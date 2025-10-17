@@ -26,7 +26,6 @@
     - [Site Management](#site-management)
     - [Rebuild \& Reset](#rebuild--reset)
   - [Quick FAQ](#quick-faq)
-  - [Next Steps](#next-steps)
   - [Documentation](#documentation)
   - [Resources](#resources)
   - [License](#license)
@@ -214,27 +213,11 @@ A: Run `npm test` for Playwright tests. See [TESTING.md](docs/TESTING.md) for co
 **Q: Can I run multiple sites simultaneously?**
 A: Yes! Use multiple containers on different ports. See [ADVANCED.md](docs/ADVANCED.md#multi-site-testing).
 
-## Next Steps
-
-**For Development:**
-
-- **[Advanced Configuration](docs/ADVANCED.md)** - Multi-site setup, custom commands, environment variables
-- **[CiviCRM Developer Guide](https://docs.civicrm.org/dev/en/latest/)** - Official development documentation
-- **[civix Documentation](https://docs.civicrm.org/dev/en/latest/extensions/civix/)** - Extension development
-
-**For Testing:**
-
-- **[Testing Guide](docs/TESTING.md)** - Playwright e2e tests, PHP/CiviCRM version testing
-
-**Having Issues?**
-
-- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common problems and solutions
-
 ## Documentation
 
-- **[Testing Guide](docs/TESTING.md)** - Comprehensive testing documentation including PHP and CiviCRM version testing
-- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and how to resolve them
-- **[Advanced Usage](docs/ADVANCED.md)** - Advanced configuration, multi-site setup, custom commands
+- **[Advanced Usage](docs/ADVANCED.md)** - Multi-site setup, custom commands, environment variables
+- **[Testing Guide](docs/TESTING.md)** - Playwright e2e tests, PHP/CiviCRM version testing
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 
 ## Resources
 
