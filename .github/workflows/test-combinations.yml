@@ -52,20 +52,56 @@ jobs:
       - name: Wait for site to be ready
         run: |
           echo "Waiting for site to become accessible..."
+          echo ""
+          echo "=== Container Status ==="
+          docker compose ps
+          echo ""
+
           max_attempts=60
           attempt=0
           while [ $attempt -lt $max_attempts ]; do
-            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 | grep -q "200\|302"; then
-              echo "✓ Site is accessible"
+            # Check if container is still running
+            if ! docker compose ps | grep -q "civicrm.*running"; then
+              echo "✗ Container is not running!"
+              docker compose ps
+              docker compose logs civicrm
+              exit 1
+            fi
+
+            # Try to connect to the site
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
+
+            if [ "$http_code" = "200" ] || [ "$http_code" = "302" ]; then
+              echo "✓ Site is accessible (HTTP $http_code)"
               break
             fi
+
             attempt=$((attempt + 1))
-            echo "Waiting... ($attempt/$max_attempts)"
+            echo "Waiting... ($attempt/$max_attempts) - HTTP $http_code"
+
+            # Show more detailed logs every 10 attempts
+            if [ $((attempt % 10)) -eq 0 ]; then
+              echo ""
+              echo "=== Progress Check (attempt $attempt) ==="
+              echo "Container status:"
+              docker compose ps civicrm
+              echo ""
+              echo "Last 15 lines of container output:"
+              docker compose logs --tail=15 civicrm
+              echo "=== End Progress Check ==="
+              echo ""
+            fi
+
             sleep 10
           done
 
           if [ $attempt -eq $max_attempts ]; then
-            echo "✗ Site failed to become accessible"
+            echo "✗ Site failed to become accessible after $max_attempts attempts"
+            echo ""
+            echo "=== Final Container Status ==="
+            docker compose ps
+            echo ""
+            echo "=== Full Container Logs ==="
             docker compose logs civicrm
             exit 1
           fi

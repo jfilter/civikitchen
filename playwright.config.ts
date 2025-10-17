@@ -49,7 +49,7 @@ export default defineConfig({
 
   /* Wait for the Docker container to be ready */
   webServer: process.env.SKIP_WEBSERVER ? undefined : {
-    command: 'docker-compose up -d && docker-compose logs -f civicrm',
+    command: 'docker compose up -d && docker compose logs -f civicrm',
     url: 'http://localhost:8080',
     timeout: 5 * 60 * 1000, // 5 minutes for initial site creation
     reuseExistingServer: true,
