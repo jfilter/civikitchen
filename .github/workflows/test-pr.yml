@@ -49,7 +49,7 @@ jobs:
           docker compose ps
           echo ""
 
-          max_attempts=60
+          max_attempts=120
           attempt=0
           while [ $attempt -lt $max_attempts ]; do
             # Check if container is still running
