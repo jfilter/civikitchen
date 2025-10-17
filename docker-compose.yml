@@ -16,7 +16,7 @@ services:
       - HTTPD_DOMAIN=${HTTPD_DOMAIN:-localhost}
       - HTTPD_PORT=${HTTPD_PORT:-8080}
       - CIVICRM_SITE_TYPE=${CIVICRM_SITE_TYPE:-drupal10-demo}
-      - CIVICRM_VERSION=${CIVICRM_VERSION:-}
+      - CIVICRM_VERSION=${CIVICRM_VERSION:-6.7.1}
     depends_on:
       - mysql
     networks:

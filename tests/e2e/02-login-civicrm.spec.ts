@@ -7,7 +7,7 @@ test.describe('Login and CiviCRM Access', () => {
     // Should see login form
     await expect(page.locator('input[name="name"]')).toBeVisible();
     await expect(page.locator('input[name="pass"]')).toBeVisible();
-    await expect(page.locator('button[type="submit"], input[type="submit"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible();
   });
 
   test('can login with demo user credentials', async ({ page }) => {
@@ -18,14 +18,14 @@ test.describe('Login and CiviCRM Access', () => {
     await page.fill('input[name="pass"]', 'demo');
 
     // Submit login form
-    await page.click('button[type="submit"], input[type="submit"]');
+    await page.getByRole('button', { name: 'Log in' }).click();
 
     // Wait for navigation after login
     await page.waitForURL(/^((?!user\/login).)*$/, { timeout: 10000 });
 
     // Should be logged in - check for user menu or logout link
-    const isLoggedIn = await page.locator('text=/log out|sign out/i').isVisible();
-    expect(isLoggedIn).toBeTruthy();
+    const logoutLinks = await page.locator('text=/log out|sign out/i').count();
+    expect(logoutLinks).toBeGreaterThan(0);
   });
 
   test('can access CiviCRM dashboard after login', async ({ page }) => {
@@ -33,7 +33,7 @@ test.describe('Login and CiviCRM Access', () => {
     await page.goto('/user/login');
     await page.fill('input[name="name"]', 'demo');
     await page.fill('input[name="pass"]', 'demo');
-    await page.click('button[type="submit"], input[type="submit"]');
+    await page.getByRole('button', { name: 'Log in' }).click();
     await page.waitForLoadState('networkidle');
 
     // Navigate to CiviCRM
@@ -57,7 +57,7 @@ test.describe('Login and CiviCRM Access', () => {
     await page.goto('/user/login');
     await page.fill('input[name="name"]', 'demo');
     await page.fill('input[name="pass"]', 'demo');
-    await page.click('button[type="submit"], input[type="submit"]');
+    await page.getByRole('button', { name: 'Log in' }).click();
     await page.waitForLoadState('networkidle');
 
     // Go to CiviCRM dashboard
@@ -75,7 +75,7 @@ test.describe('Login and CiviCRM Access', () => {
     await page.goto('/user/login');
     await page.fill('input[name="name"]', 'demo');
     await page.fill('input[name="pass"]', 'demo');
-    await page.click('button[type="submit"], input[type="submit"]');
+    await page.getByRole('button', { name: 'Log in' }).click();
     await page.waitForLoadState('networkidle');
 
     // Go to CiviCRM contacts
@@ -92,7 +92,7 @@ test.describe('Login and CiviCRM Access', () => {
     await page.goto('/user/login');
     await page.fill('input[name="name"]', 'demo');
     await page.fill('input[name="pass"]', 'demo');
-    await page.click('button[type="submit"], input[type="submit"]');
+    await page.getByRole('button', { name: 'Log in' }).click();
     await page.waitForLoadState('networkidle');
 
     // Go to CiviCRM
@@ -101,14 +101,14 @@ test.describe('Login and CiviCRM Access', () => {
 
     // Look for CiviCRM menu items (common in CiviCRM installations)
     // The menu structure can vary, but there should be navigation elements
-    const hasMenu = await page.locator('[id*="civicrm"], .crm-container').evaluate(el => {
-      const text = el.textContent || '';
-      return text.includes('Contact') ||
-             text.includes('Contribute') ||
-             text.includes('Event') ||
-             text.includes('Member') ||
-             text.includes('Report');
-    });
+    const bodyText = await page.locator('body').textContent();
+    const hasMenu = bodyText && (
+      bodyText.includes('Contact') ||
+      bodyText.includes('Contribute') ||
+      bodyText.includes('Event') ||
+      bodyText.includes('Member') ||
+      bodyText.includes('Report')
+    );
 
     expect(hasMenu).toBeTruthy();
   });

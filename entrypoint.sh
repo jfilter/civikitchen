@@ -105,7 +105,7 @@ echo "✓ amp MySQL configuration complete!"
 # Auto-create CiviCRM site if requested
 if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
     SITE_DIR="/home/buildkit/buildkit/build/site"
-    SITE_URL="http://${HTTPD_DOMAIN}"
+    SITE_URL="http://${HTTPD_DOMAIN}:${HTTPD_PORT}"
 
     # Check if site already exists
     if [ ! -d "$SITE_DIR" ]; then

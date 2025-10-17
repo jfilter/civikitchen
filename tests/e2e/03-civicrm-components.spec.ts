@@ -6,7 +6,7 @@ test.describe('CiviCRM Components', () => {
     await page.goto('/user/login');
     await page.fill('input[name="name"]', 'demo');
     await page.fill('input[name="pass"]', 'demo');
-    await page.click('button[type="submit"], input[type="submit"]');
+    await page.getByRole('button', { name: 'Log in' }).click();
     await page.waitForLoadState('networkidle');
   });
 

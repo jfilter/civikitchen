@@ -7,7 +7,6 @@
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
-    "test:report": "playwright show-report",
     "test:all-php": "./scripts/test-php-versions.sh",
     "test:all-civicrm": "./scripts/test-civicrm-versions.sh",
     "test:all-combinations": "./scripts/test-all-combinations.sh",
