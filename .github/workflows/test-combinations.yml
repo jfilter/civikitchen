@@ -8,7 +8,7 @@ on:
 jobs:
   test-combinations:
     runs-on: ubuntu-latest
-    timeout-minutes: 180 # 3 hours max
+    timeout-minutes: 60 # 1 hour max
 
     strategy:
       fail-fast: false
@@ -57,7 +57,7 @@ jobs:
           docker compose ps
           echo ""
 
-          max_attempts=120
+          max_attempts=60
           attempt=0
           while [ $attempt -lt $max_attempts ]; do
             # Check if container is still running
