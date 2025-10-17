@@ -79,6 +79,29 @@ if ! amp config:get --out=table | grep -q "mysql_dsn.*mysql://root"; then
     amp config:set --mysql_dsn="mysql://root:${MYSQL_ROOT_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}"
 fi
 
+# Wait for MySQL to be ready
+echo "===================================="
+echo "Waiting for MySQL to be ready..."
+echo "===================================="
+
+max_attempts=30
+attempt=0
+while [ $attempt -lt $max_attempts ]; do
+    if mysqladmin ping -h"${MYSQL_HOST}" -P"${MYSQL_PORT}" -uroot -p"${MYSQL_ROOT_PASSWORD}" --silent 2>/dev/null; then
+        echo "✓ MySQL is ready!"
+        break
+    fi
+
+    attempt=$((attempt + 1))
+    echo "Waiting for MySQL... ($attempt/$max_attempts)"
+    sleep 2
+done
+
+if [ $attempt -eq $max_attempts ]; then
+    echo "✗ MySQL failed to become ready after $max_attempts attempts"
+    exit 1
+fi
+
 # Auto-create CiviCRM site if requested
 if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
     SITE_DIR="/home/buildkit/site"
