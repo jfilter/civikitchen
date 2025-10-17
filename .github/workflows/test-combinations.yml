@@ -61,7 +61,7 @@ jobs:
           attempt=0
           while [ $attempt -lt $max_attempts ]; do
             # Check if container is still running
-            if ! docker compose ps | grep -q "civicrm.*running"; then
+            if ! docker compose ps civicrm | grep -q "Up"; then
               echo "✗ Container is not running!"
               docker compose ps
               docker compose logs civicrm
