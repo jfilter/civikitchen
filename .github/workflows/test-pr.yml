@@ -31,7 +31,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          PHP_VERSION=8.2 docker-compose build --no-cache
+          PHP_VERSION=8.2 docker compose build --no-cache
 
       - name: Start containers
         env:
@@ -39,7 +39,7 @@ jobs:
           CIVICRM_VERSION: 6.7.1
           CIVICRM_SITE_TYPE: drupal10-demo
         run: |
-          docker-compose up -d
+          docker compose up -d
 
       - name: Wait for site to be ready
         run: |
@@ -58,7 +58,7 @@ jobs:
 
           if [ $attempt -eq $max_attempts ]; then
             echo "✗ Site failed to become accessible"
-            docker-compose logs civicrm
+            docker compose logs civicrm
             exit 1
           fi
 
@@ -81,10 +81,10 @@ jobs:
         if: failure()
         run: |
           echo "=== CiviCRM Container Logs ==="
-          docker-compose logs civicrm
+          docker compose logs civicrm
           echo "=== MySQL Container Logs ==="
-          docker-compose logs mysql
+          docker compose logs mysql
 
       - name: Stop containers
         if: always()
-        run: docker-compose down -v
+        run: docker compose down -v
