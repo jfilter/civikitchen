@@ -115,11 +115,10 @@ This will:
 ```
 
 **Available PHP test commands:**
-- `npm run test:php74` - Test with PHP 7.4
-- `npm run test:php80` - Test with PHP 8.0
 - `npm run test:php81` - Test with PHP 8.1
 - `npm run test:php82` - Test with PHP 8.2
 - `npm run test:php83` - Test with PHP 8.3
+- `npm run test:php84` - Test with PHP 8.4
 - `npm run test:all-php` - Test all PHP versions sequentially
 
 ## Testing with Different CiviCRM Versions
@@ -134,9 +133,6 @@ npm run test:civicrm-6.6
 
 # Test CiviCRM 6.5.1 (older stable)
 npm run test:civicrm-6.5
-
-# Test CiviCRM master (development)
-npm run test:civicrm-master
 ```
 
 **Test all CiviCRM versions:**
@@ -144,15 +140,15 @@ npm run test:civicrm-master
 npm run test:all-civicrm
 ```
 
-This will test CiviCRM versions 6.5.1, 6.6.3, 6.7.1, and master with PHP 8.2 (default).
+This will test CiviCRM versions 6.5.1, 6.6.3, and 6.7.1 with PHP 8.2 (default).
 
 **Test with specific PHP + CiviCRM combination:**
 ```bash
 # Test PHP 8.3 with CiviCRM 6.7.1
 PHP_VERSION=8.3 CIVICRM_VERSION=6.7.1 npm run test:all-php
 
-# Test PHP 8.1 with CiviCRM master
-PHP_VERSION=8.1 CIVICRM_VERSION=master npm run test:all-civicrm
+# Test PHP 8.1 with CiviCRM 6.7.1
+PHP_VERSION=8.1 CIVICRM_VERSION=6.7.1 npm run test:all-civicrm
 ```
 
 **Test all combinations (PHP × CiviCRM):**
@@ -161,8 +157,8 @@ npm run test:all-combinations
 ```
 
 This will test all combinations of:
-- PHP: 8.1, 8.2, 8.3
-- CiviCRM: 6.5.1, 6.6.3, 6.7.1, master
+- PHP: 8.1, 8.2, 8.3, 8.4
+- CiviCRM: 6.5.1, 6.6.3, 6.7.1
 - Total: 12 combinations
 
 **Manual testing:**
@@ -175,7 +171,6 @@ CIVICRM_VERSION=6.7.1 ./scripts/test-with-php.sh 8.2
 - `npm run test:civicrm-6.5` - Test with CiviCRM 6.5.1
 - `npm run test:civicrm-6.6` - Test with CiviCRM 6.6.3
 - `npm run test:civicrm-6.7` - Test with CiviCRM 6.7.1
-- `npm run test:civicrm-master` - Test with CiviCRM master
 - `npm run test:all-civicrm` - Test all CiviCRM versions
 - `npm run test:all-combinations` - Test all PHP × CiviCRM combinations
 
@@ -193,7 +188,7 @@ Runs on every PR and push to main:
 Tests all combinations:
 - **Manual trigger:** Go to Actions → Test All Combinations → Run workflow
 - **Weekly schedule:** Runs every Sunday at 2 AM UTC
-- Tests all 12 combinations (PHP 8.1, 8.2, 8.3 × CiviCRM 6.5.1, 6.6.3, 6.7.1, master)
+- Tests all 12 combinations (PHP 8.1, 8.2, 8.3, 8.4 × CiviCRM 6.5.1, 6.6.3, 6.7.1)
 - Comprehensive compatibility verification
 
 **View test results:**

@@ -171,35 +171,33 @@ $ npm run test:all-php
 CiviCRM Multi-PHP Version Test Suite
 ==========================================
 
-Testing PHP versions: 7.4 8.0 8.1 8.2 8.3
+Testing PHP versions: 8.1 8.2 8.3 8.4
 Site type: drupal10-demo
 
 ==========================================
-Testing PHP 7.4
+Testing PHP 8.1
 ==========================================
-Building with PHP 7.4...
+Building with PHP 8.1...
 ✓ Site is accessible
 Running Playwright tests...
-✓ Tests passed for PHP 7.4
+✓ Tests passed for PHP 8.1
 
 ==========================================
 Test Results Summary
 ==========================================
-✓ PHP 7.4: PASSED
-✓ PHP 8.0: PASSED
 ✓ PHP 8.1: PASSED
 ✓ PHP 8.2: PASSED
 ✓ PHP 8.3: PASSED
+✓ PHP 8.4: PASSED
 ==========================================
 ```
 
 ### Available Commands
 
-- `npm run test:php74` - Test with PHP 7.4
-- `npm run test:php80` - Test with PHP 8.0
 - `npm run test:php81` - Test with PHP 8.1
 - `npm run test:php82` - Test with PHP 8.2 (default)
 - `npm run test:php83` - Test with PHP 8.3
+- `npm run test:php84` - Test with PHP 8.4
 - `npm run test:all-php` - Test all versions
 
 ### Custom Site Types

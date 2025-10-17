@@ -19,7 +19,7 @@ docker-compose build --no-cache
 docker-compose up -d
 ```
 
-**Supported PHP versions:** 7.4, 8.0, 8.1, 8.2, 8.3 (default: 8.2)
+**Supported PHP versions:** 8.1, 8.2, 8.3, 8.4 (default: 8.2)
 
 ### CiviCRM Version
 
@@ -33,10 +33,10 @@ CIVICRM_VERSION=6.7.1
 **Note:** CiviCRM version only affects auto-created sites. Leave empty for the latest stable version.
 
 **Examples:**
-- `CIVICRM_VERSION=6.7.1` - Install latest stable version
+- `CIVICRM_VERSION=6.7.1` - Install specific stable version (default)
 - `CIVICRM_VERSION=6.6.3` - Install previous stable version
 - `CIVICRM_VERSION=master` - Install development version
-- `CIVICRM_VERSION=` - Install latest stable (default)
+- `CIVICRM_VERSION=` - Install latest stable
 
 After changing the CiviCRM version, you'll need to recreate the container with a new volume:
 ```bash
@@ -178,7 +178,7 @@ Edit `.env` file to customize:
 ```env
 # Build Configuration
 # PHP version to install (requires rebuild: docker-compose build --no-cache)
-# Supported versions: 7.4, 8.0, 8.1, 8.2, 8.3
+# Supported versions: 8.1, 8.2, 8.3, 8.4
 PHP_VERSION=8.2
 
 # MySQL Configuration

@@ -33,6 +33,7 @@ RUN apt-get install -y \
     && a2enmod headers
 
 # Install PHP and required extensions (version configured via build arg)
+# Supported versions: 8.1, 8.2, 8.3, 8.4
 RUN apt-get install -y \
     php${PHP_VERSION} \
     php${PHP_VERSION}-cli \

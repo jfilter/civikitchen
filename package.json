@@ -10,15 +10,13 @@
     "test:all-php": "./scripts/test-php-versions.sh",
     "test:all-civicrm": "./scripts/test-civicrm-versions.sh",
     "test:all-combinations": "./scripts/test-all-combinations.sh",
-    "test:php74": "PHP_VERSION=7.4 ./scripts/test-with-php.sh 7.4",
-    "test:php80": "PHP_VERSION=8.0 ./scripts/test-with-php.sh 8.0",
     "test:php81": "PHP_VERSION=8.1 ./scripts/test-with-php.sh 8.1",
     "test:php82": "PHP_VERSION=8.2 ./scripts/test-with-php.sh 8.2",
     "test:php83": "PHP_VERSION=8.3 ./scripts/test-with-php.sh 8.3",
+    "test:php84": "PHP_VERSION=8.4 ./scripts/test-with-php.sh 8.4",
     "test:civicrm-6.5": "CIVICRM_VERSION=6.5.1 SKIP_WEBSERVER=1 npm test",
     "test:civicrm-6.6": "CIVICRM_VERSION=6.6.3 SKIP_WEBSERVER=1 npm test",
-    "test:civicrm-6.7": "CIVICRM_VERSION=6.7.1 SKIP_WEBSERVER=1 npm test",
-    "test:civicrm-master": "CIVICRM_VERSION=master SKIP_WEBSERVER=1 npm test"
+    "test:civicrm-6.7": "CIVICRM_VERSION=6.7.1 SKIP_WEBSERVER=1 npm test"
   },
   "keywords": [
     "civicrm",

@@ -3,7 +3,7 @@
 ## CiviCRM Buildkit Docker Setup
 
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
-![PHP](https://img.shields.io/badge/PHP-7.4%20%7C%208.0%20%7C%208.1%20%7C%208.2%20%7C%208.3-777BB4?style=flat&logo=php&logoColor=white)
+![PHP](https://img.shields.io/badge/PHP-8.1%20%7C%208.2%20%7C%208.3%20%7C%208.4-777BB4?style=flat&logo=php&logoColor=white)
 ![MariaDB](https://img.shields.io/badge/MariaDB-10.11-003545?style=flat&logo=mariadb&logoColor=white)
 ![License](https://img.shields.io/badge/License-AGPL%20v3-blue.svg?style=flat)
 
@@ -41,7 +41,7 @@
 
 ✅ **CMS:** Drupal 10, Drupal 9, WordPress
 ✅ **CiviCRM:** All core components (Events, Contributions, Memberships, Mailings, etc.)
-✅ **Testing:** Automated e2e tests across PHP 7.4-8.3 and CiviCRM 6.5-master
+✅ **Testing:** Automated e2e tests across PHP 8.1-8.4 and CiviCRM 6.5-6.7
 
 ## Prerequisites
 
@@ -65,7 +65,7 @@ cp .env.example .env
 docker-compose up -d
 ```
 
-**3. Wait for initialization (3-5 minutes)**
+**3. Wait for initialization (5-10 minutes)**
 
 ```bash
 docker-compose logs -f civicrm
@@ -91,7 +91,7 @@ Look for: `Site creation complete! Access your site at: http://localhost:8080`
 - **Disk:** 10 GB free space
 - **Docker:** 20.10+ with Docker Compose
 
-**Note:** Initial site creation takes 3-5 minutes and downloads ~500 MB of dependencies.
+**Note:** Initial site creation takes 5-10 minutes on first run while downloading dependencies.
 
 ## Site Access
 
