@@ -72,13 +72,6 @@ else
     export PATH="$HOME/buildkit/bin:$PATH"
 fi
 
-# Ensure amp MySQL connection is properly configured
-echo "Verifying amp MySQL configuration..."
-if ! amp config:get --out=table | grep -q "mysql_dsn.*mysql://root"; then
-    echo "Updating amp MySQL DSN..."
-    amp config:set --mysql_dsn="mysql://root:${MYSQL_ROOT_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}"
-fi
-
 # Wait for MySQL to be ready
 echo "===================================="
 echo "Waiting for MySQL to be ready..."
@@ -101,6 +94,13 @@ if [ $attempt -eq $max_attempts ]; then
     echo "✗ MySQL failed to become ready after $max_attempts attempts"
     exit 1
 fi
+
+# Configure amp MySQL connection after MySQL is ready
+echo "===================================="
+echo "Configuring amp MySQL connection..."
+echo "===================================="
+amp config:set --mysql_dsn="mysql://root:${MYSQL_ROOT_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}"
+echo "✓ amp MySQL configuration complete!"
 
 # Auto-create CiviCRM site if requested
 if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
