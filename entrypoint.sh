@@ -87,8 +87,8 @@ echo "===================================="
 max_attempts=30
 attempt=0
 while [ $attempt -lt $max_attempts ]; do
-    if mysqladmin ping -h"${MYSQL_HOST}" -P"${MYSQL_PORT}" -uroot -p"${MYSQL_ROOT_PASSWORD}" --silent 2>/dev/null; then
-        echo "✓ MySQL is ready!"
+    if mysql -h"${MYSQL_HOST}" -P"${MYSQL_PORT}" -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1" >/dev/null 2>&1; then
+        echo "✓ MySQL is ready and accepting connections!"
         break
     fi
 
