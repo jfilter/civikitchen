@@ -19,7 +19,10 @@ export default defineConfig({
   workers: process.env.CI ? 1 : 1,
 
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'list',
+  reporter: process.env.CI ? [
+    ['html', { outputFolder: 'playwright-report' }],
+    ['list']
+  ] : 'list',
 
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
