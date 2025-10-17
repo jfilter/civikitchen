@@ -1,0 +1,32 @@
+# Environment files
+.env
+
+# Build sites directory
+sites/
+
+# Docker volumes (usually managed by Docker, but just in case)
+volumes/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Claude Code
+.claude/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Testing
+node_modules/
+test-results/
+playwright-report/
+playwright/.cache/
+*.log

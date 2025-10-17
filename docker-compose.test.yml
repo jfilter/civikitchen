@@ -1,0 +1,30 @@
+# Docker Compose override for testing
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.test.yml up
+
+services:
+  civicrm:
+    # Override for testing - faster startup, less verbose logging
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
+      - HTTPD_DOMAIN=${HTTPD_DOMAIN:-localhost}
+      - HTTPD_PORT=${HTTPD_PORT:-8080}
+      - CIVICRM_SITE_TYPE=${CIVICRM_SITE_TYPE:-drupal10-demo}
+      - CIVICRM_VERSION=${CIVICRM_VERSION:-}
+    # Healthcheck for test automation
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+
+  mysql:
+    # Healthcheck for MySQL
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s

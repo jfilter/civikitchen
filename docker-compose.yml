@@ -1,0 +1,123 @@
+services:
+  civicrm:
+    build:
+      context: .
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.2}
+    container_name: civicrm-buildkit
+    ports:
+      - "8080:80"
+    volumes:
+      - buildkit-home:/home/buildkit
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
+      - HTTPD_DOMAIN=${HTTPD_DOMAIN:-localhost}
+      - HTTPD_PORT=${HTTPD_PORT:-8080}
+      - CIVICRM_SITE_TYPE=${CIVICRM_SITE_TYPE:-drupal10-demo}
+      - CIVICRM_VERSION=${CIVICRM_VERSION:-}
+    depends_on:
+      - mysql
+    networks:
+      - civicrm-network
+    stdin_open: true
+    tty: true
+
+  mysql:
+    image: mariadb:10.11
+    container_name: civicrm-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-civicrm}
+      - MYSQL_USER=${MYSQL_USER:-civicrm}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-civicrm}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - civicrm-network
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: civicrm-phpmyadmin
+    environment:
+      - PMA_HOST=mysql
+      - PMA_PORT=3306
+      - PMA_USER=root
+      - PMA_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
+    ports:
+      - "8081:80"
+    depends_on:
+      - mysql
+    networks:
+      - civicrm-network
+
+  maildev:
+    image: maildev/maildev:latest
+    container_name: civicrm-maildev
+    ports:
+      - "1080:1080"  # Web UI
+      - "1025:1025"  # SMTP
+    networks:
+      - civicrm-network
+
+volumes:
+  buildkit-home:
+  mysql-data:
+
+networks:
+  civicrm-network:
+    driver: bridge
+
+# Multi-Site Example (Uncomment and modify as needed)
+# Run multiple CiviCRM sites simultaneously on different ports:
+#
+# services:
+#   civicrm-drupal10:
+#     build:
+#       context: .
+#       args:
+#         PHP_VERSION: ${PHP_VERSION:-8.2}
+#     ports:
+#       - "8080:80"
+#     volumes:
+#       - drupal10-site:/home/buildkit
+#     environment:
+#       - MYSQL_HOST=mysql
+#       - MYSQL_PORT=3306
+#       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
+#       - HTTPD_DOMAIN=localhost
+#       - HTTPD_PORT=8080
+#       - CIVICRM_SITE_TYPE=drupal10-demo
+#     depends_on:
+#       - mysql
+#     networks:
+#       - civicrm-network
+#
+#   civicrm-wordpress:
+#     build:
+#       context: .
+#       args:
+#         PHP_VERSION: ${PHP_VERSION:-8.2}
+#     ports:
+#       - "8081:80"
+#     volumes:
+#       - wordpress-site:/home/buildkit
+#     environment:
+#       - MYSQL_HOST=mysql
+#       - MYSQL_PORT=3306
+#       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
+#       - HTTPD_DOMAIN=localhost
+#       - HTTPD_PORT=8081
+#       - CIVICRM_SITE_TYPE=wp-demo
+#     depends_on:
+#       - mysql
+#     networks:
+#       - civicrm-network
+#
+# volumes:
+#   drupal10-site:
+#   wordpress-site:

@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+
+# Testing
+node_modules/
+test-results/
+playwright-report/
+playwright/.cache/
+tests/
+
+# Test scripts
+test-with-php.sh
+test-php-versions.sh
+test-civicrm-versions.sh
+test-all-combinations.sh
+package.json
+package-lock.json
+playwright.config.ts
+tsconfig.json
+
+# Documentation
+README.md
+CONTRIBUTING.md
+docs/
+
+# Environment
+.env
+.env.example
+
+# CI/CD
+.github/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Logs
+*.log
+npm-debug.log*
