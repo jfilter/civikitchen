@@ -36,11 +36,6 @@ npm run test:headed
 npm run test:debug
 ```
 
-**View test report:**
-```bash
-npm run test:report
-```
-
 ## Test Coverage
 
 The test suite includes:
@@ -191,7 +186,7 @@ GitHub Actions workflows are included for automated testing:
 ### 1. Pull Request Testing (`.github/workflows/test-pr.yml`)
 Runs on every PR and push to main:
 - Tests stable combination: **PHP 8.2 + CiviCRM 6.7.1**
-- Fast feedback (~30 minutes)
+- Fast feedback (~10 minutes)
 - Uploads test results as artifacts
 
 ### 2. Full Matrix Testing (`.github/workflows/test-combinations.yml`)

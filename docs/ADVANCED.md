@@ -133,7 +133,7 @@ Access sites:
 ```bash
 # Inside container
 docker-compose exec civicrm bash
-civibuild create site --type drupal10-demo --url http://localhost --force
+civibuild create site --type drupal10-demo --url http://localhost:8080 --force
 ```
 
 ### List available site types
@@ -203,7 +203,7 @@ CIVICRM_SITE_TYPE=drupal10-demo
 # CiviCRM version to install (optional)
 # Leave empty for latest stable, or specify version like "6.7.1" or "master"
 # Examples: 6.7.1, 6.6.3, 6.5.1, master
-CIVICRM_VERSION=
+CIVICRM_VERSION=6.7.1
 ```
 
 ## Custom amp Configuration
