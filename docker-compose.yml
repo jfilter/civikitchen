@@ -9,7 +9,7 @@ services:
       - "8080:80"
     volumes:
       - buildkit-home:/home/buildkit
-      - ./extensions:/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext
+      - ./extensions:/home/buildkit/extensions-mount
     environment:
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306

@@ -11,14 +11,22 @@ echo "==================================="
 if [ ! -d "$BUILDKIT_DIR/bin" ]; then
     echo "Installing buildkit for the first time..."
 
-    # Remove empty buildkit directory if it exists
+    # If buildkit directory exists but is incomplete, initialize git in place
+    # This handles the case where volume mounts have created the directory structure
     if [ -d "$BUILDKIT_DIR" ]; then
-        sudo rm -rf "$BUILDKIT_DIR"
+        echo "Buildkit directory exists, initializing in place..."
+        # Fix ownership of the directory (may have been created by Docker with wrong permissions)
+        sudo chown -R buildkit:buildkit "$BUILDKIT_DIR"
+        cd "$BUILDKIT_DIR"
+        git init
+        git remote add origin https://github.com/civicrm/civicrm-buildkit.git
+        git fetch --depth 1 origin master
+        git checkout -f master
+    else
+        # Clone buildkit repository normally
+        git clone https://github.com/civicrm/civicrm-buildkit.git "$BUILDKIT_DIR"
+        cd "$BUILDKIT_DIR"
     fi
-
-    # Clone buildkit repository
-    git clone https://github.com/civicrm/civicrm-buildkit.git "$BUILDKIT_DIR"
-    cd "$BUILDKIT_DIR"
 
     # Download buildkit tools
     echo "Downloading buildkit tools..."
@@ -255,8 +263,9 @@ if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
     SITE_DIR="/home/buildkit/buildkit/build/site"
     SITE_URL="http://${HTTPD_DOMAIN}:${HTTPD_PORT}"
 
-    # Check if site already exists
-    if [ ! -d "$SITE_DIR" ]; then
+    # Check if site is actually installed (not just directory exists)
+    # Volume mounts may create the directory structure before site installation
+    if [ ! -f "$SITE_DIR/web/index.php" ]; then
         echo "===================================="
         echo "Auto-creating CiviCRM site"
         echo "Site type: ${CIVICRM_SITE_TYPE}"
@@ -266,11 +275,12 @@ if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
         fi
         echo "===================================="
 
-        # Create the site with optional version specification
+        # Note: We don't use --force to avoid issues with mount points
+        # Civibuild will use existing site directory if it exists
         if [ -n "${CIVICRM_VERSION}" ]; then
-            civibuild create site --type "${CIVICRM_SITE_TYPE}" --url "$SITE_URL" --civi-ver "${CIVICRM_VERSION}" --force
+            civibuild create site --type "${CIVICRM_SITE_TYPE}" --url "$SITE_URL" --civi-ver "${CIVICRM_VERSION}"
         else
-            civibuild create site --type "${CIVICRM_SITE_TYPE}" --url "$SITE_URL" --force
+            civibuild create site --type "${CIVICRM_SITE_TYPE}" --url "$SITE_URL"
         fi
 
         echo "===================================="
@@ -278,11 +288,59 @@ if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
         echo "Access your site at: http://localhost:${HTTPD_PORT}"
         echo "===================================="
 
+        # Set up extensions directory symlink
+        echo "===================================="
+        echo "Setting up extensions directory..."
+        echo "===================================="
+
+        EXT_TARGET="/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext"
+        EXT_MOUNT="/home/buildkit/extensions-mount"
+
+        # Create parent directory if it doesn't exist
+        mkdir -p "$(dirname "$EXT_TARGET")"
+
+        # If ext directory exists as a regular directory, remove it
+        if [ -d "$EXT_TARGET" ] && [ ! -L "$EXT_TARGET" ]; then
+            rm -rf "$EXT_TARGET"
+        fi
+
+        # Create symlink from site to mount point
+        if [ ! -L "$EXT_TARGET" ]; then
+            ln -s "$EXT_MOUNT" "$EXT_TARGET"
+            echo "✓ Created symlink: $EXT_TARGET -> $EXT_MOUNT"
+        else
+            echo "✓ Symlink already exists"
+        fi
+
         # Install extension dependencies and run seeding
         install_extension_dependencies
         run_extension_seeding
     else
         echo "Site already exists, skipping creation."
+
+        # Set up extensions directory symlink
+        echo "===================================="
+        echo "Setting up extensions directory..."
+        echo "===================================="
+
+        EXT_TARGET="/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext"
+        EXT_MOUNT="/home/buildkit/extensions-mount"
+
+        # Create parent directory if it doesn't exist
+        mkdir -p "$(dirname "$EXT_TARGET")"
+
+        # If ext directory exists as a regular directory, remove it
+        if [ -d "$EXT_TARGET" ] && [ ! -L "$EXT_TARGET" ]; then
+            rm -rf "$EXT_TARGET"
+        fi
+
+        # Create symlink from site to mount point
+        if [ ! -L "$EXT_TARGET" ]; then
+            ln -s "$EXT_MOUNT" "$EXT_TARGET"
+            echo "✓ Created symlink: $EXT_TARGET -> $EXT_MOUNT"
+        else
+            echo "✓ Symlink already exists"
+        fi
 
         # Still check for new dependencies and seeding even if site exists
         install_extension_dependencies

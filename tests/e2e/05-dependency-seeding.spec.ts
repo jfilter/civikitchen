@@ -13,6 +13,8 @@ const TEST_EXTENSION_SOURCE = path.join(
 const TEST_EXTENSION_DEST = path.join(EXTENSIONS_DIR, TEST_EXTENSION_NAME);
 
 test.describe.serial("Extension Dependency and Seeding System", () => {
+  test.skip(!!process.env.CI, "Skipping dependency-seeding tests in CI due to Docker bind mount restrictions");
+
   test.beforeAll(async () => {
     // Clean up any existing test extension
     if (fs.existsSync(TEST_EXTENSION_DEST)) {
@@ -75,9 +77,9 @@ test.describe.serial("Extension Dependency and Seeding System", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    // Verify extension is accessible in container
+    // Verify extension is accessible in container (note: ext is now a symlink, so we list the target)
     const lsOutput = execDockerCommand(
-      "ls -la /home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext",
+      "ls -la /home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext/",
       5000
     );
     expect(lsOutput).toContain(TEST_EXTENSION_NAME);

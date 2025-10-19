@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run ESLint
+        run: npm run lint
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -111,6 +114,22 @@ jobs:
           path: |
             test-results/
             playwright-report/
+          retention-days: 7
+
+      - name: Collect Docker logs
+        if: always()
+        run: |
+          mkdir -p docker-logs
+          docker compose logs civicrm > docker-logs/civicrm.log 2>&1 || true
+          docker compose logs mysql > docker-logs/mysql.log 2>&1 || true
+          docker compose ps > docker-logs/container-status.txt 2>&1 || true
+
+      - name: Upload Docker logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-logs
+          path: docker-logs/
           retention-days: 7
 
       - name: Show logs on failure

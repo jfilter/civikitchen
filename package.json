@@ -16,7 +16,9 @@
     "test:php84": "PHP_VERSION=8.4 ./scripts/test-with-php.sh 8.4",
     "test:civicrm-6.5": "CIVICRM_VERSION=6.5.1 SKIP_WEBSERVER=1 npm test",
     "test:civicrm-6.6": "CIVICRM_VERSION=6.6.3 SKIP_WEBSERVER=1 npm test",
-    "test:civicrm-6.7": "CIVICRM_VERSION=6.7.1 SKIP_WEBSERVER=1 npm test"
+    "test:civicrm-6.7": "CIVICRM_VERSION=6.7.1 SKIP_WEBSERVER=1 npm test",
+    "lint": "eslint . --ext .ts,.js",
+    "lint:fix": "eslint . --ext .ts,.js --fix"
   },
   "keywords": [
     "civicrm",
@@ -36,6 +38,9 @@
   },
   "homepage": "https://github.com/jfilter/civikitchen#readme",
   "devDependencies": {
-    "@playwright/test": "^1.40.0"
+    "@playwright/test": "^1.40.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.1",
+    "@typescript-eslint/parser": "^8.46.1",
+    "eslint": "^9.38.0"
   }
 }

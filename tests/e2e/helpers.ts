@@ -33,7 +33,7 @@ export async function loginAsAdminUser(page: Page): Promise<void> {
 export function getAdminPassword(): string {
   try {
     const output = execSync(
-      'docker-compose exec -T civicrm bash -c "civibuild show site"',
+      'docker compose exec -T civicrm bash -c "civibuild show site"',
       { encoding: 'utf-8', timeout: 10000 }
     );
 
@@ -108,7 +108,7 @@ export function filterCriticalErrors(errors: string[]): string[] {
 export function execDockerCommand(command: string, timeout: number = 30000): string {
   try {
     return execSync(
-      `docker-compose exec -T civicrm bash -c "${command}"`,
+      `docker compose exec -T civicrm bash -c "${command}"`,
       { encoding: 'utf-8', timeout }
     );
   } catch (error) {
