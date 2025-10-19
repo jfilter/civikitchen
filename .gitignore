@@ -30,3 +30,7 @@ test-results/
 playwright-report/
 playwright/.cache/
 *.log
+
+# Extensions (developers should version-control their own extensions separately)
+extensions/*
+!extensions/.gitkeep

@@ -205,4 +205,94 @@ The project includes several test scripts in the `scripts/` directory:
 - **`scripts/test-all-combinations.sh`** - Test all PHP × CiviCRM combinations
 - **`scripts/test-with-php.sh`** - Quick manual testing with specific PHP version
 
-See [tests/README.md](../tests/README.md) for detailed testing documentation.
+## Test Structure
+
+```
+tests/
+└── e2e/
+    ├── 01-site-accessibility.spec.ts    # Basic site accessibility tests
+    ├── 02-login-civicrm.spec.ts         # Login and CiviCRM dashboard tests
+    ├── 03-civicrm-components.spec.ts    # CiviCRM component tests
+    ├── 04-extension-development.spec.ts # Extension development workflow tests
+    └── helpers.ts                       # Shared test utilities
+```
+
+## Writing New Tests
+
+### Basic Test Template
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+test.describe('Feature Name', () => {
+  test('should do something', async ({ page }) => {
+    await page.goto('/some-path');
+
+    // Your test assertions
+    await expect(page.locator('selector')).toBeVisible();
+  });
+});
+```
+
+### Using Helpers
+
+```typescript
+import { test, expect } from '@playwright/test';
+import { loginAsDemoUser, navigateToCiviCRM } from './helpers';
+
+test.describe('Feature requiring login', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAsDemoUser(page);
+  });
+
+  test('can access some feature', async ({ page }) => {
+    await navigateToCiviCRM(page, 'some/path');
+    // Test logic here
+  });
+});
+```
+
+## Test Credentials
+
+The demo site uses these credentials:
+- **Username:** `demo`
+- **Password:** `demo`
+
+Admin credentials are generated during site creation and shown in the container logs.
+
+## Common Selectors
+
+- CiviCRM container: `.crm-container, #crm-container`
+- Login form: `input[name="name"]`, `input[name="pass"]`
+- Logout link: `text=/log out|sign out/i`
+
+## Best Practices
+
+1. **Use data-testid attributes** when possible for more stable selectors
+2. **Wait for network idle** after navigation: `await page.waitForLoadState('networkidle')`
+3. **Use helper functions** to avoid code duplication
+4. **Group related tests** in `test.describe()` blocks
+5. **Use beforeEach** for common setup like logging in
+6. **Name tests descriptively** - start with "can" or "should"
+7. **Keep tests independent** - don't rely on state from previous tests
+
+## Debugging Failed Tests
+
+1. **Run in headed mode** to see what's happening:
+   ```bash
+   npm run test:headed
+   ```
+
+2. **Use debug mode** to step through tests:
+   ```bash
+   npm run test:debug
+   ```
+
+3. **Check screenshots** in `test-results/` directory after failures
+
+4. **Check videos** in `test-results/` directory after failures
+
+5. **View HTML report** with detailed test results:
+   ```bash
+   npx playwright show-report
+   ```

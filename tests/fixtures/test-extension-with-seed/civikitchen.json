@@ -1,0 +1,8 @@
+{
+  "dependencies": [],
+  "seeding": {
+    "enabled": true,
+    "script": "scripts/seed-test-data.sh",
+    "runOnce": true
+  }
+}

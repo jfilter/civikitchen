@@ -216,6 +216,7 @@ A: Yes! Use multiple containers on different ports. See [ADVANCED.md](docs/ADVAN
 ## Documentation
 
 - **[Advanced Usage](docs/ADVANCED.md)** - Multi-site setup, custom commands, environment variables
+- **[Extension Development](docs/EXTENSIONS.md)** - Complete guide for developing CiviCRM extensions
 - **[Testing Guide](docs/TESTING.md)** - Playwright e2e tests, PHP/CiviCRM version testing
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 

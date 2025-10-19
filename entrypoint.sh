@@ -102,6 +102,154 @@ echo "===================================="
 amp config:set --mysql_dsn="mysql://root:${MYSQL_ROOT_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}"
 echo "✓ amp MySQL configuration complete!"
 
+# Function to install extension dependencies
+install_extension_dependencies() {
+    echo "===================================="
+    echo "Checking for extension dependencies..."
+    echo "===================================="
+
+    EXT_DIR="/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext"
+
+    if [ ! -d "$EXT_DIR" ]; then
+        echo "Extensions directory not found, skipping dependency installation"
+        return 0
+    fi
+
+    # Find all civikitchen.json files
+    for config_file in "$EXT_DIR"/*/civikitchen.json; do
+        if [ ! -f "$config_file" ]; then
+            continue
+        fi
+
+        echo "Found dependency config: $config_file"
+        EXTENSION_DIR=$(dirname "$config_file")
+        EXTENSION_NAME=$(basename "$EXTENSION_DIR")
+
+        # Parse and install each dependency
+        # Use jq to parse JSON (already available in buildkit)
+        DEPS=$(cat "$config_file" | jq -r '.dependencies[]? | @json')
+
+        if [ -z "$DEPS" ]; then
+            echo "  No dependencies found in $EXTENSION_NAME"
+            continue
+        fi
+
+        echo "$DEPS" | while IFS= read -r dep; do
+            DEP_NAME=$(echo "$dep" | jq -r '.name')
+            DEP_REPO=$(echo "$dep" | jq -r '.repo')
+            DEP_VERSION=$(echo "$dep" | jq -r '.version')
+            DEP_ENABLE=$(echo "$dep" | jq -r '.enable // true')
+
+            DEP_PATH="$EXT_DIR/$DEP_NAME"
+
+            # Check if dependency already exists
+            if [ -d "$DEP_PATH" ]; then
+                echo "  ✓ Dependency $DEP_NAME already installed, skipping"
+                continue
+            fi
+
+            echo "  Installing dependency: $DEP_NAME @ $DEP_VERSION"
+
+            # Clone the repository
+            cd "$EXT_DIR"
+            if ! git clone "$DEP_REPO" "$DEP_NAME" 2>/dev/null; then
+                echo "  ✗ Failed to clone $DEP_NAME from $DEP_REPO"
+                continue
+            fi
+
+            # Checkout specified version
+            cd "$DEP_PATH"
+            if ! git checkout "$DEP_VERSION" 2>/dev/null; then
+                echo "  ⚠ Warning: Could not checkout version $DEP_VERSION for $DEP_NAME"
+            fi
+
+            echo "  ✓ Installed $DEP_NAME"
+
+            # Enable the extension if requested
+            if [ "$DEP_ENABLE" = "true" ]; then
+                cd /home/buildkit/buildkit/build/site/web
+                if cv ext:enable "$DEP_NAME" 2>/dev/null; then
+                    echo "  ✓ Enabled $DEP_NAME"
+                else
+                    echo "  ⚠ Could not enable $DEP_NAME (may need manual enabling)"
+                fi
+            fi
+        done
+    done
+
+    echo "✓ Dependency installation complete!"
+}
+
+# Function to run extension seeding
+run_extension_seeding() {
+    echo "===================================="
+    echo "Running extension seeding..."
+    echo "===================================="
+
+    EXT_DIR="/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext"
+
+    if [ ! -d "$EXT_DIR" ]; then
+        echo "Extensions directory not found, skipping seeding"
+        return 0
+    fi
+
+    # Find all civikitchen.json files with seeding config
+    for config_file in "$EXT_DIR"/*/civikitchen.json; do
+        if [ ! -f "$config_file" ]; then
+            continue
+        fi
+
+        EXTENSION_DIR=$(dirname "$config_file")
+        EXTENSION_NAME=$(basename "$EXTENSION_DIR")
+
+        # Check if seeding is enabled
+        SEED_ENABLED=$(cat "$config_file" | jq -r '.seeding.enabled // false')
+
+        if [ "$SEED_ENABLED" != "true" ]; then
+            continue
+        fi
+
+        SEED_SCRIPT=$(cat "$config_file" | jq -r '.seeding.script // ""')
+        RUN_ONCE=$(cat "$config_file" | jq -r '.seeding.runOnce // true')
+        SEED_MARKER="$EXTENSION_DIR/.civicrm-seeded"
+
+        if [ -z "$SEED_SCRIPT" ]; then
+            echo "  ⚠ Seeding enabled for $EXTENSION_NAME but no script specified"
+            continue
+        fi
+
+        # Check if already seeded
+        if [ "$RUN_ONCE" = "true" ] && [ -f "$SEED_MARKER" ]; then
+            echo "  ✓ $EXTENSION_NAME already seeded (runOnce=true), skipping"
+            continue
+        fi
+
+        SEED_PATH="$EXTENSION_DIR/$SEED_SCRIPT"
+
+        if [ ! -f "$SEED_PATH" ]; then
+            echo "  ✗ Seed script not found: $SEED_PATH"
+            continue
+        fi
+
+        echo "  Running seed script for $EXTENSION_NAME..."
+
+        # Make script executable and run it
+        chmod +x "$SEED_PATH"
+        if bash "$SEED_PATH"; then
+            echo "  ✓ Seeding completed for $EXTENSION_NAME"
+
+            # Create marker file if runOnce is true
+            if [ "$RUN_ONCE" = "true" ]; then
+                touch "$SEED_MARKER"
+            fi
+        else
+            echo "  ✗ Seeding failed for $EXTENSION_NAME"
+        fi
+    done
+
+    echo "✓ Extension seeding complete!"
+}
+
 # Auto-create CiviCRM site if requested
 if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
     SITE_DIR="/home/buildkit/buildkit/build/site"
@@ -129,8 +277,16 @@ if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
         echo "Site creation complete!"
         echo "Access your site at: http://localhost:${HTTPD_PORT}"
         echo "===================================="
+
+        # Install extension dependencies and run seeding
+        install_extension_dependencies
+        run_extension_seeding
     else
         echo "Site already exists, skipping creation."
+
+        # Still check for new dependencies and seeding even if site exists
+        install_extension_dependencies
+        run_extension_seeding
     fi
 fi
 
