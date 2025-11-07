@@ -70,12 +70,21 @@ if [ "$SKIP_BASE_BUILD" = false ]; then
     echo -e "${BLUE}Step 1/4: Building base image...${NC}"
     echo ""
 
-    docker buildx build \
-        --file "$BUILD_CONTEXT/allinone/Dockerfile" \
-        --tag "${BASE_IMAGE_NAME}:${IMAGE_TAG}" \
-        --platform "$PLATFORM" \
-        --load \
-        "$BUILD_CONTEXT"
+    if [ "$PUSH_TO_REGISTRY" = true ]; then
+        docker buildx build \
+            --file "$BUILD_CONTEXT/allinone/Dockerfile" \
+            --tag "${BASE_IMAGE_NAME}:${IMAGE_TAG}" \
+            --platform "$PLATFORM" \
+            --push \
+            "$BUILD_CONTEXT"
+    else
+        docker buildx build \
+            --file "$BUILD_CONTEXT/allinone/Dockerfile" \
+            --tag "${BASE_IMAGE_NAME}:${IMAGE_TAG}" \
+            --platform "$PLATFORM" \
+            --load \
+            "$BUILD_CONTEXT"
+    fi
 
     if [ $? -eq 0 ]; then
         echo ""
