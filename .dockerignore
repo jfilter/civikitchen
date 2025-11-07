@@ -23,12 +23,13 @@ tsconfig.json
 README.md
 CONTRIBUTING.md
 docs/
+!allinone/README.md
 
 # Environment
 .env
 .env.example
 
-# CI/CD
+# CI/CD (all excluded, workflows not needed in image)
 .github/
 
 # IDE
@@ -49,3 +50,19 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Docker files (keep only what's needed for allinone build)
+docker-compose.yml
+Dockerfile
+!allinone/
+
+# Extensions directory (only keep civikitchen.json, extensions will be cloned during build)
+extensions/*/org.*/
+extensions/*/de.*/
+!extensions/eu-nonprofit/civikitchen.json
+
+# Build artifacts
+dist/
+build/
+*.tar.gz
+*.zip
