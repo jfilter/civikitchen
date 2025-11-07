@@ -229,8 +229,8 @@ A complete setup for European nonprofit organizations featuring CiviBanking, Civ
 **Quick Start:**
 
 ```bash
-mkdir -p extensions/eu-nonprofit
-cp examples/civikitchen-eu-nonprofit.json extensions/eu-nonprofit/civikitchen.json
+mkdir -p stacks/eu-nonprofit
+cp examples/civikitchen-eu-nonprofit.json stacks/eu-nonprofit/civikitchen.json
 docker-compose restart civicrm
 ```
 

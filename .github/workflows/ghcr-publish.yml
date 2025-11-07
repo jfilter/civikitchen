@@ -1,0 +1,243 @@
+name: Build and Publish to GHCR
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - 'aio-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Docker image tag'
+        required: true
+        default: 'latest'
+      platform:
+        description: 'Platform to build for'
+        required: true
+        default: 'linux/arm64'
+        type: choice
+        options:
+          - linux/arm64
+          - linux/amd64
+          - linux/amd64,linux/arm64
+
+env:
+  REGISTRY: ghcr.io
+  BASE_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/civicrm-eu-ngo-base
+  FINAL_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/civicrm-eu-ngo
+
+jobs:
+  build-base:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine platform
+        id: platform
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "platform=${{ github.event.inputs.platform }}" >> $GITHUB_OUTPUT
+          else
+            echo "platform=linux/arm64,linux/amd64" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/aio-* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/aio-}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push base image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./allinone/Dockerfile
+          platforms: ${{ steps.platform.outputs.platform }}
+          push: true
+          tags: ${{ env.BASE_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PHP_VERSION=8.2
+            CIVICRM_VERSION=6.7.1
+            CIVICRM_SITE_TYPE=drupal10-demo
+
+  build-prebuilt:
+    needs: build-base
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        platform:
+          - linux/arm64
+          - linux/amd64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/aio-* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/aio-}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine platform suffix
+        id: platform-suffix
+        run: |
+          case "${{ matrix.platform }}" in
+            linux/arm64)
+              echo "suffix=arm64" >> $GITHUB_OUTPUT
+              ;;
+            linux/amd64)
+              echo "suffix=amd64" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Build pre-built image with two-stage process
+        run: |
+          chmod +x ./allinone/build-prebuilt.sh
+
+          BASE_IMAGE_NAME="${{ env.BASE_IMAGE_NAME }}" \
+          FINAL_IMAGE_NAME="${{ env.FINAL_IMAGE_NAME }}" \
+          IMAGE_TAG="${{ steps.tag.outputs.tag }}-${{ steps.platform-suffix.outputs.suffix }}" \
+          ./allinone/build-prebuilt.sh \
+            --platform ${{ matrix.platform }} \
+            --tag ${{ steps.tag.outputs.tag }}
+
+      - name: Push final image
+        run: |
+          docker push ${{ env.FINAL_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}-${{ steps.platform-suffix.outputs.suffix }}
+
+  create-manifest:
+    needs: build-prebuilt
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/aio-* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/aio-}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and push multi-platform manifest
+        run: |
+          docker buildx imagetools create -t ${{ env.FINAL_IMAGE_NAME }}:${{ steps.tag.outputs.tag }} \
+            ${{ env.FINAL_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}-arm64 \
+            ${{ env.FINAL_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}-amd64
+
+  test-image:
+    needs: create-manifest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/aio-* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/aio-}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pull and test image
+        run: |
+          chmod +x ./allinone/test.sh
+          docker pull ${{ env.FINAL_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+
+          # Tag for test script
+          docker tag ${{ env.FINAL_IMAGE_NAME }}:${{ steps.tag.outputs.tag }} civicrm-eu-ngo:test
+
+          # Run test script
+          ./allinone/test.sh --tag test --port 8080 --timeout 300
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            *.log
+          retention-days: 7
