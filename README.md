@@ -220,6 +220,31 @@ A: Yes! Use multiple containers on different ports. See [ADVANCED.md](docs/ADVAN
 - **[Testing Guide](docs/TESTING.md)** - Playwright e2e tests, PHP/CiviCRM version testing
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 
+## Example Setups
+
+### European Nonprofit Stack 🌍
+
+A complete setup for European nonprofit organizations featuring CiviBanking, CiviSEPA, GDPR tools, and more.
+
+**Quick Start:**
+
+```bash
+mkdir -p extensions/eu-nonprofit
+cp examples/civikitchen-eu-nonprofit.json extensions/eu-nonprofit/civikitchen.json
+docker-compose restart civicrm
+```
+
+**What it includes:**
+- CiviBanking & CiviSEPA for payment processing
+- Contract management for recurring donations
+- GDPR compliance tools
+- Twingle integration (German donation forms)
+- XCM & Identity Tracker for contact management
+- Shoreditch theme
+- **Automatic sample data seeding** for each extension
+
+That's it! Extensions install automatically with built-in sample data.
+
 ## Resources
 
 - [Buildkit Documentation](https://docs.civicrm.org/dev/en/latest/tools/buildkit/)

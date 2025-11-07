@@ -1,0 +1,68 @@
+{
+  "description": "European Nonprofit Extension Stack - Banking, SEPA, GDPR, and nonprofit management tools",
+  "dependencies": [
+    {
+      "name": "org.project60.banking",
+      "repo": "https://github.com/Project60/org.project60.banking.git",
+      "version": "0.7.5",
+      "enable": true,
+      "seed": true
+    },
+    {
+      "name": "org.project60.sepa",
+      "repo": "https://github.com/Project60/org.project60.sepa.git",
+      "version": "v1.5.2",
+      "enable": true,
+      "seed": true
+    },
+    {
+      "name": "de.systopia.contract",
+      "repo": "https://github.com/systopia/de.systopia.contract.git",
+      "version": "master",
+      "enable": true,
+      "seed": true
+    },
+    {
+      "name": "de.systopia.twingle",
+      "repo": "https://github.com/systopia/de.systopia.twingle.git",
+      "version": "master",
+      "enable": true,
+      "seed": true
+    },
+    {
+      "name": "de.systopia.gdprx",
+      "repo": "https://github.com/systopia/de.systopia.gdprx.git",
+      "version": "master",
+      "enable": true,
+      "seed": true
+    },
+    {
+      "name": "de.systopia.xcm",
+      "repo": "https://github.com/systopia/de.systopia.xcm.git",
+      "version": "master",
+      "enable": true,
+      "seed": true
+    },
+    {
+      "name": "de.systopia.identitytracker",
+      "repo": "https://github.com/systopia/de.systopia.identitytracker.git",
+      "version": "master",
+      "enable": true,
+      "seed": true
+    },
+    {
+      "name": "org.civicrm.shoreditch",
+      "repo": "https://github.com/civicrm/org.civicrm.shoreditch.git",
+      "version": "master",
+      "enable": true,
+      "seed": true
+    },
+    {
+      "name": "org.civicrm.contactlayout",
+      "repo": "https://lab.civicrm.org/extensions/contactlayout.git",
+      "version": "master",
+      "enable": true,
+      "seed": false
+    }
+  ]
+}

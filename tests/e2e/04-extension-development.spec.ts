@@ -25,6 +25,18 @@ test.describe("Extension Development Workflow", () => {
       try {
         fs.rmSync(TEST_EXTENSION_PATH, { recursive: true, force: true });
         console.log("Test extension directory removed");
+
+        // Flush CiviCRM cache to remove stale extension references
+        // This prevents "Failed to find extension" errors in subsequent tests
+        try {
+          execDockerCommand(
+            "cd /home/buildkit/buildkit/build/site/web && cv flush",
+            30000
+          );
+          console.log("CiviCRM cache flushed");
+        } catch (error) {
+          console.error("Warning: Could not flush CiviCRM cache:", error);
+        }
       } catch (error) {
         console.error("Error removing test extension:", error);
       }

@@ -147,6 +147,7 @@ install_extension_dependencies() {
             DEP_REPO=$(echo "$dep" | jq -r '.repo')
             DEP_VERSION=$(echo "$dep" | jq -r '.version')
             DEP_ENABLE=$(echo "$dep" | jq -r '.enable // true')
+            DEP_SEED=$(echo "$dep" | jq -r '.seed // false')
 
             DEP_PATH="$EXT_DIR/$DEP_NAME"
 
@@ -176,11 +177,19 @@ install_extension_dependencies() {
             # Enable the extension if requested
             if [ "$DEP_ENABLE" = "true" ]; then
                 cd /home/buildkit/buildkit/build/site/web
-                if cv ext:enable "$DEP_NAME" 2>/dev/null; then
+                # Wait for CiviCRM to be ready (check if settings file exists)
+                if [ ! -f "sites/default/civicrm.settings.php" ]; then
+                    echo "  ⚠ CiviCRM not yet ready, skipping enable for $DEP_NAME"
+                elif cv ext:enable "$DEP_NAME" 2>&1 | tee /tmp/cv-enable-$DEP_NAME.log | grep -q "Enabling extension"; then
                     echo "  ✓ Enabled $DEP_NAME"
                 else
-                    echo "  ⚠ Could not enable $DEP_NAME (may need manual enabling)"
+                    echo "  ⚠ Could not enable $DEP_NAME (check logs: /tmp/cv-enable-$DEP_NAME.log)"
                 fi
+            fi
+
+            # Track for seeding later (store in temp file)
+            if [ "$DEP_SEED" != "false" ]; then
+                echo "$DEP_NAME|$DEP_SEED" >> /tmp/extensions_to_seed.txt
             fi
         done
     done
@@ -201,7 +210,63 @@ run_extension_seeding() {
         return 0
     fi
 
-    # Find all civikitchen.json files with seeding config
+    # Flush cache to ensure extension list is current and prevent stale cache issues
+    cd /home/buildkit/buildkit/build/site/web 2>/dev/null && cv flush 2>/dev/null || true
+
+    # Source the seed loader script (modular seeding system)
+    if [ -f "/home/buildkit/scripts/lib/seed-loader.sh" ]; then
+        source /home/buildkit/scripts/lib/seed-loader.sh
+    elif [ -f "/home/buildkit/scripts/lib/seed-common-extensions.sh" ]; then
+        # Fallback to monolithic script for backward compatibility
+        source /home/buildkit/scripts/lib/seed-common-extensions.sh
+    elif [ -f "/seed-common-extensions.sh" ]; then
+        # Fallback to old location for backward compatibility
+        source /seed-common-extensions.sh
+    fi
+
+    # Seed extensions based on dependency configurations (from temp file)
+    if [ -f "/tmp/extensions_to_seed.txt" ]; then
+        while IFS='|' read -r ext_name seed_type; do
+            SEED_MARKER="/tmp/.civicrm-seeded-$ext_name"
+
+            # Check if already seeded (run once)
+            if [ -f "$SEED_MARKER" ]; then
+                echo "  ✓ $ext_name already seeded, skipping"
+                continue
+            fi
+
+            if [ "$seed_type" = "true" ]; then
+                # Use built-in seeding
+                echo "  Running built-in seeding for $ext_name..."
+                if declare -f seed_extension > /dev/null; then
+                    seed_extension "$ext_name"
+                    touch "$SEED_MARKER"
+                else
+                    echo "  ⚠️  Built-in seeding not available"
+                fi
+            elif [ "$seed_type" = "custom" ] || [ "$seed_type" != "false" ]; then
+                # Custom seed script (look for it in extension directory)
+                echo "  Running custom seeding for $ext_name..."
+                EXT_PATH="$EXT_DIR/$ext_name"
+                if [ -f "$EXT_PATH/seed.sh" ]; then
+                    chmod +x "$EXT_PATH/seed.sh"
+                    if bash "$EXT_PATH/seed.sh"; then
+                        echo "  ✓ Custom seeding completed for $ext_name"
+                        touch "$SEED_MARKER"
+                    else
+                        echo "  ✗ Custom seeding failed for $ext_name"
+                    fi
+                else
+                    echo "  ⚠️  Custom seed script not found: $EXT_PATH/seed.sh"
+                fi
+            fi
+        done < /tmp/extensions_to_seed.txt
+
+        # Clean up temp file
+        rm -f /tmp/extensions_to_seed.txt
+    fi
+
+    # Also support old-style seeding config for backward compatibility
     for config_file in "$EXT_DIR"/*/civikitchen.json; do
         if [ ! -f "$config_file" ]; then
             continue
@@ -210,7 +275,7 @@ run_extension_seeding() {
         EXTENSION_DIR=$(dirname "$config_file")
         EXTENSION_NAME=$(basename "$EXTENSION_DIR")
 
-        # Check if seeding is enabled
+        # Check if seeding is enabled (old format)
         SEED_ENABLED=$(cat "$config_file" | jq -r '.seeding.enabled // false')
 
         if [ "$SEED_ENABLED" != "true" ]; then

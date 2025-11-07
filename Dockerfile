@@ -67,7 +67,8 @@ RUN apt-get install -y \
     rsync \
     patch \
     acl \
-    bzip2
+    bzip2 \
+    jq
 
 # Clean up
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -96,9 +97,12 @@ ENV PATH="/home/buildkit/buildkit/bin:${PATH}"
 # Set working directory
 WORKDIR /home/buildkit
 
-# Copy entrypoint script
+# Copy entrypoint and scripts directory
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY scripts/ /home/buildkit/scripts/
+RUN chmod +x /usr/local/bin/entrypoint.sh \
+    && chmod +x /home/buildkit/scripts/lib/*.sh \
+    && chown -R buildkit:buildkit /home/buildkit/scripts
 
 # Switch to buildkit user
 USER buildkit

@@ -127,3 +127,66 @@ export async function navigateToExtensions(page: Page): Promise<void> {
   // Wait for extensions page to load
   await page.waitForSelector('.crm-container, #crm-container', { timeout: 10000 });
 }
+
+/**
+ * Get list of enabled extensions via cv ext:list
+ */
+export function getEnabledExtensions(): string[] {
+  try {
+    const output = execDockerCommand(
+      'cd /home/buildkit/buildkit/build/site/web && cv ext:list --local 2>&1',
+      30000
+    );
+
+    const extensions: string[] = [];
+    const lines = output.split('\n');
+
+    for (const line of lines) {
+      if (line.includes('| installed |') || line.includes('| installed   |')) {
+        // Match format: "banking (org.project60.banking)" or just "authx"
+        // Extract the full key from parentheses if present, otherwise use the short name
+        const fullKeyMatch = line.match(/\(([^)]+)\)/);
+        if (fullKeyMatch && fullKeyMatch[1]) {
+          extensions.push(fullKeyMatch[1]);
+        } else {
+          // Fallback: extract short name if no parentheses
+          const shortNameMatch = line.match(/\|\s+\w+\s+\|\s+([^\s(]+)/);
+          if (shortNameMatch && shortNameMatch[1]) {
+            extensions.push(shortNameMatch[1]);
+          }
+        }
+      }
+    }
+
+    return extensions;
+  } catch (error) {
+    console.error('Error getting enabled extensions:', error);
+    return [];
+  }
+}
+
+/**
+ * Check if a specific extension is enabled
+ */
+export function isExtensionEnabled(extensionKey: string): boolean {
+  const enabledExtensions = getEnabledExtensions();
+  return enabledExtensions.some(ext => ext.includes(extensionKey));
+}
+
+/**
+ * Navigate to CiviBanking admin page
+ */
+export async function navigateToCiviBanking(page: Page): Promise<void> {
+  await page.goto('/civicrm/banking/manager');
+  await page.waitForLoadState('networkidle');
+  await page.waitForSelector('.crm-container, #crm-container', { timeout: 10000 });
+}
+
+/**
+ * Navigate to CiviSEPA settings page
+ */
+export async function navigateToCiviSEPA(page: Page): Promise<void> {
+  await page.goto('/civicrm/sepa');
+  await page.waitForLoadState('networkidle');
+  await page.waitForSelector('.crm-container, #crm-container', { timeout: 10000 });
+}
