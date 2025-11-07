@@ -34,6 +34,7 @@ echo ""
 SKIP_BASE_BUILD=false
 SKIP_SITE_CREATION=false
 PLATFORM="linux/arm64"
+PUSH_TO_REGISTRY=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -52,6 +53,10 @@ while [[ $# -gt 0 ]]; do
         --tag)
             IMAGE_TAG="$2"
             shift 2
+            ;;
+        --push)
+            PUSH_TO_REGISTRY=true
+            shift
             ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
@@ -200,12 +205,21 @@ EOF
 # Build final image
 echo ""
 echo "Building final image..."
-docker buildx build \
-    -f "$TEMP_DIR/Dockerfile.final" \
-    --tag "${FINAL_IMAGE_NAME}:${IMAGE_TAG}" \
-    --platform "$PLATFORM" \
-    --load \
-    "$TEMP_DIR"
+if [ "$PUSH_TO_REGISTRY" = true ]; then
+    docker buildx build \
+        -f "$TEMP_DIR/Dockerfile.final" \
+        --tag "${FINAL_IMAGE_NAME}:${IMAGE_TAG}" \
+        --platform "$PLATFORM" \
+        --push \
+        "$TEMP_DIR"
+else
+    docker buildx build \
+        -f "$TEMP_DIR/Dockerfile.final" \
+        --tag "${FINAL_IMAGE_NAME}:${IMAGE_TAG}" \
+        --platform "$PLATFORM" \
+        --load \
+        "$TEMP_DIR"
+fi
 
 if [ $? -eq 0 ]; then
     echo ""

@@ -142,7 +142,7 @@ jobs:
               ;;
           esac
 
-      - name: Build pre-built image with two-stage process
+      - name: Build and push pre-built image with two-stage process
         run: |
           chmod +x ./allinone/build-prebuilt.sh
 
@@ -151,11 +151,8 @@ jobs:
           IMAGE_TAG="${{ steps.tag.outputs.tag }}-${{ steps.platform-suffix.outputs.suffix }}" \
           ./allinone/build-prebuilt.sh \
             --platform ${{ matrix.platform }} \
-            --tag ${{ steps.tag.outputs.tag }}
-
-      - name: Push final image
-        run: |
-          docker push ${{ env.FINAL_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}-${{ steps.platform-suffix.outputs.suffix }}
+            --tag ${{ steps.tag.outputs.tag }}-${{ steps.platform-suffix.outputs.suffix }} \
+            --push
 
   create-manifest:
     needs: build-prebuilt
