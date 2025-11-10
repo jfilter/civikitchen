@@ -6,7 +6,7 @@ A fully configured, production-ready CiviCRM instance with Drupal 10 and a compl
 
 ```bash
 # Run the container (simplest method)
-docker run -d -p 8080:80 --name civicrm-eu username/civicrm-eu-ngo:latest
+docker run -d -p 8080:80 --name civicrm-eu ghcr.io/jfilter/civicrm-eu-ngo:latest
 
 # Wait ~20-30 seconds for startup
 # Open your browser: http://localhost:8080
@@ -77,7 +77,7 @@ To keep your data between container restarts:
 docker run -d -p 8080:80 \
   --name civicrm-eu \
   -v civicrm-db:/var/lib/mysql \
-  username/civicrm-eu-ngo:latest
+  ghcr.io/jfilter/civicrm-eu-ngo:latest
 ```
 
 ### Backup Your Data
@@ -101,7 +101,7 @@ docker run -d -p 8080:80 \
   --name civicrm-eu \
   -e CIVIBUILD_ADMIN_PASS="your-secure-password" \
   -v civicrm-db:/var/lib/mysql \
-  username/civicrm-eu-ngo:latest
+  ghcr.io/jfilter/civicrm-eu-ngo:latest
 ```
 
 ### Port Mapping
@@ -110,25 +110,27 @@ Change the external port:
 
 ```bash
 # Access on port 8888 instead of 8080
-docker run -d -p 8888:80 --name civicrm-eu username/civicrm-eu-ngo:latest
+docker run -d -p 8888:80 --name civicrm-eu ghcr.io/jfilter/civicrm-eu-ngo:latest
 ```
 
 ## 🐳 Docker Compose
 
-For easier management, use Docker Compose:
+For easier management, use Docker Compose. Save this as `docker-compose.yml`:
 
 ```yaml
 version: '3.8'
 
 services:
   civicrm-eu:
-    image: username/civicrm-eu-ngo:latest
+    image: ghcr.io/jfilter/civicrm-eu-ngo:latest
     container_name: civicrm-eu
     ports:
       - "8080:80"
     volumes:
       - civicrm-db:/var/lib/mysql
     restart: unless-stopped
+    environment:
+      - CIVIBUILD_ADMIN_PASS=your-secure-password
 
 volumes:
   civicrm-db:
@@ -181,12 +183,12 @@ docker rm civicrm-eu
 ### Update to Latest Version
 
 ```bash
-docker pull username/civicrm-eu-ngo:latest
+docker pull ghcr.io/jfilter/civicrm-eu-ngo:latest
 docker stop civicrm-eu
 docker rm civicrm-eu
 docker run -d -p 8080:80 --name civicrm-eu \
   -v civicrm-db:/var/lib/mysql \
-  username/civicrm-eu-ngo:latest
+  ghcr.io/jfilter/civicrm-eu-ngo:latest
 ```
 
 ## 🏥 Health Check
@@ -248,7 +250,7 @@ docker logs civicrm-eu
 netstat -an | grep 8080
 
 # Use different port
-docker run -d -p 8888:80 --name civicrm-eu username/civicrm-eu-ngo:latest
+docker run -d -p 8888:80 --name civicrm-eu ghcr.io/jfilter/civicrm-eu-ngo:latest
 ```
 
 ### Cannot Access the Site
@@ -289,7 +291,7 @@ docker exec -it civicrm-eu /home/buildkit/buildkit/bin/cv flush
 
 ## 🤝 Contributing
 
-Found a bug or have a suggestion? Please open an issue on the [GitHub repository](https://github.com/yourusername/civikitchen).
+Found a bug or have a suggestion? Please open an issue on the [GitHub repository](https://github.com/jfilter/civikitchen).
 
 ## 📄 License
 
@@ -300,10 +302,13 @@ This image packages open-source software:
 
 ## 🏷️ Image Tags
 
-- `latest`: Latest stable build
-- `6.7.1`: Specific CiviCRM version
-- `drupal10`: Drupal 10 variant
-- `php8.2`: PHP 8.2 variant
+Available on [GitHub Container Registry](https://github.com/jfilter/civikitchen/pkgs/container/civicrm-eu-ngo):
+
+- `latest`: Multi-architecture (ARM64 + AMD64) latest stable build
+- `latest-arm64`: ARM64-specific build
+- `latest-amd64`: AMD64/x86_64-specific build
+
+The `latest` tag automatically selects the correct architecture for your platform.
 
 ## ⚡ Performance Tips
 
@@ -314,7 +319,7 @@ docker run -d -p 8080:80 \
   --name civicrm-eu \
   --memory="2g" \
   --cpus="2" \
-  username/civicrm-eu-ngo:latest
+  ghcr.io/jfilter/civicrm-eu-ngo:latest
 ```
 
 ### Use tmpfs for Better Performance
@@ -324,7 +329,7 @@ docker run -d -p 8080:80 \
   --name civicrm-eu \
   --tmpfs /tmp:rw,noexec,nosuid,size=512m \
   -v civicrm-db:/var/lib/mysql \
-  username/civicrm-eu-ngo:latest
+  ghcr.io/jfilter/civicrm-eu-ngo:latest
 ```
 
 ## 🌍 Use Cases

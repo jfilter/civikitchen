@@ -16,6 +16,7 @@
   - [Table of Contents](#table-of-contents)
   - [Features](#features)
   - [Verified Working](#verified-working)
+  - [🚀 Pre-Built All-in-One Image](#-pre-built-all-in-one-image)
   - [Prerequisites](#prerequisites)
   - [Quick Start](#quick-start)
   - [System Requirements](#system-requirements)
@@ -42,6 +43,28 @@
 ✅ **CMS:** Drupal 10, Drupal 9, WordPress
 ✅ **CiviCRM:** All core components (Events, Contributions, Memberships, Mailings, etc.)
 ✅ **Testing:** Automated e2e tests across PHP 8.1-8.4 and CiviCRM 6.5-6.7
+
+## 🚀 Pre-Built All-in-One Image
+
+Want to get started instantly? We publish pre-built images to GitHub Container Registry:
+
+[![GHCR](https://img.shields.io/badge/GHCR-civicrm--eu--ngo-blue?logo=docker)](https://github.com/jfilter/civikitchen/pkgs/container/civicrm-eu-ngo)
+
+```bash
+docker run -d -p 8080:80 --name civicrm ghcr.io/jfilter/civicrm-eu-ngo:latest
+```
+
+**Ready in 30 seconds!** Pre-configured with:
+- ✅ CiviCRM 6.7.1 + Drupal 10
+- ✅ 9 EU nonprofit extensions (CiviBanking, SEPA, GDPR, etc.)
+- ✅ Demo data pre-loaded
+- ✅ Multi-architecture support (ARM64 + AMD64)
+
+**[📖 View full documentation →](allinone/README.md)**
+
+> **Development vs. Production:**
+> Use the pre-built image for **quick testing, demos, or production**.
+> Use docker-compose (below) for **development and customization**.
 
 ## Prerequisites
 
