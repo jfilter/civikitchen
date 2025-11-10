@@ -111,6 +111,7 @@ if [ "$SKIP_SITE_CREATION" = false ]; then
     echo "Starting container (this will take 5-10 minutes)..."
     docker run -d \
         --name "$CONTAINER_NAME" \
+        --platform "$PLATFORM" \
         -p 8888:80 \
         "${BASE_IMAGE_NAME}:${IMAGE_TAG}"
 
