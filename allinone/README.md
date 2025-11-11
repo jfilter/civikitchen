@@ -158,6 +158,80 @@ docker exec -it civicrm-eu mysql -u civicrm -pcivicrm civicrm
 - CiviCRM user: `civicrm` / `civicrm`
 - Database name: `civicrm`
 
+## 🔌 API Access
+
+The image includes **7 pre-configured API users** with different permission levels for comprehensive API testing and integration:
+
+### Available API Users
+
+| Username | Password | Purpose |
+|----------|----------|---------|
+| `admin` | `admin` | Full administrative access |
+| `demo` | `demo` | Extensive permissions for testing |
+| `readonly` | `readonly` | View-only access (no create/update/delete) |
+| `fundraiser` | `fundraiser` | CiviContribute, campaigns, donations |
+| `eventmanager` | `eventmanager` | CiviEvent management |
+| `caseworker` | `caseworker` | CiviCase management |
+| `bankimporter` | `bankimporter` | CiviBanking imports + activities |
+
+### Getting Your API Key
+
+API keys are automatically generated on first startup and displayed in the container logs:
+
+```bash
+# View API credentials
+docker logs civicrm-eu | grep -A 20 "API User Credentials"
+```
+
+Or retrieve them manually:
+
+```bash
+# Get API key for a specific user
+docker exec -it civicrm-eu bash -c \
+  "cd /home/buildkit/buildkit/build/site/web && \
+   /home/buildkit/buildkit/bin/cv api4 User.get +w name='fundraiser' +s 'contact_id.api_key'"
+```
+
+### Making API Requests
+
+**Example: Get contacts using APIv4**
+
+```bash
+curl -X POST "http://localhost:8080/civicrm/ajax/api4/Contact/get" \
+  -H "X-Civi-Auth: Bearer YOUR_API_KEY" \
+  -H "X-Requested-With: XMLHttpRequest" \
+  -H "Content-Type: application/json" \
+  -d '{"select":["id","display_name"],"limit":10}'
+```
+
+**Example: Create a contribution (fundraiser user)**
+
+```bash
+curl -X POST "http://localhost:8080/civicrm/ajax/api4/Contribution/create" \
+  -H "X-Civi-Auth: Bearer YOUR_API_KEY" \
+  -H "X-Requested-With: XMLHttpRequest" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "values": {
+      "contact_id": 123,
+      "financial_type_id": 1,
+      "total_amount": 100.00,
+      "receive_date": "2025-11-11"
+    }
+  }'
+```
+
+### API Documentation
+
+For complete API documentation including:
+- Detailed permission levels for each user
+- All authentication methods
+- API endpoint reference
+- Testing examples
+- Troubleshooting guide
+
+See: [API-USERS.md](./API-USERS.md)
+
 ## 🛠️ Common Tasks
 
 ### Check Container Logs

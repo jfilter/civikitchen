@@ -1,17 +1,118 @@
 {
   "description": "European Nonprofit Extension Stack - Banking, SEPA, GDPR, and nonprofit management tools",
+  "authx": {
+    "header_cred": ["jwt", "api_key", "pass"]
+  },
+  "apiUsers": [
+    {
+      "username": "readonly",
+      "role": "api_readonly",
+      "permissions": [
+        "access CiviCRM",
+        "access AJAX API",
+        "view all contacts",
+        "access Contact Dashboard",
+        "access CiviContribute",
+        "access CiviEvent",
+        "access CiviMember",
+        "access CiviReport",
+        "view all activities",
+        "view event info",
+        "view event participants",
+        "access all cases and activities"
+      ]
+    },
+    {
+      "username": "fundraiser",
+      "role": "api_fundraiser",
+      "permissions": [
+        "access CiviCRM",
+        "access AJAX API",
+        "view all contacts",
+        "edit all contacts",
+        "add contacts",
+        "access CiviContribute",
+        "edit contributions",
+        "delete in CiviContribute",
+        "access CiviCampaign",
+        "manage campaign",
+        "administer CiviCampaign",
+        "access CiviReport",
+        "view all activities",
+        "edit all activities",
+        "delete activities"
+      ]
+    },
+    {
+      "username": "eventmanager",
+      "role": "api_eventmanager",
+      "permissions": [
+        "access CiviCRM",
+        "access AJAX API",
+        "view all contacts",
+        "edit all contacts",
+        "add contacts",
+        "access CiviEvent",
+        "edit all events",
+        "delete in CiviEvent",
+        "register for events",
+        "view event info",
+        "edit event participants",
+        "view event participants",
+        "access CiviReport",
+        "view all activities",
+        "edit all activities"
+      ]
+    },
+    {
+      "username": "caseworker",
+      "role": "api_caseworker",
+      "permissions": [
+        "access CiviCRM",
+        "access AJAX API",
+        "view all contacts",
+        "edit all contacts",
+        "add contacts",
+        "access my cases and activities",
+        "access all cases and activities",
+        "add cases",
+        "delete in CiviCase",
+        "administer CiviCase",
+        "access CiviReport",
+        "view all activities",
+        "edit all activities",
+        "delete activities"
+      ]
+    },
+    {
+      "username": "bankimporter",
+      "role": "api_bankimporter",
+      "permissions": [
+        "access CiviCRM",
+        "access AJAX API",
+        "view all contacts",
+        "edit all contacts",
+        "access CiviContribute",
+        "edit contributions",
+        "administer CiviCRM",
+        "view all activities",
+        "edit all activities",
+        "delete activities"
+      ]
+    }
+  ],
   "dependencies": [
     {
       "name": "org.project60.banking",
       "repo": "https://github.com/Project60/org.project60.banking.git",
-      "version": "1.3.2",
+      "version": "0.7.5",
       "enable": true,
       "seed": true
     },
     {
       "name": "org.project60.sepa",
       "repo": "https://github.com/Project60/org.project60.sepa.git",
-      "version": "1.12.0",
+      "version": "v1.5.2",
       "enable": true,
       "seed": true
     },

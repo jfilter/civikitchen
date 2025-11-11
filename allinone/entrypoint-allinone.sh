@@ -139,6 +139,11 @@ if [ ! -f "$SITE_CREATED_FLAG" ]; then
         echo ""
         echo "✓ Extensions configured"
 
+        # Setup API users from civikitchen.json
+        echo ""
+        echo "Setting up API users..."
+        bash /home/buildkit/scripts/lib/configure-api-users-from-json.sh /home/buildkit/stacks/eu-nonprofit/civikitchen.json
+
         # Mark site as created
         touch "$SITE_CREATED_FLAG"
 

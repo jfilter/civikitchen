@@ -380,6 +380,16 @@ if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
         # Install extension dependencies and run seeding
         install_extension_dependencies
         run_extension_seeding
+
+        # Setup API users with different permission levels
+        echo "===================================="
+        echo "Setting up API users..."
+        echo "===================================="
+        STACK_NAME="${STACK:-eu-nonprofit}"
+        if [ -f "/home/buildkit/scripts/lib/configure-api-users-from-json.sh" ]; then
+            bash /home/buildkit/scripts/lib/configure-api-users-from-json.sh "/config/${STACK_NAME}/civikitchen.json"
+        fi
+        echo "✓ API users setup complete!"
     else
         echo "Site already exists, skipping creation."
 
@@ -410,6 +420,16 @@ if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
         # Still check for new dependencies and seeding even if site exists
         install_extension_dependencies
         run_extension_seeding
+
+        # Setup API users with different permission levels
+        echo "===================================="
+        echo "Setting up API users..."
+        echo "===================================="
+        STACK_NAME="${STACK:-eu-nonprofit}"
+        if [ -f "/home/buildkit/scripts/lib/configure-api-users-from-json.sh" ]; then
+            bash /home/buildkit/scripts/lib/configure-api-users-from-json.sh "/config/${STACK_NAME}/civikitchen.json"
+        fi
+        echo "✓ API users setup complete!"
     fi
 fi
 

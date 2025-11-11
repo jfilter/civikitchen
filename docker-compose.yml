@@ -10,6 +10,8 @@ services:
     volumes:
       - buildkit-home:/home/buildkit
       - ./extensions:/home/buildkit/extensions-mount
+      - ./scripts:/home/buildkit/scripts:ro
+      - ./stacks:/config:ro
     environment:
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
@@ -18,6 +20,7 @@ services:
       - HTTPD_PORT=${HTTPD_PORT:-8080}
       - CIVICRM_SITE_TYPE=${CIVICRM_SITE_TYPE:-drupal10-demo}
       - CIVICRM_VERSION=${CIVICRM_VERSION:-6.7.1}
+      - STACK=${STACK:-eu-nonprofit}
     depends_on:
       - mysql
     networks:
