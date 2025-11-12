@@ -5,7 +5,7 @@ set -e
 # Usage: ./scripts/reset-seed-markers.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
 
 echo "===================================="
 echo "Resetting Extension Seed Markers"
@@ -13,16 +13,18 @@ echo "===================================="
 echo ""
 
 # Check if container is running
-if ! docker-compose ps civicrm | grep -q "Up"; then
+CONTAINER_STATUS=$(docker-compose ps civicrm || true)
+if ! echo "${CONTAINER_STATUS}" | grep -q "Up"; then
     echo "Error: CiviCRM container is not running"
     echo "Start it with: docker-compose up -d"
     exit 1
 fi
 
+# shellcheck disable=SC2016
 docker-compose exec civicrm bash -c '
     EXT_DIR="/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext"
 
-    if [ ! -d "$EXT_DIR" ]; then
+    if [[ ! -d "${EXT_DIR}" ]]; then
         echo "Extensions directory not found"
         exit 1
     fi
@@ -33,20 +35,20 @@ docker-compose exec civicrm bash -c '
     found_markers=false
 
     # Find and remove all .civicrm-seeded marker files
-    for marker_file in "$EXT_DIR"/*/.civicrm-seeded; do
-        if [ -f "$marker_file" ]; then
+    for marker_file in "${EXT_DIR}"/*/.civicrm-seeded; do
+        if [[ -f "${marker_file}" ]]; then
             found_markers=true
-            extension_dir=$(dirname "$marker_file")
-            extension_name=$(basename "$extension_dir")
+            extension_dir=$(dirname "${marker_file}")
+            extension_name=$(basename "${extension_dir}")
 
-            echo "  Removing marker for: $extension_name"
-            rm -f "$marker_file"
+            echo "  Removing marker for: ${extension_name}"
+            rm -f "${marker_file}"
         fi
     done
 
     echo ""
 
-    if [ "$found_markers" = true ]; then
+    if [[ "${found_markers}" = true ]]; then
         echo "✓ Seed markers removed successfully!"
         echo ""
         echo "You can now re-run seeding with:"

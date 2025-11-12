@@ -1,0 +1,18 @@
+# ShellCheck configuration for CiviKitchen
+
+# Disable specific checks that are too noisy or not applicable
+# SC2034: Variable appears unused (common in sourced scripts)
+disable=SC2034
+
+# SC2086: Double quote to prevent globbing and word splitting (sometimes intentional)
+# Uncomment if needed:
+# disable=SC2086
+
+# SC1091: Not following sourced files (we can't always resolve all paths)
+disable=SC1091
+
+# Enable all optional checks for better quality
+enable=all
+
+# Use bash as the default shell
+shell=bash

@@ -23,8 +23,45 @@ jobs:
       - name: Run actionlint
         run: ./actionlint -color
 
+  lint-bash:
+    runs-on: ubuntu-24.04
+    name: Lint Bash scripts
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck
+        run: |
+          shellcheck $(find . -type f -name '*.sh' ! -path './node_modules/*' ! -path './extensions/*')
+
+  lint-js:
+    runs-on: ubuntu-24.04
+    name: Lint JavaScript/TypeScript
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint:js
+
   test-stable:
-    needs: lint-workflows
+    needs: [lint-workflows, lint-bash, lint-js]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -42,9 +79,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Run ESLint
-        run: npm run lint
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium

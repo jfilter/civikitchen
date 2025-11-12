@@ -19,21 +19,21 @@ TIMEOUT=180  # 3 minutes timeout
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
-    case $1 in
+    case ${1} in
         --image)
-            IMAGE_NAME="$2"
+            IMAGE_NAME="${2}"
             shift 2
             ;;
         --tag)
-            IMAGE_TAG="$2"
+            IMAGE_TAG="${2}"
             shift 2
             ;;
         --port)
-            TEST_PORT="$2"
+            TEST_PORT="${2}"
             shift 2
             ;;
         --timeout)
-            TIMEOUT="$2"
+            TIMEOUT="${2}"
             shift 2
             ;;
         --keep)
@@ -41,7 +41,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help)
-            echo "Usage: $0 [OPTIONS]"
+            echo "Usage: ${0} [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --image NAME     Image name (default: civicrm-eu-ngo)"
@@ -52,13 +52,13 @@ while [[ $# -gt 0 ]]; do
             echo "  --help           Show this help message"
             echo ""
             echo "Examples:"
-            echo "  $0"
-            echo "  $0 --tag test --port 9090"
-            echo "  $0 --keep  # Keep container for manual inspection"
+            echo "  ${0}"
+            echo "  ${0} --tag test --port 9090"
+            echo "  ${0} --keep  # Keep container for manual inspection"
             exit 0
             ;;
         *)
-            echo -e "${RED}Unknown option: $1${NC}"
+            echo -e "${RED}Unknown option: ${1}${NC}"
             echo "Use --help for usage information"
             exit 1
             ;;
@@ -79,11 +79,11 @@ echo ""
 
 # Cleanup function
 cleanup() {
-    if [ "${KEEP_CONTAINER}" != "true" ]; then
+    if [[ "${KEEP_CONTAINER}" != "true" ]]; then
         echo ""
         echo -e "${YELLOW}Cleaning up...${NC}"
-        docker stop ${CONTAINER_NAME} >/dev/null 2>&1 || true
-        docker rm ${CONTAINER_NAME} >/dev/null 2>&1 || true
+        docker stop "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+        docker rm "${CONTAINER_NAME}" >/dev/null 2>&1 || true
         echo -e "${GREEN}✓ Cleanup complete${NC}"
     else
         echo ""
@@ -99,15 +99,15 @@ cleanup() {
 }
 
 # Set trap for cleanup on exit
-if [ "${KEEP_CONTAINER}" != "true" ]; then
+if [[ "${KEEP_CONTAINER}" != "true" ]]; then
     trap cleanup EXIT
 fi
 
 # Test 1: Check if image exists
 echo -e "${BLUE}Test 1: Checking if image exists...${NC}"
-if docker image inspect ${FULL_IMAGE} >/dev/null 2>&1; then
+if docker image inspect "${FULL_IMAGE}" >/dev/null 2>&1; then
     echo -e "${GREEN}✓ Image found${NC}"
-    IMAGE_SIZE=$(docker images ${FULL_IMAGE} --format "{{.Size}}")
+    IMAGE_SIZE=$(docker images "${FULL_IMAGE}" --format "{{.Size}}")
     echo "  Size: ${IMAGE_SIZE}"
 else
     echo -e "${RED}✗ Image not found: ${FULL_IMAGE}${NC}"
@@ -118,7 +118,7 @@ echo ""
 
 # Test 2: Check if port is available
 echo -e "${BLUE}Test 2: Checking if port ${TEST_PORT} is available...${NC}"
-if lsof -Pi :${TEST_PORT} -sTCP:LISTEN -t >/dev/null 2>&1; then
+if lsof -Pi :"${TEST_PORT}" -sTCP:LISTEN -t >/dev/null 2>&1; then
     echo -e "${RED}✗ Port ${TEST_PORT} is already in use${NC}"
     echo "  Use --port option to specify a different port"
     exit 1
@@ -130,12 +130,13 @@ echo ""
 # Test 3: Start container
 echo -e "${BLUE}Test 3: Starting container...${NC}"
 # Remove any existing container with same name
-docker stop ${CONTAINER_NAME} >/dev/null 2>&1 || true
-docker rm ${CONTAINER_NAME} >/dev/null 2>&1 || true
+docker stop "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+docker rm "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 
-if docker run -d -p ${TEST_PORT}:80 --name ${CONTAINER_NAME} ${FULL_IMAGE} >/dev/null; then
+if docker run -d -p "${TEST_PORT}":80 --name "${CONTAINER_NAME}" "${FULL_IMAGE}" >/dev/null; then
     echo -e "${GREEN}✓ Container started${NC}"
-    echo "  Container ID: $(docker ps -q -f name=${CONTAINER_NAME})"
+    CONTAINER_ID=$(docker ps -q -f name="${CONTAINER_NAME}" || true)
+    echo "  Container ID: ${CONTAINER_ID}"
 else
     echo -e "${RED}✗ Failed to start container${NC}"
     exit 1
@@ -146,42 +147,43 @@ echo ""
 echo -e "${BLUE}Test 4: Waiting for container to be ready (max ${TIMEOUT}s)...${NC}"
 ELAPSED=0
 INTERVAL=5
-while [ $ELAPSED -lt $TIMEOUT ]; do
-    if curl -sf http://localhost:${TEST_PORT} >/dev/null 2>&1; then
+while [[ "${ELAPSED}" -lt "${TIMEOUT}" ]]; do
+    if curl -sf http://localhost:"${TEST_PORT}" >/dev/null 2>&1; then
         echo -e "${GREEN}✓ Container is responding (after ${ELAPSED}s)${NC}"
         break
     fi
 
     # Check if container is still running
-    if ! docker ps -q -f name=${CONTAINER_NAME} | grep -q .; then
+    RUNNING=$(docker ps -q -f name="${CONTAINER_NAME}" || true)
+    if ! echo "${RUNNING}" | grep -q .; then
         echo -e "${RED}✗ Container stopped unexpectedly${NC}"
         echo ""
         echo "Last logs:"
-        docker logs --tail 50 ${CONTAINER_NAME}
+        docker logs --tail 50 "${CONTAINER_NAME}"
         exit 1
     fi
 
-    if [ $ELAPSED -gt 0 ]; then
+    if [[ "${ELAPSED}" -gt 0 ]]; then
         echo "  Waiting... (${ELAPSED}s elapsed)"
     fi
 
-    sleep $INTERVAL
+    sleep "${INTERVAL}"
     ELAPSED=$((ELAPSED + INTERVAL))
 done
 
-if [ $ELAPSED -ge $TIMEOUT ]; then
+if [[ "${ELAPSED}" -ge "${TIMEOUT}" ]]; then
     echo -e "${RED}✗ Timeout waiting for container (${TIMEOUT}s)${NC}"
     echo ""
     echo "Container logs:"
-    docker logs ${CONTAINER_NAME}
+    docker logs "${CONTAINER_NAME}"
     exit 1
 fi
 echo ""
 
 # Test 5: HTTP Response
 echo -e "${BLUE}Test 5: Testing HTTP response...${NC}"
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${TEST_PORT})
-if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 302 ] || [ "$HTTP_CODE" -eq 301 ]; then
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:"${TEST_PORT}")
+if [[ "${HTTP_CODE}" -eq 200 ]] || [[ "${HTTP_CODE}" -eq 302 ]] || [[ "${HTTP_CODE}" -eq 301 ]]; then
     echo -e "${GREEN}✓ HTTP response: ${HTTP_CODE}${NC}"
 else
     echo -e "${RED}✗ Unexpected HTTP code: ${HTTP_CODE}${NC}"
@@ -191,7 +193,7 @@ echo ""
 
 # Test 6: MariaDB is running
 echo -e "${BLUE}Test 6: Testing MariaDB connection...${NC}"
-if docker exec ${CONTAINER_NAME} mysqladmin -u root -proot ping >/dev/null 2>&1; then
+if docker exec "${CONTAINER_NAME}" mysqladmin -u root -proot ping >/dev/null 2>&1; then
     echo -e "${GREEN}✓ MariaDB is running${NC}"
 else
     echo -e "${RED}✗ MariaDB connection failed${NC}"
@@ -201,8 +203,9 @@ echo ""
 
 # Test 7: CiviCRM database exists
 echo -e "${BLUE}Test 7: Testing CiviCRM database...${NC}"
-DB_CHECK=$(docker exec ${CONTAINER_NAME} bash -c "cd /home/buildkit/buildkit/build/site/web && /home/buildkit/buildkit/bin/cv ev 'return CRM_Core_DAO::singleValueQuery(\"SELECT COUNT(*) FROM civicrm_contact\");' 2>/dev/null" | tr -d '"')
-if [ ! -z "$DB_CHECK" ] && [ "$DB_CHECK" -gt 0 ]; then
+DB_RESULT=$(docker exec "${CONTAINER_NAME}" bash -c "cd /home/buildkit/buildkit/build/site/web && /home/buildkit/buildkit/bin/cv ev 'return CRM_Core_DAO::singleValueQuery(\"SELECT COUNT(*) FROM civicrm_contact\");' 2>/dev/null" || true)
+DB_CHECK=$(echo "${DB_RESULT}" | tr -d '"')
+if [[ -n "${DB_CHECK}" ]] && [[ "${DB_CHECK}" -gt 0 ]]; then
     echo -e "${GREEN}✓ CiviCRM database accessible${NC}"
     echo "  Found ${DB_CHECK} contacts"
 else
@@ -227,7 +230,8 @@ EXPECTED_EXTENSIONS=(
 
 EXTENSION_CHECK_FAILED=0
 for ext in "${EXPECTED_EXTENSIONS[@]}"; do
-    if docker exec ${CONTAINER_NAME} bash -c "cd /home/buildkit/buildkit/build/site/web && /home/buildkit/buildkit/bin/cv api4 Extension.get 2>/dev/null" | grep -q "\"key\": \"${ext}\""; then
+    EXT_CHECK=$(docker exec "${CONTAINER_NAME}" bash -c "cd /home/buildkit/buildkit/build/site/web && /home/buildkit/buildkit/bin/cv api4 Extension.get 2>/dev/null" || true)
+    if echo "${EXT_CHECK}" | grep -q "\"key\": \"${ext}\""; then
         echo -e "  ${GREEN}✓${NC} ${ext}"
     else
         echo -e "  ${RED}✗${NC} ${ext} not found"
@@ -235,7 +239,7 @@ for ext in "${EXPECTED_EXTENSIONS[@]}"; do
     fi
 done
 
-if [ $EXTENSION_CHECK_FAILED -eq 0 ]; then
+if [[ "${EXTENSION_CHECK_FAILED}" -eq 0 ]]; then
     echo -e "${GREEN}✓ All 9 extensions found${NC}"
 else
     echo -e "${RED}✗ Some extensions are missing${NC}"
@@ -245,18 +249,18 @@ echo ""
 
 # Test 9: Apache is serving correctly
 echo -e "${BLUE}Test 9: Testing Apache configuration...${NC}"
-if docker exec ${CONTAINER_NAME} apachectl -t >/dev/null 2>&1; then
+if docker exec "${CONTAINER_NAME}" apachectl -t >/dev/null 2>&1; then
     echo -e "${GREEN}✓ Apache configuration is valid${NC}"
 else
     echo -e "${RED}✗ Apache configuration has errors${NC}"
-    docker exec ${CONTAINER_NAME} apachectl -t
+    docker exec "${CONTAINER_NAME}" apachectl -t
     exit 1
 fi
 echo ""
 
 # Test 10: File permissions
 echo -e "${BLUE}Test 10: Testing file permissions...${NC}"
-if docker exec ${CONTAINER_NAME} test -w /home/buildkit/buildkit/build/site/web/sites/default/files; then
+if docker exec "${CONTAINER_NAME}" test -w /home/buildkit/buildkit/build/site/web/sites/default/files; then
     echo -e "${GREEN}✓ Files directory is writable${NC}"
 else
     echo -e "${RED}✗ Files directory is not writable${NC}"
@@ -282,9 +286,9 @@ echo ""
 echo "Extensions: 9 EU-NGO extensions verified"
 echo ""
 
-if [ "${KEEP_CONTAINER}" != "true" ]; then
+if [[ "${KEEP_CONTAINER}" != "true" ]]; then
     echo -e "${YELLOW}Container will be stopped and removed.${NC}"
-    echo "To keep it running, use: $0 --keep"
+    echo "To keep it running, use: ${0} --keep"
 else
     echo -e "${GREEN}Container is running: ${CONTAINER_NAME}${NC}"
 fi

@@ -16,11 +16,11 @@ ATTEMPT=0
 MAX_ATTEMPTS=30
 until mysql -u root -proot -e "SELECT 1" > /dev/null 2>&1; do
     ATTEMPT=$((ATTEMPT + 1))
-    if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-        echo "ERROR: MariaDB failed to start after $MAX_ATTEMPTS attempts"
+    if [[ "${ATTEMPT}" -ge "${MAX_ATTEMPTS}" ]]; then
+        echo "ERROR: MariaDB failed to start after ${MAX_ATTEMPTS} attempts"
         exit 1
     fi
-    echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS..."
+    echo "  Attempt ${ATTEMPT}/${MAX_ATTEMPTS}..."
     sleep 2
 done
 
@@ -28,7 +28,7 @@ echo "✓ MariaDB is ready"
 echo ""
 
 # Verify CiviCRM site exists
-if [ ! -f "/home/buildkit/buildkit/build/site/web/index.php" ]; then
+if [[ ! -f "/home/buildkit/buildkit/build/site/web/index.php" ]]; then
     echo "ERROR: CiviCRM site not found in expected location"
     exit 1
 fi

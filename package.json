@@ -17,8 +17,10 @@
     "test:civicrm-6.5": "CIVICRM_VERSION=6.5.1 SKIP_WEBSERVER=1 npm test",
     "test:civicrm-6.6": "CIVICRM_VERSION=6.6.3 SKIP_WEBSERVER=1 npm test",
     "test:civicrm-6.7": "CIVICRM_VERSION=6.7.1 SKIP_WEBSERVER=1 npm test",
-    "lint": "eslint . --ext .ts,.js",
-    "lint:fix": "eslint . --ext .ts,.js --fix",
+    "lint": "npm run lint:js && npm run lint:bash && npm run lint:workflows",
+    "lint:js": "eslint . --ext .ts,.js",
+    "lint:js:fix": "eslint . --ext .ts,.js --fix",
+    "lint:bash": "shellcheck $(find . -type f -name '*.sh' ! -path './node_modules/*' ! -path './extensions/*')",
     "lint:workflows": "actionlint .github/workflows/*.yml"
   },
   "keywords": [

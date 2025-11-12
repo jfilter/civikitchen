@@ -24,25 +24,25 @@ PLATFORM=${PLATFORM:-linux/amd64}
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
-    case $1 in
+    case ${1} in
         --php-version)
-            PHP_VERSION="$2"
+            PHP_VERSION="${2}"
             shift 2
             ;;
         --civicrm-version)
-            CIVICRM_VERSION="$2"
+            CIVICRM_VERSION="${2}"
             shift 2
             ;;
         --tag)
-            IMAGE_TAG="$2"
+            IMAGE_TAG="${2}"
             shift 2
             ;;
         --name)
-            IMAGE_NAME="$2"
+            IMAGE_NAME="${2}"
             shift 2
             ;;
         --platform)
-            PLATFORM="$2"
+            PLATFORM="${2}"
             shift 2
             ;;
         --multi-platform)
@@ -54,7 +54,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help)
-            echo "Usage: $0 [OPTIONS]"
+            echo "Usage: ${0} [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --php-version VERSION      PHP version (default: 8.2)"
@@ -67,13 +67,13 @@ while [[ $# -gt 0 ]]; do
             echo "  --help                     Show this help message"
             echo ""
             echo "Examples:"
-            echo "  $0"
-            echo "  $0 --php-version 8.3 --tag test"
-            echo "  $0 --multi-platform --push"
+            echo "  ${0}"
+            echo "  ${0} --php-version 8.3 --tag test"
+            echo "  ${0} --multi-platform --push"
             exit 0
             ;;
         *)
-            echo -e "${RED}Unknown option: $1${NC}"
+            echo -e "${RED}Unknown option: ${1}${NC}"
             echo "Use --help for usage information"
             exit 1
             ;;
@@ -97,21 +97,21 @@ PROJECT_ROOT="$( cd "${SCRIPT_DIR}/../.." && pwd )"
 cd "${PROJECT_ROOT}"
 
 # Check if we're in the correct directory
-if [ ! -f "allinone/Dockerfile" ]; then
+if [[ ! -f "allinone/Dockerfile" ]]; then
     echo -e "${RED}Error: allinone/Dockerfile not found${NC}"
     echo "Script must be run from project root or allinone directory"
     exit 1
 fi
 
 # Check if stacks/eu-nonprofit/civikitchen.json exists
-if [ ! -f "stacks/eu-nonprofit/civikitchen.json" ]; then
+if [[ ! -f "stacks/eu-nonprofit/civikitchen.json" ]]; then
     echo -e "${RED}Error: stacks/eu-nonprofit/civikitchen.json not found${NC}"
     echo "This file is required for the build"
     exit 1
 fi
 
 # Check if buildx is available for multi-platform builds
-if [[ "$PLATFORM" == *","* ]]; then
+if [[ "${PLATFORM}" == *","* ]]; then
     if ! docker buildx version >/dev/null 2>&1; then
         echo -e "${RED}Error: Docker Buildx is required for multi-platform builds${NC}"
         echo "Install it with: docker buildx install"
@@ -126,7 +126,7 @@ echo ""
 
 read -p "Do you want to continue? (y/N) " -n 1 -r
 echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+if [[ ! ${REPLY} =~ ^[Yy]$ ]]; then
     echo "Build cancelled"
     exit 0
 fi
@@ -144,13 +144,13 @@ BUILD_CMD="${BUILD_CMD} --build-arg CIVICRM_VERSION=${CIVICRM_VERSION}"
 BUILD_CMD="${BUILD_CMD} --tag ${IMAGE_NAME}:${IMAGE_TAG}"
 
 # Add additional tags
-if [ "${IMAGE_TAG}" == "latest" ]; then
+if [[ "${IMAGE_TAG}" == "latest" ]]; then
     BUILD_CMD="${BUILD_CMD} --tag ${IMAGE_NAME}:${CIVICRM_VERSION}"
     BUILD_CMD="${BUILD_CMD} --tag ${IMAGE_NAME}:php${PHP_VERSION}"
 fi
 
 # Push if requested
-if [ "${PUSH_IMAGE}" == "true" ]; then
+if [[ "${PUSH_IMAGE}" == "true" ]]; then
     BUILD_CMD="${BUILD_CMD} --push"
 else
     BUILD_CMD="${BUILD_CMD} --load"
@@ -168,7 +168,7 @@ echo ""
 
 START_TIME=$(date +%s)
 
-if eval ${BUILD_CMD}; then
+if eval "${BUILD_CMD}"; then
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
     MINUTES=$((DURATION / 60))
@@ -182,7 +182,7 @@ if eval ${BUILD_CMD}; then
     echo "Build time: ${MINUTES}m ${SECONDS}s"
     echo "Image: ${IMAGE_NAME}:${IMAGE_TAG}"
 
-    if [ "${PUSH_IMAGE}" != "true" ]; then
+    if [[ "${PUSH_IMAGE}" != "true" ]]; then
         echo ""
         echo -e "${YELLOW}Next steps:${NC}"
         echo "  1. Test the image:"
@@ -205,8 +205,8 @@ if eval ${BUILD_CMD}; then
     echo ""
 
     # Display image size if not multi-platform
-    if [[ "$PLATFORM" != *","* ]] && [ "${PUSH_IMAGE}" != "true" ]; then
-        IMAGE_SIZE=$(docker images ${IMAGE_NAME}:${IMAGE_TAG} --format "{{.Size}}")
+    if [[ "${PLATFORM}" != *","* ]] && [[ "${PUSH_IMAGE}" != "true" ]]; then
+        IMAGE_SIZE=$(docker images "${IMAGE_NAME}:${IMAGE_TAG}" --format "{{.Size}}")
         echo "Image size: ${IMAGE_SIZE}"
     fi
 

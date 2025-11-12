@@ -17,35 +17,35 @@ service mariadb start
 sleep 3
 
 # Initialize MariaDB root password if first run
-if [ ! -f "/var/lib/mysql/.mysql_initialized" ]; then
+if [[ ! -f "/var/lib/mysql/.mysql_initialized" ]]; then
     echo "Initializing MariaDB..."
     mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root';" || true
     touch /var/lib/mysql/.mysql_initialized
 fi
 
 # Check if we have a pre-built database to import
-if [ -f "$DB_DUMP_FILE" ] && [ ! -f "$DB_IMPORTED_FLAG" ]; then
+if [[ -f "${DB_DUMP_FILE}" ]] && [[ ! -f "${DB_IMPORTED_FLAG}" ]]; then
     echo "=========================================="
     echo "Found pre-built database! Importing..."
     echo "=========================================="
     echo ""
 
     # Import the database
-    mysql -u root -proot < "$DB_DUMP_FILE"
+    mysql -u root -proot < "${DB_DUMP_FILE}"
 
     # Flush privileges (the database dump already has the correct authentication settings)
     mysql -u root -proot -e "FLUSH PRIVILEGES;"
 
     # Mark as imported
-    touch "$DB_IMPORTED_FLAG"
-    touch "$SITE_CREATED_FLAG"
+    touch "${DB_IMPORTED_FLAG}"
+    touch "${SITE_CREATED_FLAG}"
 
     echo "✓ Database imported successfully"
     echo ""
 fi
 
 # If site not created yet, create it with civibuild
-if [ ! -f "$SITE_CREATED_FLAG" ]; then
+if [[ ! -f "${SITE_CREATED_FLAG}" ]]; then
     echo "=========================================="
     echo "First run - Creating CiviCRM site..."
     echo "This will take 5-10 minutes."
@@ -73,13 +73,12 @@ if [ ! -f "$SITE_CREATED_FLAG" ]; then
     echo "(This may take several minutes...)"
     echo ""
 
-    /home/buildkit/buildkit/bin/civibuild create site \
+    # shellcheck disable=SC2154
+    if /home/buildkit/buildkit/bin/civibuild create site \
         --type "${CIVICRM_SITE_TYPE}" \
         --civi-ver "${CIVICRM_VERSION}" \
         --url http://localhost:80 \
-        --admin-pass "${CIVIBUILD_ADMIN_PASS}"
-
-    if [ $? -eq 0 ]; then
+        --admin-pass "${CIVIBUILD_ADMIN_PASS}"; then
         echo ""
         echo "✓ Site created successfully"
 
@@ -90,22 +89,23 @@ if [ ! -f "$SITE_CREATED_FLAG" ]; then
         EXT_DIR="/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext"
         JSON_FILE="/home/buildkit/stacks/eu-nonprofit/civikitchen.json"
 
-        mkdir -p "$EXT_DIR"
-        cd "$EXT_DIR"
+        mkdir -p "${EXT_DIR}"
+        cd "${EXT_DIR}"
 
         # Clone extensions (disable exit on error temporarily)
         set +e
-        cat "$JSON_FILE" | jq -r '.dependencies[] | "\(.repo)|\(.name)|\(.version)"' | while IFS='|' read -r repo name version; do
-            if [ ! -d "$name" ]; then
-                echo "  Cloning $name @ $version"
-                if git clone "$repo" "$name" 2>&1 | grep -E "(error:|fatal:|✓)" || true; then
-                    if [ -d "$name" ]; then
-                        cd "$name"
-                        git checkout "$version" 2>/dev/null || echo "  Using default branch for $name"
-                        cd "$EXT_DIR"
+        DEPS_LIST=$(jq -r '.dependencies[] | "\(.repo)|\(.name)|\(.version)"' < "${JSON_FILE}" || true)
+        echo "${DEPS_LIST}" | while IFS='|' read -r repo name version; do
+            if [[ ! -d "${name}" ]]; then
+                echo "  Cloning ${name} @ ${version}"
+                if git clone "${repo}" "${name}" 2>&1 | grep -E "(error:|fatal:|✓)" || true; then
+                    if [[ -d "${name}" ]]; then
+                        cd "${name}"
+                        git checkout "${version}" 2>/dev/null || echo "  Using default branch for ${name}"
+                        cd "${EXT_DIR}"
                     fi
                 else
-                    echo "  ✗ Failed to clone $name"
+                    echo "  ✗ Failed to clone ${name}"
                 fi
             fi
         done
@@ -128,9 +128,9 @@ if [ ! -f "$SITE_CREATED_FLAG" ]; then
         echo ""
         echo "Seeding extension data..."
         for seed_script in /home/buildkit/scripts/lib/seeds/*.sh; do
-            if [ -f "$seed_script" ]; then
-                echo "  Running $(basename $seed_script)"
-                bash "$seed_script" 2>&1 | grep -E "(✓|✗|Seeding|Creating)" || true
+            if [[ -f "${seed_script}" ]]; then
+                echo "  Running $(basename "${seed_script}")"
+                bash "${seed_script}" 2>&1 | grep -E "(✓|✗|Seeding|Creating)" || true
             fi
         done
 
@@ -145,7 +145,7 @@ if [ ! -f "$SITE_CREATED_FLAG" ]; then
         bash /home/buildkit/scripts/lib/configure-api-users-from-json.sh /home/buildkit/stacks/eu-nonprofit/civikitchen.json
 
         # Mark site as created
-        touch "$SITE_CREATED_FLAG"
+        touch "${SITE_CREATED_FLAG}"
 
         echo ""
         echo "=========================================="

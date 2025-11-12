@@ -8,10 +8,11 @@ echo "  📋 Seeding Contract extension with comprehensive sample data..."
 
 create_contact_if_not_exists() {
     local contact_type="$1"; local first_name="$2"; local last_name="$3"; local email="$4"
-    existing=$(cv api4 Contact.get +w contact_type="$contact_type" +w email="$email" +l 1 --out=json 2>/dev/null | jq -r '.[] | length' || echo "0")
-    if [ "$existing" -eq 0 ]; then
-        cv api4 Contact.create values="{\"contact_type\":\"$contact_type\",\"first_name\":\"$first_name\",\"last_name\":\"$last_name\",\"email\":\"$email\"}" > /dev/null 2>&1 || true
-        echo "     ✓ Created contact: $first_name $last_name ($email)"
+    CONTACT_RESULT=$(cv api4 Contact.get +w contact_type="${contact_type}" +w email="${email}" +l 1 --out=json 2>/dev/null || true)
+    existing=$(echo "${CONTACT_RESULT}" | jq -r '.[] | length' || echo "0")
+    if [[ "${existing}" -eq 0 ]]; then
+        cv api4 Contact.create values="{\"contact_type\":\"${contact_type}\",\"first_name\":\"${first_name}\",\"last_name\":\"${last_name}\",\"email\":\"${email}\"}" > /dev/null 2>&1 || true
+        echo "     ✓ Created contact: ${first_name} ${last_name} (${email})"
     fi
 }
 

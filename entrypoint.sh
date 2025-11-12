@@ -8,24 +8,24 @@ echo "CiviCRM Buildkit Docker Container"
 echo "==================================="
 
 # Check if buildkit is already installed (check for bin directory)
-if [ ! -d "$BUILDKIT_DIR/bin" ]; then
+if [[ ! -d "${BUILDKIT_DIR}/bin" ]]; then
     echo "Installing buildkit for the first time..."
 
     # If buildkit directory exists but is incomplete, initialize git in place
     # This handles the case where volume mounts have created the directory structure
-    if [ -d "$BUILDKIT_DIR" ]; then
+    if [[ -d "${BUILDKIT_DIR}" ]]; then
         echo "Buildkit directory exists, initializing in place..."
         # Fix ownership of the directory (may have been created by Docker with wrong permissions)
-        sudo chown -R buildkit:buildkit "$BUILDKIT_DIR"
-        cd "$BUILDKIT_DIR"
+        sudo chown -R buildkit:buildkit "${BUILDKIT_DIR}"
+        cd "${BUILDKIT_DIR}"
         git init
         git remote add origin https://github.com/civicrm/civicrm-buildkit.git
         git fetch --depth 1 origin master
         git checkout -f master
     else
         # Clone buildkit repository normally
-        git clone https://github.com/civicrm/civicrm-buildkit.git "$BUILDKIT_DIR"
-        cd "$BUILDKIT_DIR"
+        git clone https://github.com/civicrm/civicrm-buildkit.git "${BUILDKIT_DIR}"
+        cd "${BUILDKIT_DIR}"
     fi
 
     # Download buildkit tools
@@ -33,13 +33,15 @@ if [ ! -d "$BUILDKIT_DIR/bin" ]; then
     ./bin/civi-download-tools
 
     # Add buildkit to PATH
-    echo 'export PATH="$HOME/buildkit/bin:$PATH"' >> /home/buildkit/.bashrc
-    export PATH="$HOME/buildkit/bin:$PATH"
+    # shellcheck disable=SC2016
+    echo 'export PATH="${HOME}/buildkit/bin:${PATH}"' >> /home/buildkit/.bashrc
+    export PATH="${HOME}/buildkit/bin:${PATH}"
 
     # Configure amp (non-interactive)
     echo "Configuring amp..."
     mkdir -p /home/buildkit/.amp
 
+    # shellcheck disable=SC2154
     cat > /home/buildkit/.amp/config.yml <<EOF
 hosts_type: file
 hosts_file_path: /etc/hosts
@@ -60,6 +62,7 @@ hosts_ip: 127.0.0.1
 EOF
 
     # Create MySQL config file
+    # shellcheck disable=SC2154
     cat > /home/buildkit/.my.cnf <<EOF
 [client]
 host=${MYSQL_HOST}
@@ -77,7 +80,7 @@ EOF
     echo "Buildkit installation complete!"
 else
     echo "Buildkit already installed."
-    export PATH="$HOME/buildkit/bin:$PATH"
+    export PATH="${HOME}/buildkit/bin:${PATH}"
 fi
 
 # Wait for MySQL to be ready
@@ -87,19 +90,19 @@ echo "===================================="
 
 max_attempts=30
 attempt=0
-while [ $attempt -lt $max_attempts ]; do
+while [[ ${attempt} -lt ${max_attempts} ]]; do
     if mysql -h"${MYSQL_HOST}" -P"${MYSQL_PORT}" -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1" >/dev/null 2>&1; then
         echo "✓ MySQL is ready and accepting connections!"
         break
     fi
 
     attempt=$((attempt + 1))
-    echo "Waiting for MySQL... ($attempt/$max_attempts)"
+    echo "Waiting for MySQL... (${attempt}/${max_attempts})"
     sleep 2
 done
 
-if [ $attempt -eq $max_attempts ]; then
-    echo "✗ MySQL failed to become ready after $max_attempts attempts"
+if [[ ${attempt} -eq ${max_attempts} ]]; then
+    echo "✗ MySQL failed to become ready after ${max_attempts} attempts"
     exit 1
 fi
 
@@ -118,7 +121,7 @@ install_extension_dependencies() {
 
     EXT_DIR="/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext"
 
-    if [ ! -d "$EXT_DIR" ]; then
+    if [[ ! -d "${EXT_DIR}" ]]; then
         echo "Extensions directory not found, skipping dependency installation"
         return 0
     fi
@@ -127,124 +130,130 @@ install_extension_dependencies() {
     STACK_NAME="${STACK:-eu-nonprofit}"
     STACK_CONFIG="/config/${STACK_NAME}/civikitchen.json"
 
-    if [ -f "$STACK_CONFIG" ]; then
-        echo "Found stack configuration: $STACK_CONFIG"
+    if [[ -f "${STACK_CONFIG}" ]]; then
+        echo "Found stack configuration: ${STACK_CONFIG}"
 
         # Parse and install each dependency from stack config
-        DEPS=$(cat "$STACK_CONFIG" | jq -r '.dependencies[]? | @json')
+        DEPS=$(jq -r < "${STACK_CONFIG}" -r '.dependencies[]? | @json')
 
-        if [ -n "$DEPS" ]; then
-            echo "$DEPS" | while IFS= read -r dep; do
-                DEP_NAME=$(echo "$dep" | jq -r '.name')
-                DEP_REPO=$(echo "$dep" | jq -r '.repo')
-                DEP_VERSION=$(echo "$dep" | jq -r '.version')
-                DEP_ENABLE=$(echo "$dep" | jq -r '.enable // true')
-                DEP_SEED=$(echo "$dep" | jq -r '.seed // false')
+        if [[ -n "${DEPS}" ]]; then
+            echo "${DEPS}" | while IFS= read -r dep; do
+                DEP_NAME=$(echo "${dep}" | jq -r '.name')
+                DEP_REPO=$(echo "${dep}" | jq -r '.repo')
+                DEP_VERSION=$(echo "${dep}" | jq -r '.version')
+                DEP_ENABLE=$(echo "${dep}" | jq -r '.enable // true')
+                DEP_SEED=$(echo "${dep}" | jq -r '.seed // false')
 
-                DEP_PATH="$EXT_DIR/$DEP_NAME"
+                DEP_PATH="${EXT_DIR}/${DEP_NAME}"
 
                 # Check if dependency already exists
-                if [ ! -d "$DEP_PATH" ]; then
-                    echo "  Installing extension: $DEP_NAME @ $DEP_VERSION"
+                if [[ ! -d "${DEP_PATH}" ]]; then
+                    echo "  Installing extension: ${DEP_NAME} @ ${DEP_VERSION}"
 
                     # Clone the repository
-                    cd "$EXT_DIR"
-                    if ! git clone "$DEP_REPO" "$DEP_NAME" 2>/dev/null; then
-                        echo "  ✗ Failed to clone $DEP_NAME from $DEP_REPO"
+                    cd "${EXT_DIR}"
+                    if ! git clone "${DEP_REPO}" "${DEP_NAME}" 2>/dev/null; then
+                        echo "  ✗ Failed to clone ${DEP_NAME} from ${DEP_REPO}"
                         continue
                     fi
 
                     # Checkout specified version
-                    cd "$DEP_PATH"
-                    if ! git checkout "$DEP_VERSION" 2>/dev/null; then
-                        echo "  ⚠ Warning: Could not checkout version $DEP_VERSION for $DEP_NAME"
+                    cd "${DEP_PATH}"
+                    if ! git checkout "${DEP_VERSION}" 2>/dev/null; then
+                        echo "  ⚠ Warning: Could not checkout version ${DEP_VERSION} for ${DEP_NAME}"
                     fi
 
-                    echo "  ✓ Installed $DEP_NAME"
+                    echo "  ✓ Installed ${DEP_NAME}"
                 else
-                    echo "  ✓ Extension $DEP_NAME already cloned"
+                    echo "  ✓ Extension ${DEP_NAME} already cloned"
                 fi
 
                 # Enable the extension if requested (always check, even if already installed)
-                if [ "$DEP_ENABLE" = "true" ]; then
+                if [[ "${DEP_ENABLE}" = "true" ]]; then
                     cd /home/buildkit/buildkit/build/site/web
                     # Wait for CiviCRM to be ready (check if settings file exists)
-                    if [ ! -f "sites/default/civicrm.settings.php" ]; then
-                        echo "  ⚠ CiviCRM not yet ready, skipping enable for $DEP_NAME"
-                    elif cv ext:enable "$DEP_NAME" 2>&1 | tee /tmp/cv-enable-$DEP_NAME.log | grep -q "Enabling extension"; then
-                        echo "  ✓ Enabled $DEP_NAME"
+                    if [[ ! -f "sites/default/civicrm.settings.php" ]]; then
+                        echo "  ⚠ CiviCRM not yet ready, skipping enable for ${DEP_NAME}"
                     else
-                        echo "  ⚠ Could not enable $DEP_NAME (check logs: /tmp/cv-enable-$DEP_NAME.log)"
+                        EXT_ENABLE_OUT=$(cv ext:enable "${DEP_NAME}" 2>&1 | tee "/tmp/cv-enable-${DEP_NAME}.log" || true)
+                        if echo "${EXT_ENABLE_OUT}" | grep -q "Enabling extension"; then
+                            echo "  ✓ Enabled ${DEP_NAME}"
+                        else
+                            echo "  ⚠ Could not enable ${DEP_NAME} (check logs: /tmp/cv-enable-${DEP_NAME}.log)"
+                        fi
                     fi
                 fi
 
                 # Track for seeding later (store in temp file)
-                if [ "$DEP_SEED" != "false" ]; then
-                    echo "$DEP_NAME|$DEP_SEED" >> /tmp/extensions_to_seed.txt
+                if [[ "${DEP_SEED}" != "false" ]]; then
+                    echo "${DEP_NAME}|${DEP_SEED}" >> /tmp/extensions_to_seed.txt
                 fi
             done
         fi
     fi
 
     # Then, check for extension-specific civikitchen.json files (for custom extension development)
-    for config_file in "$EXT_DIR"/*/civikitchen.json; do
-        if [ ! -f "$config_file" ]; then
+    for config_file in "${EXT_DIR}"/*/civikitchen.json; do
+        if [[ ! -f "${config_file}" ]]; then
             continue
         fi
 
-        echo "Found extension config: $config_file"
-        EXTENSION_DIR=$(dirname "$config_file")
-        EXTENSION_NAME=$(basename "$EXTENSION_DIR")
+        echo "Found extension config: ${config_file}"
+        EXTENSION_DIR=$(dirname "${config_file}")
+        EXTENSION_NAME=$(basename "${EXTENSION_DIR}")
 
         # Parse and install each dependency
-        DEPS=$(cat "$config_file" | jq -r '.dependencies[]? | @json')
+        DEPS=$(jq -r < "${config_file}" -r '.dependencies[]? | @json')
 
-        if [ -z "$DEPS" ]; then
-            echo "  No dependencies found in $EXTENSION_NAME"
+        if [[ -z "${DEPS}" ]]; then
+            echo "  No dependencies found in ${EXTENSION_NAME}"
             echo ""
             continue
         fi
 
-        echo "$DEPS" | while IFS= read -r dep; do
-            DEP_NAME=$(echo "$dep" | jq -r '.name')
-            DEP_REPO=$(echo "$dep" | jq -r '.repo')
-            DEP_VERSION=$(echo "$dep" | jq -r '.version')
-            DEP_ENABLE=$(echo "$dep" | jq -r '.enable // true')
+        echo "${DEPS}" | while IFS= read -r dep; do
+            DEP_NAME=$(echo "${dep}" | jq -r '.name')
+            DEP_REPO=$(echo "${dep}" | jq -r '.repo')
+            DEP_VERSION=$(echo "${dep}" | jq -r '.version')
+            DEP_ENABLE=$(echo "${dep}" | jq -r '.enable // true')
 
-            DEP_PATH="$EXT_DIR/$DEP_NAME"
+            DEP_PATH="${EXT_DIR}/${DEP_NAME}"
 
             # Check if dependency already exists
-            if [ ! -d "$DEP_PATH" ]; then
-                echo "  Installing extension: $DEP_NAME @ $DEP_VERSION"
+            if [[ ! -d "${DEP_PATH}" ]]; then
+                echo "  Installing extension: ${DEP_NAME} @ ${DEP_VERSION}"
 
                 # Clone the repository
-                cd "$EXT_DIR"
-                if ! git clone "$DEP_REPO" "$DEP_NAME" 2>/dev/null; then
-                    echo "  ✗ Failed to clone $DEP_NAME from $DEP_REPO"
+                cd "${EXT_DIR}"
+                if ! git clone "${DEP_REPO}" "${DEP_NAME}" 2>/dev/null; then
+                    echo "  ✗ Failed to clone ${DEP_NAME} from ${DEP_REPO}"
                     continue
                 fi
 
                 # Checkout specified version
-                cd "$DEP_PATH"
-                if ! git checkout "$DEP_VERSION" 2>/dev/null; then
-                    echo "  ⚠ Warning: Could not checkout version $DEP_VERSION for $DEP_NAME"
+                cd "${DEP_PATH}"
+                if ! git checkout "${DEP_VERSION}" 2>/dev/null; then
+                    echo "  ⚠ Warning: Could not checkout version ${DEP_VERSION} for ${DEP_NAME}"
                 fi
 
-                echo "  ✓ Installed $DEP_NAME"
+                echo "  ✓ Installed ${DEP_NAME}"
             else
-                echo "  ✓ Extension $DEP_NAME already cloned"
+                echo "  ✓ Extension ${DEP_NAME} already cloned"
             fi
 
             # Enable the extension if requested (always check, even if already installed)
-            if [ "$DEP_ENABLE" = "true" ]; then
+            if [[ "${DEP_ENABLE}" = "true" ]]; then
                 cd /home/buildkit/buildkit/build/site/web
                 # Wait for CiviCRM to be ready (check if settings file exists)
-                if [ ! -f "sites/default/civicrm.settings.php" ]; then
-                    echo "  ⚠ CiviCRM not yet ready, skipping enable for $DEP_NAME"
-                elif cv ext:enable "$DEP_NAME" 2>&1 | tee /tmp/cv-enable-$DEP_NAME.log | grep -q "Enabling extension"; then
-                    echo "  ✓ Enabled $DEP_NAME"
+                if [[ ! -f "sites/default/civicrm.settings.php" ]]; then
+                    echo "  ⚠ CiviCRM not yet ready, skipping enable for ${DEP_NAME}"
                 else
-                    echo "  ⚠ Could not enable $DEP_NAME (check logs: /tmp/cv-enable-$DEP_NAME.log)"
+                    EXT_ENABLE_OUT=$(cv ext:enable "${DEP_NAME}" 2>&1 | tee "/tmp/cv-enable-${DEP_NAME}.log" || true)
+                    if echo "${EXT_ENABLE_OUT}" | grep -q "Enabling extension"; then
+                        echo "  ✓ Enabled ${DEP_NAME}"
+                    else
+                        echo "  ⚠ Could not enable ${DEP_NAME} (check logs: /tmp/cv-enable-${DEP_NAME}.log)"
+                    fi
                 fi
             fi
         done
@@ -263,59 +272,61 @@ run_extension_seeding() {
 
     EXT_DIR="/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext"
 
-    if [ ! -d "$EXT_DIR" ]; then
+    if [[ ! -d "${EXT_DIR}" ]]; then
         echo "Extensions directory not found, skipping seeding"
         return 0
     fi
 
     # Flush cache to ensure extension list is current and prevent stale cache issues
-    cd /home/buildkit/buildkit/build/site/web 2>/dev/null && cv flush 2>/dev/null || true
+    if cd /home/buildkit/buildkit/build/site/web 2>/dev/null; then
+        cv flush 2>/dev/null || true
+    fi
 
     # Source the seed loader script (modular seeding system)
-    if [ -f "/home/buildkit/scripts/lib/seed-loader.sh" ]; then
+    if [[ -f "/home/buildkit/scripts/lib/seed-loader.sh" ]]; then
         source /home/buildkit/scripts/lib/seed-loader.sh
-    elif [ -f "/home/buildkit/scripts/lib/seed-common-extensions.sh" ]; then
+    elif [[ -f "/home/buildkit/scripts/lib/seed-common-extensions.sh" ]]; then
         # Fallback to monolithic script for backward compatibility
         source /home/buildkit/scripts/lib/seed-common-extensions.sh
-    elif [ -f "/seed-common-extensions.sh" ]; then
+    elif [[ -f "/seed-common-extensions.sh" ]]; then
         # Fallback to old location for backward compatibility
         source /seed-common-extensions.sh
     fi
 
     # Seed extensions based on dependency configurations (from temp file)
-    if [ -f "/tmp/extensions_to_seed.txt" ]; then
+    if [[ -f "/tmp/extensions_to_seed.txt" ]]; then
         while IFS='|' read -r ext_name seed_type; do
-            SEED_MARKER="/tmp/.civicrm-seeded-$ext_name"
+            SEED_MARKER="/tmp/.civicrm-seeded-${ext_name}"
 
             # Check if already seeded (run once)
-            if [ -f "$SEED_MARKER" ]; then
-                echo "  ✓ $ext_name already seeded, skipping"
+            if [[ -f "${SEED_MARKER}" ]]; then
+                echo "  ✓ ${ext_name} already seeded, skipping"
                 continue
             fi
 
-            if [ "$seed_type" = "true" ]; then
+            if [[ "${seed_type}" = "true" ]]; then
                 # Use built-in seeding
-                echo "  Running built-in seeding for $ext_name..."
+                echo "  Running built-in seeding for ${ext_name}..."
                 if declare -f seed_extension > /dev/null; then
-                    seed_extension "$ext_name"
-                    touch "$SEED_MARKER"
+                    seed_extension "${ext_name}"
+                    touch "${SEED_MARKER}"
                 else
                     echo "  ⚠️  Built-in seeding not available"
                 fi
-            elif [ "$seed_type" = "custom" ] || [ "$seed_type" != "false" ]; then
+            elif [[ "${seed_type}" = "custom" ]] || [[ "${seed_type}" != "false" ]]; then
                 # Custom seed script (look for it in extension directory)
-                echo "  Running custom seeding for $ext_name..."
-                EXT_PATH="$EXT_DIR/$ext_name"
-                if [ -f "$EXT_PATH/seed.sh" ]; then
-                    chmod +x "$EXT_PATH/seed.sh"
-                    if bash "$EXT_PATH/seed.sh"; then
-                        echo "  ✓ Custom seeding completed for $ext_name"
-                        touch "$SEED_MARKER"
+                echo "  Running custom seeding for ${ext_name}..."
+                EXT_PATH="${EXT_DIR}/${ext_name}"
+                if [[ -f "${EXT_PATH}/seed.sh" ]]; then
+                    chmod +x "${EXT_PATH}/seed.sh"
+                    if bash "${EXT_PATH}/seed.sh"; then
+                        echo "  ✓ Custom seeding completed for ${ext_name}"
+                        touch "${SEED_MARKER}"
                     else
-                        echo "  ✗ Custom seeding failed for $ext_name"
+                        echo "  ✗ Custom seeding failed for ${ext_name}"
                     fi
                 else
-                    echo "  ⚠️  Custom seed script not found: $EXT_PATH/seed.sh"
+                    echo "  ⚠️  Custom seed script not found: ${EXT_PATH}/seed.sh"
                 fi
             fi
         done < /tmp/extensions_to_seed.txt
@@ -325,59 +336,59 @@ run_extension_seeding() {
     fi
 
     # Then, check for extension-specific seeding configurations
-    for config_file in "$EXT_DIR"/*/civikitchen.json; do
-        if [ ! -f "$config_file" ]; then
+    for config_file in "${EXT_DIR}"/*/civikitchen.json; do
+        if [[ ! -f "${config_file}" ]]; then
             continue
         fi
 
-        EXTENSION_DIR=$(dirname "$config_file")
-        EXTENSION_NAME=$(basename "$EXTENSION_DIR")
+        EXTENSION_DIR=$(dirname "${config_file}")
+        EXTENSION_NAME=$(basename "${EXTENSION_DIR}")
 
         # Check if seeding is enabled
-        SEED_ENABLED=$(cat "$config_file" | jq -r '.seeding.enabled // false')
+        SEED_ENABLED=$(jq -r < "${config_file}" -r '.seeding.enabled // false')
 
-        if [ "$SEED_ENABLED" != "true" ]; then
+        if [[ "${SEED_ENABLED}" != "true" ]]; then
             continue
         fi
 
-        SEED_SCRIPT=$(cat "$config_file" | jq -r '.seeding.script // ""')
-        RUN_ONCE=$(cat "$config_file" | jq -r '.seeding.runOnce // true')
-        SEED_MARKER="$EXTENSION_DIR/.civicrm-seeded"
+        SEED_SCRIPT=$(jq -r < "${config_file}" -r '.seeding.script // ""')
+        RUN_ONCE=$(jq -r < "${config_file}" -r '.seeding.runOnce // true')
+        SEED_MARKER="${EXTENSION_DIR}/.civicrm-seeded"
 
-        if [ -z "$SEED_SCRIPT" ]; then
-            echo "  ⚠ Seeding enabled for $EXTENSION_NAME but no script specified"
+        if [[ -z "${SEED_SCRIPT}" ]]; then
+            echo "  ⚠ Seeding enabled for ${EXTENSION_NAME} but no script specified"
             echo ""
             continue
         fi
 
         # Check if already seeded (unless force mode)
-        if [ "$RUN_ONCE" = "true" ] && [ -f "$SEED_MARKER" ]; then
-            echo "  ✓ $EXTENSION_NAME already seeded (runOnce=true), skipping"
+        if [[ "${RUN_ONCE}" = "true" ]] && [[ -f "${SEED_MARKER}" ]]; then
+            echo "  ✓ ${EXTENSION_NAME} already seeded (runOnce=true), skipping"
             echo ""
             continue
         fi
 
-        SEED_PATH="$EXTENSION_DIR/$SEED_SCRIPT"
+        SEED_PATH="${EXTENSION_DIR}/${SEED_SCRIPT}"
 
-        if [ ! -f "$SEED_PATH" ]; then
-            echo "  ✗ Seed script not found: $SEED_PATH"
+        if [[ ! -f "${SEED_PATH}" ]]; then
+            echo "  ✗ Seed script not found: ${SEED_PATH}"
             echo ""
             continue
         fi
 
-        echo "  Running seed script for $EXTENSION_NAME..."
+        echo "  Running seed script for ${EXTENSION_NAME}..."
 
         # Make script executable and run it
-        chmod +x "$SEED_PATH"
-        if bash "$SEED_PATH"; then
-            echo "  ✓ Seeding completed for $EXTENSION_NAME"
+        chmod +x "${SEED_PATH}"
+        if bash "${SEED_PATH}"; then
+            echo "  ✓ Seeding completed for ${EXTENSION_NAME}"
 
             # Create marker file if runOnce is true
-            if [ "$RUN_ONCE" = "true" ]; then
-                touch "$SEED_MARKER"
+            if [[ "${RUN_ONCE}" = "true" ]]; then
+                touch "${SEED_MARKER}"
             fi
         else
-            echo "  ✗ Seeding failed for $EXTENSION_NAME"
+            echo "  ✗ Seeding failed for ${EXTENSION_NAME}"
         fi
 
         echo ""
@@ -387,28 +398,29 @@ run_extension_seeding() {
 }
 
 # Auto-create CiviCRM site if requested
-if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
+if [[ -n "${CIVICRM_SITE_TYPE}" ]] && [[ "${CIVICRM_SITE_TYPE}" != "false" ]]; then
     SITE_DIR="/home/buildkit/buildkit/build/site"
+    # shellcheck disable=SC2154
     SITE_URL="http://${HTTPD_DOMAIN}:${HTTPD_PORT}"
 
     # Check if site is actually installed (not just directory exists)
     # Volume mounts may create the directory structure before site installation
-    if [ ! -f "$SITE_DIR/web/index.php" ]; then
+    if [[ ! -f "${SITE_DIR}/web/index.php" ]]; then
         echo "===================================="
         echo "Auto-creating CiviCRM site"
         echo "Site type: ${CIVICRM_SITE_TYPE}"
-        echo "URL: $SITE_URL"
-        if [ -n "${CIVICRM_VERSION}" ]; then
+        echo "URL: ${SITE_URL}"
+        if [[ -n "${CIVICRM_VERSION}" ]]; then
             echo "CiviCRM version: ${CIVICRM_VERSION}"
         fi
         echo "===================================="
 
         # Note: We don't use --force to avoid issues with mount points
         # Civibuild will use existing site directory if it exists
-        if [ -n "${CIVICRM_VERSION}" ]; then
-            civibuild create site --type "${CIVICRM_SITE_TYPE}" --url "$SITE_URL" --civi-ver "${CIVICRM_VERSION}"
+        if [[ -n "${CIVICRM_VERSION}" ]]; then
+            civibuild create site --type "${CIVICRM_SITE_TYPE}" --url "${SITE_URL}" --civi-ver "${CIVICRM_VERSION}"
         else
-            civibuild create site --type "${CIVICRM_SITE_TYPE}" --url "$SITE_URL"
+            civibuild create site --type "${CIVICRM_SITE_TYPE}" --url "${SITE_URL}"
         fi
 
         echo "===================================="
@@ -425,17 +437,17 @@ if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
         EXT_MOUNT="/home/buildkit/extensions-mount"
 
         # Create parent directory if it doesn't exist
-        mkdir -p "$(dirname "$EXT_TARGET")"
+        mkdir -p "$(dirname "${EXT_TARGET}")"
 
         # If ext directory exists as a regular directory, remove it
-        if [ -d "$EXT_TARGET" ] && [ ! -L "$EXT_TARGET" ]; then
-            rm -rf "$EXT_TARGET"
+        if [[ -d "${EXT_TARGET}" ]] && [[ ! -L "${EXT_TARGET}" ]]; then
+            rm -rf "${EXT_TARGET}"
         fi
 
         # Create symlink from site to mount point
-        if [ ! -L "$EXT_TARGET" ]; then
-            ln -s "$EXT_MOUNT" "$EXT_TARGET"
-            echo "✓ Created symlink: $EXT_TARGET -> $EXT_MOUNT"
+        if [[ ! -L "${EXT_TARGET}" ]]; then
+            ln -s "${EXT_MOUNT}" "${EXT_TARGET}"
+            echo "✓ Created symlink: ${EXT_TARGET} -> ${EXT_MOUNT}"
         else
             echo "✓ Symlink already exists"
         fi
@@ -449,7 +461,7 @@ if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
         echo "Setting up API users..."
         echo "===================================="
         STACK_NAME="${STACK:-eu-nonprofit}"
-        if [ -f "/home/buildkit/scripts/lib/configure-api-users-from-json.sh" ]; then
+        if [[ -f "/home/buildkit/scripts/lib/configure-api-users-from-json.sh" ]]; then
             bash /home/buildkit/scripts/lib/configure-api-users-from-json.sh "/config/${STACK_NAME}/civikitchen.json"
         fi
         echo "✓ API users setup complete!"
@@ -465,17 +477,17 @@ if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
         EXT_MOUNT="/home/buildkit/extensions-mount"
 
         # Create parent directory if it doesn't exist
-        mkdir -p "$(dirname "$EXT_TARGET")"
+        mkdir -p "$(dirname "${EXT_TARGET}")"
 
         # If ext directory exists as a regular directory, remove it
-        if [ -d "$EXT_TARGET" ] && [ ! -L "$EXT_TARGET" ]; then
-            rm -rf "$EXT_TARGET"
+        if [[ -d "${EXT_TARGET}" ]] && [[ ! -L "${EXT_TARGET}" ]]; then
+            rm -rf "${EXT_TARGET}"
         fi
 
         # Create symlink from site to mount point
-        if [ ! -L "$EXT_TARGET" ]; then
-            ln -s "$EXT_MOUNT" "$EXT_TARGET"
-            echo "✓ Created symlink: $EXT_TARGET -> $EXT_MOUNT"
+        if [[ ! -L "${EXT_TARGET}" ]]; then
+            ln -s "${EXT_MOUNT}" "${EXT_TARGET}"
+            echo "✓ Created symlink: ${EXT_TARGET} -> ${EXT_MOUNT}"
         else
             echo "✓ Symlink already exists"
         fi
@@ -489,7 +501,7 @@ if [ -n "${CIVICRM_SITE_TYPE}" ] && [ "${CIVICRM_SITE_TYPE}" != "false" ]; then
         echo "Setting up API users..."
         echo "===================================="
         STACK_NAME="${STACK:-eu-nonprofit}"
-        if [ -f "/home/buildkit/scripts/lib/configure-api-users-from-json.sh" ]; then
+        if [[ -f "/home/buildkit/scripts/lib/configure-api-users-from-json.sh" ]]; then
             bash /home/buildkit/scripts/lib/configure-api-users-from-json.sh "/config/${STACK_NAME}/civikitchen.json"
         fi
         echo "✓ API users setup complete!"
@@ -524,7 +536,7 @@ sudo tee /etc/apache2/sites-available/000-default.conf > /dev/null <<EOF
 EOF
 
 # Verify extensions are ready before starting Apache
-if [ -f "/home/buildkit/buildkit/build/site/web/index.php" ]; then
+if [[ -f "/home/buildkit/buildkit/build/site/web/index.php" ]]; then
     echo "==================================="
     echo "Verifying extension readiness..."
     echo "==================================="
@@ -534,20 +546,20 @@ if [ -f "/home/buildkit/buildkit/build/site/web/index.php" ]; then
     HAS_DEPENDENCIES=false
 
     # Check stack config
-    if [ -f "/config/${STACK_NAME}/civikitchen.json" ]; then
-        DEPS_COUNT=$(cat "/config/${STACK_NAME}/civikitchen.json" | jq -r '.dependencies[]? | .name' 2>/dev/null | wc -l)
-        if [ "$DEPS_COUNT" -gt 0 ]; then
+    if [[ -f "/config/${STACK_NAME}/civikitchen.json" ]]; then
+        DEPS_COUNT=$(jq -r '.dependencies[]? | .name' < "/config/${STACK_NAME}/civikitchen.json" 2>/dev/null | wc -l || true)
+        if [[ "${DEPS_COUNT}" -gt 0 ]]; then
             HAS_DEPENDENCIES=true
         fi
     fi
 
     # Check extension-level configs
     EXT_DIR="/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext"
-    if [ -d "$EXT_DIR" ]; then
-        for config_file in "$EXT_DIR"/*/civikitchen.json; do
-            if [ -f "$config_file" ]; then
-                EXT_DEPS_COUNT=$(cat "$config_file" | jq -r '.dependencies[]? | .name' 2>/dev/null | wc -l)
-                if [ "$EXT_DEPS_COUNT" -gt 0 ]; then
+    if [[ -d "${EXT_DIR}" ]]; then
+        for config_file in "${EXT_DIR}"/*/civikitchen.json; do
+            if [[ -f "${config_file}" ]]; then
+                EXT_DEPS_COUNT=$(jq -r '.dependencies[]? | .name' < "${config_file}" 2>/dev/null | wc -l || true)
+                if [[ "${EXT_DEPS_COUNT}" -gt 0 ]]; then
                     HAS_DEPENDENCIES=true
                     break
                 fi
@@ -556,25 +568,30 @@ if [ -f "/home/buildkit/buildkit/build/site/web/index.php" ]; then
     fi
 
     # Only wait if we actually have dependencies configured
-    if [ "$HAS_DEPENDENCIES" = "true" ]; then
+    if [[ "${HAS_DEPENDENCIES}" = "true" ]]; then
         WAIT_ATTEMPTS=0
         MAX_WAIT=60  # Maximum 60 seconds wait
 
-        while [ $WAIT_ATTEMPTS -lt $MAX_WAIT ]; do
+        while [[ ${WAIT_ATTEMPTS} -lt ${MAX_WAIT} ]]; do
             # Try to get extension list - if cv command works, extensions are ready
-            if cd /home/buildkit/buildkit/build/site/web 2>/dev/null && cv ext:list --local 2>/dev/null | grep -q "installed\|enabled" 2>/dev/null; then
+            if cd /home/buildkit/buildkit/build/site/web 2>/dev/null; then
+                EXT_LIST=$(cv ext:list --local 2>/dev/null || true)
+            else
+                EXT_LIST=""
+            fi
+            if echo "${EXT_LIST}" | grep -q "installed\|enabled" 2>/dev/null; then
                 echo "✓ Extensions are ready!"
                 break
             fi
 
             WAIT_ATTEMPTS=$((WAIT_ATTEMPTS + 1))
-            if [ $WAIT_ATTEMPTS -lt $MAX_WAIT ]; then
+            if [[ ${WAIT_ATTEMPTS} -lt ${MAX_WAIT} ]]; then
                 echo "  Waiting for extensions to be ready... (${WAIT_ATTEMPTS}s)"
                 sleep 1
             fi
         done
 
-        if [ $WAIT_ATTEMPTS -ge $MAX_WAIT ]; then
+        if [[ ${WAIT_ATTEMPTS} -ge ${MAX_WAIT} ]]; then
             echo "⚠ Warning: Extensions may not be fully ready, but continuing startup"
         fi
     else
@@ -592,7 +609,7 @@ echo "  - CiviCRM site: http://localhost:${HTTPD_PORT}"
 echo "  - PHPMyAdmin: http://localhost:8081"
 echo "  - Maildev: http://localhost:1080"
 echo ""
-if [ -z "${CIVICRM_SITE_TYPE}" ] || [ "${CIVICRM_SITE_TYPE}" = "false" ]; then
+if [[ -z "${CIVICRM_SITE_TYPE}" ]] || [[ "${CIVICRM_SITE_TYPE}" = "false" ]]; then
     echo "No auto-site configured. To create a site manually:"
     echo "  docker-compose exec civicrm civibuild create site --type drupal10-demo --url http://${HTTPD_DOMAIN}"
     echo ""

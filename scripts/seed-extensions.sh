@@ -22,18 +22,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
 
 echo "===================================="
 echo "Running Extension Seeding"
-if [ "$FORCE" = true ]; then
+if [[ "${FORCE}" = true ]]; then
     echo "(Force mode: ignoring runOnce markers)"
 fi
 echo "===================================="
 echo ""
 
 # Check if container is running
-if ! docker-compose ps civicrm | grep -q "Up"; then
+CONTAINER_STATUS=$(docker-compose ps civicrm || true)
+if ! echo "${CONTAINER_STATUS}" | grep -q "Up"; then
     echo "Error: CiviCRM container is not running"
     echo "Start it with: docker-compose up -d"
     exit 1
@@ -42,9 +43,9 @@ fi
 # Execute the seeding function
 docker-compose exec civicrm bash -c "
     EXT_DIR=\"/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext\"
-    FORCE=$FORCE
+    FORCE=${FORCE}
 
-    if [ ! -d \"\$EXT_DIR\" ]; then
+    if [[ ! -d \"\${EXT_DIR}\" ]]; then
         echo \"Extensions directory not found\"
         exit 1
     fi
@@ -56,9 +57,9 @@ docker-compose exec civicrm bash -c "
     cd /home/buildkit/buildkit/build/site/web 2>/dev/null && cv flush 2>/dev/null || true
 
     # Source the seed loader script if available
-    if [ -f \"/home/buildkit/scripts/lib/seed-loader.sh\" ]; then
+    if [[ -f \"/home/buildkit/scripts/lib/seed-loader.sh\" ]]; then
         source /home/buildkit/scripts/lib/seed-loader.sh
-    elif [ -f \"/home/buildkit/scripts/lib/seed-common-extensions.sh\" ]; then
+    elif [[ -f \"/home/buildkit/scripts/lib/seed-common-extensions.sh\" ]]; then
         source /home/buildkit/scripts/lib/seed-common-extensions.sh
     fi
 
@@ -66,58 +67,58 @@ docker-compose exec civicrm bash -c "
     STACK_NAME=\"\${STACK:-eu-nonprofit}\"
     STACK_CONFIG=\"/config/\${STACK_NAME}/civikitchen.json\"
 
-    if [ -f \"\$STACK_CONFIG\" ]; then
-        echo \"Found stack configuration: \$STACK_CONFIG\"
+    if [[ -f \"\${STACK_CONFIG}\" ]]; then
+        echo \"Found stack configuration: \${STACK_CONFIG}\"
 
         # Parse dependencies and check which ones need seeding
-        DEPS=\$(cat \"\$STACK_CONFIG\" | jq -r '.dependencies[]? | @json')
+        DEPS=\$(jq -r '.dependencies[]? | @json' < \"\${STACK_CONFIG}\" || true)
 
-        if [ -n \"\$DEPS\" ]; then
-            echo \"\$DEPS\" | while IFS= read -r dep; do
-                DEP_NAME=\$(echo \"\$dep\" | jq -r '.name')
-                DEP_SEED=\$(echo \"\$dep\" | jq -r '.seed // false')
+        if [[ -n \"\${DEPS}\" ]]; then
+            echo \"\${DEPS}\" | while IFS= read -r dep; do
+                DEP_NAME=\$(echo \"\${dep}\" | jq -r '.name')
+                DEP_SEED=\$(echo \"\${dep}\" | jq -r '.seed // false')
 
-                if [ \"\$DEP_SEED\" = \"false\" ]; then
+                if [[ \"\${DEP_SEED}\" = \"false\" ]]; then
                     continue
                 fi
 
-                SEED_MARKER=\"/tmp/.civicrm-seeded-\$DEP_NAME\"
+                SEED_MARKER=\"/tmp/.civicrm-seeded-\${DEP_NAME}\"
 
                 # Check if already seeded (unless force mode)
-                if [ \"\$FORCE\" != \"true\" ] && [ -f \"\$SEED_MARKER\" ]; then
-                    echo \"  ✓ \$DEP_NAME already seeded, skipping\"
+                if [[ \"\${FORCE}\" != \"true\" ]] && [[ -f \"\${SEED_MARKER}\" ]]; then
+                    echo \"  ✓ \${DEP_NAME} already seeded, skipping\"
                     echo \"    Use --force to re-run seeding\"
                     echo \"\"
                     continue
                 fi
 
-                if [ \"\$DEP_SEED\" = \"true\" ]; then
+                if [[ \"\${DEP_SEED}\" = \"true\" ]]; then
                     # Use built-in seeding
-                    echo \"  Running built-in seeding for \$DEP_NAME...\"
+                    echo \"  Running built-in seeding for \${DEP_NAME}...\"
                     if declare -f seed_extension > /dev/null; then
-                        if seed_extension \"\$DEP_NAME\"; then
-                            echo \"  ✓ Seeding completed for \$DEP_NAME\"
-                            touch \"\$SEED_MARKER\"
+                        if seed_extension \"\${DEP_NAME}\"; then
+                            echo \"  ✓ Seeding completed for \${DEP_NAME}\"
+                            touch \"\${SEED_MARKER}\"
                         else
-                            echo \"  ✗ Seeding failed for \$DEP_NAME\"
+                            echo \"  ✗ Seeding failed for \${DEP_NAME}\"
                         fi
                     else
                         echo \"  ⚠️  Built-in seeding not available\"
                     fi
-                elif [ \"\$DEP_SEED\" = \"custom\" ] || [ \"\$DEP_SEED\" != \"false\" ]; then
+                elif [[ \"\${DEP_SEED}\" = \"custom\" ]] || [[ \"\${DEP_SEED}\" != \"false\" ]]; then
                     # Custom seed script
-                    echo \"  Running custom seeding for \$DEP_NAME...\"
-                    EXT_PATH=\"\$EXT_DIR/\$DEP_NAME\"
-                    if [ -f \"\$EXT_PATH/seed.sh\" ]; then
-                        chmod +x \"\$EXT_PATH/seed.sh\"
-                        if bash \"\$EXT_PATH/seed.sh\"; then
-                            echo \"  ✓ Custom seeding completed for \$DEP_NAME\"
-                            touch \"\$SEED_MARKER\"
+                    echo \"  Running custom seeding for \${DEP_NAME}...\"
+                    EXT_PATH=\"\${EXT_DIR}/\${DEP_NAME}\"
+                    if [[ -f \"\${EXT_PATH}/seed.sh\" ]]; then
+                        chmod +x \"\${EXT_PATH}/seed.sh\"
+                        if bash \"\${EXT_PATH}/seed.sh\"; then
+                            echo \"  ✓ Custom seeding completed for \${DEP_NAME}\"
+                            touch \"\${SEED_MARKER}\"
                         else
-                            echo \"  ✗ Custom seeding failed for \$DEP_NAME\"
+                            echo \"  ✗ Custom seeding failed for \${DEP_NAME}\"
                         fi
                     else
-                        echo \"  ⚠️  Custom seed script not found: \$EXT_PATH/seed.sh\"
+                        echo \"  ⚠️  Custom seed script not found: \${EXT_PATH}/seed.sh\"
                     fi
                 fi
 
@@ -128,60 +129,60 @@ docker-compose exec civicrm bash -c "
     fi
 
     # Then, check for extension-specific seeding configurations
-    for config_file in \"\$EXT_DIR\"/*/civikitchen.json; do
-        if [ ! -f \"\$config_file\" ]; then
+    for config_file in \"\${EXT_DIR}\"/*/civikitchen.json; do
+        if [[ ! -f \"\${config_file}\" ]]; then
             continue
         fi
 
-        EXTENSION_DIR=\$(dirname \"\$config_file\")
-        EXTENSION_NAME=\$(basename \"\$EXTENSION_DIR\")
+        EXTENSION_DIR=\$(dirname \"\${config_file}\")
+        EXTENSION_NAME=\$(basename \"\${EXTENSION_DIR}\")
 
         # Check if seeding is enabled
-        SEED_ENABLED=\$(cat \"\$config_file\" | jq -r '.seeding.enabled // false')
+        SEED_ENABLED=\$(jq -r '.seeding.enabled // false' < \"\${config_file}\" || true)
 
-        if [ \"\$SEED_ENABLED\" != \"true\" ]; then
+        if [[ \"\${SEED_ENABLED}\" != \"true\" ]]; then
             continue
         fi
 
-        SEED_SCRIPT=\$(cat \"\$config_file\" | jq -r '.seeding.script // \"\"')
-        RUN_ONCE=\$(cat \"\$config_file\" | jq -r '.seeding.runOnce // true')
-        SEED_MARKER=\"\$EXTENSION_DIR/.civicrm-seeded\"
+        SEED_SCRIPT=\$(jq -r '.seeding.script // \"\"' < \"\${config_file}\" || true)
+        RUN_ONCE=\$(jq -r '.seeding.runOnce // true' < \"\${config_file}\" || true)
+        SEED_MARKER=\"\${EXTENSION_DIR}/.civicrm-seeded\"
 
-        if [ -z \"\$SEED_SCRIPT\" ]; then
-            echo \"  ⚠ Seeding enabled for \$EXTENSION_NAME but no script specified\"
+        if [[ -z \"\${SEED_SCRIPT}\" ]]; then
+            echo \"  ⚠ Seeding enabled for \${EXTENSION_NAME} but no script specified\"
             echo \"\"
             continue
         fi
 
         # Check if already seeded (unless force mode)
-        if [ \"\$FORCE\" != \"true\" ] && [ \"\$RUN_ONCE\" = \"true\" ] && [ -f \"\$SEED_MARKER\" ]; then
-            echo \"  ✓ \$EXTENSION_NAME already seeded (runOnce=true), skipping\"
+        if [[ \"\${FORCE}\" != \"true\" ]] && [[ \"\${RUN_ONCE}\" = \"true\" ]] && [[ -f \"\${SEED_MARKER}\" ]]; then
+            echo \"  ✓ \${EXTENSION_NAME} already seeded (runOnce=true), skipping\"
             echo \"    Use --force to re-run seeding\"
             echo \"\"
             continue
         fi
 
-        SEED_PATH=\"\$EXTENSION_DIR/\$SEED_SCRIPT\"
+        SEED_PATH=\"\${EXTENSION_DIR}/\${SEED_SCRIPT}\"
 
-        if [ ! -f \"\$SEED_PATH\" ]; then
-            echo \"  ✗ Seed script not found: \$SEED_PATH\"
+        if [[ ! -f \"\${SEED_PATH}\" ]]; then
+            echo \"  ✗ Seed script not found: \${SEED_PATH}\"
             echo \"\"
             continue
         fi
 
-        echo \"  Running seed script for \$EXTENSION_NAME...\"
+        echo \"  Running seed script for \${EXTENSION_NAME}...\"
 
         # Make script executable and run it
-        chmod +x \"\$SEED_PATH\"
-        if bash \"\$SEED_PATH\"; then
-            echo \"  ✓ Seeding completed for \$EXTENSION_NAME\"
+        chmod +x \"\${SEED_PATH}\"
+        if bash \"\${SEED_PATH}\"; then
+            echo \"  ✓ Seeding completed for \${EXTENSION_NAME}\"
 
             # Create marker file if runOnce is true
-            if [ \"\$RUN_ONCE\" = \"true\" ]; then
-                touch \"\$SEED_MARKER\"
+            if [[ \"\${RUN_ONCE}\" = \"true\" ]]; then
+                touch \"\${SEED_MARKER}\"
             fi
         else
-            echo \"  ✗ Seeding failed for \$EXTENSION_NAME\"
+            echo \"  ✗ Seeding failed for \${EXTENSION_NAME}\"
         fi
 
         echo \"\"
