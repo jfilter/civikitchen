@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Build arguments for version configuration
 ARG PHP_VERSION=8.2

@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint-workflows:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Lint GitHub Actions workflows
 
     steps:
@@ -25,7 +25,7 @@ jobs:
 
   test-stable:
     needs: lint-workflows
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     name: Test stable combination (PHP 8.2 + CiviCRM 6.7.1)

@@ -10,7 +10,7 @@ ARG CIVICRM_SITE_TYPE=drupal10-demo
 # =============================================================================
 # Stage 1: Base System with All Dependencies
 # =============================================================================
-FROM ubuntu:22.04 AS base
+FROM ubuntu:24.04 AS base
 
 ARG PHP_VERSION
 ARG DEBIAN_FRONTEND=noninteractive

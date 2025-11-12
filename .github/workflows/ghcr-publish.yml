@@ -39,7 +39,7 @@ jobs:
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
           - platform: linux/amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -97,7 +97,7 @@ jobs:
 
   create-base-manifest:
     needs: build-base
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -142,7 +142,7 @@ jobs:
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
           - platform: linux/amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -197,7 +197,7 @@ jobs:
 
   create-manifest:
     needs: build-prebuilt
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -231,7 +231,7 @@ jobs:
 
   test-image:
     needs: create-manifest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: read
