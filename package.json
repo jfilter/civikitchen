@@ -18,7 +18,8 @@
     "test:civicrm-6.6": "CIVICRM_VERSION=6.6.3 SKIP_WEBSERVER=1 npm test",
     "test:civicrm-6.7": "CIVICRM_VERSION=6.7.1 SKIP_WEBSERVER=1 npm test",
     "lint": "eslint . --ext .ts,.js",
-    "lint:fix": "eslint . --ext .ts,.js --fix"
+    "lint:fix": "eslint . --ext .ts,.js --fix",
+    "lint:workflows": "actionlint .github/workflows/*.yml"
   },
   "keywords": [
     "civicrm",

@@ -141,8 +141,10 @@ jobs:
     steps:
       - name: Test Matrix Summary
         run: |
-          echo "## Test Matrix Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| PHP | CiviCRM | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| All | All     | ${{ needs.test-combinations.result }} |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Test Matrix Results"
+            echo ""
+            echo "| PHP | CiviCRM | Status |"
+            echo "|-----|---------|--------|"
+            echo "| All | All     | ${{ needs.test-combinations.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
