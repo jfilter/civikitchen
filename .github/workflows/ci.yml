@@ -38,7 +38,7 @@ jobs:
 
       - name: Run shellcheck
         run: |
-          shellcheck $(find . -type f -name '*.sh' ! -path './node_modules/*' ! -path './extensions/*')
+          find . -type f -name '*.sh' ! -path './node_modules/*' ! -path './extensions/*' -print0 | xargs -0 shellcheck
 
   lint-js:
     runs-on: ubuntu-24.04
