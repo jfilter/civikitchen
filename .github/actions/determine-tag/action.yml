@@ -1,0 +1,23 @@
+name: 'Determine Docker Tag'
+description: 'Determines the Docker image tag based on the trigger event'
+outputs:
+  tag:
+    description: 'The determined Docker image tag'
+    value: ${{ steps.determine.outputs.tag }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Determine tag
+      id: determine
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+        elif [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
+          echo "tag=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+        elif [[ "${{ github.ref }}" =~ ^refs/tags/aio- ]]; then
+          echo "tag=${GITHUB_REF#refs/tags/aio-}" >> "$GITHUB_OUTPUT"
+        else
+          echo "tag=latest" >> "$GITHUB_OUTPUT"
+        fi

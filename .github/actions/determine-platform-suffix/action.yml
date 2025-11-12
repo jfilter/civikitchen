@@ -1,0 +1,26 @@
+name: 'Determine Platform Suffix'
+description: 'Determines the platform suffix (arm64 or amd64) from the platform string'
+inputs:
+  platform:
+    description: 'The platform string (e.g., linux/arm64 or linux/amd64)'
+    required: true
+outputs:
+  suffix:
+    description: 'The platform suffix (arm64 or amd64)'
+    value: ${{ steps.determine.outputs.suffix }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Determine platform suffix
+      id: determine
+      shell: bash
+      run: |
+        case "${{ inputs.platform }}" in
+          linux/arm64)
+            echo "suffix=arm64" >> "$GITHUB_OUTPUT"
+            ;;
+          linux/amd64)
+            echo "suffix=amd64" >> "$GITHUB_OUTPUT"
+            ;;
+        esac
