@@ -50,9 +50,16 @@ Or use the helper script:
 
 ## Dependency Management
 
-Your extension can declare dependencies on other CiviCRM extensions. Dependencies are automatically installed when the container starts.
+CiviKitchen supports **two approaches** for managing extension dependencies in your development environment:
 
-### Defining Dependencies
+1. **Extension-Level Config** - Dependencies defined in extension's own repository
+2. **Stack-Level Config** - Dependencies defined in centralized stack configuration
+
+Both approaches can work together - stack dependencies are processed first, then extension-specific dependencies.
+
+### Approach 1: Extension-Level Dependencies
+
+**Best for:** Developing a single custom extension with its own dependencies
 
 Create a `civikitchen.json` file in your extension's root directory:
 
@@ -75,6 +82,43 @@ Create a `civikitchen.json` file in your extension's root directory:
 }
 ```
 
+**Benefits:**
+- Dependencies live with the extension code
+- Extension repo is self-contained and portable
+- Just clone + symlink + restart = ready to develop
+
+### Approach 2: Stack-Level Dependencies
+
+**Best for:** Pre-configured development environments, testing multiple extensions together, shared team setups
+
+Create a stack configuration file at `/config/my-stack/civikitchen.json`:
+
+```json
+{
+  "dependencies": [
+    {
+      "name": "org.project60.banking",
+      "repo": "https://github.com/Project60/org.project60.banking.git",
+      "version": "0.7.5",
+      "enable": true
+    }
+  ]
+}
+```
+
+Set the `STACK` environment variable:
+
+```yaml
+environment:
+  - STACK=my-stack
+```
+
+**Benefits:**
+- Centralized configuration for multiple extensions
+- Consistent setup across team members
+- Easy to switch between different development scenarios
+- Clean separation between extension code and environment config
+
 ### Dependency Fields
 
 - **name** (required): The extension key (e.g., `org.project60.banking`)
@@ -84,7 +128,7 @@ Create a `civikitchen.json` file in your extension's root directory:
 
 ### How It Works
 
-1. Container scans `./extensions/*/civikitchen.json` on startup
+1. Container reads `/config/${STACK}/civikitchen.json` on startup (where `${STACK}` is the stack name)
 2. Clones missing dependencies into the extensions directory
 3. Checks out the specified version
 4. Enables dependencies (if `enable: true`)
@@ -106,11 +150,14 @@ View current dependencies:
 
 ## Extension Seeding
 
-Your extension can provide seed scripts to populate test data for development.
+CiviKitchen supports **two approaches** for seeding test data in your development environment:
 
-### Defining Seeding
+1. **Extension-Level Seeding** - Seed configuration in extension's own repository
+2. **Stack-Level Seeding** - Seed configuration in stack config
 
-Add a seeding configuration to your `civikitchen.json`:
+### Approach 1: Extension-Level Seeding
+
+Add a seeding configuration to your extension's `civikitchen.json`:
 
 ```json
 {
@@ -123,11 +170,35 @@ Add a seeding configuration to your `civikitchen.json`:
 }
 ```
 
-### Seeding Fields
-
+**Seeding Fields:**
 - **enabled** (required): Set to `true` to enable seeding
 - **script** (required): Path to seed script relative to extension root
-- **runOnce** (optional, default: `true`): If true, seeding runs once and creates a `.civicrm-seeded` marker file
+- **runOnce** (optional, default: `true`): If true, creates marker file `.civicrm-seeded` to prevent re-running
+
+### Approach 2: Stack-Level Seeding
+
+Add seeding configuration to your stack's `civikitchen.json`:
+
+```json
+{
+  "dependencies": [
+    {
+      "name": "org.project60.banking",
+      "repo": "https://github.com/Project60/org.project60.banking.git",
+      "version": "0.7.5",
+      "enable": true,
+      "seed": true
+    }
+  ]
+}
+```
+
+**Seeding Options:**
+- **seed: true** - Use built-in seeding (if available for the extension)
+- **seed: "custom"** - Look for a `seed.sh` script in the extension directory
+- **seed: false** (default) - No seeding
+
+**Note:** Stack-level seeding uses `/tmp/.civicrm-seeded-<extension-name>` as marker file.
 
 ### Creating Seed Scripts
 
@@ -164,7 +235,7 @@ echo "✓ Seeding complete!"
 
 Make sure your seed script is:
 - **Executable**: `chmod +x scripts/seed-dev-data.sh`
-- **Idempotent**: Safe to run multiple times if `runOnce` is `false`
+- **Idempotent**: Safe to run multiple times
 - **Well-logged**: Print what it's creating for debugging
 
 ### Seeding Workflow
@@ -172,43 +243,45 @@ Make sure your seed script is:
 Seeding runs automatically after dependency installation:
 
 1. Container starts/restarts
-2. Dependencies are installed
-3. Seed scripts execute for each extension
-4. Marker files created (if `runOnce: true`)
+2. Stack-level dependencies are installed and seeded
+3. Extension-level dependencies are installed and seeded
+4. Marker files created:
+   - Stack-level: `/tmp/.civicrm-seeded-<extension-name>`
+   - Extension-level: `<extension-dir>/.civicrm-seeded`
 
 ### Manual Seeding
 
 Run seeding manually:
 
 ```bash
-# Seed all extensions
+# Seed all configured extensions
 ./scripts/seed-extensions.sh
 
-# Force re-seed (ignore runOnce markers)
+# Force re-seed (ignore markers)
 ./scripts/seed-extensions.sh --force
 
 # Reset seed markers to allow re-seeding
 ./scripts/reset-seed-markers.sh
 ```
 
-### Example: Full Extension Setup
+### Example: Extension-Level Configuration
 
-Here's a complete example showing dependencies and seeding:
+Here's a complete example showing extension-level dependencies and seeding:
 
+**Extension repository structure:**
 ```bash
-# Your extension repo structure:
 com.yourorg.myextension/
 ├── info.xml
 ├── myextension.php
 ├── civikitchen.json     # Dependencies + seeding config
 ├── scripts/
-│   └── seed-dev-data.sh          # Seed script
+│   └── seed-dev-data.sh # Seed script
 ├── CRM/
 └── templates/
 ```
 
+**`civikitchen.json`:**
 ```json
-// civikitchen.json
 {
   "dependencies": [
     {
@@ -224,6 +297,21 @@ com.yourorg.myextension/
     "runOnce": true
   }
 }
+```
+
+**Workflow:**
+```bash
+# 1. Clone your extension
+cd ~/projects
+git clone git@github.com:yourorg/com.yourorg.myextension.git
+
+# 2. Symlink into civikitchen
+cd /path/to/civikitchen/extensions
+ln -s ~/projects/com.yourorg.myextension .
+
+# 3. Restart container - dependencies and seeding happen automatically!
+cd /path/to/civikitchen
+docker-compose restart civicrm
 ```
 
 ## Quick Start

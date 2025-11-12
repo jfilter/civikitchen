@@ -94,9 +94,21 @@ docker-compose up -d
 docker-compose logs -f civicrm
 ```
 
-Look for: `Site creation complete! Access your site at: http://localhost:8080`
+The container performs these startup tasks:
+- Creates the CiviCRM site (if configured)
+- Installs extension dependencies (if any are configured)
+- Seeds test data (if configured)
+- Verifies extensions are ready
+- Starts Apache web server
+
+Look for these completion messages:
+- `✓ Extensions are ready!` (if dependencies configured)
+- `Site creation complete!`
+- `Starting Apache...`
 
 **That's it!** Your site is ready at **http://localhost:8080** 🎉
+
+> **Note for developers:** If you've configured a stack with extensions (like `eu-nonprofit`), the container waits for all extensions to be installed before starting Apache. This ensures the site is truly ready when tests or development begins.
 
 > **First run automatically:**
 >

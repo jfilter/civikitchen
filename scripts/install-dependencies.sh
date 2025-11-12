@@ -28,16 +28,72 @@ docker-compose exec civicrm bash -c '
         exit 1
     fi
 
-    echo "Scanning for extension dependencies..."
+    echo "Scanning for dependencies..."
     echo ""
 
-    # Find all civikitchen.json files
+    # First, check for stack configuration file
+    STACK_NAME="${STACK:-eu-nonprofit}"
+    STACK_CONFIG="/config/${STACK_NAME}/civikitchen.json"
+
+    if [ -f "$STACK_CONFIG" ]; then
+        echo "Found stack configuration: $STACK_CONFIG"
+
+        # Parse and install each dependency from stack config
+        DEPS=$(cat "$STACK_CONFIG" | jq -r ".dependencies[]? | @json")
+
+        if [ -n "$DEPS" ]; then
+            echo "$DEPS" | while IFS= read -r dep; do
+                DEP_NAME=$(echo "$dep" | jq -r ".name")
+                DEP_REPO=$(echo "$dep" | jq -r ".repo")
+                DEP_VERSION=$(echo "$dep" | jq -r ".version")
+                DEP_ENABLE=$(echo "$dep" | jq -r ".enable // true")
+
+                DEP_PATH="$EXT_DIR/$DEP_NAME"
+
+                # Check if dependency already exists
+                if [ -d "$DEP_PATH" ]; then
+                    echo "  ✓ Dependency $DEP_NAME already installed, skipping"
+                    continue
+                fi
+
+                echo "  Installing dependency: $DEP_NAME @ $DEP_VERSION"
+
+                # Clone the repository
+                cd "$EXT_DIR"
+                if ! git clone "$DEP_REPO" "$DEP_NAME" 2>/dev/null; then
+                    echo "  ✗ Failed to clone $DEP_NAME from $DEP_REPO"
+                    continue
+                fi
+
+                # Checkout specified version
+                cd "$DEP_PATH"
+                if ! git checkout "$DEP_VERSION" 2>/dev/null; then
+                    echo "  ⚠ Warning: Could not checkout version $DEP_VERSION for $DEP_NAME"
+                fi
+
+                echo "  ✓ Installed $DEP_NAME"
+
+                # Enable the extension if requested
+                if [ "$DEP_ENABLE" = "true" ]; then
+                    cd /home/buildkit/buildkit/build/site/web
+                    if cv ext:enable "$DEP_NAME" 2>/dev/null; then
+                        echo "  ✓ Enabled $DEP_NAME"
+                    else
+                        echo "  ⚠ Could not enable $DEP_NAME (may need manual enabling)"
+                    fi
+                fi
+            done
+        fi
+        echo ""
+    fi
+
+    # Then, check for extension-specific civikitchen.json files
     for config_file in "$EXT_DIR"/*/civikitchen.json; do
         if [ ! -f "$config_file" ]; then
             continue
         fi
 
-        echo "Found dependency config: $config_file"
+        echo "Found extension config: $config_file"
         EXTENSION_DIR=$(dirname "$config_file")
         EXTENSION_NAME=$(basename "$EXTENSION_DIR")
 

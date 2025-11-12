@@ -13,14 +13,14 @@ DB_DUMP_FILE="/home/buildkit/civicrm-initial.sql"
 
 # Start MariaDB
 echo "Starting MariaDB..."
-sudo service mariadb start
+service mariadb start
 sleep 3
 
 # Initialize MariaDB root password if first run
 if [ ! -f "/var/lib/mysql/.mysql_initialized" ]; then
     echo "Initializing MariaDB..."
-    sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root';" || true
-    sudo touch /var/lib/mysql/.mysql_initialized
+    mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root';" || true
+    touch /var/lib/mysql/.mysql_initialized
 fi
 
 # Check if we have a pre-built database to import
@@ -63,7 +63,7 @@ if [ ! -f "$SITE_CREATED_FLAG" ]; then
         --mysql_type='dsn' \
         --mysql_dsn='mysql://root:root@127.0.0.1:3306' \
         --httpd_type=apache24 \
-        --httpd_restart_command='sudo apachectl graceful' \
+        --httpd_restart_command='apachectl graceful' \
         --hosts_type=file \
         --perm_type=none
 
@@ -163,7 +163,7 @@ fi
 # Start Apache
 echo ""
 echo "Starting Apache..."
-sudo apachectl start
+apachectl start
 
 echo ""
 echo "=========================================="

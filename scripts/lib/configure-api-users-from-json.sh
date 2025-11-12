@@ -36,10 +36,26 @@ echo "     Adding authentication permissions..."
 drush role:perm:add authenticated 'authenticate with password' 2>/dev/null || true
 drush role:perm:add administrator 'authenticate with password' 2>/dev/null || true
 
-# Reset passwords for built-in users (admin, demo)
+# Ensure CiviCRM permissions are registered in Drupal FIRST
+echo "     Syncing CiviCRM permissions to Drupal..."
+cv api System.flush 2>/dev/null || true
+
+# Grant all CiviCRM permissions to administrator role
+echo "     Granting CiviCRM permissions to administrator role..."
+drush role:perm:add administrator 'access civicrm' 2>/dev/null || true
+drush role:perm:add administrator 'administer civicrm' 2>/dev/null || true
+
+# Reset passwords for built-in users and update civibuild config
 echo "     Resetting passwords for built-in users..."
 drush user:password admin 'admin' 2>/dev/null || true
 drush user:password demo 'demo' 2>/dev/null || true
+
+# Update civibuild site config to reflect new passwords
+echo "     Updating civibuild site configuration..."
+if [ -f "/home/buildkit/buildkit/build/site.sh" ]; then
+  sed -i 's/^ADMIN_PASS=.*/ADMIN_PASS="admin"/' /home/buildkit/buildkit/build/site.sh 2>/dev/null || true
+  sed -i 's/^DEMO_PASS=.*/DEMO_PASS="demo"/' /home/buildkit/buildkit/build/site.sh 2>/dev/null || true
+fi
 
 # === Process API Users ===
 echo "  👥 Creating API users..."
@@ -148,6 +164,11 @@ echo '     -H "X-Requested-With: XMLHttpRequest" \'
 echo "     --data-urlencode 'params={\"limit\":5}'"
 echo ""
 echo "=========================================="
+
+# Clear Drupal cache to ensure permissions take effect
+echo ""
+echo "     Clearing Drupal cache..."
+drush cache:rebuild 2>/dev/null || true
 
 # Cleanup
 rm -f "$API_KEYS_FILE"

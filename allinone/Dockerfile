@@ -15,17 +15,16 @@ FROM ubuntu:22.04 AS base
 ARG PHP_VERSION
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Install system packages and repositories
+# Install system packages, repositories, and Apache in a single layer
+# Optimized: removed wget (use curl), removed sudo (unnecessary in containers)
 RUN apt-get update && apt-get install -y \
     software-properties-common \
     ca-certificates \
     gnupg \
     curl \
-    wget \
     git \
     unzip \
     zip \
-    sudo \
     rsync \
     patch \
     acl \
@@ -33,13 +32,13 @@ RUN apt-get update && apt-get install -y \
     jq \
     && add-apt-repository ppa:ondrej/php -y \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get update
-
-# Install Apache
-RUN apt-get install -y \
-    apache2 \
+    && apt-get update \
+    && apt-get install -y apache2 \
     && a2enmod rewrite ssl headers \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get purge -y software-properties-common gnupg \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt/*
 
 # Install PHP with all required extensions
 RUN apt-get update && apt-get install -y \
@@ -56,29 +55,38 @@ RUN apt-get update && apt-get install -y \
     php${PHP_VERSION}-bcmath \
     php${PHP_VERSION}-soap \
     libapache2-mod-php${PHP_VERSION} \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt/*
 
 # Install MariaDB Server (embedded)
 RUN apt-get update && apt-get install -y \
     mariadb-server \
     mariadb-client \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /usr/share/mysql/mysql-test \
+    && rm -rf /usr/share/mysql/sql-bench \
+    && rm -rf /var/lib/mysql-files \
+    && rm -rf /var/lib/mysql-keyring \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt/*
 
 # Install Node.js and Composer
 RUN apt-get update && apt-get install -y \
     nodejs \
     && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt/*
 
-# Configure PHP
-RUN sed -i 's/upload_max_filesize = .*/upload_max_filesize = 64M/' /etc/php/${PHP_VERSION}/apache2/php.ini \
-    && sed -i 's/post_max_size = .*/post_max_size = 64M/' /etc/php/${PHP_VERSION}/apache2/php.ini \
-    && sed -i 's/memory_limit = .*/memory_limit = 512M/' /etc/php/${PHP_VERSION}/apache2/php.ini \
-    && sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/${PHP_VERSION}/apache2/php.ini \
-    && sed -i 's/upload_max_filesize = .*/upload_max_filesize = 64M/' /etc/php/${PHP_VERSION}/cli/php.ini \
-    && sed -i 's/post_max_size = .*/post_max_size = 64M/' /etc/php/${PHP_VERSION}/cli/php.ini \
-    && sed -i 's/memory_limit = .*/memory_limit = 512M/' /etc/php/${PHP_VERSION}/cli/php.ini \
-    && sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/${PHP_VERSION}/cli/php.ini
+# Configure PHP (optimized: single sed with multiple expressions per file)
+RUN sed -i -e 's/upload_max_filesize = .*/upload_max_filesize = 64M/' \
+           -e 's/post_max_size = .*/post_max_size = 64M/' \
+           -e 's/memory_limit = .*/memory_limit = 512M/' \
+           -e 's/max_execution_time = .*/max_execution_time = 300/' \
+           /etc/php/${PHP_VERSION}/apache2/php.ini \
+    && sed -i -e 's/upload_max_filesize = .*/upload_max_filesize = 64M/' \
+              -e 's/post_max_size = .*/post_max_size = 64M/' \
+              -e 's/memory_limit = .*/memory_limit = 512M/' \
+              -e 's/max_execution_time = .*/max_execution_time = 300/' \
+              /etc/php/${PHP_VERSION}/cli/php.ini
 
 # Create buildkit user
 RUN useradd -m -s /bin/bash buildkit \
@@ -105,6 +113,15 @@ RUN echo "<VirtualHost *:80>" > /etc/apache2/sites-available/civicrm.conf \
     && a2dissite 000-default.conf \
     && a2ensite civicrm.conf
 
+# Final cleanup: Remove docs, man pages, and unnecessary locales
+RUN rm -rf /usr/share/doc/* \
+    && rm -rf /usr/share/man/* \
+    && rm -rf /usr/share/info/* \
+    && rm -rf /usr/share/groff/* \
+    && rm -rf /usr/share/lintian/* \
+    && rm -rf /usr/share/linda/* \
+    && find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' -exec rm -rf {} +
+
 # =============================================================================
 # Stage 2: Install Buildkit
 # =============================================================================
@@ -113,8 +130,9 @@ FROM base AS buildkit-setup
 USER buildkit
 WORKDIR /home/buildkit
 
-# Clone and install buildkit
+# Clone and install buildkit (remove .git to save space)
 RUN git clone https://github.com/civicrm/civicrm-buildkit.git buildkit \
+    && rm -rf buildkit/.git \
     && cd buildkit \
     && ./bin/civi-download-tools \
     && echo 'export PATH=/home/buildkit/buildkit/bin:$PATH' >> /home/buildkit/.bashrc

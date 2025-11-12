@@ -123,22 +123,85 @@ install_extension_dependencies() {
         return 0
     fi
 
-    # Find all civikitchen.json files
+    # First, check for stack configuration file
+    STACK_NAME="${STACK:-eu-nonprofit}"
+    STACK_CONFIG="/config/${STACK_NAME}/civikitchen.json"
+
+    if [ -f "$STACK_CONFIG" ]; then
+        echo "Found stack configuration: $STACK_CONFIG"
+
+        # Parse and install each dependency from stack config
+        DEPS=$(cat "$STACK_CONFIG" | jq -r '.dependencies[]? | @json')
+
+        if [ -n "$DEPS" ]; then
+            echo "$DEPS" | while IFS= read -r dep; do
+                DEP_NAME=$(echo "$dep" | jq -r '.name')
+                DEP_REPO=$(echo "$dep" | jq -r '.repo')
+                DEP_VERSION=$(echo "$dep" | jq -r '.version')
+                DEP_ENABLE=$(echo "$dep" | jq -r '.enable // true')
+                DEP_SEED=$(echo "$dep" | jq -r '.seed // false')
+
+                DEP_PATH="$EXT_DIR/$DEP_NAME"
+
+                # Check if dependency already exists
+                if [ ! -d "$DEP_PATH" ]; then
+                    echo "  Installing extension: $DEP_NAME @ $DEP_VERSION"
+
+                    # Clone the repository
+                    cd "$EXT_DIR"
+                    if ! git clone "$DEP_REPO" "$DEP_NAME" 2>/dev/null; then
+                        echo "  ✗ Failed to clone $DEP_NAME from $DEP_REPO"
+                        continue
+                    fi
+
+                    # Checkout specified version
+                    cd "$DEP_PATH"
+                    if ! git checkout "$DEP_VERSION" 2>/dev/null; then
+                        echo "  ⚠ Warning: Could not checkout version $DEP_VERSION for $DEP_NAME"
+                    fi
+
+                    echo "  ✓ Installed $DEP_NAME"
+                else
+                    echo "  ✓ Extension $DEP_NAME already cloned"
+                fi
+
+                # Enable the extension if requested (always check, even if already installed)
+                if [ "$DEP_ENABLE" = "true" ]; then
+                    cd /home/buildkit/buildkit/build/site/web
+                    # Wait for CiviCRM to be ready (check if settings file exists)
+                    if [ ! -f "sites/default/civicrm.settings.php" ]; then
+                        echo "  ⚠ CiviCRM not yet ready, skipping enable for $DEP_NAME"
+                    elif cv ext:enable "$DEP_NAME" 2>&1 | tee /tmp/cv-enable-$DEP_NAME.log | grep -q "Enabling extension"; then
+                        echo "  ✓ Enabled $DEP_NAME"
+                    else
+                        echo "  ⚠ Could not enable $DEP_NAME (check logs: /tmp/cv-enable-$DEP_NAME.log)"
+                    fi
+                fi
+
+                # Track for seeding later (store in temp file)
+                if [ "$DEP_SEED" != "false" ]; then
+                    echo "$DEP_NAME|$DEP_SEED" >> /tmp/extensions_to_seed.txt
+                fi
+            done
+        fi
+    fi
+
+    # Then, check for extension-specific civikitchen.json files (for custom extension development)
     for config_file in "$EXT_DIR"/*/civikitchen.json; do
         if [ ! -f "$config_file" ]; then
             continue
         fi
 
-        echo "Found dependency config: $config_file"
+        echo "Found extension config: $config_file"
         EXTENSION_DIR=$(dirname "$config_file")
         EXTENSION_NAME=$(basename "$EXTENSION_DIR")
 
         # Parse and install each dependency
-        # Use jq to parse JSON (already available in buildkit)
         DEPS=$(cat "$config_file" | jq -r '.dependencies[]? | @json')
 
         if [ -z "$DEPS" ]; then
             echo "  No dependencies found in $EXTENSION_NAME"
+            echo ""
             continue
         fi
 
@@ -147,34 +210,32 @@ install_extension_dependencies() {
             DEP_REPO=$(echo "$dep" | jq -r '.repo')
             DEP_VERSION=$(echo "$dep" | jq -r '.version')
             DEP_ENABLE=$(echo "$dep" | jq -r '.enable // true')
-            DEP_SEED=$(echo "$dep" | jq -r '.seed // false')
 
             DEP_PATH="$EXT_DIR/$DEP_NAME"
 
             # Check if dependency already exists
-            if [ -d "$DEP_PATH" ]; then
-                echo "  ✓ Dependency $DEP_NAME already installed, skipping"
-                continue
+            if [ ! -d "$DEP_PATH" ]; then
+                echo "  Installing extension: $DEP_NAME @ $DEP_VERSION"
+
+                # Clone the repository
+                cd "$EXT_DIR"
+                if ! git clone "$DEP_REPO" "$DEP_NAME" 2>/dev/null; then
+                    echo "  ✗ Failed to clone $DEP_NAME from $DEP_REPO"
+                    continue
+                fi
+
+                # Checkout specified version
+                cd "$DEP_PATH"
+                if ! git checkout "$DEP_VERSION" 2>/dev/null; then
+                    echo "  ⚠ Warning: Could not checkout version $DEP_VERSION for $DEP_NAME"
+                fi
+
+                echo "  ✓ Installed $DEP_NAME"
+            else
+                echo "  ✓ Extension $DEP_NAME already cloned"
             fi
 
-            echo "  Installing dependency: $DEP_NAME @ $DEP_VERSION"
-
-            # Clone the repository
-            cd "$EXT_DIR"
-            if ! git clone "$DEP_REPO" "$DEP_NAME" 2>/dev/null; then
-                echo "  ✗ Failed to clone $DEP_NAME from $DEP_REPO"
-                continue
-            fi
-
-            # Checkout specified version
-            cd "$DEP_PATH"
-            if ! git checkout "$DEP_VERSION" 2>/dev/null; then
-                echo "  ⚠ Warning: Could not checkout version $DEP_VERSION for $DEP_NAME"
-            fi
-
-            echo "  ✓ Installed $DEP_NAME"
-
-            # Enable the extension if requested
+            # Enable the extension if requested (always check, even if already installed)
             if [ "$DEP_ENABLE" = "true" ]; then
                 cd /home/buildkit/buildkit/build/site/web
                 # Wait for CiviCRM to be ready (check if settings file exists)
@@ -186,12 +247,9 @@ install_extension_dependencies() {
                     echo "  ⚠ Could not enable $DEP_NAME (check logs: /tmp/cv-enable-$DEP_NAME.log)"
                 fi
             fi
-
-            # Track for seeding later (store in temp file)
-            if [ "$DEP_SEED" != "false" ]; then
-                echo "$DEP_NAME|$DEP_SEED" >> /tmp/extensions_to_seed.txt
-            fi
         done
+
+        echo ""
     done
 
     echo "✓ Dependency installation complete!"
@@ -266,7 +324,7 @@ run_extension_seeding() {
         rm -f /tmp/extensions_to_seed.txt
     fi
 
-    # Also support old-style seeding config for backward compatibility
+    # Then, check for extension-specific seeding configurations
     for config_file in "$EXT_DIR"/*/civikitchen.json; do
         if [ ! -f "$config_file" ]; then
             continue
@@ -275,7 +333,7 @@ run_extension_seeding() {
         EXTENSION_DIR=$(dirname "$config_file")
         EXTENSION_NAME=$(basename "$EXTENSION_DIR")
 
-        # Check if seeding is enabled (old format)
+        # Check if seeding is enabled
         SEED_ENABLED=$(cat "$config_file" | jq -r '.seeding.enabled // false')
 
         if [ "$SEED_ENABLED" != "true" ]; then
@@ -288,12 +346,14 @@ run_extension_seeding() {
 
         if [ -z "$SEED_SCRIPT" ]; then
             echo "  ⚠ Seeding enabled for $EXTENSION_NAME but no script specified"
+            echo ""
             continue
         fi
 
-        # Check if already seeded
+        # Check if already seeded (unless force mode)
         if [ "$RUN_ONCE" = "true" ] && [ -f "$SEED_MARKER" ]; then
             echo "  ✓ $EXTENSION_NAME already seeded (runOnce=true), skipping"
+            echo ""
             continue
         fi
 
@@ -301,6 +361,7 @@ run_extension_seeding() {
 
         if [ ! -f "$SEED_PATH" ]; then
             echo "  ✗ Seed script not found: $SEED_PATH"
+            echo ""
             continue
         fi
 
@@ -318,6 +379,8 @@ run_extension_seeding() {
         else
             echo "  ✗ Seeding failed for $EXTENSION_NAME"
         fi
+
+        echo ""
     done
 
     echo "✓ Extension seeding complete!"
@@ -459,6 +522,66 @@ sudo tee /etc/apache2/sites-available/000-default.conf > /dev/null <<EOF
     CustomLog \${APACHE_LOG_DIR}/access.log combined
 </VirtualHost>
 EOF
+
+# Verify extensions are ready before starting Apache
+if [ -f "/home/buildkit/buildkit/build/site/web/index.php" ]; then
+    echo "==================================="
+    echo "Verifying extension readiness..."
+    echo "==================================="
+
+    # Check if we have any stack or extension-level configs that define dependencies
+    STACK_NAME="${STACK:-eu-nonprofit}"
+    HAS_DEPENDENCIES=false
+
+    # Check stack config
+    if [ -f "/config/${STACK_NAME}/civikitchen.json" ]; then
+        DEPS_COUNT=$(cat "/config/${STACK_NAME}/civikitchen.json" | jq -r '.dependencies[]? | .name' 2>/dev/null | wc -l)
+        if [ "$DEPS_COUNT" -gt 0 ]; then
+            HAS_DEPENDENCIES=true
+        fi
+    fi
+
+    # Check extension-level configs
+    EXT_DIR="/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext"
+    if [ -d "$EXT_DIR" ]; then
+        for config_file in "$EXT_DIR"/*/civikitchen.json; do
+            if [ -f "$config_file" ]; then
+                EXT_DEPS_COUNT=$(cat "$config_file" | jq -r '.dependencies[]? | .name' 2>/dev/null | wc -l)
+                if [ "$EXT_DEPS_COUNT" -gt 0 ]; then
+                    HAS_DEPENDENCIES=true
+                    break
+                fi
+            fi
+        done
+    fi
+
+    # Only wait if we actually have dependencies configured
+    if [ "$HAS_DEPENDENCIES" = "true" ]; then
+        WAIT_ATTEMPTS=0
+        MAX_WAIT=60  # Maximum 60 seconds wait
+
+        while [ $WAIT_ATTEMPTS -lt $MAX_WAIT ]; do
+            # Try to get extension list - if cv command works, extensions are ready
+            if cd /home/buildkit/buildkit/build/site/web 2>/dev/null && cv ext:list --local 2>/dev/null | grep -q "installed\|enabled" 2>/dev/null; then
+                echo "✓ Extensions are ready!"
+                break
+            fi
+
+            WAIT_ATTEMPTS=$((WAIT_ATTEMPTS + 1))
+            if [ $WAIT_ATTEMPTS -lt $MAX_WAIT ]; then
+                echo "  Waiting for extensions to be ready... (${WAIT_ATTEMPTS}s)"
+                sleep 1
+            fi
+        done
+
+        if [ $WAIT_ATTEMPTS -ge $MAX_WAIT ]; then
+            echo "⚠ Warning: Extensions may not be fully ready, but continuing startup"
+        fi
+    else
+        echo "✓ No dependencies configured, skipping extension readiness check"
+    fi
+    echo ""
+fi
 
 echo "==================================="
 echo "Starting Apache..."
