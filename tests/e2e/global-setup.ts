@@ -27,7 +27,7 @@ async function waitForExtensionsReady(maxAttempts = 30): Promise<boolean> {
         console.log("✓ Extensions are ready!");
         return true;
       }
-    } catch (error) {
+    } catch {
       // Extension system not ready yet, continue waiting
     }
 

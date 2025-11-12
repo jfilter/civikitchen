@@ -12,6 +12,7 @@ export default [
       "build/**",
       "docs/**",
       "scripts/**",
+      "extensions/**",
       "**/*.md",
       "eslint.config.mjs",
     ],
