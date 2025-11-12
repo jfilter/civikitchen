@@ -129,8 +129,71 @@ jobs:
             ${{ env.BASE_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}-arm64 \
             ${{ env.BASE_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}-amd64
 
-  build-prebuilt:
+  test-base-image:
     needs: create-base-manifest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" =~ ^refs/tags/aio- ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/aio-}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pull and smoke test base image
+        run: |
+          echo "Pulling base image..."
+          docker pull ${{ env.BASE_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+
+          echo "Starting container..."
+          docker run -d --name test-base ${{ env.BASE_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+
+          echo "Waiting for services to start..."
+          sleep 30
+
+          echo "Checking MariaDB..."
+          docker exec test-base mysqladmin ping -h localhost || {
+            echo "MariaDB health check failed"
+            docker logs test-base
+            exit 1
+          }
+
+          echo "Checking Apache..."
+          docker exec test-base apache2ctl -t || {
+            echo "Apache config check failed"
+            docker logs test-base
+            exit 1
+          }
+
+          docker exec test-base pgrep apache2 || {
+            echo "Apache process not running"
+            docker logs test-base
+            exit 1
+          }
+
+          echo "Base image smoke test passed!"
+          docker stop test-base
+          docker rm test-base
+
+  build-prebuilt:
+    needs: test-base-image
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -231,10 +294,20 @@ jobs:
 
   test-image:
     needs: create-manifest
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: read
+
+    strategy:
+      matrix:
+        include:
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            suffix: arm64
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            suffix: amd64
 
     steps:
       - name: Checkout repository
@@ -260,10 +333,10 @@ jobs:
             echo "tag=latest" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Pull and test image
+      - name: Pull and test image for ${{ matrix.platform }}
         run: |
           chmod +x ./allinone/test.sh
-          docker pull ${{ env.FINAL_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+          docker pull --platform ${{ matrix.platform }} ${{ env.FINAL_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
 
           # Tag for test script
           docker tag ${{ env.FINAL_IMAGE_NAME }}:${{ steps.tag.outputs.tag }} civicrm-eu-ngo:test
@@ -275,7 +348,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-logs
+          name: test-logs-${{ matrix.suffix }}
           path: |
             *.log
           retention-days: 7
