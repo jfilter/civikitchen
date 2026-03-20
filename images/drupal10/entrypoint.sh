@@ -60,6 +60,13 @@ MYCNF
         --civi-ver '${CIVICRM_VERSION}' \
         --admin-pass 'admin'"
 
+    # Workaround: brick/money 0.12+ renamed ISOCurrencyProvider → IsoCurrencyProvider
+    # but CiviCRM still references the old name. Pin to compatible version.
+    SITE_DIR="/home/buildkit/buildkit/build/site"
+    if [[ -f "${SITE_DIR}/composer.json" ]]; then
+        ${BK} "export PATH='${PATH}' && cd '${SITE_DIR}' && composer require 'brick/money:<0.12' -W --no-interaction 2>/dev/null" || true
+    fi
+
     touch "${MARKER_FILE}"
     echo "Site created successfully."
 else
