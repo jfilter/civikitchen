@@ -62,7 +62,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install dev tools (pcov, civix, phpunit, phpstan)
-RUN pecl install pcov && docker-php-ext-enable pcov \
+RUN pecl install pcov \
+    && echo "extension=pcov.so" > /etc/php/${PHP_VERSION}/mods-available/pcov.ini \
+    && phpenmod pcov \
     && curl -LsS https://download.civicrm.org/civix/civix.phar -o /usr/local/bin/civix && chmod +x /usr/local/bin/civix \
     && curl -LsS https://phar.phpunit.de/phpunit-9.phar -o /usr/local/bin/phpunit && chmod +x /usr/local/bin/phpunit \
     && curl -LsS https://github.com/phpstan/phpstan/releases/latest/download/phpstan.phar -o /usr/local/bin/phpstan && chmod +x /usr/local/bin/phpstan
@@ -76,7 +78,6 @@ RUN sed -i -e 's/upload_max_filesize = .*/upload_max_filesize = 64M/' \
 
 # Create buildkit user
 RUN useradd -m -s /bin/bash buildkit \
-    && echo "buildkit ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
     && mkdir -p /var/log/apache2 /var/run/apache2 \
     && chown -R buildkit:buildkit /var/log/apache2 /var/run/apache2
 

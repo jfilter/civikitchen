@@ -12,7 +12,6 @@ HTTPD_DOMAIN="${HTTPD_DOMAIN:-localhost}"
 HTTPD_PORT="${HTTPD_PORT:-80}"
 
 SITE_URL="http://${HTTPD_DOMAIN}:${HTTPD_PORT}"
-SITE_DIR="/home/buildkit/buildkit/build/site"
 MARKER_FILE="/home/buildkit/.site-installed"
 
 echo "CiviCRM Dev Image (${CIVICRM_SITE_TYPE})"
@@ -32,33 +31,34 @@ until mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u root -p"${MYSQL_ROOT_PASSWO
 done
 echo "MySQL is ready."
 
-# Build site on first run only
+# Build site on first run only (as buildkit user)
 if [[ ! -f "${MARKER_FILE}" ]]; then
     echo "First run: building ${CIVICRM_SITE_TYPE} site..."
 
+    BK="su -s /bin/bash buildkit -c"
+    export PATH="/home/buildkit/buildkit/bin:${PATH}"
+
     # Configure amp for MySQL connection
-    sudo -u buildkit bash -c "
-        export PATH='/home/buildkit/buildkit/bin:\${PATH}'
-        amp config:set \
-            --mysql_type=mycnf \
-            --httpd_type=none \
-            --perm_type=none
-        echo '[client]' > /home/buildkit/.my.cnf
-        echo 'host=${MYSQL_HOST}' >> /home/buildkit/.my.cnf
-        echo 'port=${MYSQL_PORT}' >> /home/buildkit/.my.cnf
-        echo 'user=root' >> /home/buildkit/.my.cnf
-        echo 'password=${MYSQL_ROOT_PASSWORD}' >> /home/buildkit/.my.cnf
-    "
+    ${BK} "export PATH='${PATH}' && amp config:set \
+        --mysql_type=mycnf \
+        --httpd_type=none \
+        --perm_type=none"
+
+    cat > /home/buildkit/.my.cnf <<MYCNF
+[client]
+host=${MYSQL_HOST}
+port=${MYSQL_PORT}
+user=root
+password=${MYSQL_ROOT_PASSWORD}
+MYCNF
+    chown buildkit:buildkit /home/buildkit/.my.cnf
 
     # Create the CiviCRM site
-    sudo -u buildkit bash -c "
-        export PATH='/home/buildkit/buildkit/bin:\${PATH}'
-        civibuild create site \
-            --type '${CIVICRM_SITE_TYPE}' \
-            --url '${SITE_URL}' \
-            --civi-ver '${CIVICRM_VERSION}' \
-            --admin-pass 'admin'
-    "
+    ${BK} "export PATH='${PATH}' && civibuild create site \
+        --type '${CIVICRM_SITE_TYPE}' \
+        --url '${SITE_URL}' \
+        --civi-ver '${CIVICRM_VERSION}' \
+        --admin-pass 'admin'"
 
     touch "${MARKER_FILE}"
     echo "Site created successfully."
@@ -66,8 +66,8 @@ else
     echo "Site already installed (skipping build)."
 fi
 
-# Start Apache
+# Start Apache (needs root for port 80)
 echo "Starting Apache..."
 echo "Access: ${SITE_URL}"
 echo "Login: admin / admin"
-sudo apachectl -D FOREGROUND
+apachectl -D FOREGROUND
