@@ -149,8 +149,8 @@ USER buildkit
 WORKDIR /home/buildkit
 
 # Copy stack configuration
-RUN mkdir -p /home/buildkit/stacks
-COPY --chown=buildkit:buildkit stacks/eu-nonprofit/civikitchen.json /home/buildkit/stacks/eu-nonprofit/civikitchen.json
+RUN mkdir -p /home/buildkit/stacks/eu-nonprofit
+COPY --chown=buildkit:buildkit allinone/config/eu-nonprofit.json /home/buildkit/stacks/eu-nonprofit/civikitchen.json
 
 # =============================================================================
 # Stage 4: Final Image (Runtime Setup)
@@ -160,10 +160,11 @@ FROM extensions-setup AS final
 USER root
 
 # Copy scripts and entrypoint
-COPY --chown=buildkit:buildkit scripts /home/buildkit/scripts
+COPY --chown=buildkit:buildkit allinone/scripts /home/buildkit/scripts
 COPY --chown=buildkit:buildkit allinone/entrypoint-allinone.sh /home/buildkit/entrypoint.sh
 RUN chmod +x /home/buildkit/entrypoint.sh \
-    && chmod +x /home/buildkit/scripts/lib/*.sh
+    && chmod +x /home/buildkit/scripts/lib/*.sh \
+    && chmod +x /home/buildkit/scripts/lib/seeds/*.sh
 
 # Environment variables
 ENV PATH="/home/buildkit/buildkit/bin:${PATH}"

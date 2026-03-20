@@ -103,9 +103,9 @@ if [[ ! -f "allinone/Dockerfile" ]]; then
     exit 1
 fi
 
-# Check if stacks/eu-nonprofit/civikitchen.json exists
-if [[ ! -f "stacks/eu-nonprofit/civikitchen.json" ]]; then
-    echo -e "${RED}Error: stacks/eu-nonprofit/civikitchen.json not found${NC}"
+# Check if eu-nonprofit config exists
+if [[ ! -f "allinone/config/eu-nonprofit.json" ]]; then
+    echo -e "${RED}Error: allinone/config/eu-nonprofit.json not found${NC}"
     echo "This file is required for the build"
     exit 1
 fi
