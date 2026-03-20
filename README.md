@@ -60,6 +60,7 @@ services:
     environment:
       MYSQL_HOST: db
       MYSQL_ROOT_PASSWORD: root
+      SITE_URL: http://localhost:8080   # must match the port mapping above
     depends_on:
       - db
   db:
@@ -67,6 +68,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
 ```
+
+**Important:** `SITE_URL` must match the external port from your Docker port mapping. CiviCRM uses this URL for all asset paths (JS, CSS, fonts). If omitted, defaults to `http://localhost` (port 80).
 
 ### WordPress (dev)
 

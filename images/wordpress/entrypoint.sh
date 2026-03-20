@@ -8,14 +8,27 @@ MYSQL_PORT="${MYSQL_PORT:-3306}"
 MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-root}"
 CIVICRM_SITE_TYPE="${CIVICRM_SITE_TYPE:-wp-demo}"
 CIVICRM_VERSION="${CIVICRM_VERSION:-6.7.1}"
-HTTPD_DOMAIN="${HTTPD_DOMAIN:-localhost}"
-HTTPD_PORT="${HTTPD_PORT:-80}"
 
-SITE_URL="http://${HTTPD_DOMAIN}:${HTTPD_PORT}"
+# SITE_URL is the URL the browser uses to reach this container.
+# Must match the external port from your Docker port mapping (-p flag).
+# Examples:
+#   docker run -p 8080:80  →  SITE_URL=http://localhost:8080
+#   docker run -p 80:80    →  SITE_URL=http://localhost (default)
+if [[ -z "${SITE_URL}" ]]; then
+    HTTPD_DOMAIN="${HTTPD_DOMAIN:-localhost}"
+    HTTPD_PORT="${HTTPD_PORT:-80}"
+    if [[ "${HTTPD_PORT}" == "80" ]]; then
+        SITE_URL="http://${HTTPD_DOMAIN}"
+    else
+        SITE_URL="http://${HTTPD_DOMAIN}:${HTTPD_PORT}"
+    fi
+fi
+
 MARKER_FILE="/home/buildkit/.site-installed"
 
 echo "CiviCRM Dev Image (${CIVICRM_SITE_TYPE})"
 echo "=========================================="
+echo "Site URL: ${SITE_URL}"
 
 # Wait for MySQL
 echo "Waiting for MySQL at ${MYSQL_HOST}:${MYSQL_PORT}..."
