@@ -17,7 +17,7 @@ echo ""
 
 # Default values
 PHP_VERSION=${PHP_VERSION:-8.2}
-CIVICRM_VERSION=${CIVICRM_VERSION:-6.7.1}
+CIVICRM_VERSION=${CIVICRM_VERSION:-6.12.1}
 IMAGE_NAME=${IMAGE_NAME:-civicrm-eu-ngo}
 IMAGE_TAG=${IMAGE_TAG:-latest}
 PLATFORM=${PLATFORM:-linux/amd64}
@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --php-version VERSION      PHP version (default: 8.2)"
-            echo "  --civicrm-version VERSION  CiviCRM version (default: 6.7.1)"
+            echo "  --civicrm-version VERSION  CiviCRM version (default: 6.12.1)"
             echo "  --tag TAG                  Image tag (default: latest)"
             echo "  --name NAME                Image name (default: civicrm-eu-ngo)"
             echo "  --platform PLATFORM        Target platform (default: linux/amd64)"

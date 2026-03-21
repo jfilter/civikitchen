@@ -11,7 +11,7 @@
 #     civicrm-dev:wordpress
 
 ARG PHP_VERSION=8.3
-ARG CIVICRM_VERSION=6.7.1
+ARG CIVICRM_VERSION=6.12.1
 
 # =============================================================================
 # Stage 1: Base system with PHP, Apache, and tools

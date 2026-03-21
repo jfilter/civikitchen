@@ -21,7 +21,7 @@ docker run -d -p 8080:80 --name civicrm-eu ghcr.io/jfilter/civicrm-eu-ngo:latest
 ## 📦 What's Included
 
 ### Platform Stack
-- **CiviCRM**: 6.7.1
+- **CiviCRM**: 6.12.1
 - **Drupal**: 10 (latest stable)
 - **PHP**: 8.2
 - **Database**: MariaDB 10.11 (embedded)

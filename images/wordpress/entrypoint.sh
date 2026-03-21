@@ -7,7 +7,7 @@ MYSQL_HOST="${MYSQL_HOST:-db}"
 MYSQL_PORT="${MYSQL_PORT:-3306}"
 MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-root}"
 CIVICRM_SITE_TYPE="${CIVICRM_SITE_TYPE:-wp-demo}"
-CIVICRM_VERSION="${CIVICRM_VERSION:-6.7.1}"
+CIVICRM_VERSION="${CIVICRM_VERSION:-6.12.1}"
 
 # SITE_URL is the URL the browser uses to reach this container.
 # Must match the external port from your Docker port mapping (-p flag).

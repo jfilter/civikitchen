@@ -77,7 +77,7 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             PHP_VERSION=8.2
-            CIVICRM_VERSION=6.7.1
+            CIVICRM_VERSION=6.12.1
             CIVICRM_SITE_TYPE=drupal10-demo
 
   create-base-manifest:

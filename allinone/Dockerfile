@@ -4,7 +4,7 @@
 
 # Build arguments
 ARG PHP_VERSION=8.2
-ARG CIVICRM_VERSION=6.7.1
+ARG CIVICRM_VERSION=6.12.1
 ARG CIVICRM_SITE_TYPE=drupal10-demo
 
 # =============================================================================
@@ -170,7 +170,7 @@ RUN chmod +x /home/buildkit/entrypoint.sh \
 ENV PATH="/home/buildkit/buildkit/bin:${PATH}"
 ENV CIVIBUILD_ADMIN_PASS="admin"
 ENV CIVICRM_SITE_TYPE="drupal10-demo"
-ENV CIVICRM_VERSION="6.7.1"
+ENV CIVICRM_VERSION="6.12.1"
 
 # Expose HTTP port
 EXPOSE 80
