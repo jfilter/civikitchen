@@ -1,0 +1,12 @@
+{
+  "name": "civikitchen-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "description": "E2E smoke tests for civikitchen dev images. Not published.",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}

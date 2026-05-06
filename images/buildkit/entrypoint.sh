@@ -3,10 +3,34 @@ set -e
 
 export PATH="/home/buildkit/buildkit/bin:${PATH}"
 
+# Xdebug toggle. pcov is always on (coverage). Set XDEBUG_MODE=debug,develop
+# (or any combo from https://xdebug.org/docs/all_settings#mode) to enable
+# step debugging. Leave unset / "off" to skip.
+PHP_VERSION="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
+for INI_DIR in /etc/php/${PHP_VERSION}/apache2/conf.d /etc/php/${PHP_VERSION}/cli/conf.d; do
+    rm -f "${INI_DIR}/20-xdebug.ini"
+done
+if [[ -n "${XDEBUG_MODE}" && "${XDEBUG_MODE}" != "off" ]]; then
+    cat > "/etc/php/${PHP_VERSION}/mods-available/xdebug.ini" <<EOF
+zend_extension=xdebug.so
+xdebug.mode=${XDEBUG_MODE}
+xdebug.client_host=${XDEBUG_CLIENT_HOST:-host.docker.internal}
+xdebug.client_port=${XDEBUG_CLIENT_PORT:-9003}
+xdebug.start_with_request=${XDEBUG_START_WITH_REQUEST:-trigger}
+xdebug.discover_client_host=${XDEBUG_DISCOVER_CLIENT_HOST:-0}
+xdebug.idekey=${XDEBUG_IDEKEY:-VSCODE}
+EOF
+    phpenmod xdebug
+    echo "[civikitchen] xdebug enabled (mode=${XDEBUG_MODE})"
+fi
+
 MYSQL_HOST="${MYSQL_HOST:-db}"
 MYSQL_PORT="${MYSQL_PORT:-3306}"
 MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-root}"
-CIVICRM_SITE_TYPE="${CIVICRM_SITE_TYPE:-wp-demo}"
+# Default site type comes from the build arg DEFAULT_SITE_TYPE — :drupal10
+# tags ship drupal10-demo, :wordpress tags ship wp-demo. Users can override
+# at runtime by setting CIVICRM_SITE_TYPE.
+CIVICRM_SITE_TYPE="${CIVICRM_SITE_TYPE:-${CIVICRM_SITE_TYPE_DEFAULT:-drupal10-demo}}"
 CIVICRM_VERSION="${CIVICRM_VERSION:-6.12.1}"
 
 # SITE_URL is the URL the browser uses to reach this container.

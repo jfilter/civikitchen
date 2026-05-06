@@ -3,11 +3,14 @@
 # 1. Point the volume below at your extension repo (uncomment).
 # 2. docker compose up -d
 #    On first start the app container runs cv core:install automatically.
-# 3. Enable + test:
+# 3. (If your extension uses composer) install vendor deps:
+#      docker compose exec app bash -c "cd /var/www/html/ext/myextension && composer install"
+# 4. Enable + test:
 #      docker compose exec app cv ext:enable myextension
 #      docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpunit"
 #
-# Tools in the image: cv, civix, phpunit, phpstan, pcov
+# Tools in the image: cv, civix, composer, node/npm, phpunit, phpstan, phpcs
+# (drupal/coder + dealerdirect installer), pcov, xdebug (opt-in via XDEBUG_MODE).
 #
 # URLs:
 #   CiviCRM:    http://localhost:8080
@@ -16,7 +19,9 @@
 
 services:
   app:
-    image: ghcr.io/jfilter/civicrm-dev:standalone
+    # Override via `IMAGE=... docker compose up` (used by CI to test a
+    # locally-built tag). Defaults to the published GHCR tag.
+    image: ${IMAGE:-ghcr.io/jfilter/civicrm-dev:standalone}
     depends_on:
       db:
         condition: service_healthy
@@ -28,6 +33,9 @@ services:
       CIVICRM_DB_NAME: civicrm
       CIVICRM_DB_USER: civicrm
       CIVICRM_DB_PASSWORD: civicrm
+      # Must match the host:port you open in the browser. CiviCRM bakes this
+      # into every asset URL — a mismatch silently breaks the Angular UI.
+      SITE_URL: "http://localhost:8080"
     # volumes:
     #   - ../path/to/your/extension:/var/www/html/ext/myextension
 

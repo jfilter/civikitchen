@@ -33,10 +33,14 @@ For extension development, see [Extension development](#extension-development).
 ### Standalone (dev)
 
 Official `civicrm/civicrm` image with dev tools added:
-- **pcov** — fast code coverage (replaces xdebug for coverage-only use)
+- **composer** — most modern extensions ship vendor deps
+- **node + npm** — for extensions with Angular/JS assets
+- **pcov** — fast code coverage (always on)
+- **xdebug** — step debugging, opt-in via `XDEBUG_MODE` (see [IDE step debugging](#ide-step-debugging))
 - **civix** — scaffolding/build tool for extensions
 - **phpunit 9** — pinned for CiviCRM compatibility
 - **phpstan** — static analysis
+- **phpcs + civicrm/coder** — the de-facto CiviCRM style guide (relaxed Drupal CS)
 
 CiviCRM is auto-installed on first container start when `CIVICRM_AUTO_INSTALL=1`. See [Extension development](#extension-development) for the full setup.
 
@@ -88,7 +92,7 @@ Ready-to-run: [`examples/drupal10/`](examples/drupal10/)
 
 ### WordPress (dev)
 
-CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10.
+CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10. The `:wordpress` and `:drupal10` tags are built from the same Dockerfile (`images/buildkit/`) — only the default civibuild site type differs (`wp-demo` vs `drupal10-demo`). Both images carry the same dev tools as the standalone image (composer, node/npm, phpunit, phpstan, phpcs+coder, civix, pcov, xdebug).
 
 Ready-to-run: [`examples/wordpress/`](examples/wordpress/)
 
@@ -124,12 +128,97 @@ docker compose up -d
 # Subsequent starts skip the install (idempotent: settings.php and DB persist).
 ```
 
-**3. Enable + test:**
+**3. Install vendor deps (if your extension uses composer):**
+
+```bash
+docker compose exec app bash -c "cd /var/www/html/ext/myextension && composer install"
+```
+
+**4. Enable + test:**
 
 ```bash
 docker compose exec app cv ext:enable myextension
 docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpunit"
 ```
+
+For headless tests (extending `CiviUnitTestCase` or implementing `HeadlessInterface`), set `CIVICRM_UF=UnitTests` so PHPUnit boots an isolated test database:
+
+```bash
+docker compose exec -e CIVICRM_UF=UnitTests app \
+  bash -c "cd /var/www/html/ext/myextension && phpunit"
+```
+
+### Civix workflow
+
+The image ships [`civix`](https://github.com/totten/civix) for scaffolding. Common commands:
+
+```bash
+docker compose exec app civix generate:module org.example.myext   # bootstrap a new extension
+docker compose exec app civix generate:entity MyEntity            # APIv4-exposed entity + schema
+docker compose exec app civix generate:test --template headless \
+    \\Civi\\Myext\\Test\\MyHeadlessTest                            # boilerplate for a headless test
+docker compose exec app civix upgrade                             # re-run periodically; bumps mixins,
+                                                                  # backports polyfills, refreshes
+                                                                  # generated stubs to current civix
+```
+
+Modern extensions configure features in `info.xml` via [standard mixins](https://docs.civicrm.org/dev/en/latest/framework/mixin/standard/) (`mgd-php`, `menu-xml`, `setting-php`, `entity-types-php@2.0.0`, `smarty-v2`, `ang-php`, …) instead of bespoke hooks — `civix upgrade` keeps the mixin block current.
+
+### PHPStan
+
+PHPStan needs to know about CiviCRM's autoloader to resolve `CRM_*` and `Civi\*` symbols. Each extension typically ships its own `phpstanBootstrap.php` that boots civi enough for static analysis (`extensions/de.systopia.contract/phpstanBootstrap.php` is a working reference). Run:
+
+```bash
+docker compose exec app bash -c \
+    "cd /var/www/html/ext/myextension && phpstan analyse"
+```
+
+### Linting
+
+`phpcs` is preinstalled with the [civicrm/coder](https://github.com/civicrm/coder) fork of `drupal/coder` on the `8.x-2.x-civi` branch. The ruleset registers itself as the standard `Drupal` and `DrupalPractice` standards (the civi fork relaxes a handful of rules but keeps the names).
+
+```bash
+docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpcs --standard=Drupal ."
+docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpcbf --standard=Drupal ."  # auto-fix
+```
+
+Most extensions ship a `phpcs.xml.dist` that scopes the run to the right files and excludes generated DAOs — see `extensions/de.systopia.contract/phpcs.xml.dist` for a working reference.
+
+### IDE step debugging
+
+Xdebug is installed but disabled until you set `XDEBUG_MODE`. Add it to your compose file:
+
+```yaml
+services:
+  app:
+    environment:
+      XDEBUG_MODE: "debug,develop"
+      # XDEBUG_CLIENT_HOST: host.docker.internal   # default — works for Docker Desktop
+      # XDEBUG_CLIENT_PORT: "9003"                 # default
+      # XDEBUG_START_WITH_REQUEST: trigger         # default; "yes" to break on every request
+      # XDEBUG_IDEKEY: VSCODE                      # default
+```
+
+VS Code `.vscode/launch.json` (path mapping must match your volume mount):
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [{
+    "name": "Listen for Xdebug",
+    "type": "php",
+    "request": "launch",
+    "port": 9003,
+    "pathMappings": {
+      "/var/www/html/ext/myextension": "${workspaceFolder}"
+    }
+  }]
+}
+```
+
+PhpStorm: enable "Listen for PHP Debug Connections", set the port to 9003, and add a path mapping from your project to `/var/www/html/ext/myextension`.
+
+`XDEBUG_START_WITH_REQUEST=trigger` (the default) means xdebug only activates when the request carries `XDEBUG_TRIGGER=1` (cookie, GET/POST param, or env var) — no overhead on regular requests. Use the [Xdebug Helper](https://xdebug.org/docs/step_debug#start_with_request) browser extension to send the trigger.
 
 ### Configuration
 
@@ -174,18 +263,40 @@ To add a new pinned version, edit the `version: [...]` matrix in [`.github/workf
 
 ## Building locally
 
+The build context is the `images/` dir for both the standalone and buildkit-based images, so the Dockerfiles can `COPY lib/install-dev-tools.sh` (the shared phars + phpcs/coder install).
+
 ```bash
 # Standalone (tracks civicrm/civicrm:latest)
-docker build -t civicrm-dev:standalone images/standalone/
+docker build -f images/standalone/Dockerfile -t civicrm-dev:standalone images/
 
 # Standalone pinned to a specific CiviCRM version
-docker build --build-arg CIVICRM_VERSION=6.12.1 -t civicrm-dev:standalone-6.12.1 images/standalone/
+docker build -f images/standalone/Dockerfile \
+    --build-arg CIVICRM_VERSION=6.12.1 \
+    -t civicrm-dev:standalone-6.12.1 images/
 
-# Drupal 10 (with specific PHP version)
-docker build --build-arg PHP_VERSION=8.3 -t civicrm-dev:drupal10 images/drupal10/
+# Buildkit-based images. The :drupal10 and :wordpress tags are built from
+# the same Dockerfile (images/buildkit/) — DEFAULT_SITE_TYPE picks which
+# civibuild site type the entrypoint creates on first run.
+docker build -f images/buildkit/Dockerfile \
+    --build-arg PHP_VERSION=8.3 \
+    --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
+    -t civicrm-dev:drupal10 images/
 
-# WordPress
-docker build --build-arg PHP_VERSION=8.3 -t civicrm-dev:wordpress images/wordpress/
+docker build -f images/buildkit/Dockerfile \
+    --build-arg PHP_VERSION=8.3 \
+    --build-arg DEFAULT_SITE_TYPE=wp-demo \
+    -t civicrm-dev:wordpress images/
+```
+
+## Verifying a built image
+
+`images/test/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through phpcs, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, and verifies the xdebug toggle. The same script runs in CI against both `:standalone` and `:drupal10`/`:wordpress`.
+
+```bash
+docker run --rm -v "$(pwd)/images/test:/civikitchen-test:ro" \
+    --entrypoint='' \
+    ghcr.io/jfilter/civicrm-dev:standalone \
+    bash /civikitchen-test/test-dev-tools.sh
 ```
 
 ## License

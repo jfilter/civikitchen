@@ -1,9 +1,21 @@
-# CiviCRM Drupal 10 Development Image
-# Pre-built Drupal 10 + CiviCRM site via buildkit for instant startup.
+# CiviCRM Buildkit Development Image
+#
+# Used for both Drupal 10 and WordPress dev images — the only difference is
+# the default civibuild site type, set via the DEFAULT_SITE_TYPE build arg.
+# Pre-built CiviCRM site via buildkit for instant startup on first run.
 # Requires external MariaDB (not embedded).
 #
+# Build context: images/  (so we can COPY ../lib/install-dev-tools.sh).
+#
 # Build:
-#   docker build --build-arg PHP_VERSION=8.3 -t civicrm-dev:drupal10 images/drupal10/
+#   docker build -f images/buildkit/Dockerfile \
+#                --build-arg PHP_VERSION=8.3 \
+#                --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
+#                -t civicrm-dev:drupal10 images/
+#   docker build -f images/buildkit/Dockerfile \
+#                --build-arg PHP_VERSION=8.3 \
+#                --build-arg DEFAULT_SITE_TYPE=wp-demo \
+#                -t civicrm-dev:wordpress images/
 #
 # Run (needs MariaDB):
 #   docker run -d -p 8080:80 \
@@ -12,6 +24,7 @@
 
 ARG PHP_VERSION=8.3
 ARG CIVICRM_VERSION=6.12.1
+ARG DEFAULT_SITE_TYPE=drupal10-demo
 
 # =============================================================================
 # Stage 1: Base system with PHP, Apache, and tools
@@ -61,13 +74,18 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dev tools (pcov, civix, phpunit, phpstan)
-RUN pecl install pcov \
+# pcov: fast code-coverage driver. xdebug: installed but disabled — the
+# entrypoint activates it when XDEBUG_MODE is set.
+RUN pecl install pcov xdebug \
     && echo "extension=pcov.so" > /etc/php/${PHP_VERSION}/mods-available/pcov.ini \
-    && phpenmod pcov \
-    && curl -LsS https://download.civicrm.org/civix/civix.phar -o /usr/local/bin/civix && chmod +x /usr/local/bin/civix \
-    && curl -LsS https://phar.phpunit.de/phpunit-9.phar -o /usr/local/bin/phpunit && chmod +x /usr/local/bin/phpunit \
-    && curl -LsS https://github.com/phpstan/phpstan/releases/latest/download/phpstan.phar -o /usr/local/bin/phpstan && chmod +x /usr/local/bin/phpstan
+    && echo "zend_extension=xdebug.so" > /etc/php/${PHP_VERSION}/mods-available/xdebug.ini \
+    && phpenmod pcov
+
+# Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder).
+# Lives in images/lib/ so the standalone image uses the same script.
+ENV PATH="/opt/composer/vendor/bin:${PATH}"
+COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
+RUN bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh
 
 # Configure PHP
 RUN sed -i -e 's/upload_max_filesize = .*/upload_max_filesize = 64M/' \
@@ -99,7 +117,7 @@ RUN sed -i 's/export APACHE_RUN_USER=www-data/export APACHE_RUN_USER=buildkit/' 
     && a2ensite civicrm.conf
 
 # =============================================================================
-# Stage 2: Install buildkit and create Drupal 10 site
+# Stage 2: Install buildkit
 # =============================================================================
 FROM base AS buildkit-setup
 
@@ -121,10 +139,16 @@ ENV PATH="/home/buildkit/buildkit/bin:${PATH}"
 # =============================================================================
 FROM buildkit-setup AS final
 
-ENV PATH="/home/buildkit/buildkit/bin:${PATH}"
-ENV CIVIBUILD_ADMIN_PASS="admin"
+# /opt/composer/vendor/bin is prepended ahead of /home/buildkit/buildkit/bin
+# so the dev-tools phpcs (with the civicrm/coder Drupal standard registered)
+# wins over the plain phpcs that civi-download-tools installs into buildkit's
+# own bin dir.
+ARG DEFAULT_SITE_TYPE
+ENV PATH="/opt/composer/vendor/bin:/home/buildkit/buildkit/bin:${PATH}" \
+    CIVIBUILD_ADMIN_PASS="admin" \
+    CIVICRM_SITE_TYPE_DEFAULT="${DEFAULT_SITE_TYPE}"
 
-COPY entrypoint.sh /home/buildkit/entrypoint.sh
+COPY buildkit/entrypoint.sh /home/buildkit/entrypoint.sh
 
 USER root
 RUN chmod +x /home/buildkit/entrypoint.sh
