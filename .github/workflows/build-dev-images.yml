@@ -23,13 +23,15 @@ jobs:
 
     strategy:
       matrix:
+        version: [latest, '6.12.1']
+        arch: [arm64, amd64]
         include:
-          - platform: linux/arm64
+          - arch: arm64
+            platform: linux/arm64
             runner: ubuntu-24.04-arm
-            suffix: arm64
-          - platform: linux/amd64
+          - arch: amd64
+            platform: linux/amd64
             runner: ubuntu-24.04
-            suffix: amd64
 
     steps:
       - name: Checkout
@@ -51,11 +53,13 @@ jobs:
           context: images/standalone
           platforms: ${{ matrix.platform }}
           push: true
+          build-args: |
+            CIVICRM_VERSION=${{ matrix.version }}
           tags: |
-            ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.suffix }}
-            ${{ env.IMAGE_PREFIX }}:standalone-${{ github.sha }}-${{ matrix.suffix }}
-          cache-from: type=gha,scope=standalone-${{ matrix.suffix }}
-          cache-to: type=gha,mode=max,scope=standalone-${{ matrix.suffix }}
+            ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ matrix.arch }}
+            ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=standalone-${{ matrix.version }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=standalone-${{ matrix.version }}-${{ matrix.arch }}
 
   merge-standalone:
     needs: build-standalone
@@ -63,6 +67,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+
+    strategy:
+      matrix:
+        version: [latest, '6.12.1']
 
     steps:
       - name: Log in to GHCR
@@ -72,14 +80,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create multi-platform manifests
+      - name: Create multi-platform manifest for version
+        run: |
+          docker buildx imagetools create -t ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }} \
+            ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-arm64 \
+            ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-amd64
+          docker buildx imagetools create -t ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }} \
+            ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}-arm64 \
+            ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}-amd64
+
+      - name: Alias :standalone -> :standalone-latest
+        if: matrix.version == 'latest'
         run: |
           docker buildx imagetools create -t ${{ env.IMAGE_PREFIX }}:standalone \
-            ${{ env.IMAGE_PREFIX }}:standalone-arm64 \
-            ${{ env.IMAGE_PREFIX }}:standalone-amd64
-          docker buildx imagetools create -t ${{ env.IMAGE_PREFIX }}:standalone-${{ github.sha }} \
-            ${{ env.IMAGE_PREFIX }}:standalone-${{ github.sha }}-arm64 \
-            ${{ env.IMAGE_PREFIX }}:standalone-${{ github.sha }}-amd64
+            ${{ env.IMAGE_PREFIX }}:standalone-latest
 
   smoke-test-standalone:
     needs: merge-standalone

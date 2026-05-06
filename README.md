@@ -47,6 +47,8 @@ services:
 
 **Included tools:** pcov (coverage), civix (scaffolding), phpunit 9, phpstan
 
+**Versioned tags:** `:standalone` tracks upstream `latest`. Pinned versions (e.g. `:standalone-6.12.1`) are also published — useful for testing extensions against a specific CiviCRM release before upgrading.
+
 Ready-to-run example: [`examples/standalone/`](examples/standalone/)
 
 ### Drupal 10 (dev)
@@ -96,8 +98,11 @@ See [allinone/README.md](allinone/README.md) for details.
 ## Building locally
 
 ```bash
-# Standalone
+# Standalone (tracks civicrm/civicrm:latest)
 docker build -t civicrm-dev:standalone images/standalone/
+
+# Standalone pinned to a specific CiviCRM version
+docker build --build-arg CIVICRM_VERSION=6.12.1 -t civicrm-dev:standalone-6.12.1 images/standalone/
 
 # Drupal 10 (with specific PHP version)
 docker build --build-arg PHP_VERSION=8.3 -t civicrm-dev:drupal10 images/drupal10/

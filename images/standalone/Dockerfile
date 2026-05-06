@@ -10,7 +10,8 @@
 #       image: ghcr.io/jfilter/civicrm-dev:standalone
 #       # ... volumes, env, etc.
 
-FROM civicrm/civicrm:latest
+ARG CIVICRM_VERSION=latest
+FROM civicrm/civicrm:${CIVICRM_VERSION}
 
 # Install pcov for fast code coverage (replaces xdebug for coverage-only use)
 RUN pecl install pcov && docker-php-ext-enable pcov
