@@ -6,6 +6,14 @@ set -e
 # When CIVICRM_AUTO_INSTALL=1 and CiviCRM is not yet installed, wait for
 # the database and run `cv core:install` on first start. After that, hand
 # off to the upstream civicrm-docker-entrypoint.
+#
+# Why runtime install (not a build-time SQL dump like allinone/)?
+# allinone's embedded MariaDB lives in the same container as CiviCRM,
+# so a build-time install + mysqldump roundtrip targets a localhost DB
+# that's still localhost at runtime. This image is meant to point at an
+# external MariaDB whose host/credentials are only known at runtime, so
+# baking a dump would require regenerating civicrm.settings.php on first
+# start anyway. The ~8s saving wasn't worth the extra build complexity.
 
 export CIVICRM_DB_HOST="${CIVICRM_DB_HOST:-db}"
 export CIVICRM_DB_PORT="${CIVICRM_DB_PORT:-3306}"
