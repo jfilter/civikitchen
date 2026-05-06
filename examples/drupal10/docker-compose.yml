@@ -1,0 +1,53 @@
+# CiviCRM on Drupal 10 — quickstart
+# docker compose up -d
+# CiviCRM:    http://localhost:8080  (admin / admin)
+# phpMyAdmin: http://localhost:8081
+# Maildev:    http://localhost:1080
+
+services:
+  civicrm:
+    image: ghcr.io/jfilter/civicrm-dev:drupal10
+    depends_on:
+      db:
+        condition: service_started
+    ports:
+      - "8080:80"
+    environment:
+      MYSQL_HOST: db
+      MYSQL_ROOT_PASSWORD: root
+      SITE_URL: "http://localhost:8080"
+
+  db:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    depends_on:
+      - db
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: db
+
+  maildev:
+    image: maildev/maildev:latest
+    ports:
+      - "1080:1080"
+      - "1025:1025"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:1080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  db-data:

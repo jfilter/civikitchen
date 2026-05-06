@@ -47,6 +47,8 @@ services:
 
 **Included tools:** pcov (coverage), civix (scaffolding), phpunit 9, phpstan
 
+Ready-to-run example: [`examples/standalone/`](examples/standalone/)
+
 ### Drupal 10 (dev)
 
 CiviCRM on Drupal 10 via buildkit. Site is built on first container start (requires MariaDB).
@@ -71,9 +73,13 @@ services:
 
 **Important:** `SITE_URL` must match the external port from your Docker port mapping. CiviCRM uses this URL for all asset paths (JS, CSS, fonts). If omitted, defaults to `http://localhost` (port 80).
 
+Ready-to-run example (with phpMyAdmin + Maildev): [`examples/drupal10/`](examples/drupal10/)
+
 ### WordPress (dev)
 
 CiviCRM on WordPress via buildkit. Same pattern as Drupal 10.
+
+Ready-to-run example (with phpMyAdmin + Maildev): [`examples/wordpress/`](examples/wordpress/)
 
 ### EU-NGO (all-in-one demo)
 
