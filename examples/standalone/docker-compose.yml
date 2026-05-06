@@ -1,11 +1,18 @@
 # CiviCRM Standalone — extension development quickstart
-# docker compose up -d
-# CiviCRM:    http://localhost:8080
-# phpMyAdmin: http://localhost:8081
-# Maildev:    http://localhost:1080
 #
-# To develop your extension against this stack, uncomment the volume
-# below and point it at your extension repo.
+# 1. Point the volume below at your extension repo (uncomment).
+# 2. docker compose up -d
+#    On first start the app container runs cv core:install automatically.
+# 3. Enable + test:
+#      docker compose exec app cv ext:enable myextension
+#      docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpunit"
+#
+# Tools in the image: cv, civix, phpunit, phpstan, pcov
+#
+# URLs:
+#   CiviCRM:    http://localhost:8080
+#   phpMyAdmin: http://localhost:8081
+#   Maildev:    http://localhost:1080
 
 services:
   app:
@@ -16,6 +23,7 @@ services:
     ports:
       - "8080:80"
     environment:
+      CIVICRM_AUTO_INSTALL: "1"
       CIVICRM_DB_HOST: db
       CIVICRM_DB_NAME: civicrm
       CIVICRM_DB_USER: civicrm
@@ -32,6 +40,7 @@ services:
       MYSQL_PASSWORD: civicrm
     volumes:
       - db-data:/var/lib/mysql
+      - ./db-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s

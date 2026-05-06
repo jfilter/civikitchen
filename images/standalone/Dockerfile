@@ -25,3 +25,9 @@ RUN curl -LsS https://download.civicrm.org/civix/civix.phar -o /usr/local/bin/ci
     && chmod +x /usr/local/bin/phpunit \
     && curl -LsS https://github.com/phpstan/phpstan/releases/latest/download/phpstan.phar -o /usr/local/bin/phpstan \
     && chmod +x /usr/local/bin/phpstan
+
+COPY entrypoint.sh /usr/local/bin/civikitchen-entrypoint
+RUN chmod +x /usr/local/bin/civikitchen-entrypoint
+
+ENTRYPOINT ["/usr/local/bin/civikitchen-entrypoint"]
+CMD ["apache2-foreground"]
