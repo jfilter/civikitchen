@@ -137,6 +137,27 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
             env DEMO_USER="${DEMO_USER}" DEMO_PASS="${DEMO_PASS}" DEMO_EMAIL="${DEMO_EMAIL}" \
             cv scr /usr/local/share/civikitchen/demo-user.php
     fi
+
+    # Extra extensions: download + enable a comma-separated list after the
+    # core install. Replaces the per-project boilerplate of running
+    # `cv ext:download` + `cv ext:enable` from a setup script (extension
+    # repos' run-phpunit.sh, Playwright auth.setup.ts, etc.). Each entry can
+    # be a bare key (de.systopia.xcm) — pulled from the public registry —
+    # or `key@URL` for a pinned / forked release; cv ext:download accepts
+    # the same syntax natively. Hard-fails on a bad key/URL so a typo in
+    # compose env doesn't silently start a half-broken site.
+    if [[ -n "${CIVICRM_EXTRA_EXTENSIONS}" ]]; then
+        echo "[civikitchen] Installing extra extensions: ${CIVICRM_EXTRA_EXTENSIONS}"
+        IFS=',' read -ra _CK_EXTS <<< "${CIVICRM_EXTRA_EXTENSIONS}"
+        for ext_spec in "${_CK_EXTS[@]}"; do
+            ext_spec="${ext_spec// /}"
+            [[ -z "${ext_spec}" ]] && continue
+            ext_key="${ext_spec%%@*}"
+            echo "[civikitchen]   - ${ext_key}"
+            runuser -u www-data -- cv ext:download -n "${ext_spec}"
+            runuser -u www-data -- cv ext:enable "${ext_key}"
+        done
+    fi
 fi
 
 exec civicrm-docker-entrypoint "$@"

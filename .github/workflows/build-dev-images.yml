@@ -159,6 +159,11 @@ jobs:
       - name: Boot the example stack
         env:
           IMAGE: ${{ env.IMAGE_PREFIX }}:standalone
+          # Exercise the CIVICRM_EXTRA_EXTENSIONS entrypoint hook. mjwshared
+          # is a small shared-utility extension in the public registry; using
+          # a real registry pull catches regressions in both ext:download
+          # (network + cache refresh) and ext:enable.
+          CIVICRM_EXTRA_EXTENSIONS: mjwshared
         run: |
           docker compose -f examples/standalone/docker-compose.yml up -d --pull always
 
@@ -174,6 +179,17 @@ jobs:
           echo "site never became reachable" >&2
           docker compose -f examples/standalone/docker-compose.yml logs app
           exit 1
+
+      - name: Verify CIVICRM_EXTRA_EXTENSIONS got installed
+        run: |
+          status=$(docker compose -f examples/standalone/docker-compose.yml exec -T app \
+            runuser -u www-data -- cv api4 Extension.get \
+            '{"where":[["key","=","mjwshared"]],"select":["status"]}' \
+            --out=json)
+          echo "$status"
+          # cv emits compact JSON ("status":"installed") so match without
+          # depending on whitespace.
+          echo "$status" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"installed"'
 
       - name: Set up Node
         uses: actions/setup-node@v4

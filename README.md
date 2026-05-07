@@ -249,6 +249,7 @@ PhpStorm: enable "Listen for PHP Debug Connections", set the port to 9003, and a
 | `CIVICRM_COMPONENTS` | all standard | Comma-separated CiviCRM components to enable at install. Defaults to the full set: `CiviEvent,CiviContribute,CiviMember,CiviMail,CiviPledge,CiviCase,CiviReport,CiviCampaign`. Override to narrow the set, or pass an empty string for `cv`'s own core-only default. |
 | `CIVICRM_SMTP_HOST` | _(unset)_ | If set, points Civi's `mailing_backend` at this SMTP host after install. The example compose stack uses `maildev` so outbound mail lands in the maildev UI on `:1080`. |
 | `CIVICRM_SMTP_PORT` | `1025` | Port for `CIVICRM_SMTP_HOST`. |
+| `CIVICRM_EXTRA_EXTENSIONS` | _(unset)_ | Comma-separated extension keys downloaded + enabled after install — e.g. `de.systopia.xcm,de.systopia.twingle`. Each entry can also be `key@URL` for a pinned or forked release (passed to `cv ext:download` verbatim). Replaces hand-rolled `cv ext:download` / `cv ext:enable` boilerplate in extension test setups. Requires `CIVICRM_AUTO_INSTALL=1`; runs once on first install. |
 
 ### Headless test setup
 
