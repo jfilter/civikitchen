@@ -159,11 +159,15 @@ jobs:
       - name: Boot the example stack
         env:
           IMAGE: ${{ env.IMAGE_PREFIX }}:standalone
-          # Exercise the CIVICRM_EXTRA_EXTENSIONS entrypoint hook. mjwshared
-          # is a small shared-utility extension in the public registry; using
-          # a real registry pull catches regressions in both ext:download
-          # (network + cache refresh) and ext:enable.
-          CIVICRM_EXTRA_EXTENSIONS: mjwshared
+          # Exercise the CIVICRM_EXTRA_EXTENSIONS entrypoint hook with both
+          # supported syntaxes:
+          # - bare key (mjwshared): pulled from the public registry, exercises
+          #   ext:download's network + cache refresh path.
+          # - key@URL (de.systopia.xcm): exercises the explicit-URL path. This
+          #   one previously regressed because cv ext:download auto-installs
+          #   and bombed with "Cannot install or enable extension"; the
+          #   entrypoint now splits download (--no-install) + enable.
+          CIVICRM_EXTRA_EXTENSIONS: "mjwshared,de.systopia.xcm@https://github.com/systopia/de.systopia.xcm/releases/download/1.13.0/de.systopia.xcm-1.13.0.zip"
         run: |
           docker compose -f examples/standalone/docker-compose.yml up -d --pull always
 
@@ -182,14 +186,17 @@ jobs:
 
       - name: Verify CIVICRM_EXTRA_EXTENSIONS got installed
         run: |
-          status=$(docker compose -f examples/standalone/docker-compose.yml exec -T app \
-            runuser -u www-data -- cv api4 Extension.get \
-            '{"where":[["key","=","mjwshared"]],"select":["status"]}' \
-            --out=json)
-          echo "$status"
-          # cv emits compact JSON ("status":"installed") so match without
-          # depending on whitespace.
-          echo "$status" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"installed"'
+          # Both the bare-key (mjwshared) and key@URL (de.systopia.xcm)
+          # entries from CIVICRM_EXTRA_EXTENSIONS must end up installed.
+          for key in mjwshared de.systopia.xcm; do
+            status=$(docker compose -f examples/standalone/docker-compose.yml exec -T app \
+              runuser -u www-data -- cv api4 Extension.get \
+              "{\"where\":[[\"key\",\"=\",\"${key}\"]],\"select\":[\"status\"]}" \
+              --out=json)
+            echo "${key}: ${status}"
+            echo "$status" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"installed"' \
+              || { echo "FAIL: ${key} not installed" >&2; exit 1; }
+          done
 
       - name: Set up Node
         uses: actions/setup-node@v4

@@ -139,7 +139,14 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
             [[ -z "${ext_spec}" ]] && continue
             ext_key="${ext_spec%%@*}"
             echo "[civikitchen]   - ${ext_key}"
-            runuser -u www-data -- cv ext:download -n "${ext_spec}"
+            # Split download + enable into two cv calls. The combined
+            # `cv ext:download <key@URL>` (which auto-enables) bombs
+            # for some extensions with "Cannot install or enable" — the
+            # same code path works when run as separate steps. Also lets
+            # later entries in the list (e.g. de.systopia.twingle) see
+            # their dependencies (e.g. de.systopia.xcm) as installed
+            # during the requirements check.
+            runuser -u www-data -- cv ext:download -n --no-install "${ext_spec}"
             runuser -u www-data -- cv ext:enable "${ext_key}"
         done
     fi
