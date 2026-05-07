@@ -51,6 +51,10 @@ RUN a2enconf civikitchen
 # CIVICRM_DEMO_USER is set). Lives outside the docroot so it's not web-served.
 COPY standalone/demo-user.php /usr/local/share/civikitchen/demo-user.php
 
+# Shared xdebug toggle — sourced from the entrypoint, also used by the
+# buildkit image so the two stay byte-identical.
+COPY lib/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.sh
+
 COPY standalone/entrypoint.sh /usr/local/bin/civikitchen-entrypoint
 RUN chmod +x /usr/local/bin/civikitchen-entrypoint
 

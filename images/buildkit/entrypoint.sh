@@ -3,26 +3,8 @@ set -e
 
 export PATH="/home/buildkit/buildkit/bin:${PATH}"
 
-# Xdebug toggle. pcov is always on (coverage). Set XDEBUG_MODE=debug,develop
-# (or any combo from https://xdebug.org/docs/all_settings#mode) to enable
-# step debugging. Leave unset / "off" to skip.
-PHP_VERSION="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
-for INI_DIR in /etc/php/${PHP_VERSION}/apache2/conf.d /etc/php/${PHP_VERSION}/cli/conf.d; do
-    rm -f "${INI_DIR}/20-xdebug.ini"
-done
-if [[ -n "${XDEBUG_MODE}" && "${XDEBUG_MODE}" != "off" ]]; then
-    cat > "/etc/php/${PHP_VERSION}/mods-available/xdebug.ini" <<EOF
-zend_extension=xdebug.so
-xdebug.mode=${XDEBUG_MODE}
-xdebug.client_host=${XDEBUG_CLIENT_HOST:-host.docker.internal}
-xdebug.client_port=${XDEBUG_CLIENT_PORT:-9003}
-xdebug.start_with_request=${XDEBUG_START_WITH_REQUEST:-trigger}
-xdebug.discover_client_host=${XDEBUG_DISCOVER_CLIENT_HOST:-0}
-xdebug.idekey=${XDEBUG_IDEKEY:-VSCODE}
-EOF
-    phpenmod xdebug
-    echo "[civikitchen] xdebug enabled (mode=${XDEBUG_MODE})"
-fi
+# Xdebug toggle (shared with standalone image).
+. /usr/local/share/civikitchen/xdebug-toggle.sh
 
 MYSQL_HOST="${MYSQL_HOST:-db}"
 MYSQL_PORT="${MYSQL_PORT:-3306}"
@@ -54,14 +36,25 @@ echo "CiviCRM Dev Image (${CIVICRM_SITE_TYPE})"
 echo "=========================================="
 echo "Site URL: ${SITE_URL}"
 
-# Wait for MySQL
+# Wait for MySQL via PHP mysqli — matches the standalone entrypoint and
+# sidesteps Debian's default-mysql-client, which now enforces TLS by default
+# and refuses to talk to a plain MariaDB sidecar (closes the connection
+# before auth, so the server logs "unauthenticated" aborts).
 echo "Waiting for MySQL at ${MYSQL_HOST}:${MYSQL_PORT}..."
 attempt=0
-max_attempts=60
-until mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1" > /dev/null 2>&1; do
+until php -r '
+    $m = @new mysqli(
+        getenv("MYSQL_HOST"),
+        "root",
+        getenv("MYSQL_ROOT_PASSWORD"),
+        "",
+        (int) getenv("MYSQL_PORT")
+    );
+    exit($m->connect_errno ? 1 : 0);
+' 2>/dev/null; do
     attempt=$((attempt + 1))
-    if [[ "${attempt}" -ge "${max_attempts}" ]]; then
-        echo "ERROR: MySQL not ready after ${max_attempts} attempts"
+    if [[ "${attempt}" -ge 60 ]]; then
+        echo "ERROR: MySQL not ready after 120s" >&2
         exit 1
     fi
     sleep 2
@@ -81,12 +74,17 @@ if [[ ! -f "${MARKER_FILE}" ]]; then
         --httpd_type=none \
         --perm_type=none"
 
+    # ssl-mode=DISABLED: Debian Bookworm's mariadb-client defaults to
+    # PREFERRED, which refuses a plain (non-TLS) sidecar by closing the
+    # connection before auth — exactly the trap the buildkit user wants to
+    # avoid in dev. Force plain transport.
     cat > /home/buildkit/.my.cnf <<MYCNF
 [client]
 host=${MYSQL_HOST}
 port=${MYSQL_PORT}
 user=root
 password=${MYSQL_ROOT_PASSWORD}
+ssl-mode=DISABLED
 MYCNF
     chown buildkit:buildkit /home/buildkit/.my.cnf
 

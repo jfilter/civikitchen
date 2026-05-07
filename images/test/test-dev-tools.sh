@@ -159,46 +159,21 @@ else
     ok "xdebug off by default"
 fi
 
-# Pick the right entrypoint for whichever image we're in.
-ENTRYPOINT_BIN=""
-for candidate in /usr/local/bin/civikitchen-entrypoint /home/buildkit/entrypoint.sh; do
-    [[ -x "${candidate}" ]] && ENTRYPOINT_BIN="${candidate}" && break
-done
-
-if [[ -n "${ENTRYPOINT_BIN}" ]]; then
-    # Run only the xdebug-toggle prelude (the entrypoint also tries to start
-    # apache/civibuild, which we don't want here). We invoke it with `php -m`
-    # as the command and grep for xdebug — the standalone entrypoint execs
-    # civicrm-docker-entrypoint which will run our php -m. The buildkit
-    # entrypoint goes straight into civibuild and won't return; for that
-    # image we simulate the toggle by sourcing only the relevant lines.
-    case "${ENTRYPOINT_BIN}" in
-        */civikitchen-entrypoint)
-            XDEBUG_TOGGLE_OUT="$(XDEBUG_MODE=develop "${ENTRYPOINT_BIN}" php -m 2>&1 || true)"
-            ;;
-        *)
-            # Buildkit entrypoint: just exercise the toggle block by running
-            # the same logic inline so we don't hang on civibuild.
-            PHP_VERSION="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
-            XDEBUG_MODE=develop bash -c '
-                cat > /etc/php/'"${PHP_VERSION}"'/mods-available/xdebug.ini <<EOF
+# Both images now use the same php:apache layout: writing xdebug.ini to
+# /usr/local/etc/php/conf.d/ enables it on next php invocation. Simulate
+# the entrypoint toggle inline (entrypoints would otherwise spawn apache /
+# civibuild, which we don't want here).
+XDEBUG_INI="/usr/local/etc/php/conf.d/xdebug.ini"
+cat > "${XDEBUG_INI}" <<EOF
 zend_extension=xdebug.so
 xdebug.mode=develop
 EOF
-                phpenmod xdebug
-            '
-            XDEBUG_TOGGLE_OUT="$(php -m 2>&1)"
-            ;;
-    esac
-
-    if echo "${XDEBUG_TOGGLE_OUT}" | grep -qi "xdebug"; then
-        ok "XDEBUG_MODE enables xdebug"
-    else
-        fail "XDEBUG_MODE didn't enable xdebug (out: ${XDEBUG_TOGGLE_OUT:0:200})"
-    fi
+if php -m 2>&1 | grep -qi "^xdebug$"; then
+    ok "XDEBUG_MODE enables xdebug"
 else
-    fail "no entrypoint found to test xdebug toggle"
+    fail "XDEBUG_MODE didn't enable xdebug"
 fi
+rm -f "${XDEBUG_INI}"
 
 # ---------------------------------------------------------------------------
 echo
