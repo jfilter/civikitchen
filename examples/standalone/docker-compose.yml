@@ -2,7 +2,8 @@
 #
 # 1. Point the volume below at your extension repo (uncomment).
 # 2. docker compose up -d
-#    On first start the app container runs cv core:install automatically.
+#    On first start the app container runs cv core:install and creates a demo
+#    login user (admin / admin) — open http://localhost:8080 and log in.
 # 3. (If your extension uses composer) install vendor deps:
 #      docker compose exec app bash -c "cd /var/www/html/ext/myextension && composer install"
 # 4. Enable + test:
@@ -36,6 +37,18 @@ services:
       # Must match the host:port you open in the browser. CiviCRM bakes this
       # into every asset URL — a mismatch silently breaks the Angular UI.
       SITE_URL: "http://localhost:8080"
+      # Auto-create a login user after install. Defaults: pass=admin,
+      # email=admin@example.org. Unset CIVICRM_DEMO_USER to skip.
+      CIVICRM_DEMO_USER: admin
+      # The image enables all standard Civi components by default
+      # (CiviEvent, CiviContribute, CiviMember, CiviMail, CiviPledge, CiviCase,
+      # CiviReport, CiviCampaign). Override with CIVICRM_COMPONENTS to narrow
+      # the set; pass an empty string to keep only the core component.
+      # Point Civi's mailer at the maildev sidecar (UI on :1080). Outbound
+      # mail from Civi (mailings, notifications, password resets) lands in
+      # maildev instead of being silently dropped.
+      CIVICRM_SMTP_HOST: maildev
+      CIVICRM_SMTP_PORT: "1025"
     # volumes:
     #   - ../path/to/your/extension:/var/www/html/ext/myextension
 

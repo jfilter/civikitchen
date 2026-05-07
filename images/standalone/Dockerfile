@@ -47,6 +47,10 @@ RUN bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh
 COPY standalone/apache/civikitchen.conf /etc/apache2/conf-available/civikitchen.conf
 RUN a2enconf civikitchen
 
+# Post-install demo-user script (run via `cv scr` from the entrypoint when
+# CIVICRM_DEMO_USER is set). Lives outside the docroot so it's not web-served.
+COPY standalone/demo-user.php /usr/local/share/civikitchen/demo-user.php
+
 COPY standalone/entrypoint.sh /usr/local/bin/civikitchen-entrypoint
 RUN chmod +x /usr/local/bin/civikitchen-entrypoint
 

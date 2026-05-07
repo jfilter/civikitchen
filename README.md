@@ -21,7 +21,7 @@ Each image has a ready-to-run compose example with phpMyAdmin and Maildev:
 git clone https://github.com/jfilter/civikitchen
 cd civikitchen/examples/standalone   # or drupal10 / wordpress
 docker compose up -d
-# CiviCRM:    http://localhost:8080
+# CiviCRM:    http://localhost:8080   (login: admin / admin)
 # phpMyAdmin: http://localhost:8081
 # Maildev:    http://localhost:1080
 ```
@@ -230,6 +230,12 @@ PhpStorm: enable "Listen for PHP Debug Connections", set the port to 9003, and a
 | `CIVICRM_DB_NAME` | `civicrm` | Database name. |
 | `CIVICRM_DB_USER` | `civicrm` | DB user. |
 | `CIVICRM_DB_PASSWORD` | `civicrm` | DB password. |
+| `CIVICRM_DEMO_USER` | _(unset)_ | If set during auto-install, creates a CiviCRM login user with this username and the `admin` role. Requires `CIVICRM_AUTO_INSTALL=1`. |
+| `CIVICRM_DEMO_PASS` | `admin` | Password for the demo user. |
+| `CIVICRM_DEMO_EMAIL` | `admin@example.org` | Email for the demo user's contact record. |
+| `CIVICRM_COMPONENTS` | all standard | Comma-separated CiviCRM components to enable at install. Defaults to the full set: `CiviEvent,CiviContribute,CiviMember,CiviMail,CiviPledge,CiviCase,CiviReport,CiviCampaign`. Override to narrow the set, or pass an empty string for `cv`'s own core-only default. |
+| `CIVICRM_SMTP_HOST` | _(unset)_ | If set, points Civi's `mailing_backend` at this SMTP host after install. The example compose stack uses `maildev` so outbound mail lands in the maildev UI on `:1080`. |
+| `CIVICRM_SMTP_PORT` | `1025` | Port for `CIVICRM_SMTP_HOST`. |
 
 ### Headless test setup
 
