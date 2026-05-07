@@ -272,13 +272,13 @@ The standalone image is published in two flavors on GHCR:
 
 | Tag | What it points at |
 |-----|-------------------|
-| `:standalone` | The most recent CiviCRM `latest` build (rebuilt weekly). |
+| `:standalone` | The most recent CiviCRM `latest` build (rebuilt on every `images/**` change and monthly). |
 | `:standalone-latest` | Same as `:standalone`. |
-| `:standalone-<version>` | Pinned to a specific upstream `civicrm/civicrm:<version>` tag (e.g. `:standalone-6.12.1`). |
+| `:standalone-<minor>` | Latest patch of an upstream minor (e.g. `:standalone-6.12` follows `civicrm/civicrm:6.12`). |
 
-Use a pinned tag when you want reproducible builds — for CI matrix testing across CiviCRM versions, or to test an extension against a release before upgrading.
+Use a minor-pinned tag for reproducible CI matrix testing across CiviCRM versions, or to test an extension against the previous minor before upgrading.
 
-To add a new pinned version, edit the `version: [...]` matrix in [`.github/workflows/build-dev-images.yml`](.github/workflows/build-dev-images.yml) and trigger the workflow. Only versions actually published as `civicrm/civicrm:<x.y.z>` on Docker Hub work.
+To track an additional minor, edit the `version: [...]` matrix in [`.github/workflows/build-dev-images.yml`](.github/workflows/build-dev-images.yml). Only minors actually published as `civicrm/civicrm:<x.y>` on Docker Hub work.
 
 ## Building locally
 
@@ -288,10 +288,10 @@ The build context is the `images/` dir for both the standalone and buildkit-base
 # Standalone (tracks civicrm/civicrm:latest)
 docker build -f images/standalone/Dockerfile -t civicrm-dev:standalone images/
 
-# Standalone pinned to a specific CiviCRM version
+# Standalone pinned to a specific CiviCRM minor (or any tag civicrm/civicrm publishes)
 docker build -f images/standalone/Dockerfile \
-    --build-arg CIVICRM_VERSION=6.12.1 \
-    -t civicrm-dev:standalone-6.12.1 images/
+    --build-arg CIVICRM_VERSION=6.12 \
+    -t civicrm-dev:standalone-6.12 images/
 
 # Buildkit-based images. The :drupal10 and :wordpress tags are built from
 # the same Dockerfile (images/buildkit/) — DEFAULT_SITE_TYPE picks which

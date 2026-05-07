@@ -6,8 +6,10 @@ on:
     paths:
       - 'images/**'
   schedule:
-    # Weekly: pick up upstream civicrm/civicrm image updates
-    - cron: '0 6 * * 1'
+    # Monthly on the 1st: pick up upstream civicrm/civicrm patch releases.
+    # Floating tags (`latest`, `6.12`) make this enough — every run rebuilds
+    # against the current latest patch of each tracked minor.
+    - cron: '0 6 1 * *'
   workflow_dispatch:
 
 env:
@@ -23,7 +25,7 @@ jobs:
 
     strategy:
       matrix:
-        version: [latest, '6.12.1']
+        version: [latest, '6.12']
         arch: [arm64, amd64]
         include:
           - arch: arm64
@@ -71,7 +73,7 @@ jobs:
 
     strategy:
       matrix:
-        version: [latest, '6.12.1']
+        version: [latest, '6.12']
 
     steps:
       - name: Log in to GHCR

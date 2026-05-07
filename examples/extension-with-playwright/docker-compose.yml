@@ -22,6 +22,10 @@
 services:
   app:
     image: ${IMAGE:-ghcr.io/jfilter/civicrm-dev:standalone}
+    # The :standalone tag is updated on every push to main and monthly to pick
+    # up upstream patches. Always pull on `up` so a stale local copy doesn't
+    # mask entrypoint/install fixes.
+    pull_policy: always
     depends_on:
       db:
         condition: service_healthy
