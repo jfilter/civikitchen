@@ -23,7 +23,7 @@
 #
 # Run (needs MariaDB):
 #   docker run -d -p 8080:80 \
-#     -e MYSQL_HOST=db -e MYSQL_ROOT_PASSWORD=root \
+#     -e CIVICRM_DB_HOST=db -e CIVICRM_DB_ROOT_PASSWORD=root \
 #     civicrm-dev:drupal10
 
 ARG PHP_VERSION=8.3

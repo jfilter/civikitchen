@@ -13,8 +13,8 @@ services:
     ports:
       - "8080:80"
     environment:
-      MYSQL_HOST: db
-      MYSQL_ROOT_PASSWORD: root
+      CIVICRM_DB_HOST: db
+      CIVICRM_DB_ROOT_PASSWORD: root
       SITE_URL: "http://localhost:8080"
       CIVICRM_SITE_TYPE: drupal10-demo
 

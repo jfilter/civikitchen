@@ -6,9 +6,13 @@ export PATH="/home/buildkit/buildkit/bin:${PATH}"
 # Xdebug toggle (shared with standalone image).
 . /usr/local/share/civikitchen/xdebug-toggle.sh
 
-MYSQL_HOST="${MYSQL_HOST:-db}"
-MYSQL_PORT="${MYSQL_PORT:-3306}"
-MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-root}"
+# DB connection. Uses the CIVICRM_DB_* prefix for symmetry with the
+# standalone image. CIVICRM_DB_ROOT_PASSWORD is the *admin* password (not
+# the runtime app password) — civibuild creates a per-site user during
+# `civibuild create site`, so the entrypoint needs GRANT-level access.
+export CIVICRM_DB_HOST="${CIVICRM_DB_HOST:-db}"
+export CIVICRM_DB_PORT="${CIVICRM_DB_PORT:-3306}"
+export CIVICRM_DB_ROOT_PASSWORD="${CIVICRM_DB_ROOT_PASSWORD:-root}"
 # Default site type comes from the build arg DEFAULT_SITE_TYPE — :drupal10
 # tags ship drupal10-demo, :wordpress tags ship wp-demo. Users can override
 # at runtime by setting CIVICRM_SITE_TYPE.
@@ -36,30 +40,32 @@ echo "CiviCRM Dev Image (${CIVICRM_SITE_TYPE})"
 echo "=========================================="
 echo "Site URL: ${SITE_URL}"
 
-# Wait for MySQL via PHP mysqli — matches the standalone entrypoint and
-# sidesteps Debian's default-mysql-client, which now enforces TLS by default
-# and refuses to talk to a plain MariaDB sidecar (closes the connection
-# before auth, so the server logs "unauthenticated" aborts).
-echo "Waiting for MySQL at ${MYSQL_HOST}:${MYSQL_PORT}..."
+# Wait for the database via PHP mysqli — same probe the standalone image
+# uses. mysqli (mysqlnd) sidesteps the TLS-enforcement default that newer
+# mariadb-client builds apply to plain dev sidecars.
+echo "Waiting for database at ${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}..."
 attempt=0
 until php -r '
+    // mysqli_report() must be OFF or PHP 8.1+ throws on every failed
+    // connect attempt during the wait loop, which is just noise here.
+    mysqli_report(MYSQLI_REPORT_OFF);
     $m = @new mysqli(
-        getenv("MYSQL_HOST"),
+        getenv("CIVICRM_DB_HOST"),
         "root",
-        getenv("MYSQL_ROOT_PASSWORD"),
+        getenv("CIVICRM_DB_ROOT_PASSWORD"),
         "",
-        (int) getenv("MYSQL_PORT")
+        (int) getenv("CIVICRM_DB_PORT")
     );
     exit($m->connect_errno ? 1 : 0);
 ' 2>/dev/null; do
     attempt=$((attempt + 1))
     if [[ "${attempt}" -ge 60 ]]; then
-        echo "ERROR: MySQL not ready after 120s" >&2
+        echo "ERROR: database not reachable after 120s" >&2
         exit 1
     fi
     sleep 2
 done
-echo "MySQL is ready."
+echo "Database is ready."
 
 # Build site on first run only (as buildkit user)
 if [[ ! -f "${MARKER_FILE}" ]]; then
@@ -74,17 +80,12 @@ if [[ ! -f "${MARKER_FILE}" ]]; then
         --httpd_type=none \
         --perm_type=none"
 
-    # ssl-mode=DISABLED: Debian Bookworm's mariadb-client defaults to
-    # PREFERRED, which refuses a plain (non-TLS) sidecar by closing the
-    # connection before auth — exactly the trap the buildkit user wants to
-    # avoid in dev. Force plain transport.
     cat > /home/buildkit/.my.cnf <<MYCNF
 [client]
-host=${MYSQL_HOST}
-port=${MYSQL_PORT}
+host=${CIVICRM_DB_HOST}
+port=${CIVICRM_DB_PORT}
 user=root
-password=${MYSQL_ROOT_PASSWORD}
-ssl-mode=DISABLED
+password=${CIVICRM_DB_ROOT_PASSWORD}
 MYCNF
     chown buildkit:buildkit /home/buildkit/.my.cnf
 

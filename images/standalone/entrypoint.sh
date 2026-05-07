@@ -37,6 +37,9 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
 
     attempt=0
     until php -r '
+        // mysqli_report() must be OFF or PHP 8.1+ throws on every failed
+        // connect attempt during the wait loop, which is just noise here.
+        mysqli_report(MYSQLI_REPORT_OFF);
         $m = @new mysqli(
             getenv("CIVICRM_DB_HOST"),
             getenv("CIVICRM_DB_USER"),

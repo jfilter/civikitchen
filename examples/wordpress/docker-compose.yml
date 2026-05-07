@@ -13,8 +13,8 @@ services:
     ports:
       - "8080:80"
     environment:
-      MYSQL_HOST: db
-      MYSQL_ROOT_PASSWORD: root
+      CIVICRM_DB_HOST: db
+      CIVICRM_DB_ROOT_PASSWORD: root
       SITE_URL: "http://localhost:8080"
       # The :wordpress and :drupal10 tags share the same image — only the
       # default civibuild site type differs. Setting it explicitly here makes

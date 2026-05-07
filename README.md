@@ -76,8 +76,8 @@ services:
     image: ghcr.io/jfilter/civicrm-dev:drupal10
     ports: ["8080:80"]
     environment:
-      MYSQL_HOST: db
-      MYSQL_ROOT_PASSWORD: root
+      CIVICRM_DB_HOST: db
+      CIVICRM_DB_ROOT_PASSWORD: root
       SITE_URL: http://localhost:8080   # must match the port mapping
     depends_on: [db]
   db:
@@ -235,21 +235,27 @@ PhpStorm: enable "Listen for PHP Debug Connections", set the port to 9003, and a
 
 ### Configuration
 
-| Env var | Default | Purpose |
-|---------|---------|---------|
-| `CIVICRM_AUTO_INSTALL` | `0` | Set to `1` to auto-install CiviCRM on first start (when `civicrm.settings.php` is missing). |
-| `CIVICRM_DB_HOST` | `db` | DB hostname. |
-| `CIVICRM_DB_PORT` | `3306` | DB port. |
-| `CIVICRM_DB_NAME` | `civicrm` | Database name. |
-| `CIVICRM_DB_USER` | `civicrm` | DB user. |
-| `CIVICRM_DB_PASSWORD` | `civicrm` | DB password. |
-| `CIVICRM_DEMO_USER` | _(unset)_ | If set during auto-install, creates a CiviCRM login user with this username and the `admin` role. Requires `CIVICRM_AUTO_INSTALL=1`. |
-| `CIVICRM_DEMO_PASS` | `admin` | Password for the demo user. |
-| `CIVICRM_DEMO_EMAIL` | `admin@example.org` | Email for the demo user's contact record. |
-| `CIVICRM_COMPONENTS` | all standard | Comma-separated CiviCRM components to enable at install. Defaults to the full set: `CiviEvent,CiviContribute,CiviMember,CiviMail,CiviPledge,CiviCase,CiviReport,CiviCampaign`. Override to narrow the set, or pass an empty string for `cv`'s own core-only default. |
-| `CIVICRM_SMTP_HOST` | _(unset)_ | If set, points Civi's `mailing_backend` at this SMTP host after install. The example compose stack uses `maildev` so outbound mail lands in the maildev UI on `:1080`. |
-| `CIVICRM_SMTP_PORT` | `1025` | Port for `CIVICRM_SMTP_HOST`. |
-| `CIVICRM_EXTRA_EXTENSIONS` | _(unset)_ | Comma-separated extension keys downloaded + enabled after install — e.g. `de.systopia.xcm,de.systopia.twingle`. Each entry can also be `key@URL` for a pinned or forked release (passed to `cv ext:download` verbatim). Replaces hand-rolled `cv ext:download` / `cv ext:enable` boilerplate in extension test setups. Requires `CIVICRM_AUTO_INSTALL=1`; runs once on first install. |
+All env vars use the `CIVICRM_*` prefix across both image families. Where a var only makes sense for one image family, the **Image** column flags it.
+
+| Env var | Default | Image | Purpose |
+|---------|---------|-------|---------|
+| `CIVICRM_DB_HOST` | `db` | both | DB hostname. |
+| `CIVICRM_DB_PORT` | `3306` | both | DB port. |
+| `SITE_URL` | derived | both | Browser-facing URL Civi bakes into asset paths. Must match the host:port the user opens — set it to `http://localhost:8080` if you mapped `-p 8080:80`. |
+| `CIVICRM_AUTO_INSTALL` | `0` | standalone | Set to `1` to auto-install CiviCRM on first start (when `civicrm.settings.php` is missing). |
+| `CIVICRM_DB_NAME` | `civicrm` | standalone | Database name (the standalone image connects with the app user; buildkit creates DB + user itself). |
+| `CIVICRM_DB_USER` | `civicrm` | standalone | DB user used by the running CiviCRM. |
+| `CIVICRM_DB_PASSWORD` | `civicrm` | standalone | Password for `CIVICRM_DB_USER`. |
+| `CIVICRM_DEMO_USER` | _(unset)_ | standalone | If set during auto-install, creates a CiviCRM login user with this username and the `admin` role. Requires `CIVICRM_AUTO_INSTALL=1`. |
+| `CIVICRM_DEMO_PASS` | `admin` | standalone | Password for the demo user. |
+| `CIVICRM_DEMO_EMAIL` | `admin@example.org` | standalone | Email for the demo user's contact record. |
+| `CIVICRM_COMPONENTS` | all standard | standalone | Comma-separated CiviCRM components to enable at install. Defaults to the full set: `CiviEvent,CiviContribute,CiviMember,CiviMail,CiviPledge,CiviCase,CiviReport,CiviCampaign`. Override to narrow the set, or pass an empty string for `cv`'s own core-only default. |
+| `CIVICRM_SMTP_HOST` | _(unset)_ | standalone | If set, points Civi's `mailing_backend` at this SMTP host after install. The example compose stack uses `maildev` so outbound mail lands in the maildev UI on `:1080`. |
+| `CIVICRM_SMTP_PORT` | `1025` | standalone | Port for `CIVICRM_SMTP_HOST`. |
+| `CIVICRM_EXTRA_EXTENSIONS` | _(unset)_ | standalone | Comma-separated extension keys downloaded + enabled after install — e.g. `de.systopia.xcm,de.systopia.twingle`. Each entry can also be `key@URL` for a pinned or forked release (passed to `cv ext:download` verbatim). Replaces hand-rolled `cv ext:download` / `cv ext:enable` boilerplate in extension test setups. Requires `CIVICRM_AUTO_INSTALL=1`; runs once on first install. |
+| `CIVICRM_DB_ROOT_PASSWORD` | `root` | drupal10/wordpress | DB **admin** password. civibuild uses it to create the per-site database and user during the first-run site build. |
+| `CIVICRM_SITE_TYPE` | tag default | drupal10/wordpress | civibuild site type. The `:drupal10` tag defaults to `drupal10-demo`, `:wordpress` to `wp-demo`. Override to use any [civibuild template](https://docs.civicrm.org/dev/en/latest/tools/civibuild/). |
+| `CIVICRM_VERSION` | `6.12.1` | drupal10/wordpress | CiviCRM version civibuild installs. |
 
 ### Headless test setup
 
