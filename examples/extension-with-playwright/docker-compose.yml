@@ -1,0 +1,87 @@
+# CiviCRM Standalone — extension dev with Playwright UI tests
+#
+# Same image as examples/standalone/, but the extension volume is wired up
+# and a Playwright test suite lives alongside in this directory.
+#
+# 1. Point the volume below at YOUR extension repo (edit the host path).
+# 2. docker compose up -d
+#    On first start the app container runs cv core:install and creates a demo
+#    login user (admin / admin) — open http://localhost:8080 to verify.
+# 3. Enable your extension:
+#      docker compose exec app cv ext:enable myextension
+# 4. Run Playwright tests on the host (see README.md):
+#      npm install
+#      npx playwright install chromium
+#      npm test
+#
+# URLs:
+#   CiviCRM:    http://localhost:8080
+#   phpMyAdmin: http://localhost:8081
+#   Maildev:    http://localhost:1080
+
+services:
+  app:
+    image: ${IMAGE:-ghcr.io/jfilter/civicrm-dev:standalone}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    environment:
+      CIVICRM_AUTO_INSTALL: "1"
+      CIVICRM_DB_HOST: db
+      CIVICRM_DB_NAME: civicrm
+      CIVICRM_DB_USER: civicrm
+      CIVICRM_DB_PASSWORD: civicrm
+      # Must match the host:port you open in the browser AND the baseURL
+      # in playwright.config.ts. CiviCRM bakes this into every asset URL.
+      SITE_URL: "http://localhost:8080"
+      # Auto-create a login user. Defaults: pass=admin, email=admin@example.org.
+      # The Playwright auth.setup.ts uses these credentials.
+      CIVICRM_DEMO_USER: admin
+      CIVICRM_SMTP_HOST: maildev
+      CIVICRM_SMTP_PORT: "1025"
+    volumes:
+      # Edit the left-hand side to point at your own extension repo.
+      # The right-hand side is the path inside the container; the last
+      # segment ("myextension") is the extension key used by `cv ext:enable`.
+      - ../../extensions/de.systopia.contract:/var/www/html/ext/myextension
+
+  db:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: civicrm
+      MYSQL_USER: civicrm
+      MYSQL_PASSWORD: civicrm
+    volumes:
+      - db-data:/var/lib/mysql
+      - ../standalone/db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    depends_on:
+      - db
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: db
+
+  maildev:
+    image: maildev/maildev:latest
+    ports:
+      - "1080:1080"
+      - "1025:1025"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:1080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  db-data:

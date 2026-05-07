@@ -148,6 +148,19 @@ docker compose exec -e CIVICRM_UF=UnitTests app \
   bash -c "cd /var/www/html/ext/myextension && phpunit"
 ```
 
+### UI tests with Playwright
+
+For browser-level tests of your extension's UI (forms, Angular/React widgets, JS behaviour) there's a copy-pasteable starter at [`examples/extension-with-playwright/`](examples/extension-with-playwright/). It boots the same standalone stack, runs Playwright on the host against `localhost:8080`, and handles login once via a shared session.
+
+```bash
+cd examples/extension-with-playwright
+docker compose up -d
+npm install && npx playwright install chromium
+npm test
+```
+
+See the [example's README](examples/extension-with-playwright/README.md) for how to drop the four config files into your own extension repo.
+
 ### Civix workflow
 
 The image ships [`civix`](https://github.com/totten/civix) for scaffolding. Common commands:
