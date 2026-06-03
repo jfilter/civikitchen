@@ -188,6 +188,18 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
             cv scr /usr/local/share/civikitchen/demo-user.php
     fi
 
+fi
+
+# ---------------------------------------------------------------------------
+# Post-install provisioning: extra/mounted extensions and first-boot hooks.
+#
+# Gated by a success marker rather than the settings file: the install above
+# writes the settings file first, so if anything in here fails (a typo'd
+# extension key, a broken hook) the container exits loudly AND the next start
+# retries this block — instead of silently skipping it because the settings
+# file already exists.
+PROVISIONED_MARKER="/var/www/html/private/.civikitchen-provisioned"
+if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && -f "${SETTINGS_FILE}" && ! -f "${PROVISIONED_MARKER}" ]]; then
     # Extra extensions: download + enable a comma-separated list after the
     # core install. Replaces the per-project boilerplate of running
     # `cv ext:download` + `cv ext:enable` from a setup script (extension
@@ -252,6 +264,8 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
             esac
         done
     fi
+
+    touch "${PROVISIONED_MARKER}"
 fi
 
 # ---------------------------------------------------------------------------
