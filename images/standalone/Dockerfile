@@ -47,6 +47,14 @@ RUN bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh
 COPY standalone/apache/civikitchen.conf /etc/apache2/conf-available/civikitchen.conf
 RUN a2enconf civikitchen
 
+# Wrap cv so it runs as www-data even when invoked as root (the default for
+# `docker compose exec`). Root-run cv leaves root-owned caches/locks that the
+# web workers can't write. Opt out with CIVIKITCHEN_CV_AS_ROOT=1.
+COPY standalone/cv-wrapper.sh /usr/local/bin/cv-wrapper
+RUN mv /usr/local/bin/cv /usr/local/bin/cv.real \
+    && mv /usr/local/bin/cv-wrapper /usr/local/bin/cv \
+    && chmod +x /usr/local/bin/cv
+
 # Post-install demo-user script (run via `cv scr` from the entrypoint when
 # CIVICRM_DEMO_USER is set). Lives outside the docroot so it's not web-served.
 COPY standalone/demo-user.php /usr/local/share/civikitchen/demo-user.php
