@@ -184,4 +184,12 @@ if [[ "${CIVICRM_AUTO_COMPOSER}" == "1" ]]; then
     shopt -u nullglob
 fi
 
+# ---------------------------------------------------------------------------
+# Heal root-owned files in the CiviCRM data dirs. Anything run as root inside
+# the container may leave files behind that the www-data web workers can't
+# write — caches, lock files, upload dirs. Cheap no-op when ownership is
+# already correct.
+find /var/www/html/private /var/www/html/public ! -user www-data \
+    -exec chown www-data:www-data {} + 2>/dev/null || true
+
 exec civicrm-docker-entrypoint "$@"
