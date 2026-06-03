@@ -21,6 +21,41 @@ set -e
 . /usr/local/share/civikitchen/xdebug-toggle.sh
 
 # ---------------------------------------------------------------------------
+# Auto-run composer install for bind-mounted extensions.
+#
+# An extension's composer.json typically pulls in dev tooling (phpunit,
+# phpstan) that's not in the image. Running composer install here saves
+# every contributor from doing it by hand before `vendor/bin/phpunit`
+# works — historically the most common new-contributor stumble.
+#
+# Runs before the auto-install so extensions enabled during install (e.g.
+# via CIVICRM_ENABLE_EXTENSIONS) already have their vendor/ in place.
+#
+# Idempotent: skips when vendor/ already exists. Runs on every container
+# start (not just the first install) so newly bind-mounted extensions are
+# picked up without rebuilding. Failure is non-fatal — the container still
+# boots; the user can fix composer.json and restart.
+#
+# Opt out via CIVICRM_AUTO_COMPOSER=0 (e.g. if you ship vendor/ in the
+# repo or want full control). Default is on.
+CIVICRM_AUTO_COMPOSER="${CIVICRM_AUTO_COMPOSER:-1}"
+if [[ "${CIVICRM_AUTO_COMPOSER}" == "1" ]]; then
+    shopt -s nullglob
+    for composer_json in /var/www/html/ext/*/composer.json; do
+        ext_dir="$(dirname "${composer_json}")"
+        ext_name="$(basename "${ext_dir}")"
+        if [[ -d "${ext_dir}/vendor" ]]; then
+            continue
+        fi
+        echo "[civikitchen] composer install in ext/${ext_name}..."
+        if ! ( cd "${ext_dir}" && composer install --no-interaction --no-progress --prefer-dist ); then
+            echo "[civikitchen] WARN: composer install failed in ext/${ext_name} — set CIVICRM_AUTO_COMPOSER=0 or fix composer.json" >&2
+        fi
+    done
+    shopt -u nullglob
+fi
+
+# ---------------------------------------------------------------------------
 # Auto-install.
 export CIVICRM_DB_HOST="${CIVICRM_DB_HOST:-db}"
 export CIVICRM_DB_PORT="${CIVICRM_DB_PORT:-3306}"
@@ -150,38 +185,6 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
             runuser -u www-data -- cv ext:enable "${ext_key}"
         done
     fi
-fi
-
-# ---------------------------------------------------------------------------
-# Auto-run composer install for bind-mounted extensions.
-#
-# An extension's composer.json typically pulls in dev tooling (phpunit,
-# phpstan) that's not in the image. Running composer install here saves
-# every contributor from doing it by hand before `vendor/bin/phpunit`
-# works — historically the most common new-contributor stumble.
-#
-# Idempotent: skips when vendor/ already exists. Runs on every container
-# start (not just the first install) so newly bind-mounted extensions are
-# picked up without rebuilding. Failure is non-fatal — the container still
-# boots; the user can fix composer.json and restart.
-#
-# Opt out via CIVICRM_AUTO_COMPOSER=0 (e.g. if you ship vendor/ in the
-# repo or want full control). Default is on.
-CIVICRM_AUTO_COMPOSER="${CIVICRM_AUTO_COMPOSER:-1}"
-if [[ "${CIVICRM_AUTO_COMPOSER}" == "1" ]]; then
-    shopt -s nullglob
-    for composer_json in /var/www/html/ext/*/composer.json; do
-        ext_dir="$(dirname "${composer_json}")"
-        ext_name="$(basename "${ext_dir}")"
-        if [[ -d "${ext_dir}/vendor" ]]; then
-            continue
-        fi
-        echo "[civikitchen] composer install in ext/${ext_name}..."
-        if ! ( cd "${ext_dir}" && composer install --no-interaction --no-progress --prefer-dist ); then
-            echo "[civikitchen] WARN: composer install failed in ext/${ext_name} — set CIVICRM_AUTO_COMPOSER=0 or fix composer.json" >&2
-        fi
-    done
-    shopt -u nullglob
 fi
 
 # ---------------------------------------------------------------------------
