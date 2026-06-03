@@ -148,6 +148,24 @@ docker compose exec -e CIVICRM_UF=UnitTests app \
   bash -c "cd /var/www/html/ext/myextension && phpunit"
 ```
 
+### Provisioning hooks
+
+Anything a test setup needs beyond `cv ext:enable` — renderer config, seed
+data, system packages — can run automatically on first boot. Mount scripts
+into `/civikitchen-init.d/`; after a fresh auto-install they run in lexical
+order: `*.sh` via bash (as root), `*.php` via `cv scr` (as www-data). A
+failing hook aborts the boot, so broken provisioning is loud.
+
+```yaml
+services:
+  app:
+    environment:
+      CIVIKITCHEN_EXTRA_PACKAGES: "libreoffice-writer,unoconv"
+      CIVICRM_ENABLE_EXTENSIONS: "mailattachment,de.systopia.civioffice"
+    volumes:
+      - ./init.d:/civikitchen-init.d:ro
+```
+
 ### UI tests with Playwright
 
 For browser-level tests of your extension's UI (forms, Angular/React widgets, JS behaviour) there's a copy-pasteable starter at [`examples/extension-with-playwright/`](examples/extension-with-playwright/). It boots the same standalone stack, runs Playwright on the host against `localhost:8080`, and handles login once via a shared session.

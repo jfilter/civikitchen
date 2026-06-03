@@ -228,6 +228,30 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
             runuser -u www-data -- cv ext:enable "${ext_key}"
         done
     fi
+
+    # First-boot provisioning hooks: mount scripts into /civikitchen-init.d/
+    # and they run once after a fresh install, in lexical order — *.sh via
+    # bash (as root, e.g. for system setup), *.php via `cv scr` (as www-data,
+    # e.g. for Civi settings or seed data). A failing hook aborts the boot so
+    # misconfiguration is loud, not silent.
+    if [[ -d /civikitchen-init.d ]]; then
+        for hook in /civikitchen-init.d/*; do
+            [[ -e "${hook}" ]] || continue
+            case "${hook}" in
+                *.sh)
+                    echo "[civikitchen] init hook (bash): ${hook}"
+                    bash "${hook}"
+                    ;;
+                *.php)
+                    echo "[civikitchen] init hook (cv scr): ${hook}"
+                    runuser -u www-data -- cv scr "${hook}"
+                    ;;
+                *)
+                    echo "[civikitchen] init hook skipped (expects *.sh or *.php): ${hook}" >&2
+                    ;;
+            esac
+        done
+    fi
 fi
 
 # ---------------------------------------------------------------------------
