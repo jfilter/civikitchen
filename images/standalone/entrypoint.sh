@@ -21,6 +21,23 @@ set -e
 . /usr/local/share/civikitchen/xdebug-toggle.sh
 
 # ---------------------------------------------------------------------------
+# Extra OS packages (e.g. libreoffice-writer + unoconv for CiviOffice
+# rendering) without baking them into the image. Comma- or space-separated.
+# Installed once per container; restarts skip already-present packages.
+if [[ -n "${CIVIKITCHEN_EXTRA_PACKAGES}" ]]; then
+    _ck_missing=()
+    for pkg in ${CIVIKITCHEN_EXTRA_PACKAGES//,/ }; do
+        dpkg -s "${pkg}" >/dev/null 2>&1 || _ck_missing+=("${pkg}")
+    done
+    if [[ ${#_ck_missing[@]} -gt 0 ]]; then
+        echo "[civikitchen] Installing extra packages: ${_ck_missing[*]}"
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${_ck_missing[@]}"
+        rm -rf /var/lib/apt/lists/*
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Auto-run composer install for bind-mounted extensions.
 #
 # An extension's composer.json typically pulls in dev tooling (phpunit,
