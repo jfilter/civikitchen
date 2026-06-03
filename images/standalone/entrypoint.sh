@@ -215,6 +215,19 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
             runuser -u www-data -- cv ext:enable "${ext_key}"
         done
     fi
+
+    # Enable extensions that are already present (e.g. bind-mounted into
+    # /var/www/html/ext) by key. Complements CIVICRM_EXTRA_EXTENSIONS, which
+    # downloads from the public registry.
+    if [[ -n "${CIVICRM_ENABLE_EXTENSIONS}" ]]; then
+        echo "[civikitchen] Enabling extensions: ${CIVICRM_ENABLE_EXTENSIONS}"
+        IFS=',' read -ra _CK_ENABLE <<< "${CIVICRM_ENABLE_EXTENSIONS}"
+        for ext_key in "${_CK_ENABLE[@]}"; do
+            ext_key="${ext_key// /}"
+            [[ -z "${ext_key}" ]] && continue
+            runuser -u www-data -- cv ext:enable "${ext_key}"
+        done
+    fi
 fi
 
 # ---------------------------------------------------------------------------
