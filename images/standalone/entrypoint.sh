@@ -47,8 +47,21 @@ if [[ "${CIVICRM_AUTO_COMPOSER}" == "1" ]]; then
         if [[ -d "${ext_dir}/vendor" ]]; then
             continue
         fi
+        # Extensions whose lock file vendors civicrm-core (the systopia
+        # dev-tooling pattern) must NOT get that vendor/ inside a running
+        # CiviCRM — their autoloader would load a second core. They need a
+        # runtime vendor/ built with their own tooling instead (their
+        # pre-update hook strips the civicrm packages on `composer update`).
+        if grep -q '"name": "civicrm/civicrm-core"' "${ext_dir}/composer.lock" 2>/dev/null; then
+            echo "[civikitchen] WARN: skipping composer install in ext/${ext_name} — its lock file vendors civicrm/civicrm-core. Build a runtime vendor/ outside the container (composer update --no-dev) instead." >&2
+            continue
+        fi
         echo "[civikitchen] composer install in ext/${ext_name}..."
-        if ! ( cd "${ext_dir}" && composer install --no-interaction --no-progress --prefer-dist ); then
+        if ( cd "${ext_dir}" && composer install --no-interaction --no-progress --prefer-dist ); then
+            # Bind mounts belong to the host user; match vendor/ to the mount
+            # owner so it isn't left root-owned on Linux hosts.
+            chown -R --reference="${ext_dir}" "${ext_dir}/vendor" 2>/dev/null || true
+        else
             echo "[civikitchen] WARN: composer install failed in ext/${ext_name} — set CIVICRM_AUTO_COMPOSER=0 or fix composer.json" >&2
         fi
     done
