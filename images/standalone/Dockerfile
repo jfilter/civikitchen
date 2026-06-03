@@ -56,7 +56,7 @@ RUN mv /usr/local/bin/cv /usr/local/bin/cv.real \
     && chmod +x /usr/local/bin/cv
 
 # Post-install demo-user script (run via `cv scr` from the entrypoint when
-# CIVICRM_DEMO_USER is set). Lives outside the docroot so it's not web-served.
+# CIVIKITCHEN_DEMO_USER is set). Lives outside the docroot so it's not web-served.
 COPY standalone/demo-user.php /usr/local/share/civikitchen/demo-user.php
 
 # Shared xdebug toggle — sourced from the entrypoint, also used by the

@@ -19,18 +19,25 @@ export CIVICRM_DB_ROOT_PASSWORD="${CIVICRM_DB_ROOT_PASSWORD:-root}"
 CIVICRM_SITE_TYPE="${CIVICRM_SITE_TYPE:-${CIVICRM_SITE_TYPE_DEFAULT:-drupal10-demo}}"
 CIVICRM_VERSION="${CIVICRM_VERSION:-6.12.1}"
 
-# SITE_URL is the URL the browser uses to reach this container.
+# Legacy name: SITE_URL was renamed to CIVIKITCHEN_SITE_URL (kitchen-owned
+# behavior knob); the old spelling keeps working with a warning.
+if [[ -z "${CIVIKITCHEN_SITE_URL+x}" && -n "${SITE_URL+x}" ]]; then
+    echo "[civikitchen] WARN: SITE_URL is deprecated - use CIVIKITCHEN_SITE_URL" >&2
+    export CIVIKITCHEN_SITE_URL="${SITE_URL}"
+fi
+
+# CIVIKITCHEN_SITE_URL is the URL the browser uses to reach this container.
 # Must match the external port from your Docker port mapping (-p flag).
 # Examples:
-#   docker run -p 8080:80  →  SITE_URL=http://localhost:8080
-#   docker run -p 80:80    →  SITE_URL=http://localhost (default)
-if [[ -z "${SITE_URL}" ]]; then
+#   docker run -p 8080:80  →  CIVIKITCHEN_SITE_URL=http://localhost:8080
+#   docker run -p 80:80    →  CIVIKITCHEN_SITE_URL=http://localhost (default)
+if [[ -z "${CIVIKITCHEN_SITE_URL}" ]]; then
     HTTPD_DOMAIN="${HTTPD_DOMAIN:-localhost}"
     HTTPD_PORT="${HTTPD_PORT:-80}"
     if [[ "${HTTPD_PORT}" == "80" ]]; then
-        SITE_URL="http://${HTTPD_DOMAIN}"
+        CIVIKITCHEN_SITE_URL="http://${HTTPD_DOMAIN}"
     else
-        SITE_URL="http://${HTTPD_DOMAIN}:${HTTPD_PORT}"
+        CIVIKITCHEN_SITE_URL="http://${HTTPD_DOMAIN}:${HTTPD_PORT}"
     fi
 fi
 
@@ -38,7 +45,7 @@ MARKER_FILE="/home/buildkit/.site-installed"
 
 echo "CiviCRM Dev Image (${CIVICRM_SITE_TYPE})"
 echo "=========================================="
-echo "Site URL: ${SITE_URL}"
+echo "Site URL: ${CIVIKITCHEN_SITE_URL}"
 
 # Wait for the database via PHP mysqli — same probe the standalone image
 # uses. mysqli (mysqlnd) sidesteps the TLS-enforcement default that newer
@@ -92,7 +99,7 @@ MYCNF
     # Create the CiviCRM site
     ${BK} "export PATH='${PATH}' && civibuild create site \
         --type '${CIVICRM_SITE_TYPE}' \
-        --url '${SITE_URL}' \
+        --url '${CIVIKITCHEN_SITE_URL}' \
         --civi-ver '${CIVICRM_VERSION}' \
         --admin-pass 'admin'"
 
@@ -111,6 +118,6 @@ fi
 
 # Start Apache (needs root for port 80)
 echo "Starting Apache..."
-echo "Access: ${SITE_URL}"
+echo "Access: ${CIVIKITCHEN_SITE_URL}"
 echo "Login: admin / admin"
 apachectl -D FOREGROUND

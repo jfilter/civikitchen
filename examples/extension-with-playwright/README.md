@@ -53,7 +53,7 @@ at your extension via the `volumes:` mapping, and you're set.
 
 The `auth.setup.ts` step logs in with `admin` / `admin` by default — that's
 the demo user the standalone image creates on first start (controlled by
-`CIVICRM_DEMO_USER` / `CIVICRM_DEMO_PASS` in `docker-compose.yml`).
+`CIVIKITCHEN_DEMO_USER` / `CIVIKITCHEN_DEMO_PASS` in `docker-compose.yml`).
 
 If you change the demo user, override at test time:
 

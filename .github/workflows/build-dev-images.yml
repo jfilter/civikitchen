@@ -159,7 +159,7 @@ jobs:
       - name: Boot the example stack
         env:
           IMAGE: ${{ env.IMAGE_PREFIX }}:standalone
-          # Exercise the CIVICRM_EXTRA_EXTENSIONS entrypoint hook with both
+          # Exercise the CIVIKITCHEN_EXTRA_EXTENSIONS entrypoint hook with both
           # supported syntaxes:
           # - bare key (mjwshared): pulled from the public registry, exercises
           #   ext:download's network + cache refresh path.
@@ -167,7 +167,7 @@ jobs:
           #   one previously regressed because cv ext:download auto-installs
           #   and bombed with "Cannot install or enable extension"; the
           #   entrypoint now splits download (--no-install) + enable.
-          CIVICRM_EXTRA_EXTENSIONS: "mjwshared,de.systopia.xcm@https://github.com/systopia/de.systopia.xcm/releases/download/1.13.0/de.systopia.xcm-1.13.0.zip"
+          CIVIKITCHEN_EXTRA_EXTENSIONS: "mjwshared,de.systopia.xcm@https://github.com/systopia/de.systopia.xcm/releases/download/1.13.0/de.systopia.xcm-1.13.0.zip"
         run: |
           docker compose -f examples/standalone/docker-compose.yml up -d --pull always
 
@@ -184,10 +184,10 @@ jobs:
           docker compose -f examples/standalone/docker-compose.yml logs app
           exit 1
 
-      - name: Verify CIVICRM_EXTRA_EXTENSIONS got installed
+      - name: Verify CIVIKITCHEN_EXTRA_EXTENSIONS got installed
         run: |
           # Both the bare-key (mjwshared) and key@URL (de.systopia.xcm)
-          # entries from CIVICRM_EXTRA_EXTENSIONS must end up installed.
+          # entries from CIVIKITCHEN_EXTRA_EXTENSIONS must end up installed.
           for key in mjwshared de.systopia.xcm; do
             status=$(docker compose -f examples/standalone/docker-compose.yml exec -T app \
               runuser -u www-data -- cv api4 Extension.get \

@@ -21,6 +21,30 @@ set -e
 . /usr/local/share/civikitchen/xdebug-toggle.sh
 
 # ---------------------------------------------------------------------------
+# Env-var convention: CIVIKITCHEN_* are this image's own behavior knobs.
+# CIVICRM_* is reserved for the upstream image contract (CIVICRM_AUTO_INSTALL,
+# CIVICRM_DB_*), for describing the CiviCRM target (CIVICRM_VERSION,
+# CIVICRM_SITE_TYPE) and for CiviCRM's own variables (CIVICRM_UF, ...).
+# Legacy CIVICRM_-spelled kitchen vars keep working with a deprecation warning.
+_ck_legacy() {
+    local new="$1" legacy="$2"
+    if [[ -z "${!new+x}" && -n "${!legacy+x}" ]]; then
+        echo "[civikitchen] WARN: ${legacy} is deprecated - use ${new}" >&2
+        export "${new}=${!legacy}"
+    fi
+}
+_ck_legacy CIVIKITCHEN_COMPONENTS        CIVICRM_COMPONENTS
+_ck_legacy CIVIKITCHEN_DEMO_USER         CIVICRM_DEMO_USER
+_ck_legacy CIVIKITCHEN_DEMO_PASS         CIVICRM_DEMO_PASS
+_ck_legacy CIVIKITCHEN_DEMO_EMAIL        CIVICRM_DEMO_EMAIL
+_ck_legacy CIVIKITCHEN_SMTP_HOST         CIVICRM_SMTP_HOST
+_ck_legacy CIVIKITCHEN_SMTP_PORT         CIVICRM_SMTP_PORT
+_ck_legacy CIVIKITCHEN_EXTRA_EXTENSIONS  CIVICRM_EXTRA_EXTENSIONS
+_ck_legacy CIVIKITCHEN_ENABLE_EXTENSIONS CIVICRM_ENABLE_EXTENSIONS
+_ck_legacy CIVIKITCHEN_AUTO_COMPOSER     CIVICRM_AUTO_COMPOSER
+_ck_legacy CIVIKITCHEN_SITE_URL          SITE_URL
+
+# ---------------------------------------------------------------------------
 # Extra OS packages (e.g. libreoffice-writer + unoconv for CiviOffice
 # rendering) without baking them into the image. Comma- or space-separated.
 # Installed once per container; restarts skip already-present packages.
@@ -46,17 +70,17 @@ fi
 # works — historically the most common new-contributor stumble.
 #
 # Runs before the auto-install so extensions enabled during install (e.g.
-# via CIVICRM_ENABLE_EXTENSIONS) already have their vendor/ in place.
+# via CIVIKITCHEN_ENABLE_EXTENSIONS) already have their vendor/ in place.
 #
 # Idempotent: skips when vendor/ already exists. Runs on every container
 # start (not just the first install) so newly bind-mounted extensions are
 # picked up without rebuilding. Failure is non-fatal — the container still
 # boots; the user can fix composer.json and restart.
 #
-# Opt out via CIVICRM_AUTO_COMPOSER=0 (e.g. if you ship vendor/ in the
+# Opt out via CIVIKITCHEN_AUTO_COMPOSER=0 (e.g. if you ship vendor/ in the
 # repo or want full control). Default is on.
-CIVICRM_AUTO_COMPOSER="${CIVICRM_AUTO_COMPOSER:-1}"
-if [[ "${CIVICRM_AUTO_COMPOSER}" == "1" ]]; then
+CIVIKITCHEN_AUTO_COMPOSER="${CIVIKITCHEN_AUTO_COMPOSER:-1}"
+if [[ "${CIVIKITCHEN_AUTO_COMPOSER}" == "1" ]]; then
     shopt -s nullglob
     for composer_json in /var/www/html/ext/*/composer.json; do
         ext_dir="$(dirname "${composer_json}")"
@@ -79,7 +103,7 @@ if [[ "${CIVICRM_AUTO_COMPOSER}" == "1" ]]; then
             # owner so it isn't left root-owned on Linux hosts.
             chown -R --reference="${ext_dir}" "${ext_dir}/vendor" 2>/dev/null || true
         else
-            echo "[civikitchen] WARN: composer install failed in ext/${ext_name} — set CIVICRM_AUTO_COMPOSER=0 or fix composer.json" >&2
+            echo "[civikitchen] WARN: composer install failed in ext/${ext_name} — set CIVIKITCHEN_AUTO_COMPOSER=0 or fix composer.json" >&2
         fi
     done
     shopt -u nullglob
@@ -123,26 +147,26 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
     done
 
     DB_URL="mysql://${CIVICRM_DB_USER}:${CIVICRM_DB_PASSWORD}@${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}/${CIVICRM_DB_NAME}"
-    # SITE_URL is the URL the browser uses. It MUST match the host:port the
+    # CIVIKITCHEN_SITE_URL is the URL the browser uses. It MUST match the host:port the
     # user opens — Civi bakes it into every JS/CSS asset URL, so a mismatch
     # silently breaks the Angular login form because asset fetches fail.
-    SITE_URL="${SITE_URL:-http://localhost}"
+    CIVIKITCHEN_SITE_URL="${CIVIKITCHEN_SITE_URL:-http://localhost}"
 
     # cv core:install --comp accepts a comma-separated list. cv's own default
     # enables only the core component, which is wrong for a dev image —
     # extensions assuming CiviContribute/CiviCase/etc. would silently fail.
     # Default to all standard components; user can override (or pass an
     # empty string to fall back to cv's core-only default).
-    CIVICRM_COMPONENTS="${CIVICRM_COMPONENTS-CiviEvent,CiviContribute,CiviMember,CiviMail,CiviPledge,CiviCase,CiviReport,CiviCampaign}"
+    CIVIKITCHEN_COMPONENTS="${CIVIKITCHEN_COMPONENTS-CiviEvent,CiviContribute,CiviMember,CiviMail,CiviPledge,CiviCase,CiviReport,CiviCampaign}"
     INSTALL_OPTS=()
-    if [[ -n "${CIVICRM_COMPONENTS}" ]]; then
-        INSTALL_OPTS+=(--comp="${CIVICRM_COMPONENTS}")
+    if [[ -n "${CIVIKITCHEN_COMPONENTS}" ]]; then
+        INSTALL_OPTS+=(--comp="${CIVIKITCHEN_COMPONENTS}")
     fi
 
-    echo "[civikitchen] Running cv core:install (cmsBaseUrl=${SITE_URL}${CIVICRM_COMPONENTS:+, components=${CIVICRM_COMPONENTS}})..."
+    echo "[civikitchen] Running cv core:install (cmsBaseUrl=${CIVIKITCHEN_SITE_URL}${CIVIKITCHEN_COMPONENTS:+, components=${CIVIKITCHEN_COMPONENTS}})..."
     # cv --url is the documented flag for setting cmsBaseUrl during install.
     # It populates the model BEFORE init plugins run, so every
-    # $civicrm_paths[*]['url'] is derived from SITE_URL (cms.root,
+    # $civicrm_paths[*]['url'] is derived from CIVIKITCHEN_SITE_URL (cms.root,
     # civicrm.root, civicrm.files, civicrm.vendor — all of them).
     #
     # -K keeps existing tables — survives `docker compose down` (without -v)
@@ -150,7 +174,7 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
     # Run as www-data: /var/www/html/private/ is owned by www-data, and the
     # install creates settings files + cache dirs there. Running as root
     # leaves them root-owned and apache can't later write to the cache dir.
-    runuser -u www-data -- cv core:install -n -K --url="${SITE_URL}" --db="${DB_URL}" "${INSTALL_OPTS[@]}"
+    runuser -u www-data -- cv core:install -n -K --url="${CIVIKITCHEN_SITE_URL}" --db="${DB_URL}" "${INSTALL_OPTS[@]}"
     echo "[civikitchen] CiviCRM installed."
 
     # Dev-mode defaults — buildkit's standalone-clean install.sh sets these
@@ -164,22 +188,22 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
     # Point Civi's mail backend at an SMTP host (e.g. the maildev sidecar in
     # the example compose). Without this, Civi defaults to the PHP `mail()`
     # function and outbound mail silently goes nowhere in a containerised
-    # dev environment. Opt-in via CIVICRM_SMTP_HOST.
-    if [[ -n "${CIVICRM_SMTP_HOST}" ]]; then
-        SMTP_PORT="${CIVICRM_SMTP_PORT:-1025}"
-        echo "[civikitchen] Configuring mail backend → ${CIVICRM_SMTP_HOST}:${SMTP_PORT}..."
-        runuser -u www-data -- env SMTP_HOST="${CIVICRM_SMTP_HOST}" SMTP_PORT="${SMTP_PORT}" \
+    # dev environment. Opt-in via CIVIKITCHEN_SMTP_HOST.
+    if [[ -n "${CIVIKITCHEN_SMTP_HOST}" ]]; then
+        SMTP_PORT="${CIVIKITCHEN_SMTP_PORT:-1025}"
+        echo "[civikitchen] Configuring mail backend → ${CIVIKITCHEN_SMTP_HOST}:${SMTP_PORT}..."
+        runuser -u www-data -- env SMTP_HOST="${CIVIKITCHEN_SMTP_HOST}" SMTP_PORT="${SMTP_PORT}" \
             cv ev '\Civi::settings()->set("mailing_backend", ["outBound_option" => 0, "smtpServer" => getenv("SMTP_HOST"), "smtpPort" => (int) getenv("SMTP_PORT"), "smtpAuth" => 0, "smtpUsername" => "", "smtpPassword" => ""]);'
     fi
 
-    # Demo login user. Opt-in via CIVICRM_DEMO_USER (mirroring how
+    # Demo login user. Opt-in via CIVIKITCHEN_DEMO_USER (mirroring how
     # CIVICRM_AUTO_INSTALL itself defaults to off). The shipped example
     # compose file sets it so `docker compose up -d` lands at a logged-in-able
     # CiviCRM out of the box.
-    if [[ -n "${CIVICRM_DEMO_USER}" ]]; then
-        DEMO_USER="${CIVICRM_DEMO_USER}"
-        DEMO_PASS="${CIVICRM_DEMO_PASS:-admin}"
-        DEMO_EMAIL="${CIVICRM_DEMO_EMAIL:-admin@example.org}"
+    if [[ -n "${CIVIKITCHEN_DEMO_USER}" ]]; then
+        DEMO_USER="${CIVIKITCHEN_DEMO_USER}"
+        DEMO_PASS="${CIVIKITCHEN_DEMO_PASS:-admin}"
+        DEMO_EMAIL="${CIVIKITCHEN_DEMO_EMAIL:-admin@example.org}"
         echo "[civikitchen] Creating demo user '${DEMO_USER}'..."
         # Pass env explicitly via `env` rather than relying on
         # runuser --preserve-environment, which is filtered by PAM.
@@ -208,9 +232,9 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && -f "${SETTINGS_FILE}" && ! -f "${PROVI
     # or `key@URL` for a pinned / forked release; cv ext:download accepts
     # the same syntax natively. Hard-fails on a bad key/URL so a typo in
     # compose env doesn't silently start a half-broken site.
-    if [[ -n "${CIVICRM_EXTRA_EXTENSIONS}" ]]; then
-        echo "[civikitchen] Installing extra extensions: ${CIVICRM_EXTRA_EXTENSIONS}"
-        IFS=',' read -ra _CK_EXTS <<< "${CIVICRM_EXTRA_EXTENSIONS}"
+    if [[ -n "${CIVIKITCHEN_EXTRA_EXTENSIONS}" ]]; then
+        echo "[civikitchen] Installing extra extensions: ${CIVIKITCHEN_EXTRA_EXTENSIONS}"
+        IFS=',' read -ra _CK_EXTS <<< "${CIVIKITCHEN_EXTRA_EXTENSIONS}"
         for ext_spec in "${_CK_EXTS[@]}"; do
             ext_spec="${ext_spec// /}"
             [[ -z "${ext_spec}" ]] && continue
@@ -229,11 +253,11 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && -f "${SETTINGS_FILE}" && ! -f "${PROVI
     fi
 
     # Enable extensions that are already present (e.g. bind-mounted into
-    # /var/www/html/ext) by key. Complements CIVICRM_EXTRA_EXTENSIONS, which
+    # /var/www/html/ext) by key. Complements CIVIKITCHEN_EXTRA_EXTENSIONS, which
     # downloads from the public registry.
-    if [[ -n "${CIVICRM_ENABLE_EXTENSIONS}" ]]; then
-        echo "[civikitchen] Enabling extensions: ${CIVICRM_ENABLE_EXTENSIONS}"
-        IFS=',' read -ra _CK_ENABLE <<< "${CIVICRM_ENABLE_EXTENSIONS}"
+    if [[ -n "${CIVIKITCHEN_ENABLE_EXTENSIONS}" ]]; then
+        echo "[civikitchen] Enabling extensions: ${CIVIKITCHEN_ENABLE_EXTENSIONS}"
+        IFS=',' read -ra _CK_ENABLE <<< "${CIVIKITCHEN_ENABLE_EXTENSIONS}"
         for ext_key in "${_CK_ENABLE[@]}"; do
             ext_key="${ext_key// /}"
             [[ -z "${ext_key}" ]] && continue
