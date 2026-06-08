@@ -187,6 +187,19 @@ RUN if [ "${DEFAULT_SITE_TYPE}" = "standalone-demo" ]; then \
         && a2enconf civikitchen-demo; \
     fi
 
+# Optional demo profile: when DEMO_PROFILE is set (e.g. eu-ngo), bake its
+# extensions + seed data + API users into the embedded DB at build time. The
+# wrapper starts MariaDB on the baked data, runs images/profiles/<profile>/
+# apply.sh, then cleanly shuts it down. No profile -> the image ships just the
+# civibuild `-demo` data. (eu-ngo -> civicrm-eu-ngo; see images/profiles/.)
+ARG DEMO_PROFILE=""
+COPY profiles /tmp/civikitchen-profiles
+COPY buildkit/apply-profile.sh /tmp/apply-profile.sh
+RUN if [ -n "${DEMO_PROFILE}" ]; then \
+        bash /tmp/apply-profile.sh "/tmp/civikitchen-profiles/${DEMO_PROFILE}"; \
+    fi \
+    && rm -rf /tmp/apply-profile.sh /tmp/civikitchen-profiles
+
 # Shared xdebug toggle + provisioning library — same files the dev images use.
 # The demo runs provision.sh too, so its opt-in knobs (SMTP, mounted-extension
 # enabling, /civikitchen-init.d hooks) work here as well.
