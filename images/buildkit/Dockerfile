@@ -158,8 +158,59 @@ RUN CIVICRM_VERSION="${CIVICRM_VERSION}" DEFAULT_SITE_TYPE="${DEFAULT_SITE_TYPE}
         bash /tmp/bake.sh && rm /tmp/bake.sh
 
 # =============================================================================
-# Stage 4: Final image — copies the baked site, NO embedded DB
+# Stage 4: Demo image — single-container, embedded MariaDB, baked demo data
 # =============================================================================
+# Reuses the `builder` stage's baked civibuild site AND its populated
+# /var/lib/mysql (which the dev `final` stage discards via a selective COPY).
+# The demo therefore boots in seconds: start the embedded MariaDB on the baked
+# data + Apache — no external DB, no `civibuild reinstall`. `docker run -p 80:80
+# IMAGE` → a working CiviCRM with demo data. Built with `--target demo`.
+#
+# (The EU-NGO profile bake — extensions + seeds + API users on top of this —
+# is layered in via the DEMO_PROFILE build arg.)
+FROM builder AS demo
+
+ARG DEFAULT_SITE_TYPE
+ENV PATH="/opt/composer/vendor/bin:/home/buildkit/buildkit/bin:${PATH}" \
+    CIVIBUILD_ADMIN_PASS="admin" \
+    CIVICRM_SITE_TYPE_DEFAULT="${DEFAULT_SITE_TYPE}"
+
+USER root
+
+# Standalone serves CiviCRM directly: anonymous `/` (→ /civicrm/home) returns
+# 403 under the standaloneusers extension, so bounce bare-/ to the login form
+# (the same rule the standalone dev image ships). drupal10/wp serve their CMS
+# front page at `/`, so only add the redirect for the standalone flavor.
+RUN if [ "${DEFAULT_SITE_TYPE}" = "standalone-demo" ]; then \
+        echo 'RedirectMatch 302 ^/$ /civicrm/login' \
+            > /etc/apache2/conf-available/civikitchen-demo.conf \
+        && a2enconf civikitchen-demo; \
+    fi
+
+# Shared xdebug toggle + provisioning library — same files the dev images use.
+# The demo runs provision.sh too, so its opt-in knobs (SMTP, mounted-extension
+# enabling, /civikitchen-init.d hooks) work here as well.
+COPY lib/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.sh
+COPY lib/provision.sh /usr/local/share/civikitchen/provision.sh
+
+COPY buildkit/entrypoint-demo.sh /home/buildkit/entrypoint.sh
+RUN chmod +x /home/buildkit/entrypoint.sh
+
+EXPOSE 80
+
+# The site + DB are baked, so first boot is just "start embedded MariaDB +
+# provisioning + Apache" — fast. The entrypoint writes the provisioned marker
+# before handing off to Apache.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=120s --retries=18 \
+    CMD test -f /home/buildkit/.civikitchen-provisioned || exit 1
+
+ENTRYPOINT ["/home/buildkit/entrypoint.sh"]
+
+# =============================================================================
+# Stage 5: Final dev image — copies the baked site, NO embedded DB (default)
+# =============================================================================
+# This is the LAST stage, so a plain `docker build` (no --target) builds the dev
+# image; the demo above is opt-in via `--target demo`.
 FROM buildkit-setup AS final
 
 # /opt/composer/vendor/bin is prepended ahead of /home/buildkit/buildkit/bin
