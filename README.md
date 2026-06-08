@@ -141,12 +141,20 @@ docker compose exec app cv ext:enable myextension
 docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpunit"
 ```
 
-For headless tests (extending `CiviUnitTestCase` or implementing `HeadlessInterface`), set `CIVICRM_UF=UnitTests` so PHPUnit boots an isolated test database:
+For headless tests (extending `CiviUnitTestCase` or implementing `HeadlessInterface`), set `CIVICRM_UF=UnitTests`:
 
 ```bash
 docker compose exec -e CIVICRM_UF=UnitTests app \
   bash -c "cd /var/www/html/ext/myextension && phpunit"
 ```
+
+This runs the test framework against a **separate** scratch database
+(`<db>_test`, e.g. `civicrm_test`), not your dev site. On first install the
+image creates that database and writes `TEST_DB_DSN` to `~/.cv.json` (for both
+`root` and `www-data`) so the framework finds it. **Without `TEST_DB_DSN` set,
+CiviCRM falls back to the main database and a headless `phpunit` run wipes your
+dev data** — so this is configured automatically. Opt out with
+`CIVIKITCHEN_TEST_DB=0` if you manage `TEST_DB_DSN` yourself.
 
 ### Provisioning hooks
 
@@ -273,6 +281,7 @@ Two prefixes, by ownership: `CIVIKITCHEN_*` vars are this project's own behavior
 | `CIVIKITCHEN_EXTRA_EXTENSIONS` | _(unset)_ | standalone | Comma-separated extension keys downloaded + enabled after install — e.g. `de.systopia.xcm,de.systopia.twingle`. Each entry can also be `key@URL` for a pinned or forked release (passed to `cv ext:download` verbatim). Replaces hand-rolled `cv ext:download` / `cv ext:enable` boilerplate in extension test setups. Requires `CIVICRM_AUTO_INSTALL=1`; runs once on first install. |
 | `CIVIKITCHEN_ENABLE_EXTENSIONS` | _(unset)_ | standalone | Comma-separated keys of extensions that are already present (e.g. bind-mounted into `/var/www/html/ext`) to enable after install — e.g. `mailattachment,de.systopia.civioffice,mailbatch`. Complements `CIVIKITCHEN_EXTRA_EXTENSIONS`, which downloads from the registry. Requires `CIVICRM_AUTO_INSTALL=1`; runs once on first install. |
 | `CIVIKITCHEN_AUTO_COMPOSER` | `1` | standalone | If `1`, scan `/var/www/html/ext/*/composer.json` on every container start and run `composer install` in each extension directory whose `vendor/` is missing. Removes the manual gate before `vendor/bin/phpunit` works. Idempotent (skips when `vendor/` exists), non-fatal on failure. Set to `0` if you ship `vendor/` in your repo or want full control. |
+| `CIVIKITCHEN_TEST_DB` | `1` | standalone | If `1`, configure an isolated headless-test database on first install: create `<db>_test` (e.g. `civicrm_test`) and write `TEST_DB_DSN` to `~/.cv.json` (root + www-data) so `CIVICRM_UF=UnitTests` runs against it instead of the dev DB. Prevents a headless `phpunit` run from wiping the main database. Set to `0` to manage `TEST_DB_DSN` yourself. |
 | `CIVIKITCHEN_EXTRA_PACKAGES` | _(unset)_ | standalone | Comma- or space-separated Debian packages installed on container start (e.g. `libreoffice-writer,unoconv` for CiviOffice rendering) — heavyweight or niche deps stay out of the image. Restarts skip packages that are already present. |
 | `CIVIKITCHEN_CV_AS_ROOT` | `0` | standalone | `cv` inside the container is wrapped to always run as `www-data`, even from `docker compose exec` (root) — root-run `cv` leaves root-owned caches/locks that break the web workers. Set to `1` to bypass the wrapper and run `cv` as root. |
 | `CIVICRM_DB_ROOT_PASSWORD` | `root` | drupal10/wordpress | DB **admin** password. civibuild uses it to create the per-site database and user during the first-run site build. |

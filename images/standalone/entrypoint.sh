@@ -212,6 +212,33 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
             cv scr /usr/local/share/civikitchen/demo-user.php
     fi
 
+    # Isolated headless-test database. `CIVICRM_UF=UnitTests` boots the test
+    # framework against TEST_DB_DSN — and when that is unset, CiviCRM falls
+    # back to the MAIN database, so a headless `phpunit` run silently wipes the
+    # dev site (a nasty, hard-to-debug footgun). Point it at a separate scratch
+    # DB (<db>_test) so the documented UnitTests path is actually isolated. The
+    # framework creates/drops tables in this DB itself (the example compose's
+    # db-init grants the privilege); we only ensure the database exists and that
+    # cv knows the DSN. Opt out with CIVIKITCHEN_TEST_DB=0; a project needing a
+    # different DSN can overwrite ~/.cv.json from a /civikitchen-init.d hook.
+    CIVIKITCHEN_TEST_DB="${CIVIKITCHEN_TEST_DB:-1}"
+    if [[ "${CIVIKITCHEN_TEST_DB}" == "1" ]]; then
+        TEST_DB_NAME="${CIVICRM_DB_NAME}_test"
+        TEST_DB_DSN="mysql://${CIVICRM_DB_USER}:${CIVICRM_DB_PASSWORD}@${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}/${TEST_DB_NAME}?new_link=true"
+        echo "[civikitchen] Configuring isolated test DB → ${TEST_DB_NAME} (TEST_DB_DSN)..."
+        mysql -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" \
+            -e "CREATE DATABASE IF NOT EXISTS \`${TEST_DB_NAME}\`" 2>/dev/null \
+            || echo "[civikitchen] WARN: could not pre-create ${TEST_DB_NAME}; the test framework will create it on demand" >&2
+        # cv merges ~/.cv.json into $GLOBALS['_CV'], keyed by the standalone
+        # bootstrap path; civicrm.settings.php reads _CV['TEST_DB_DSN'] under
+        # CIVICRM_UF=UnitTests. Write it for root (docker exec default) and
+        # www-data (the cv wrapper drops to it). Don't clobber an existing
+        # ~/.cv.json (a project/user may have set their own).
+        CK_CV_JSON=$(printf '{\n  "sites": {\n    "/var/www/html/civicrm.standalone.php": {\n      "TEST_DB_DSN": "%s"\n    }\n  }\n}' "${TEST_DB_DSN}")
+        [[ -f /root/.cv.json ]] || printf '%s\n' "${CK_CV_JSON}" > /root/.cv.json
+        [[ -f /var/www/.cv.json ]] || runuser -u www-data -- bash -c "printf '%s\n' '${CK_CV_JSON}' > /var/www/.cv.json"
+    fi
+
 fi
 
 # ---------------------------------------------------------------------------
