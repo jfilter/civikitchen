@@ -6,7 +6,8 @@ set -e
 # 1. If XDEBUG_MODE is set, activate xdebug for this container.
 # 2. If CIVICRM_AUTO_INSTALL=1 and CiviCRM is not yet installed, wait for the
 #    database and run `cv core:install`.
-# 3. Hand off to the upstream civicrm-docker-entrypoint.
+# 3. Run the shared first-boot provisioning (images/lib/provision.sh).
+# 4. Hand off to the upstream civicrm-docker-entrypoint.
 #
 # Why runtime install (not a build-time SQL dump like allinone/)?
 # allinone's embedded MariaDB lives in the same container as CiviCRM,
@@ -45,6 +46,13 @@ _ck_legacy CIVIKITCHEN_AUTO_COMPOSER     CIVICRM_AUTO_COMPOSER
 _ck_legacy CIVIKITCHEN_SITE_URL          SITE_URL
 
 # ---------------------------------------------------------------------------
+# Shared provisioning library. ck_as_web runs a command as the web user
+# (www-data) against the standalone CiviCRM site. The CK_* parameters default
+# to the standalone layout, so nothing else needs overriding here.
+ck_as_web() { runuser -u www-data -- "$@"; }
+. /usr/local/share/civikitchen/provision.sh
+
+# ---------------------------------------------------------------------------
 # Extra OS packages (e.g. libreoffice-writer + unoconv for CiviOffice
 # rendering) without baking them into the image. Comma- or space-separated.
 # Installed once per container; restarts skip already-present packages.
@@ -62,52 +70,10 @@ if [[ -n "${CIVIKITCHEN_EXTRA_PACKAGES}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Auto-run composer install for bind-mounted extensions.
-#
-# An extension's composer.json typically pulls in dev tooling (phpunit,
-# phpstan) that's not in the image. Running composer install here saves
-# every contributor from doing it by hand before `vendor/bin/phpunit`
-# works — historically the most common new-contributor stumble.
-#
-# Runs before the auto-install so extensions enabled during install (e.g.
-# via CIVIKITCHEN_ENABLE_EXTENSIONS) already have their vendor/ in place.
-#
-# Idempotent: skips when vendor/ already exists. Runs on every container
-# start (not just the first install) so newly bind-mounted extensions are
-# picked up without rebuilding. Failure is non-fatal — the container still
-# boots; the user can fix composer.json and restart.
-#
-# Opt out via CIVIKITCHEN_AUTO_COMPOSER=0 (e.g. if you ship vendor/ in the
-# repo or want full control). Default is on.
-CIVIKITCHEN_AUTO_COMPOSER="${CIVIKITCHEN_AUTO_COMPOSER:-1}"
-if [[ "${CIVIKITCHEN_AUTO_COMPOSER}" == "1" ]]; then
-    shopt -s nullglob
-    for composer_json in /var/www/html/ext/*/composer.json; do
-        ext_dir="$(dirname "${composer_json}")"
-        ext_name="$(basename "${ext_dir}")"
-        if [[ -d "${ext_dir}/vendor" ]]; then
-            continue
-        fi
-        # Extensions whose lock file vendors civicrm-core (the systopia
-        # dev-tooling pattern) must NOT get that vendor/ inside a running
-        # CiviCRM — their autoloader would load a second core. They need a
-        # runtime vendor/ built with their own tooling instead (their
-        # pre-update hook strips the civicrm packages on `composer update`).
-        if grep -q '"name": "civicrm/civicrm-core"' "${ext_dir}/composer.lock" 2>/dev/null; then
-            echo "[civikitchen] WARN: skipping composer install in ext/${ext_name} — its lock file vendors civicrm/civicrm-core. Build a runtime vendor/ outside the container (composer update --no-dev) instead." >&2
-            continue
-        fi
-        echo "[civikitchen] composer install in ext/${ext_name}..."
-        if ( cd "${ext_dir}" && composer install --no-interaction --no-progress --prefer-dist ); then
-            # Bind mounts belong to the host user; match vendor/ to the mount
-            # owner so it isn't left root-owned on Linux hosts.
-            chown -R --reference="${ext_dir}" "${ext_dir}/vendor" 2>/dev/null || true
-        else
-            echo "[civikitchen] WARN: composer install failed in ext/${ext_name} — set CIVIKITCHEN_AUTO_COMPOSER=0 or fix composer.json" >&2
-        fi
-    done
-    shopt -u nullglob
-fi
+# Auto-run composer install for bind-mounted extensions. Runs before the
+# auto-install so extensions enabled during install (e.g. via
+# CIVIKITCHEN_ENABLE_EXTENSIONS) already have their vendor/ in place.
+ck_auto_composer
 
 # ---------------------------------------------------------------------------
 # Auto-install.
@@ -177,154 +143,26 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
     runuser -u www-data -- cv core:install -n -K --url="${CIVIKITCHEN_SITE_URL}" --db="${DB_URL}" "${INSTALL_OPTS[@]}"
     echo "[civikitchen] CiviCRM installed."
 
-    # Dev-mode defaults — buildkit's standalone-clean install.sh sets these
-    # after every install, and there's no reason a dev image would want them
-    # off. Quiet the output; failure here is non-fatal (settings backfill on
-    # next request).
-    runuser -u www-data -- cv setting:set environment=Development >/dev/null
-    runuser -u www-data -- cv setting:set debug_enabled=1 >/dev/null
-    echo "[civikitchen] Dev settings applied (environment=Development, debug_enabled=1)."
-
-    # Point Civi's mail backend at an SMTP host (e.g. the maildev sidecar in
-    # the example compose). Without this, Civi defaults to the PHP `mail()`
-    # function and outbound mail silently goes nowhere in a containerised
-    # dev environment. Opt-in via CIVIKITCHEN_SMTP_HOST.
-    if [[ -n "${CIVIKITCHEN_SMTP_HOST}" ]]; then
-        SMTP_PORT="${CIVIKITCHEN_SMTP_PORT:-1025}"
-        echo "[civikitchen] Configuring mail backend → ${CIVIKITCHEN_SMTP_HOST}:${SMTP_PORT}..."
-        runuser -u www-data -- env SMTP_HOST="${CIVIKITCHEN_SMTP_HOST}" SMTP_PORT="${SMTP_PORT}" \
-            cv ev '\Civi::settings()->set("mailing_backend", ["outBound_option" => 0, "smtpServer" => getenv("SMTP_HOST"), "smtpPort" => (int) getenv("SMTP_PORT"), "smtpAuth" => 0, "smtpUsername" => "", "smtpPassword" => ""]);'
-    fi
-
-    # Demo login user. Opt-in via CIVIKITCHEN_DEMO_USER (mirroring how
-    # CIVICRM_AUTO_INSTALL itself defaults to off). The shipped example
-    # compose file sets it so `docker compose up -d` lands at a logged-in-able
-    # CiviCRM out of the box.
-    if [[ -n "${CIVIKITCHEN_DEMO_USER}" ]]; then
-        DEMO_USER="${CIVIKITCHEN_DEMO_USER}"
-        DEMO_PASS="${CIVIKITCHEN_DEMO_PASS:-admin}"
-        DEMO_EMAIL="${CIVIKITCHEN_DEMO_EMAIL:-admin@example.org}"
-        echo "[civikitchen] Creating demo user '${DEMO_USER}'..."
-        # Pass env explicitly via `env` rather than relying on
-        # runuser --preserve-environment, which is filtered by PAM.
-        runuser -u www-data -- \
-            env DEMO_USER="${DEMO_USER}" DEMO_PASS="${DEMO_PASS}" DEMO_EMAIL="${DEMO_EMAIL}" \
-            cv scr /usr/local/share/civikitchen/demo-user.php
-    fi
-
-    # Isolated headless-test database. `CIVICRM_UF=UnitTests` boots the test
-    # framework against TEST_DB_DSN — and when that is unset, CiviCRM falls
-    # back to the MAIN database, so a headless `phpunit` run silently wipes the
-    # dev site (a nasty, hard-to-debug footgun). Point it at a separate scratch
-    # DB (<db>_test) so the documented UnitTests path is actually isolated. The
-    # framework creates/drops tables in this DB itself (the example compose's
-    # db-init grants the privilege); we only ensure the database exists and that
-    # cv knows the DSN. Opt out with CIVIKITCHEN_TEST_DB=0; a project needing a
-    # different DSN can overwrite ~/.cv.json from a /civikitchen-init.d hook.
-    CIVIKITCHEN_TEST_DB="${CIVIKITCHEN_TEST_DB:-1}"
-    if [[ "${CIVIKITCHEN_TEST_DB}" == "1" ]]; then
-        TEST_DB_NAME="${CIVICRM_DB_NAME}_test"
-        TEST_DB_DSN="mysql://${CIVICRM_DB_USER}:${CIVICRM_DB_PASSWORD}@${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}/${TEST_DB_NAME}?new_link=true"
-        echo "[civikitchen] Configuring isolated test DB → ${TEST_DB_NAME} (TEST_DB_DSN)..."
-        mysql -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" \
-            -e "CREATE DATABASE IF NOT EXISTS \`${TEST_DB_NAME}\`" 2>/dev/null \
-            || echo "[civikitchen] WARN: could not pre-create ${TEST_DB_NAME}; the test framework will create it on demand" >&2
-        # cv merges ~/.cv.json into $GLOBALS['_CV'], keyed by the standalone
-        # bootstrap path; civicrm.settings.php reads _CV['TEST_DB_DSN'] under
-        # CIVICRM_UF=UnitTests. Write it for root (docker exec default) and
-        # www-data (the cv wrapper drops to it). Don't clobber an existing
-        # ~/.cv.json (a project/user may have set their own).
-        CK_CV_JSON=$(printf '{\n  "sites": {\n    "/var/www/html/civicrm.standalone.php": {\n      "TEST_DB_DSN": "%s"\n    }\n  }\n}' "${TEST_DB_DSN}")
-        [[ -f /root/.cv.json ]] || printf '%s\n' "${CK_CV_JSON}" > /root/.cv.json
-        [[ -f /var/www/.cv.json ]] || runuser -u www-data -- bash -c "printf '%s\n' '${CK_CV_JSON}' > /var/www/.cv.json"
-    fi
-
+    # Shared post-install configuration (dev settings, SMTP backend, demo user,
+    # isolated test DB) — see images/lib/provision.sh.
+    ck_dev_settings
+    ck_smtp
+    ck_demo_user
+    ck_setup_test_db
 fi
 
 # ---------------------------------------------------------------------------
 # Post-install provisioning: extra/mounted extensions and first-boot hooks.
-#
-# Gated by a success marker rather than the settings file: the install above
-# writes the settings file first, so if anything in here fails (a typo'd
-# extension key, a broken hook) the container exits loudly AND the next start
-# retries this block — instead of silently skipping it because the settings
-# file already exists.
-PROVISIONED_MARKER="/var/www/html/private/.civikitchen-provisioned"
-if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && -f "${SETTINGS_FILE}" && ! -f "${PROVISIONED_MARKER}" ]]; then
-    # Extra extensions: download + enable a comma-separated list after the
-    # core install. Replaces the per-project boilerplate of running
-    # `cv ext:download` + `cv ext:enable` from a setup script (extension
-    # repos' run-phpunit.sh, Playwright auth.setup.ts, etc.). Each entry can
-    # be a bare key (de.systopia.xcm) — pulled from the public registry —
-    # or `key@URL` for a pinned / forked release; cv ext:download accepts
-    # the same syntax natively. Hard-fails on a bad key/URL so a typo in
-    # compose env doesn't silently start a half-broken site.
-    if [[ -n "${CIVIKITCHEN_EXTRA_EXTENSIONS}" ]]; then
-        echo "[civikitchen] Installing extra extensions: ${CIVIKITCHEN_EXTRA_EXTENSIONS}"
-        IFS=',' read -ra _CK_EXTS <<< "${CIVIKITCHEN_EXTRA_EXTENSIONS}"
-        for ext_spec in "${_CK_EXTS[@]}"; do
-            ext_spec="${ext_spec// /}"
-            [[ -z "${ext_spec}" ]] && continue
-            ext_key="${ext_spec%%@*}"
-            echo "[civikitchen]   - ${ext_key}"
-            # Split download + enable into two cv calls. The combined
-            # `cv ext:download <key@URL>` (which auto-enables) bombs
-            # for some extensions with "Cannot install or enable" — the
-            # same code path works when run as separate steps. Also lets
-            # later entries in the list (e.g. de.systopia.twingle) see
-            # their dependencies (e.g. de.systopia.xcm) as installed
-            # during the requirements check.
-            runuser -u www-data -- cv ext:download -n --no-install "${ext_spec}"
-            runuser -u www-data -- cv ext:enable "${ext_key}"
-        done
-    fi
-
-    # Enable extensions that are already present (e.g. bind-mounted into
-    # /var/www/html/ext) by key. Complements CIVIKITCHEN_EXTRA_EXTENSIONS, which
-    # downloads from the public registry.
-    if [[ -n "${CIVIKITCHEN_ENABLE_EXTENSIONS}" ]]; then
-        echo "[civikitchen] Enabling extensions: ${CIVIKITCHEN_ENABLE_EXTENSIONS}"
-        IFS=',' read -ra _CK_ENABLE <<< "${CIVIKITCHEN_ENABLE_EXTENSIONS}"
-        for ext_key in "${_CK_ENABLE[@]}"; do
-            ext_key="${ext_key// /}"
-            [[ -z "${ext_key}" ]] && continue
-            runuser -u www-data -- cv ext:enable "${ext_key}"
-        done
-    fi
-
-    # First-boot provisioning hooks: mount scripts into /civikitchen-init.d/
-    # and they run once after a fresh install, in lexical order — *.sh via
-    # bash (as root, e.g. for system setup), *.php via `cv scr` (as www-data,
-    # e.g. for Civi settings or seed data). A failing hook aborts the boot so
-    # misconfiguration is loud, not silent.
-    if [[ -d /civikitchen-init.d ]]; then
-        for hook in /civikitchen-init.d/*; do
-            [[ -e "${hook}" ]] || continue
-            case "${hook}" in
-                *.sh)
-                    echo "[civikitchen] init hook (bash): ${hook}"
-                    bash "${hook}"
-                    ;;
-                *.php)
-                    echo "[civikitchen] init hook (cv scr): ${hook}"
-                    runuser -u www-data -- cv scr "${hook}"
-                    ;;
-                *)
-                    echo "[civikitchen] init hook skipped (expects *.sh or *.php): ${hook}" >&2
-                    ;;
-            esac
-        done
-    fi
-
-    touch "${PROVISIONED_MARKER}"
+# ck_post_install_provision is marker-gated (writes the marker last) so a
+# failed hook exits loudly AND retries on the next start, instead of being
+# silently skipped because the settings file already exists.
+if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && -f "${SETTINGS_FILE}" ]]; then
+    ck_post_install_provision
 fi
 
 # ---------------------------------------------------------------------------
-# Heal root-owned files in the CiviCRM data dirs. Anything run as root inside
-# the container may leave files behind that the www-data web workers can't
-# write — caches, lock files, upload dirs. Cheap no-op when ownership is
-# already correct. -h: change symlinks themselves, never their targets.
-find /var/www/html/private /var/www/html/public ! -user www-data \
-    -exec chown -h www-data:www-data {} + 2>/dev/null || true
+# Heal root-owned files in the CiviCRM data dirs so the www-data web workers
+# can write caches/locks/uploads. Cheap no-op when ownership is already correct.
+ck_heal_perms
 
 exec civicrm-docker-entrypoint "$@"

@@ -37,9 +37,14 @@ RUN curl -sS https://getcomposer.org/installer \
 
 # Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder).
 # Lives in images/lib/ so the buildkit image uses the same script.
+# PHPSTAN_VERSION / CODER_REF are pinned in the script; pass --build-arg to
+# override (e.g. to test a newer phpstan before bumping the default).
 ENV PATH="/opt/composer/vendor/bin:${PATH}"
+ARG PHPSTAN_VERSION
+ARG CODER_REF
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
-RUN bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh
+RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" \
+        bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh
 
 # Add our vhost extras (e.g. the bare-/ → /civicrm/login redirect) via the
 # standard apache conf-available + a2enconf flow rather than editing the
@@ -59,12 +64,22 @@ RUN mv /usr/local/bin/cv /usr/local/bin/cv.real \
 # CIVIKITCHEN_DEMO_USER is set). Lives outside the docroot so it's not web-served.
 COPY standalone/demo-user.php /usr/local/share/civikitchen/demo-user.php
 
-# Shared xdebug toggle — sourced from the entrypoint, also used by the
-# buildkit image so the two stay byte-identical.
+# Shared xdebug toggle + provisioning library — sourced from the entrypoint,
+# also used by the buildkit image so the two stay in lockstep.
 COPY lib/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.sh
+COPY lib/provision.sh /usr/local/share/civikitchen/provision.sh
 
 COPY standalone/entrypoint.sh /usr/local/bin/civikitchen-entrypoint
 RUN chmod +x /usr/local/bin/civikitchen-entrypoint
+
+# Readiness signal for the auto-install flow: the entrypoint writes this marker
+# only after install + provisioning (extensions, init.d hooks) complete, then
+# hands off to Apache. Lets dependent services wait via
+# `depends_on: { condition: service_healthy }` instead of racing a half-installed
+# site. start-period covers a cold install; without CIVICRM_AUTO_INSTALL the
+# marker is never written and the container just reports unhealthy (harmless).
+HEALTHCHECK --interval=10s --timeout=5s --start-period=180s --retries=12 \
+    CMD test -f /var/www/html/private/.civikitchen-provisioned || exit 1
 
 ENTRYPOINT ["/usr/local/bin/civikitchen-entrypoint"]
 CMD ["apache2-foreground"]
