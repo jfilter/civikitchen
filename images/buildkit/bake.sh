@@ -26,6 +26,10 @@ civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_VERSIO
 # brick/money 0.12+ renamed ISOCurrencyProvider; CiviCRM still references the old
 # name. Pin compatible (non-fatal — only matters for some CMS/Civi combos).
 { cd /home/buildkit/buildkit/build/site && [ -f composer.json ] && composer require 'brick/money:<0.12' -W --no-interaction; } || true
+# Drop build-time download caches (composer + npm, ~800MB). The final image
+# COPYs ~buildkit wholesale, so clearing them here keeps them out. The runtime
+# \`civibuild reinstall\` reuses the baked vendor/, so nothing is re-downloaded.
+rm -rf /home/buildkit/.composer/cache /home/buildkit/.npm /home/buildkit/.cache
 BK
 
 # Best-effort stop; the throwaway DB data is discarded with the builder stage,
