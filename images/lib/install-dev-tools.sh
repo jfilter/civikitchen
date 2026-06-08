@@ -14,6 +14,20 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
+# Pinned tool versions — bump deliberately here. The image tags are floating
+# (standalone-6.12 rebuilds monthly for CiviCRM patches); without pins the dev
+# tools would drift too, so a rebuild could silently bump phpstan to a new
+# major and turn a green `phpstan analyse` red with no code change. Override at
+# build time with --build-arg PHPSTAN_VERSION=... / CODER_REF=...
+PHPSTAN_VERSION="${PHPSTAN_VERSION:-2.2.2}"
+# civicrm/coder has no usable release tags, so pin to a commit on 8.x-2.x-civi.
+CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
+# civix is intentionally NOT pinned: it ships only as a floating phar on
+# download.civicrm.org (no versioned URLs), and as a scaffolding tool it
+# generates code on demand rather than running in CI, so its drift doesn't turn
+# existing extensions' pipelines red.
+
+# ---------------------------------------------------------------------------
 # Phars: civix, phpunit, phpstan
 curl -LsS https://download.civicrm.org/civix/civix.phar -o /usr/local/bin/civix
 chmod +x /usr/local/bin/civix
@@ -21,7 +35,7 @@ chmod +x /usr/local/bin/civix
 curl -LsS https://phar.phpunit.de/phpunit-9.phar -o /usr/local/bin/phpunit
 chmod +x /usr/local/bin/phpunit
 
-curl -LsS https://github.com/phpstan/phpstan/releases/latest/download/phpstan.phar \
+curl -LsS "https://github.com/phpstan/phpstan/releases/download/${PHPSTAN_VERSION}/phpstan.phar" \
     -o /usr/local/bin/phpstan
 chmod +x /usr/local/bin/phpstan
 
@@ -50,9 +64,12 @@ composer global require --no-interaction --no-progress \
     "dealerdirect/phpcodesniffer-composer-installer:^1"
 
 # Clone the civicrm fork of drupal/coder (relaxed Drupal CS rules; ruleset
-# still registers as "Drupal" / "DrupalPractice" via phpcs).
+# still registers as "Drupal" / "DrupalPractice" via phpcs). Pinned to
+# CODER_REF: clone the branch (small repo, no --depth so an older commit stays
+# checkout-able) and check out the exact ref for a reproducible ruleset.
 CODER_DIR=/opt/civicrm-coder
-git clone --depth 1 --branch 8.x-2.x-civi https://github.com/civicrm/coder.git "${CODER_DIR}"
+git clone --branch 8.x-2.x-civi https://github.com/civicrm/coder.git "${CODER_DIR}"
+git -C "${CODER_DIR}" checkout --quiet "${CODER_REF}"
 rm -rf "${CODER_DIR}/.git"
 
 # Register with phpcs. --config-set writes to the CodeSniffer.conf alongside
