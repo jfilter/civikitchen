@@ -74,19 +74,17 @@ until php -r '
 done
 echo "Database is ready."
 
-# Build site on first run only (as buildkit user)
+# First boot: re-install the BAKED site against the external DB. The codebase
+# (CMS + CiviCRM) was baked at image-build time, so this is a fast `civibuild
+# reinstall` (~60s) — it recreates the DBs on the external host and regenerates
+# the settings + isolated test DB for it, without re-downloading anything.
 if [[ ! -f "${MARKER_FILE}" ]]; then
-    echo "First run: building ${CIVICRM_SITE_TYPE} site..."
+    echo "First run: installing ${CIVICRM_SITE_TYPE} site against ${CIVICRM_DB_HOST}..."
 
     BK="su -s /bin/bash buildkit -c"
-    export PATH="/home/buildkit/buildkit/bin:${PATH}"
 
-    # Configure amp for MySQL connection
-    ${BK} "export PATH='${PATH}' && amp config:set \
-        --mysql_type=mycnf \
-        --httpd_type=none \
-        --perm_type=none"
-
+    # Point amp/civibuild at the external DB (root creds for GRANT-level access:
+    # reinstall recreates the per-site databases + users).
     cat > /home/buildkit/.my.cnf <<MYCNF
 [client]
 host=${CIVICRM_DB_HOST}
@@ -96,25 +94,88 @@ password=${CIVICRM_DB_ROOT_PASSWORD}
 MYCNF
     chown buildkit:buildkit /home/buildkit/.my.cnf
 
-    # Create the CiviCRM site
-    ${BK} "export PATH='${PATH}' && civibuild create site \
-        --type '${CIVICRM_SITE_TYPE}' \
-        --url '${CIVIKITCHEN_SITE_URL}' \
-        --civi-ver '${CIVICRM_VERSION}' \
-        --admin-pass 'admin'"
+    ${BK} "export PATH='${PATH}' && amp config:set --mysql_type=mycnf --httpd_type=none --perm_type=none"
 
-    # Workaround: brick/money 0.12+ renamed ISOCurrencyProvider → IsoCurrencyProvider
-    # but CiviCRM still references the old name. Pin to compatible version.
-    SITE_DIR="/home/buildkit/buildkit/build/site"
-    if [[ -f "${SITE_DIR}/composer.json" ]]; then
-        ${BK} "export PATH='${PATH}' && cd '${SITE_DIR}' && composer require 'brick/money:<0.12' -W --no-interaction 2>/dev/null" || true
-    fi
+    # The site was baked against a throwaway MariaDB on 127.0.0.1 (see bake.sh),
+    # so the civibuild build config + amp instance registry still point there.
+    # Repoint them at the external DB host before reinstall — civibuild's
+    # `amp create -f` (run by reinstall via amp_install) then re-creates the
+    # per-site DBs + users on ${CIVICRM_DB_HOST}. Without this, drush/cv dial
+    # 127.0.0.1 inside the container and get "[2002] Connection refused".
+    ${BK} "sed -i 's/127\.0\.0\.1/${CIVICRM_DB_HOST}/g' \
+        /home/buildkit/buildkit/build/*.sh \
+        /home/buildkit/.amp/instances.yml \
+        /home/buildkit/.amp/my.cnf.d/* 2>/dev/null || true"
+
+    # reinstall (not create): reuse the baked codebase, recreate the DBs on the
+    # external host, regenerate settings for ${CIVIKITCHEN_SITE_URL}.
+    ${BK} "export PATH='${PATH}' && civibuild reinstall site --url '${CIVIKITCHEN_SITE_URL}'"
 
     touch "${MARKER_FILE}"
-    echo "Site created successfully."
+    echo "Site installed."
 else
-    echo "Site already installed (skipping build)."
+    echo "Site already installed (skipping)."
 fi
+
+# ---------------------------------------------------------------------------
+# Shared first-boot provisioning — the same images/lib/provision.sh the
+# standalone image uses, parameterized for this civibuild site. Gives the
+# buildkit (drupal10/wordpress) images the same knobs: auto-composer for
+# mounted extensions, SMTP, an isolated test DB, registry + mounted extension
+# enabling, and /civikitchen-init.d hooks. Runs as the buildkit user (Apache's
+# user) so it never leaves root-owned caches the web workers can't write.
+SITE_WEB="/home/buildkit/buildkit/build/site/web"
+
+# Accept legacy CIVICRM_-spelled kitchen vars (parity with the standalone image).
+_ck_legacy() {
+    local new="$1" legacy="$2"
+    if [[ -z "${!new+x}" && -n "${!legacy+x}" ]]; then
+        echo "[civikitchen] WARN: ${legacy} is deprecated - use ${new}" >&2
+        export "${new}=${!legacy}"
+    fi
+}
+_ck_legacy CIVIKITCHEN_SMTP_HOST         CIVICRM_SMTP_HOST
+_ck_legacy CIVIKITCHEN_SMTP_PORT         CIVICRM_SMTP_PORT
+_ck_legacy CIVIKITCHEN_EXTRA_EXTENSIONS  CIVICRM_EXTRA_EXTENSIONS
+_ck_legacy CIVIKITCHEN_ENABLE_EXTENSIONS CIVICRM_ENABLE_EXTENSIONS
+_ck_legacy CIVIKITCHEN_AUTO_COMPOSER     CIVICRM_AUTO_COMPOSER
+
+# Run a command as the buildkit user from the site docroot so cv auto-detects
+# the civibuild site. PATH and SITE_WEB are expanded in THIS (root) shell — the
+# entrypoint's PATH already has cv + the dev tools — and printf %q preserves
+# both the PATH and each argument's quoting through `su -c`. (Single-quoting the
+# PATH here would pass a literal ${PATH} to the inner shell and drop /usr/bin.)
+ck_as_web() {
+    su -s /bin/bash buildkit -c "export PATH=$(printf '%q' "${PATH}") && cd $(printf '%q' "${SITE_WEB}") && $(printf '%q ' "$@")"
+}
+
+# provision.sh parameters for this civibuild site (override standalone defaults).
+export CK_WEB_USER=buildkit
+export CK_WEB_GROUP=buildkit
+export CK_WEB_USER_HOME=/home/buildkit
+export CK_DATA_DIRS="/home/buildkit/buildkit/build/site"
+export CK_PROVISIONED_MARKER=/home/buildkit/.civikitchen-provisioned
+# Discover the extension dir from cv (CMS-agnostic: Drupal + WordPress).
+CK_EXT_DIR="$(ck_as_web cv ev 'echo rtrim(CRM_Core_Config::singleton()->extensionsDir, "/");' 2>/dev/null || true)"
+export CK_EXT_DIR
+
+. /usr/local/share/civikitchen/provision.sh
+
+# Auto-composer runs every boot (picks up newly bind-mounted extensions).
+ck_auto_composer
+
+if [[ ! -f "${CK_PROVISIONED_MARKER}" ]]; then
+    echo "[civikitchen] First-boot provisioning (${CIVICRM_SITE_TYPE})..."
+    ck_smtp
+    # No ck_setup_test_db here: civibuild already provisions an isolated
+    # TEST_DB_DSN (its own sitetest_* build, visible in `civibuild reinstall`
+    # output) — unlike standalone, which has no civibuild and sets its own.
+    ck_post_install_provision
+    echo "[civikitchen] Provisioning complete."
+fi
+
+# Heal any root-owned files left in the site tree (runs every boot, cheap).
+ck_heal_perms
 
 # Start Apache (needs root for port 80)
 echo "Starting Apache..."

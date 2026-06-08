@@ -74,9 +74,13 @@ RUN pecl install pcov xdebug \
 
 # Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder).
 # Lives in images/lib/ so the standalone image uses the same script.
+# PHPSTAN_VERSION / CODER_REF are pinned in the script; pass --build-arg to override.
 ENV PATH="/opt/composer/vendor/bin:${PATH}"
+ARG PHPSTAN_VERSION
+ARG CODER_REF
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
-RUN bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh
+RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" \
+        bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh
 
 # PHP runtime tuning — matches what civibuild expects for site builds.
 RUN { \
@@ -131,7 +135,30 @@ RUN git clone https://github.com/civicrm/civicrm-buildkit.git buildkit \
 ENV PATH="/home/buildkit/buildkit/bin:${PATH}"
 
 # =============================================================================
-# Stage 3: Final image
+# Stage 3: Bake the civibuild site at BUILD time (the slow part)
+# =============================================================================
+# civibuild downloads the CMS + CiviCRM (~3-4 min) and installs a site. We run
+# it HERE against a THROWAWAY MariaDB started just for this layer, so the heavy
+# codebase is baked into the image. The DB data (/var/lib/mysql) is NOT carried
+# into the final image — at runtime the entrypoint does a fast `civibuild
+# reinstall` (~60s) against the external DB instead of a full create.
+FROM buildkit-setup AS builder
+
+ARG CIVICRM_VERSION
+ARG DEFAULT_SITE_TYPE
+
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends mariadb-server \
+    && rm -rf /var/lib/apt/lists/*
+
+# Bake the site (logic in buildkit/bake.sh to keep the shell quoting sane).
+COPY buildkit/bake.sh /tmp/bake.sh
+RUN CIVICRM_VERSION="${CIVICRM_VERSION}" DEFAULT_SITE_TYPE="${DEFAULT_SITE_TYPE}" \
+        bash /tmp/bake.sh && rm /tmp/bake.sh
+
+# =============================================================================
+# Stage 4: Final image — copies the baked site, NO embedded DB
 # =============================================================================
 FROM buildkit-setup AS final
 
@@ -146,13 +173,29 @@ ENV PATH="/opt/composer/vendor/bin:/home/buildkit/buildkit/bin:${PATH}" \
 
 USER root
 
-# Shared xdebug toggle — sourced from the entrypoint, also used by the
-# standalone image so the two stay byte-identical.
+# Bake: bring in the civibuild site tree + civibuild/amp registry built in the
+# `builder` stage. This is the heavy part (CMS + CiviCRM codebase) — having it
+# here means runtime only needs a fast `civibuild reinstall`. The builder's
+# throwaway MariaDB data is left behind (not copied). The baked ~/.my.cnf points
+# at the build-time localhost DB; the entrypoint overwrites it for the runtime
+# external DB.
+COPY --from=builder --chown=buildkit:buildkit /home/buildkit /home/buildkit
+
+# Shared xdebug toggle + provisioning library — sourced from the entrypoint,
+# also used by the standalone image so the two stay in lockstep.
 COPY lib/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.sh
+COPY lib/provision.sh /usr/local/share/civikitchen/provision.sh
 
 COPY buildkit/entrypoint.sh /home/buildkit/entrypoint.sh
 RUN chmod +x /home/buildkit/entrypoint.sh
 
 EXPOSE 80
+
+# Readiness signal: the entrypoint writes this marker after the first-boot
+# install + provisioning complete, before handing off to Apache. The site
+# codebase is baked, so first boot is a fast `civibuild reinstall` (~60s) +
+# provisioning — far quicker than the old runtime `civibuild create`.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=240s --retries=18 \
+    CMD test -f /home/buildkit/.civikitchen-provisioned || exit 1
 
 ENTRYPOINT ["/home/buildkit/entrypoint.sh"]

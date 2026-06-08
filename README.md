@@ -96,6 +96,18 @@ CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10. The `
 
 Ready-to-run: [`examples/wordpress/`](examples/wordpress/)
 
+> **Scope note.** The buildkit images (`:drupal10`, `:wordpress`) share
+> [`images/lib/provision.sh`](images/lib/provision.sh) with standalone, so the
+> same first-boot knobs work: `CIVIKITCHEN_AUTO_COMPOSER`,
+> `CIVIKITCHEN_SMTP_HOST`, `CIVIKITCHEN_EXTRA_EXTENSIONS` /
+> `CIVIKITCHEN_ENABLE_EXTENSIONS`, and `/civikitchen-init.d` hooks (marked
+> *all* in the env-var table). Only the CMS-less standalone install knobs differ
+> — `CIVICRM_AUTO_INSTALL`, the `CIVICRM_DB_NAME`/`_USER`/`_PASSWORD` app-user
+> vars, `CIVIKITCHEN_TEST_DB`, and the `CIVIKITCHEN_DEMO_*` /
+> `CIVIKITCHEN_COMPONENTS` knobs don't apply: civibuild builds the site, so it
+> provides the equivalent admin/demo users, components, and an isolated
+> `sitetest_*` test DB itself. Use buildkit to test CMS-specific behaviour.
+
 ### EU-NGO (all-in-one demo)
 
 Pre-built single-container image: CiviCRM + Drupal 10 + 9 EU-nonprofit extensions + embedded MariaDB + demo data. For demos and evaluation, **not** for development.
@@ -276,11 +288,11 @@ Two prefixes, by ownership: `CIVIKITCHEN_*` vars are this project's own behavior
 | `CIVIKITCHEN_DEMO_PASS` | `admin` | standalone | Password for the demo user. |
 | `CIVIKITCHEN_DEMO_EMAIL` | `admin@example.org` | standalone | Email for the demo user's contact record. |
 | `CIVIKITCHEN_COMPONENTS` | all standard | standalone | Comma-separated CiviCRM components to enable at install. Defaults to the full set: `CiviEvent,CiviContribute,CiviMember,CiviMail,CiviPledge,CiviCase,CiviReport,CiviCampaign`. Override to narrow the set, or pass an empty string for `cv`'s own core-only default. |
-| `CIVIKITCHEN_SMTP_HOST` | _(unset)_ | standalone | If set, points Civi's `mailing_backend` at this SMTP host after install. The example compose stack uses `maildev` so outbound mail lands in the maildev UI on `:1080`. |
-| `CIVIKITCHEN_SMTP_PORT` | `1025` | standalone | Port for `CIVIKITCHEN_SMTP_HOST`. |
-| `CIVIKITCHEN_EXTRA_EXTENSIONS` | _(unset)_ | standalone | Comma-separated extension keys downloaded + enabled after install — e.g. `de.systopia.xcm,de.systopia.twingle`. Each entry can also be `key@URL` for a pinned or forked release (passed to `cv ext:download` verbatim). Replaces hand-rolled `cv ext:download` / `cv ext:enable` boilerplate in extension test setups. Requires `CIVICRM_AUTO_INSTALL=1`; runs once on first install. |
-| `CIVIKITCHEN_ENABLE_EXTENSIONS` | _(unset)_ | standalone | Comma-separated keys of extensions that are already present (e.g. bind-mounted into `/var/www/html/ext`) to enable after install — e.g. `mailattachment,de.systopia.civioffice,mailbatch`. Complements `CIVIKITCHEN_EXTRA_EXTENSIONS`, which downloads from the registry. Requires `CIVICRM_AUTO_INSTALL=1`; runs once on first install. |
-| `CIVIKITCHEN_AUTO_COMPOSER` | `1` | standalone | If `1`, scan `/var/www/html/ext/*/composer.json` on every container start and run `composer install` in each extension directory whose `vendor/` is missing. Removes the manual gate before `vendor/bin/phpunit` works. Idempotent (skips when `vendor/` exists), non-fatal on failure. Set to `0` if you ship `vendor/` in your repo or want full control. |
+| `CIVIKITCHEN_SMTP_HOST` | _(unset)_ | all | If set, points Civi's `mailing_backend` at this SMTP host after install. The example compose stack uses `maildev` so outbound mail lands in the maildev UI on `:1080`. |
+| `CIVIKITCHEN_SMTP_PORT` | `1025` | all | Port for `CIVIKITCHEN_SMTP_HOST`. |
+| `CIVIKITCHEN_EXTRA_EXTENSIONS` | _(unset)_ | all | Comma-separated extension keys downloaded + enabled after install — e.g. `de.systopia.xcm,de.systopia.twingle`. Each entry can also be `key@URL` for a pinned or forked release (passed to `cv ext:download` verbatim). Replaces hand-rolled `cv ext:download` / `cv ext:enable` boilerplate in extension test setups. Runs once during first-boot provisioning (standalone gates it on `CIVICRM_AUTO_INSTALL=1`; buildkit runs it after the civibuild site build). |
+| `CIVIKITCHEN_ENABLE_EXTENSIONS` | _(unset)_ | all | Comma-separated keys of extensions that are already present (e.g. bind-mounted into `/var/www/html/ext`) to enable after install — e.g. `mailattachment,de.systopia.civioffice,mailbatch`. Complements `CIVIKITCHEN_EXTRA_EXTENSIONS`, which downloads from the registry. Runs once during first-boot provisioning (standalone gates it on `CIVICRM_AUTO_INSTALL=1`; buildkit runs it after the civibuild site build). |
+| `CIVIKITCHEN_AUTO_COMPOSER` | `1` | all | If `1`, scan `/var/www/html/ext/*/composer.json` on every container start and run `composer install` in each extension directory whose `vendor/` is missing. Removes the manual gate before `vendor/bin/phpunit` works. Idempotent (skips when `vendor/` exists), non-fatal on failure. Set to `0` if you ship `vendor/` in your repo or want full control. |
 | `CIVIKITCHEN_TEST_DB` | `1` | standalone | If `1`, configure an isolated headless-test database on first install: create `<db>_test` (e.g. `civicrm_test`) and write `TEST_DB_DSN` to `~/.cv.json` (root + www-data) so `CIVICRM_UF=UnitTests` runs against it instead of the dev DB. Prevents a headless `phpunit` run from wiping the main database. Set to `0` to manage `TEST_DB_DSN` yourself. |
 | `CIVIKITCHEN_EXTRA_PACKAGES` | _(unset)_ | standalone | Comma- or space-separated Debian packages installed on container start (e.g. `libreoffice-writer,unoconv` for CiviOffice rendering) — heavyweight or niche deps stay out of the image. Restarts skip packages that are already present. |
 | `CIVIKITCHEN_CV_AS_ROOT` | `0` | standalone | `cv` inside the container is wrapped to always run as `www-data`, even from `docker compose exec` (root) — root-run `cv` leaves root-owned caches/locks that break the web workers. Set to `1` to bypass the wrapper and run `cv` as root. |
