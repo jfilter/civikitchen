@@ -9,7 +9,8 @@ CiviCRM Docker images for development, testing, and demos. All published to GHCR
 | [`:standalone`](#standalone-dev) | Extension dev — fast iteration, headless tests | external (compose) | runs `cv core:install` |
 | [`:drupal10`](#drupal-10-dev) | Test extensions against the Drupal 10 stack | external (compose) | runs `civibuild` |
 | [`:wordpress`](#wordpress-dev) | Test extensions against the WordPress stack | external (compose) | runs `civibuild` |
-| [`civicrm-eu-ngo`](#eu-ngo-all-in-one-demo) | Demos, evaluation, EU-NGO showcase | embedded | imports baked-in SQL dump |
+| [`:{standalone,drupal10,wordpress}-demo`](#demo-images) | Single-container demos — `docker run` and go | embedded (baked) | boots from baked data dir |
+| [`civicrm-eu-ngo`](#demo-images) | EU-NGO showcase: drupal10 + 9 extensions + demo data | embedded (baked) | boots from baked data dir |
 
 **Most users want `standalone`** — it's the fastest dev loop and works for any extension that doesn't depend on a specific CMS. Use the buildkit images (`drupal10`, `wordpress`) only when you need to test CMS-specific behavior.
 
@@ -108,17 +109,33 @@ Ready-to-run: [`examples/wordpress/`](examples/wordpress/)
 > provides the equivalent admin/demo users, components, and an isolated
 > `sitetest_*` test DB itself. Use buildkit to test CMS-specific behaviour.
 
-### EU-NGO (all-in-one demo)
+### Demo images
 
-Pre-built single-container image: CiviCRM + Drupal 10 + 9 EU-nonprofit extensions + embedded MariaDB + demo data. For demos and evaluation, **not** for development.
+Single-container images with an **embedded MariaDB and baked demo data** — no
+compose, no external DB. `docker run` and you have a working CiviCRM with demo
+content in a few seconds. For demos, evaluation, and screenshots — **not** for
+development (the DB is inside the container; data resets on `docker rm`).
+
+Three flavors (one per CMS) plus the EU-NGO showcase, all built from the same
+`images/buildkit/` `demo` target:
 
 ```bash
-docker run -d -p 8080:80 --name civicrm ghcr.io/jfilter/civicrm-eu-ngo:latest
-# Wait ~30s, then open http://localhost:8080
-# Login: admin / admin
+# Pick a flavor: standalone-demo (CMS-less), drupal10-demo, or wordpress-demo
+docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:drupal10-demo
+
+# EU-NGO showcase: Drupal 10 + 9 EU-nonprofit extensions + seed data + API users
+docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civicrm-eu-ngo:latest
+
+# then open http://localhost  —  login: admin / admin
 ```
 
-See [`allinone/README.md`](allinone/README.md) for details and the bundled extension list.
+> Map to port **80** (`-p 80:80`): the site is baked at `http://localhost`, so a
+> different host port would serve CiviCRM's assets at the wrong base URL.
+
+The EU-NGO image bundles CiviBanking, CiviSEPA, GDPRX, XCM, Contract, Twingle,
+IdentityTracker, Shoreditch, and ContactLayout, with seed data and 5 ready-made
+API users (readonly / fundraiser / eventmanager / caseworker / bankimporter).
+Its profile manifest lives in [`images/profiles/eu-ngo/`](images/profiles/eu-ngo/).
 
 ## Extension development
 

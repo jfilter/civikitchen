@@ -2,9 +2,8 @@
 # Apply the "eu-ngo" demo profile (extensions + seed data + API users) to the
 # freshly-baked civibuild site. Runs at BUILD time (buildkit Dockerfile `demo`
 # stage, DEMO_PROFILE=eu-ngo) as the buildkit user, with the embedded MariaDB
-# already up. This is the build-time replacement for the old runtime block in
-# allinone/entrypoint-allinone.sh — done once at bake time so the demo image
-# boots ready.
+# already up. The extension/seed/API-user work happens once here at bake time,
+# so the demo image boots ready (rather than doing it on every container start).
 #
 #   apply.sh <profile-dir>     # e.g. /tmp/civikitchen-profiles/eu-ngo
 set -euo pipefail

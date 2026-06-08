@@ -9,13 +9,12 @@ set -e
 # 3. Run the shared first-boot provisioning (images/lib/provision.sh).
 # 4. Hand off to the upstream civicrm-docker-entrypoint.
 #
-# Why runtime install (not a build-time SQL dump like allinone/)?
-# allinone's embedded MariaDB lives in the same container as CiviCRM,
-# so a build-time install + mysqldump roundtrip targets a localhost DB
-# that's still localhost at runtime. This image is meant to point at an
-# external MariaDB whose host/credentials are only known at runtime, so
-# baking a dump would require regenerating civicrm.settings.php on first
-# start anyway. The ~8s saving wasn't worth the extra build complexity.
+# Why runtime install (not a build-time bake like the buildkit demo images)?
+# The demo images bake an embedded MariaDB into the same container as CiviCRM,
+# so the baked DB sits on localhost at both build and run time. This image
+# instead points at an external MariaDB whose host/credentials are only known
+# at runtime, so baking the DB would require regenerating civicrm.settings.php
+# on first start anyway. The saving wasn't worth the extra build complexity.
 
 # ---------------------------------------------------------------------------
 # Xdebug toggle (shared with buildkit image).
