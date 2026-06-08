@@ -15,16 +15,16 @@
 #   docker build -f images/buildkit/Dockerfile \
 #                --build-arg PHP_VERSION=8.3 \
 #                --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
-#                -t civicrm-dev:drupal10 images/
+#                -t civikitchen:drupal10 images/
 #   docker build -f images/buildkit/Dockerfile \
 #                --build-arg PHP_VERSION=8.3 \
 #                --build-arg DEFAULT_SITE_TYPE=wp-demo \
-#                -t civicrm-dev:wordpress images/
+#                -t civikitchen:wordpress images/
 #
 # Run (needs MariaDB):
 #   docker run -d -p 8080:80 \
 #     -e CIVICRM_DB_HOST=db -e CIVICRM_DB_ROOT_PASSWORD=root \
-#     civicrm-dev:drupal10
+#     civikitchen:drupal10
 
 ARG PHP_VERSION=8.3
 ARG CIVICRM_VERSION=6.12.1

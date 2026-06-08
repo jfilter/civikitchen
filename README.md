@@ -47,7 +47,7 @@ CiviCRM is auto-installed on first container start when `CIVICRM_AUTO_INSTALL=1`
 ```yaml
 services:
   app:
-    image: ghcr.io/jfilter/civicrm-dev:standalone
+    image: ghcr.io/jfilter/civikitchen:standalone
     ports: ["8080:80"]
     environment:
       CIVICRM_AUTO_INSTALL: "1"
@@ -73,7 +73,7 @@ CiviCRM on Drupal 10 via [civicrm-buildkit](https://github.com/civicrm/civicrm-b
 ```yaml
 services:
   app:
-    image: ghcr.io/jfilter/civicrm-dev:drupal10
+    image: ghcr.io/jfilter/civikitchen:drupal10
     ports: ["8080:80"]
     environment:
       CIVICRM_DB_HOST: db
@@ -315,12 +315,12 @@ The build context is the `images/` dir for both the standalone and buildkit-base
 
 ```bash
 # Standalone (tracks civicrm/civicrm:latest)
-docker build -f images/standalone/Dockerfile -t civicrm-dev:standalone images/
+docker build -f images/standalone/Dockerfile -t civikitchen:standalone images/
 
 # Standalone pinned to a specific CiviCRM minor (or any tag civicrm/civicrm publishes)
 docker build -f images/standalone/Dockerfile \
     --build-arg CIVICRM_VERSION=6.12 \
-    -t civicrm-dev:standalone-6.12 images/
+    -t civikitchen:standalone-6.12 images/
 
 # Buildkit-based images. The :drupal10 and :wordpress tags are built from
 # the same Dockerfile (images/buildkit/) — DEFAULT_SITE_TYPE picks which
@@ -328,12 +328,12 @@ docker build -f images/standalone/Dockerfile \
 docker build -f images/buildkit/Dockerfile \
     --build-arg PHP_VERSION=8.3 \
     --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
-    -t civicrm-dev:drupal10 images/
+    -t civikitchen:drupal10 images/
 
 docker build -f images/buildkit/Dockerfile \
     --build-arg PHP_VERSION=8.3 \
     --build-arg DEFAULT_SITE_TYPE=wp-demo \
-    -t civicrm-dev:wordpress images/
+    -t civikitchen:wordpress images/
 ```
 
 ## Verifying a built image
@@ -343,7 +343,7 @@ docker build -f images/buildkit/Dockerfile \
 ```bash
 docker run --rm -v "$(pwd)/images/test:/civikitchen-test:ro" \
     --entrypoint='' \
-    ghcr.io/jfilter/civicrm-dev:standalone \
+    ghcr.io/jfilter/civikitchen:standalone \
     bash /civikitchen-test/test-dev-tools.sh
 ```
 

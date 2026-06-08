@@ -5,7 +5,7 @@
 # checks. Run inside a built dev image, e.g.:
 #
 #   docker run --rm -v "$(pwd)/images/test:/civikitchen-test" \
-#       ghcr.io/jfilter/civicrm-dev:standalone \
+#       ghcr.io/jfilter/civikitchen:standalone \
 #       bash /civikitchen-test/test-dev-tools.sh
 #
 # Or via the workflow's smoke-test job (see .github/workflows/build-dev-images.yml).

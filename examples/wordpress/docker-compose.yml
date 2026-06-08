@@ -6,7 +6,7 @@
 
 services:
   civicrm:
-    image: ghcr.io/jfilter/civicrm-dev:wordpress
+    image: ghcr.io/jfilter/civikitchen:wordpress
     depends_on:
       db:
         condition: service_started

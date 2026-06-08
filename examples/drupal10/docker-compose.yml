@@ -6,7 +6,7 @@
 
 services:
   civicrm:
-    image: ghcr.io/jfilter/civicrm-dev:drupal10
+    image: ghcr.io/jfilter/civikitchen:drupal10
     depends_on:
       db:
         condition: service_started

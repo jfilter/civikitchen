@@ -22,7 +22,7 @@ services:
   app:
     # Override via `IMAGE=... docker compose up` (used by CI to test a
     # locally-built tag). Defaults to the published GHCR tag.
-    image: ${IMAGE:-ghcr.io/jfilter/civicrm-dev:standalone}
+    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:standalone}
     # The :standalone tag is updated on every push to main and monthly to pick
     # up upstream patches. Always pull on `up` so a stale local copy doesn't
     # mask entrypoint/install fixes.

@@ -10,7 +10,7 @@
 # In your extension's .docker/compose.yaml:
 #   services:
 #     app:
-#       image: ghcr.io/jfilter/civicrm-dev:standalone
+#       image: ghcr.io/jfilter/civikitchen:standalone
 
 ARG CIVICRM_VERSION=latest
 FROM civicrm/civicrm:${CIVICRM_VERSION}
