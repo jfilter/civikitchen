@@ -337,7 +337,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Checkout (for the dev-tools test script)
+      - name: Checkout (for the test scripts)
         uses: actions/checkout@v4
 
       - name: Functional test of bundled dev tools
@@ -348,3 +348,11 @@ jobs:
             --entrypoint='' \
             ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }} \
             bash /civikitchen-test/test-dev-tools.sh
+
+      - name: Boot test (real first-boot path against an external DB)
+        run: |
+          case "${{ matrix.variant }}" in
+            drupal10)  SITE_TYPE=drupal10-demo ;;
+            wordpress) SITE_TYPE=wp-demo ;;
+          esac
+          bash images/test/boot-test.sh ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }} "$SITE_TYPE"
