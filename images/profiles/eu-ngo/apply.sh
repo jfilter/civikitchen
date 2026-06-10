@@ -1,11 +1,12 @@
 #!/bin/bash
-# Apply the "eu-ngo" demo profile (extensions + seed data + API users) to the
-# freshly-baked civibuild site. Runs at BUILD time (buildkit Dockerfile `demo`
-# stage, DEMO_PROFILE=eu-ngo) as the buildkit user, with the embedded MariaDB
-# already up. The extension/seed/API-user work happens once here at bake time,
-# so the demo image boots ready (rather than doing it on every container start).
+# Apply the "eu-ngo" demo profile (extensions + seed data + API users) to a
+# civibuild site. Runs at FIRST BOOT as the buildkit user, invoked by
+# provision.sh's ck_apply_profile when CIVIKITCHEN_PROFILE=eu-ngo is set —
+# works on the demo images (embedded DB) and the dev images (external DB)
+# alike. Needs network (git clones) and takes a few minutes; it is marker-
+# gated by the caller, so it applies exactly once per container.
 #
-#   apply.sh <profile-dir>     # e.g. /tmp/civikitchen-profiles/eu-ngo
+#   apply.sh <profile-dir>     # e.g. /usr/local/share/civikitchen/profiles/eu-ngo
 set -euo pipefail
 
 PROFILE_DIR="${1:?usage: apply.sh <profile-dir>}"

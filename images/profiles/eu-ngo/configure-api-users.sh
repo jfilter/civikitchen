@@ -85,9 +85,11 @@ get_last_name() {
     echo "User"
 }
 
-# Temporary file to store API keys
-API_KEYS_FILE="/tmp/api-keys.txt"
+# Credentials are kept in the container so they stay retrievable after the
+# log output scrolls away: docker exec <c> cat /home/buildkit/api-credentials.txt
+API_KEYS_FILE="${HOME:-/home/buildkit}/api-credentials.txt"
 true > "${API_KEYS_FILE}"
+chmod 600 "${API_KEYS_FILE}" 2>/dev/null || true
 
 # Get number of users
 user_count=$(jq -r '.apiUsers | length' "${CONFIG_FILE}")
@@ -184,5 +186,4 @@ echo ""
 echo "     Clearing Drupal cache..."
 drush cache:rebuild 2>/dev/null || true
 
-# Cleanup
-rm -f "${API_KEYS_FILE}"
+echo "     Credentials saved to ${API_KEYS_FILE}"

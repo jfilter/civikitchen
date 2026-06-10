@@ -1,28 +1,37 @@
 #!/bin/bash
-# Boot test for the single-container DEMO images (civikitchen:*-demo,
-# civicrm-eu-ngo). Unlike images/test/boot-test.sh (which spins up an external
-# MariaDB sidecar), the demo image is self-contained: `docker run` it, wait for
-# the HEALTHCHECK, and assert the baked site + embedded DB come up. This guards
-# the build-time bake of the embedded DB and the demo entrypoint.
+# Boot test for the single-container DEMO images (civikitchen:*-demo). Unlike
+# images/test/boot-test.sh (which spins up an external MariaDB sidecar), the
+# demo image is self-contained: `docker run` it, wait for the HEALTHCHECK, and
+# assert the baked site + embedded DB come up. This guards the build-time bake
+# of the embedded DB and the demo entrypoint. An optional second argument
+# boots with CIVIKITCHEN_PROFILE=<profile> and additionally asserts the
+# runtime profile apply worked (extension installed, credentials in the logs).
 #
 # Usage:
-#   bash images/test/boot-test-demo.sh <image>
+#   bash images/test/boot-test-demo.sh <image> [profile]
 #   bash images/test/boot-test-demo.sh civikitchen:drupal10-demo
-#   bash images/test/boot-test-demo.sh civicrm-eu-ngo:latest
+#   bash images/test/boot-test-demo.sh civikitchen:drupal10-demo eu-ngo
 set -euo pipefail
 
-IMAGE="${1:?usage: boot-test-demo.sh <image>}"
+IMAGE="${1:?usage: boot-test-demo.sh <image> [profile]}"
+PROFILE="${2:-}"
 
-SLUG="demotest-$(echo "${IMAGE}" | tr -c 'a-z0-9' '-')"
+SLUG="demotest-$(echo "${IMAGE}${PROFILE:+-${PROFILE}}" | tr -c 'a-z0-9' '-')"
 APP="${SLUG}-app"
-HEALTH_TIMEOUT=300   # baked site → first boot is fast; allow slack
+if [ -n "${PROFILE}" ]; then
+    HEALTH_TIMEOUT=900   # profile apply = git clones + seeds at first boot
+else
+    HEALTH_TIMEOUT=300   # baked site → first boot is fast; allow slack
+fi
 
-cleanup() { docker rm -f "${APP}" >/dev/null 2>&1 || true; }
+cleanup() { docker rm -f "${APP}" >/dev/null 2>&1 || true; rm -f "${LOGFILE:-}"; }
 trap cleanup EXIT
 
-echo "==> boot-test (demo) ${IMAGE}"
+echo "==> boot-test (demo) ${IMAGE}${PROFILE:+ profile=${PROFILE}}"
 docker rm -f "${APP}" >/dev/null 2>&1 || true
-docker run -d --name "${APP}" "${IMAGE}" >/dev/null
+docker run -d --name "${APP}" \
+    ${PROFILE:+-e CIVIKITCHEN_PROFILE=${PROFILE}} \
+    "${IMAGE}" >/dev/null
 
 echo "==> waiting for healthy (embedded MariaDB + provisioning)..."
 elapsed=0
@@ -60,11 +69,34 @@ contacts=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${
     | grep -c '"id"' || true)
 check "demo data present (${contacts} contacts)" "[ '${contacts:-0}' -gt 1 ]"
 
+# Snapshot the container logs once for the log-based checks below: piping
+# `docker logs` straight into `grep -q` dies of SIGPIPE under pipefail when
+# grep exits on an early match, turning real matches into false negatives.
+LOGFILE="$(mktemp)"
+docker logs "${APP}" >"${LOGFILE}" 2>&1
+
 # 4) Embedded DB started clean from the baked data dir (no InnoDB crash recovery).
-if docker logs "${APP}" 2>&1 | grep -qiE 'InnoDB.*(crash recovery|Starting crash recovery|Recovering)'; then
+if grep -qiE 'InnoDB.*(crash recovery|Starting crash recovery|Recovering)' "${LOGFILE}"; then
     echo "  ✗ embedded MariaDB did InnoDB crash recovery (baked data dir not cleanly shut down)"; fail=1
 else
     echo "  ✓ embedded MariaDB started clean (no InnoDB recovery)"
+fi
+
+# 5+6) Runtime profile apply worked: the profile's first enabled extension is
+# installed, and the API credentials were printed to the container logs.
+if [ -n "${PROFILE}" ]; then
+    ext_key=$(docker exec "${APP}" \
+        jq -r '[.dependencies[] | select(.enable)][0].name // empty' \
+        "/usr/local/share/civikitchen/profiles/${PROFILE}/profile.json" 2>/dev/null || true)
+    if [ -n "${ext_key}" ]; then
+        status=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${APP}" \
+            bash -lc "export PATH=/home/buildkit/buildkit/bin:\$PATH; cv api4 Extension.get +w key=${ext_key} +w status=installed +s key 2>/dev/null" || true)
+        check "profile extension ${ext_key} installed" "echo '${status}' | grep -q '${ext_key}'"
+    else
+        echo "  ✗ could not read profile.json for '${PROFILE}' from the image"; fail=1
+    fi
+    check "API credentials printed to docker logs" \
+        "grep -q 'API User Credentials' '${LOGFILE}'"
 fi
 
 [ "${fail}" = 0 ] && echo "==> PASS: ${IMAGE}" || { echo "==> FAIL: ${IMAGE}"; exit 1; }

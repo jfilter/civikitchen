@@ -117,65 +117,10 @@ else
     echo "Site already installed (skipping)."
 fi
 
-# ---------------------------------------------------------------------------
-# Shared first-boot provisioning — the same images/lib/provision.sh the
-# standalone image uses, parameterized for this civibuild site. Gives the
-# buildkit (drupal10/wordpress) images the same knobs: auto-composer for
-# mounted extensions, SMTP, an isolated test DB, registry + mounted extension
-# enabling, and /civikitchen-init.d hooks. Runs as the buildkit user (Apache's
-# user) so it never leaves root-owned caches the web workers can't write.
-SITE_WEB="/home/buildkit/buildkit/build/site/web"
-
-# Accept legacy CIVICRM_-spelled kitchen vars (parity with the standalone image).
-_ck_legacy() {
-    local new="$1" legacy="$2"
-    if [[ -z "${!new+x}" && -n "${!legacy+x}" ]]; then
-        echo "[civikitchen] WARN: ${legacy} is deprecated - use ${new}" >&2
-        export "${new}=${!legacy}"
-    fi
-}
-_ck_legacy CIVIKITCHEN_SMTP_HOST         CIVICRM_SMTP_HOST
-_ck_legacy CIVIKITCHEN_SMTP_PORT         CIVICRM_SMTP_PORT
-_ck_legacy CIVIKITCHEN_EXTRA_EXTENSIONS  CIVICRM_EXTRA_EXTENSIONS
-_ck_legacy CIVIKITCHEN_ENABLE_EXTENSIONS CIVICRM_ENABLE_EXTENSIONS
-_ck_legacy CIVIKITCHEN_AUTO_COMPOSER     CIVICRM_AUTO_COMPOSER
-
-# Run a command as the buildkit user from the site docroot so cv auto-detects
-# the civibuild site. PATH and SITE_WEB are expanded in THIS (root) shell — the
-# entrypoint's PATH already has cv + the dev tools — and printf %q preserves
-# both the PATH and each argument's quoting through `su -c`. (Single-quoting the
-# PATH here would pass a literal ${PATH} to the inner shell and drop /usr/bin.)
-ck_as_web() {
-    su -s /bin/bash buildkit -c "export PATH=$(printf '%q' "${PATH}") && cd $(printf '%q' "${SITE_WEB}") && $(printf '%q ' "$@")"
-}
-
-# provision.sh parameters for this civibuild site (override standalone defaults).
-export CK_WEB_USER=buildkit
-export CK_WEB_GROUP=buildkit
-export CK_WEB_USER_HOME=/home/buildkit
-export CK_DATA_DIRS="/home/buildkit/buildkit/build/site"
-export CK_PROVISIONED_MARKER=/home/buildkit/.civikitchen-provisioned
-# Discover the extension dir from cv (CMS-agnostic: Drupal + WordPress).
-CK_EXT_DIR="$(ck_as_web cv ev 'echo rtrim(CRM_Core_Config::singleton()->extensionsDir, "/");' 2>/dev/null || true)"
-export CK_EXT_DIR
-
-. /usr/local/share/civikitchen/provision.sh
-
-# Auto-composer runs every boot (picks up newly bind-mounted extensions).
-ck_auto_composer
-
-if [[ ! -f "${CK_PROVISIONED_MARKER}" ]]; then
-    echo "[civikitchen] First-boot provisioning (${CIVICRM_SITE_TYPE})..."
-    ck_smtp
-    # No ck_setup_test_db here: civibuild already provisions an isolated
-    # TEST_DB_DSN (its own sitetest_* build, visible in `civibuild reinstall`
-    # output) — unlike standalone, which has no civibuild and sets its own.
-    ck_post_install_provision
-    echo "[civikitchen] Provisioning complete."
-fi
-
-# Heal any root-owned files left in the site tree (runs every boot, cheap).
-ck_heal_perms
+# Shared first-boot provisioning (auto-composer, SMTP, CIVIKITCHEN_PROFILE,
+# extension knobs, init.d hooks, readiness marker) — identical for the dev and
+# demo images, so it lives in entrypoint-common.sh.
+. /usr/local/share/civikitchen/entrypoint-common.sh
 
 # Start Apache (needs root for port 80)
 echo "Starting Apache..."

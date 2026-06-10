@@ -147,9 +147,10 @@ FROM buildkit-setup AS builder
 ARG CIVICRM_VERSION
 ARG DEFAULT_SITE_TYPE
 
+# procps provides pgrep, which bake.sh uses to verify the clean DB shutdown.
 USER root
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends mariadb-server \
+    && apt-get install -y --no-install-recommends mariadb-server procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Bake the site (logic in buildkit/bake.sh to keep the shell quoting sane).
@@ -166,8 +167,9 @@ RUN CIVICRM_VERSION="${CIVICRM_VERSION}" DEFAULT_SITE_TYPE="${DEFAULT_SITE_TYPE}
 # data + Apache — no external DB, no `civibuild reinstall`. `docker run -p 80:80
 # IMAGE` → a working CiviCRM with demo data. Built with `--target demo`.
 #
-# (The EU-NGO profile bake — extensions + seeds + API users on top of this —
-# is layered in via the DEMO_PROFILE build arg.)
+# Profiles (extensions + seeds + API users, e.g. eu-ngo) are NOT baked — they
+# apply at first boot via `-e CIVIKITCHEN_PROFILE=<name>` (see images/profiles/
+# and provision.sh's ck_apply_profile). That keeps one image per CMS flavor.
 FROM builder AS demo
 
 ARG DEFAULT_SITE_TYPE
@@ -187,34 +189,25 @@ RUN if [ "${DEFAULT_SITE_TYPE}" = "standalone-demo" ]; then \
         && a2enconf civikitchen-demo; \
     fi
 
-# Optional demo profile: when DEMO_PROFILE is set (e.g. eu-ngo), bake its
-# extensions + seed data + API users into the embedded DB at build time. The
-# wrapper starts MariaDB on the baked data, runs images/profiles/<profile>/
-# apply.sh, then cleanly shuts it down. No profile -> the image ships just the
-# civibuild `-demo` data. (eu-ngo -> civicrm-eu-ngo; see images/profiles/.)
-ARG DEMO_PROFILE=""
-COPY profiles /tmp/civikitchen-profiles
-COPY buildkit/apply-profile.sh /tmp/apply-profile.sh
-RUN if [ -n "${DEMO_PROFILE}" ]; then \
-        bash /tmp/apply-profile.sh "/tmp/civikitchen-profiles/${DEMO_PROFILE}"; \
-    fi \
-    && rm -rf /tmp/apply-profile.sh /tmp/civikitchen-profiles
-
 # Shared xdebug toggle + provisioning library — same files the dev images use.
 # The demo runs provision.sh too, so its opt-in knobs (SMTP, mounted-extension
-# enabling, /civikitchen-init.d hooks) work here as well.
+# enabling, CIVIKITCHEN_PROFILE, /civikitchen-init.d hooks) work here as well.
 COPY lib/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.sh
 COPY lib/provision.sh /usr/local/share/civikitchen/provision.sh
+COPY buildkit/entrypoint-common.sh /usr/local/share/civikitchen/entrypoint-common.sh
+COPY profiles /usr/local/share/civikitchen/profiles
 
 COPY buildkit/entrypoint-demo.sh /home/buildkit/entrypoint.sh
 RUN chmod +x /home/buildkit/entrypoint.sh
 
 EXPOSE 80
 
-# The site + DB are baked, so first boot is just "start embedded MariaDB +
-# provisioning + Apache" — fast. The entrypoint writes the provisioned marker
-# before handing off to Apache.
-HEALTHCHECK --interval=10s --timeout=5s --start-period=120s --retries=18 \
+# The site + DB are baked, so a plain first boot is just "start embedded
+# MariaDB + provisioning + Apache" — fast. With CIVIKITCHEN_PROFILE set, first
+# boot also clones + enables + seeds the profile (minutes, needs network) —
+# hence the generous start period. The entrypoint writes the provisioned
+# marker before handing off to Apache.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=600s --retries=18 \
     CMD test -f /home/buildkit/.civikitchen-provisioned || exit 1
 
 ENTRYPOINT ["/home/buildkit/entrypoint.sh"]
@@ -246,9 +239,13 @@ USER root
 COPY --from=builder --chown=buildkit:buildkit /home/buildkit /home/buildkit
 
 # Shared xdebug toggle + provisioning library — sourced from the entrypoint,
-# also used by the standalone image so the two stay in lockstep.
+# also used by the standalone image so the two stay in lockstep. Profiles ship
+# here too: CIVIKITCHEN_PROFILE works on the dev images as well (applied after
+# the first-boot `civibuild reinstall`).
 COPY lib/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.sh
 COPY lib/provision.sh /usr/local/share/civikitchen/provision.sh
+COPY buildkit/entrypoint-common.sh /usr/local/share/civikitchen/entrypoint-common.sh
+COPY profiles /usr/local/share/civikitchen/profiles
 
 COPY buildkit/entrypoint.sh /home/buildkit/entrypoint.sh
 RUN chmod +x /home/buildkit/entrypoint.sh
@@ -258,8 +255,9 @@ EXPOSE 80
 # Readiness signal: the entrypoint writes this marker after the first-boot
 # install + provisioning complete, before handing off to Apache. The site
 # codebase is baked, so first boot is a fast `civibuild reinstall` (~60s) +
-# provisioning — far quicker than the old runtime `civibuild create`.
-HEALTHCHECK --interval=10s --timeout=5s --start-period=240s --retries=18 \
+# provisioning — but a CIVIKITCHEN_PROFILE apply on top (git clones + seeds)
+# can take minutes, hence the generous start period.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=600s --retries=18 \
     CMD test -f /home/buildkit/.civikitchen-provisioned || exit 1
 
 ENTRYPOINT ["/home/buildkit/entrypoint.sh"]

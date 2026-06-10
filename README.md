@@ -10,7 +10,6 @@ CiviCRM Docker images for development, testing, and demos. All published to GHCR
 | [`:drupal10`](#drupal-10-dev) | Test extensions against the Drupal 10 stack | external (compose) | runs `civibuild` |
 | [`:wordpress`](#wordpress-dev) | Test extensions against the WordPress stack | external (compose) | runs `civibuild` |
 | [`:{standalone,drupal10,wordpress}-demo`](#demo-images) | Single-container demos — `docker run` and go | embedded (baked) | boots from baked data dir |
-| [`civicrm-eu-ngo`](#demo-images) | EU-NGO showcase: drupal10 + 9 extensions + demo data | embedded (baked) | boots from baked data dir |
 
 **Most users want `standalone`** — it's the fastest dev loop and works for any extension that doesn't depend on a specific CMS. Use the buildkit images (`drupal10`, `wordpress`) only when you need to test CMS-specific behavior.
 
@@ -116,15 +115,12 @@ compose, no external DB. `docker run` and you have a working CiviCRM with demo
 content in a few seconds. For demos, evaluation, and screenshots — **not** for
 development (the DB is inside the container; data resets on `docker rm`).
 
-Three flavors (one per CMS) plus the EU-NGO showcase, all built from the same
-`images/buildkit/` `demo` target:
+Three flavors (one per CMS), all built from the same `images/buildkit/` `demo`
+target:
 
 ```bash
 # Pick a flavor: standalone-demo (CMS-less), drupal10-demo, or wordpress-demo
 docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:drupal10-demo
-
-# EU-NGO showcase: Drupal 10 + 9 EU-nonprofit extensions + seed data + API users
-docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civicrm-eu-ngo:latest
 
 # then open http://localhost  —  login: admin / admin
 ```
@@ -132,10 +128,34 @@ docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civicrm-eu-ngo:latest
 > Map to port **80** (`-p 80:80`): the site is baked at `http://localhost`, so a
 > different host port would serve CiviCRM's assets at the wrong base URL.
 
-The EU-NGO image bundles CiviBanking, CiviSEPA, GDPRX, XCM, Contract, Twingle,
-IdentityTracker, Shoreditch, and ContactLayout, with seed data and 5 ready-made
-API users (readonly / fundraiser / eventmanager / caseworker / bankimporter).
-Its profile manifest lives in [`images/profiles/eu-ngo/`](images/profiles/eu-ngo/).
+#### Profiles (`CIVIKITCHEN_PROFILE`)
+
+A profile layers a curated extension stack + seed data + API users on top of
+the base site at **first boot**. The `eu-ngo` profile (Drupal 10 only) bundles
+CiviBanking, CiviSEPA, GDPRX, XCM, Contract, Twingle, IdentityTracker,
+Shoreditch, and ContactLayout, with seed data and 5 ready-made API users
+(readonly / fundraiser / eventmanager / caseworker / bankimporter). Its
+manifest lives in [`images/profiles/eu-ngo/`](images/profiles/eu-ngo/).
+
+```bash
+# EU-NGO showcase: Drupal 10 + 9 EU-nonprofit extensions + seed data + API users
+docker run -d -p 80:80 --name civicrm \
+    -e CIVIKITCHEN_PROFILE=eu-ngo \
+    ghcr.io/jfilter/civikitchen:drupal10-demo
+```
+
+The profile applies once, on first boot — it clones the extensions from
+GitHub, so it **needs network access and takes a few minutes** (watch
+`docker logs -f civicrm`; the container turns healthy when done). The
+generated API-user credentials are printed to the logs and kept in the
+container: `docker exec civicrm cat /home/buildkit/api-credentials.txt`.
+
+Profiles also work on the dev images (`:drupal10`, `:wordpress`) — set the
+same env var in your compose file to develop against a realistic stack.
+
+> **Migrating from `civicrm-eu-ngo:latest`?** That pre-baked image is retired;
+> use `civikitchen:drupal10-demo` with `CIVIKITCHEN_PROFILE=eu-ngo` instead
+> (same content, applied at first boot).
 
 ## Extension development
 
@@ -309,6 +329,7 @@ Two prefixes, by ownership: `CIVIKITCHEN_*` vars are this project's own behavior
 | `CIVIKITCHEN_SMTP_PORT` | `1025` | all | Port for `CIVIKITCHEN_SMTP_HOST`. |
 | `CIVIKITCHEN_EXTRA_EXTENSIONS` | _(unset)_ | all | Comma-separated extension keys downloaded + enabled after install — e.g. `de.systopia.xcm,de.systopia.twingle`. Each entry can also be `key@URL` for a pinned or forked release (passed to `cv ext:download` verbatim). Replaces hand-rolled `cv ext:download` / `cv ext:enable` boilerplate in extension test setups. Runs once during first-boot provisioning (standalone gates it on `CIVICRM_AUTO_INSTALL=1`; buildkit runs it after the civibuild site build). |
 | `CIVIKITCHEN_ENABLE_EXTENSIONS` | _(unset)_ | all | Comma-separated keys of extensions that are already present (e.g. bind-mounted into `/var/www/html/ext`) to enable after install — e.g. `mailattachment,de.systopia.civioffice,mailbatch`. Complements `CIVIKITCHEN_EXTRA_EXTENSIONS`, which downloads from the registry. Runs once during first-boot provisioning (standalone gates it on `CIVICRM_AUTO_INSTALL=1`; buildkit runs it after the civibuild site build). |
+| `CIVIKITCHEN_PROFILE` | _(unset)_ | drupal10/wordpress + demos | Named profile from [`images/profiles/`](images/profiles/) applied once at first boot: clones + enables the profile's extensions, loads seed data, and creates API users. Only `eu-ngo` (Drupal 10 only) ships today. Needs network and takes a few minutes; credentials land in the logs and in `/home/buildkit/api-credentials.txt`. |
 | `CIVIKITCHEN_AUTO_COMPOSER` | `1` | all | If `1`, scan `/var/www/html/ext/*/composer.json` on every container start and run `composer install` in each extension directory whose `vendor/` is missing. Removes the manual gate before `vendor/bin/phpunit` works. Idempotent (skips when `vendor/` exists), non-fatal on failure. Set to `0` if you ship `vendor/` in your repo or want full control. |
 | `CIVIKITCHEN_TEST_DB` | `1` | standalone | If `1`, configure an isolated headless-test database on first install: create `<db>_test` (e.g. `civicrm_test`) and write `TEST_DB_DSN` to `~/.cv.json` (root + www-data) so `CIVICRM_UF=UnitTests` runs against it instead of the dev DB. Prevents a headless `phpunit` run from wiping the main database. Set to `0` to manage `TEST_DB_DSN` yourself. |
 | `CIVIKITCHEN_EXTRA_PACKAGES` | _(unset)_ | standalone | Comma- or space-separated Debian packages installed on container start (e.g. `libreoffice-writer,unoconv` for CiviOffice rendering) — heavyweight or niche deps stay out of the image. Restarts skip packages that are already present. |

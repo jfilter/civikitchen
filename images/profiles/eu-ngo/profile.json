@@ -1,5 +1,6 @@
 {
   "description": "European Nonprofit Extension Stack - Banking, SEPA, GDPR, and nonprofit management tools",
+  "cms": "drupal10",
   "authx": {
     "header_cred": ["jwt", "api_key", "pass"]
   },

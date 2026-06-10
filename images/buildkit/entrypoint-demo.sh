@@ -1,12 +1,13 @@
 #!/bin/bash
-# Entrypoint for the single-container DEMO images (civikitchen:*-demo,
-# civicrm-eu-ngo). Unlike images/buildkit/entrypoint.sh (external DB + fast
-# `civibuild reinstall` on first boot), the demo image carries an EMBEDDED
-# MariaDB whose data dir was baked at build time (the civibuild `-demo` site +
-# any profile). So first boot is just: start MariaDB on the baked data → run
-# the shared opt-in provisioning → start Apache. No external DB, no reinstall,
-# no 127.0.0.1->host rewrite (the DB host is 127.0.0.1 at both bake and run
-# time, so the baked grants stay valid).
+# Entrypoint for the single-container DEMO images (civikitchen:*-demo).
+# Unlike images/buildkit/entrypoint.sh (external DB + fast `civibuild
+# reinstall` on first boot), the demo image carries an EMBEDDED MariaDB whose
+# data dir was baked at build time (the civibuild `-demo` site). So first boot
+# is just: start MariaDB on the baked data → run the shared opt-in
+# provisioning (incl. an optional CIVIKITCHEN_PROFILE apply, e.g. eu-ngo) →
+# start Apache. No external DB, no reinstall, no 127.0.0.1->host rewrite (the
+# DB host is 127.0.0.1 at both bake and run time, so the baked grants stay
+# valid).
 set -e
 
 export PATH="/home/buildkit/buildkit/bin:${PATH}"
@@ -42,57 +43,12 @@ until mysqladmin --user=root --password=root ping >/dev/null 2>&1; do
 done
 echo "Database is ready."
 
-# ---------------------------------------------------------------------------
-# Shared first-boot provisioning — the same images/lib/provision.sh the dev
-# images use. For a demo the extension/data is already baked, so these are
-# mostly opt-in knobs (SMTP, enabling bind-mounted extensions, /civikitchen-
-# init.d hooks); running them keeps the demo and dev images behaviourally in
-# lockstep and writes the readiness marker the HEALTHCHECK looks for.
-SITE_WEB="/home/buildkit/buildkit/build/site/web"
-
-# Accept legacy CIVICRM_-spelled kitchen vars (parity with the dev images).
-_ck_legacy() {
-    local new="$1" legacy="$2"
-    if [[ -z "${!new+x}" && -n "${!legacy+x}" ]]; then
-        echo "[civikitchen] WARN: ${legacy} is deprecated - use ${new}" >&2
-        export "${new}=${!legacy}"
-    fi
-}
-_ck_legacy CIVIKITCHEN_SMTP_HOST         CIVICRM_SMTP_HOST
-_ck_legacy CIVIKITCHEN_SMTP_PORT         CIVICRM_SMTP_PORT
-_ck_legacy CIVIKITCHEN_EXTRA_EXTENSIONS  CIVICRM_EXTRA_EXTENSIONS
-_ck_legacy CIVIKITCHEN_ENABLE_EXTENSIONS CIVICRM_ENABLE_EXTENSIONS
-_ck_legacy CIVIKITCHEN_AUTO_COMPOSER     CIVICRM_AUTO_COMPOSER
-
-# Run a command as the buildkit user from the site docroot so cv auto-detects
-# the civibuild site (identical helper to the dev entrypoint).
-ck_as_web() {
-    su -s /bin/bash buildkit -c "export PATH=$(printf '%q' "${PATH}") && cd $(printf '%q' "${SITE_WEB}") && $(printf '%q ' "$@")"
-}
-
-# provision.sh parameters for this civibuild site.
-export CK_WEB_USER=buildkit
-export CK_WEB_GROUP=buildkit
-export CK_WEB_USER_HOME=/home/buildkit
-export CK_DATA_DIRS="/home/buildkit/buildkit/build/site"
-export CK_PROVISIONED_MARKER=/home/buildkit/.civikitchen-provisioned
-CK_EXT_DIR="$(ck_as_web cv ev 'echo rtrim(CRM_Core_Config::singleton()->extensionsDir, "/");' 2>/dev/null || true)"
-export CK_EXT_DIR
-
-. /usr/local/share/civikitchen/provision.sh
-
-# Auto-composer runs every boot (picks up newly bind-mounted extensions).
-ck_auto_composer
-
-if [[ ! -f "${CK_PROVISIONED_MARKER}" ]]; then
-    echo "[civikitchen] First-boot provisioning (${CIVICRM_SITE_TYPE})..."
-    ck_smtp
-    ck_post_install_provision
-    echo "[civikitchen] Provisioning complete."
-fi
-
-# Heal any root-owned files in the site tree (runs every boot, cheap).
-ck_heal_perms
+# Shared first-boot provisioning (auto-composer, SMTP, CIVIKITCHEN_PROFILE,
+# extension knobs, init.d hooks, readiness marker) — identical for the dev and
+# demo images, so it lives in entrypoint-common.sh. For a demo the base site is
+# already baked, so these are mostly opt-in knobs; a CIVIKITCHEN_PROFILE apply
+# (git clones + seeds) makes first boot take minutes instead of seconds.
+. /usr/local/share/civikitchen/entrypoint-common.sh
 
 # Start Apache (needs root for port 80).
 echo "Starting Apache..."

@@ -5,8 +5,8 @@
 # `cv core:install`; buildkit: `civibuild create site`). It holds the
 # CMS-agnostic first-boot provisioning so the standalone and buildkit images
 # behave the same: auto-composer for bind-mounted extensions, dev settings,
-# SMTP backend, an isolated test DB, registry + mounted extension enabling, and
-# /civikitchen-init.d hooks.
+# SMTP backend, an isolated test DB, registry + mounted extension enabling,
+# named profiles (CIVIKITCHEN_PROFILE), and /civikitchen-init.d hooks.
 #
 # Caller contract — define this BEFORE calling any ck_* function:
 #
@@ -29,6 +29,8 @@
 # ~/.cv.json site key under which TEST_DB_DSN is stored. Standalone keys by its
 # bootstrap file; other CMSes key the site differently (resolved per image).
 : "${CK_TEST_DB_CV_KEY:=/var/www/html/civicrm.standalone.php}"
+# Where named profiles (images/profiles/<name>/) ship inside the image.
+: "${CK_PROFILE_DIR:=/usr/local/share/civikitchen/profiles}"
 
 # --- functions -------------------------------------------------------------
 
@@ -154,6 +156,31 @@ ck_enable_extensions() {
     done
 }
 
+# Apply a named profile (extensions + seed data + API users) at first boot.
+# Opt-in via CIVIKITCHEN_PROFILE=<name>; profiles ship in CK_PROFILE_DIR (see
+# images/profiles/). Needs network (git clones) and can take several minutes.
+# Runs inside ck_post_install_provision, so it is marker-gated: it applies
+# once, and a failure aborts the boot (no marker) and re-runs on next start.
+ck_apply_profile() {
+    [[ -n "${CIVIKITCHEN_PROFILE:-}" ]] || return 0
+    local dir="${CK_PROFILE_DIR}/${CIVIKITCHEN_PROFILE}"
+    if [[ ! -f "${dir}/apply.sh" ]]; then
+        echo "[civikitchen] ERROR: unknown profile '${CIVIKITCHEN_PROFILE}'." >&2
+        echo "[civikitchen] Available profiles: $(ls "${CK_PROFILE_DIR}" 2>/dev/null | tr '\n' ' ')" >&2
+        return 1
+    fi
+    # CMS gate: profile.json declares the CMS family it needs (e.g. "drupal10");
+    # match it as a prefix of the civibuild site type (drupal10-demo, ...).
+    local want_cms
+    want_cms="$(jq -r '.cms // empty' "${dir}/profile.json" 2>/dev/null || true)"
+    if [[ -n "${want_cms}" && "${CIVICRM_SITE_TYPE:-}" != "${want_cms}"* ]]; then
+        echo "[civikitchen] ERROR: profile '${CIVIKITCHEN_PROFILE}' requires a ${want_cms} site; this site is '${CIVICRM_SITE_TYPE:-unknown}'." >&2
+        return 1
+    fi
+    echo "[civikitchen] Applying profile '${CIVIKITCHEN_PROFILE}' (needs network; this can take several minutes)..."
+    ck_as_web bash "${dir}/apply.sh" "${dir}"
+}
+
 # First-boot provisioning hooks mounted into CK_INIT_D, run in lexical order:
 # *.sh via bash (as root, for system setup), *.php via `cv scr` (as the web
 # user, for Civi settings / seed data). A failing hook aborts the boot.
@@ -187,11 +214,14 @@ ck_heal_perms() {
         -exec chown -h "${CK_WEB_USER}:${CK_WEB_GROUP}" {} + 2>/dev/null || true
 }
 
-# Marker-gated post-install provisioning bundle: registry + mounted extensions
-# and init.d hooks, run once. The marker is written only on success so a failed
-# hook re-runs on the next start instead of being silently skipped.
+# Marker-gated post-install provisioning bundle: profile, registry + mounted
+# extensions, and init.d hooks, run once. The marker is written only on success
+# so a failed step re-runs on the next start instead of being silently skipped.
+# The profile goes first: it sets up the base stack that the user's extension
+# knobs and init hooks layer on top of.
 ck_post_install_provision() {
     [[ -f "${CK_PROVISIONED_MARKER}" ]] && return 0
+    ck_apply_profile
     ck_extra_extensions
     ck_enable_extensions
     ck_run_init_hooks
