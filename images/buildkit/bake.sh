@@ -42,8 +42,7 @@ BK
 # Strip the git history civibuild cloned into the site (~550MB, most of it
 # civicrm-core). Neither serving the site nor the runtime `civibuild reinstall`
 # needs it — but `civibuild update` / working on core does, so it is opt-in:
-# build with --build-arg KEEP_GIT=1 to keep the repos (see README "Building
-# locally").
+# build with --build-arg KEEP_GIT=1 to keep the repos (see docs/building.md).
 if [ "${KEEP_GIT:-0}" != "1" ]; then
     echo "bake.sh: stripping git history from the baked site (--build-arg KEEP_GIT=1 keeps it)"
     find /home/buildkit/buildkit/build/site -type d -name .git -prune -exec rm -rf {} +

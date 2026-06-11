@@ -67,5 +67,5 @@ DEMO_USER=alice DEMO_PASS=secret npm test
   behaviour, anything you'd otherwise test by clicking around.
 - **PHPUnit (headless)** for API/business logic: APIv4 calls, hooks, BAOs,
   workflows. Faster, no browser, no compose stack required for unit tests.
-  See the main [Extension development](../../README.md#extension-development)
-  section for the headless setup.
+  See the main [Extension development](../../docs/extension-development.md)
+  guide for the headless setup.
