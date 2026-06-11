@@ -9,7 +9,8 @@
 # and SHIPS this /var/lib/mysql as its embedded DB — hence the verified clean
 # shutdown at the end.
 #
-# Reads CIVICRM_VERSION + DEFAULT_SITE_TYPE from the environment (Dockerfile ARGs).
+# Reads CIVICRM_VERSION + DEFAULT_SITE_TYPE + KEEP_GIT from the environment
+# (Dockerfile ARGs).
 set -euxo pipefail
 
 service mariadb start
@@ -37,6 +38,16 @@ civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_VERSIO
 # \`civibuild reinstall\` reuses the baked vendor/, so nothing is re-downloaded.
 rm -rf /home/buildkit/.composer/cache /home/buildkit/.npm /home/buildkit/.cache
 BK
+
+# Strip the git history civibuild cloned into the site (~550MB, most of it
+# civicrm-core). Neither serving the site nor the runtime `civibuild reinstall`
+# needs it — but `civibuild update` / working on core does, so it is opt-in:
+# build with --build-arg KEEP_GIT=1 to keep the repos (see README "Building
+# locally").
+if [ "${KEEP_GIT:-0}" != "1" ]; then
+    echo "bake.sh: stripping git history from the baked site (--build-arg KEEP_GIT=1 keeps it)"
+    find /home/buildkit/buildkit/build/site -type d -name .git -prune -exec rm -rf {} +
+fi
 
 # VERIFIED clean shutdown. The `demo` target is `FROM builder` and ships this
 # /var/lib/mysql as its embedded DB — an unclean stop here means InnoDB crash

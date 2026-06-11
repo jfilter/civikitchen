@@ -401,6 +401,21 @@ docker build -f images/buildkit/Dockerfile \
     -t civikitchen:wordpress images/
 ```
 
+### Keeping the CiviCRM git history (`KEEP_GIT=1`)
+
+The published buildkit images strip the git history civibuild clones into the
+site (`vendor/civicrm/civicrm-core` etc., ~550 MB) — extension development and
+the runtime `civibuild reinstall` don't need it. If you want a git-enabled
+site (working on core, `civibuild update`, `git log` archaeology), build your
+own image with the history kept:
+
+```bash
+docker build -f images/buildkit/Dockerfile \
+    --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
+    --build-arg KEEP_GIT=1 \
+    -t civikitchen:drupal10-git images/
+```
+
 ## Verifying a built image
 
 `images/test/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through phpcs, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, and verifies the xdebug toggle. The same script runs in CI against both `:standalone` and `:drupal10`/`:wordpress`.

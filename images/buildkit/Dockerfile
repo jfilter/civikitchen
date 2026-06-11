@@ -146,6 +146,10 @@ FROM buildkit-setup AS builder
 
 ARG CIVICRM_VERSION
 ARG DEFAULT_SITE_TYPE
+# KEEP_GIT=1 keeps the ~550MB of git history civibuild clones into the site
+# (vendor/civicrm/civicrm-core etc.). Default strips it — the published images
+# target extension development; build your own image to work on core.
+ARG KEEP_GIT=0
 
 # procps provides pgrep, which bake.sh uses to verify the clean DB shutdown.
 USER root
@@ -156,6 +160,7 @@ RUN apt-get update \
 # Bake the site (logic in buildkit/bake.sh to keep the shell quoting sane).
 COPY buildkit/bake.sh /tmp/bake.sh
 RUN CIVICRM_VERSION="${CIVICRM_VERSION}" DEFAULT_SITE_TYPE="${DEFAULT_SITE_TYPE}" \
+        KEEP_GIT="${KEEP_GIT}" \
         bash /tmp/bake.sh && rm /tmp/bake.sh
 
 # =============================================================================
@@ -217,7 +222,12 @@ ENTRYPOINT ["/home/buildkit/entrypoint.sh"]
 # =============================================================================
 # This is the LAST stage, so a plain `docker build` (no --target) builds the dev
 # image; the demo above is opt-in via `--target demo`.
-FROM buildkit-setup AS final
+#
+# FROM base (not buildkit-setup) on purpose: the COPY --from=builder below
+# brings the WHOLE of /home/buildkit (buildkit tools + baked site). Inheriting
+# buildkit-setup would mean its ~200MB buildkit-clone layer ships shadowed
+# underneath that COPY, inflating the image for nothing.
+FROM base AS final
 
 # /opt/composer/vendor/bin is prepended ahead of /home/buildkit/buildkit/bin
 # so the dev-tools phpcs (with the civicrm/coder Drupal standard registered)
@@ -229,6 +239,8 @@ ENV PATH="/opt/composer/vendor/bin:/home/buildkit/buildkit/bin:${PATH}" \
     CIVICRM_SITE_TYPE_DEFAULT="${DEFAULT_SITE_TYPE}"
 
 USER root
+# Parity with the buildkit-setup-derived stages (base leaves /var/www/html).
+WORKDIR /home/buildkit
 
 # Bake: bring in the civibuild site tree + civibuild/amp registry built in the
 # `builder` stage. This is the heavy part (CMS + CiviCRM codebase) — having it
