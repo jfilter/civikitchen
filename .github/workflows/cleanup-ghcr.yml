@@ -1,0 +1,72 @@
+# Prune the sha-candidate tags the test-then-promote pipeline leaves behind.
+#
+# Every push creates per-sha candidate tags (…-<40-hex-sha> multi-arch index +
+# …-<sha>-amd64/-arm64 children) that the smoke tests run against; promote then
+# attaches the stable tags to the SAME digests. The candidates are dead weight
+# once a newer push has been promoted — but the most recent generation still
+# shares digests with the stable tags, so deletion must be reference-aware:
+#
+#   protected = every sha that appears on a version which ALSO carries a
+#               non-sha tag (i.e. the digests the stable tags point at)
+#   deleted   = versions whose tags are ALL sha-candidate tags of
+#               non-protected shas, older than 2 days (in-flight-run guard)
+#
+# Untagged versions are never touched (attestations / children referenced by
+# kept indexes). Runs weekly + on demand (dry_run input previews).
+name: Cleanup GHCR
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'   # Mondays 05:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only log what would be deleted'
+        type: boolean
+        default: false
+
+jobs:
+  prune-candidates:
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PKG: civikitchen
+      DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+    steps:
+      - name: Prune stale sha-candidate versions
+        run: |
+          set -euo pipefail
+          OWNER='${{ github.repository_owner }}'
+          gh api "/users/${OWNER}/packages/container/${PKG}/versions?per_page=100" \
+              --paginate > versions.json
+
+          # A candidate tag is "<anything>-<40-hex-sha>" or that plus an arch
+          # suffix. Shas still reachable from a stable tag are protected.
+          jq -r '
+            def sha_of: capture("-(?<sha>[0-9a-f]{40})(-(amd64|arm64))?$").sha;
+            def is_sha_tag: test("-[0-9a-f]{40}(-(amd64|arm64))?$");
+            [ .[] | select(.metadata.container.tags | length > 0)
+                  | select([.metadata.container.tags[] | is_sha_tag] | all | not)
+                  | .metadata.container.tags[] | select(is_sha_tag) | sha_of
+            ] | unique | .[]' versions.json > protected-shas.txt
+          echo "protected shas:"; cat protected-shas.txt
+
+          jq -r --slurpfile protected <(jq -R . protected-shas.txt | jq -s .) '
+            def sha_of: capture("-(?<sha>[0-9a-f]{40})(-(amd64|arm64))?$").sha;
+            def is_sha_tag: test("-[0-9a-f]{40}(-(amd64|arm64))?$");
+            .[] | select(.metadata.container.tags | length > 0)
+                | select([.metadata.container.tags[] | is_sha_tag] | all)
+                | select([.metadata.container.tags[] | sha_of | IN($protected[0][])] | any | not)
+                | select(.updated_at < (now - 2*86400 | todate))
+                | "\(.id)\t\(.metadata.container.tags | join(","))"
+          ' versions.json > victims.tsv
+
+          if [ ! -s victims.tsv ]; then echo "nothing to prune"; exit 0; fi
+          echo "pruning $(wc -l < victims.tsv) versions:"; cat victims.tsv
+          if [ "${DRY_RUN}" = "1" ]; then echo "dry run - nothing deleted"; exit 0; fi
+          while IFS=$'\t' read -r id tags; do
+              echo "deleting version ${id} (${tags})"
+              gh api -X DELETE "/users/${OWNER}/packages/container/${PKG}/versions/${id}"
+          done < victims.tsv
