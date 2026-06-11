@@ -164,11 +164,15 @@ ck_enable_extensions() {
 ck_apply_profile() {
     [[ -n "${CIVIKITCHEN_PROFILE:-}" ]] || return 0
     local dir="${CK_PROFILE_DIR}/${CIVIKITCHEN_PROFILE}"
-    if [[ ! -f "${dir}/apply.sh" ]]; then
+    if [[ ! -f "${dir}/profile.json" ]]; then
         echo "[civikitchen] ERROR: unknown profile '${CIVIKITCHEN_PROFILE}'." >&2
-        echo "[civikitchen] Available profiles: $(ls "${CK_PROFILE_DIR}" 2>/dev/null | tr '\n' ' ')" >&2
+        echo "[civikitchen] Available profiles: $(cd "${CK_PROFILE_DIR}" 2>/dev/null && ls -d -- */ 2>/dev/null | tr -d '/' | tr '\n' ' ')" >&2
         return 1
     fi
+    # Profiles share CK_PROFILE_DIR/apply.sh; a profile can ship its own
+    # apply.sh to override the shared driver.
+    local apply="${CK_PROFILE_DIR}/apply.sh"
+    [[ -f "${dir}/apply.sh" ]] && apply="${dir}/apply.sh"
     # CMS gate: profile.json declares the CMS family it needs (e.g. "drupal10");
     # match it as a prefix of the civibuild site type (drupal10-demo, ...).
     local want_cms
@@ -178,7 +182,7 @@ ck_apply_profile() {
         return 1
     fi
     echo "[civikitchen] Applying profile '${CIVIKITCHEN_PROFILE}' (needs network; this can take several minutes)..."
-    ck_as_web bash "${dir}/apply.sh" "${dir}"
+    ck_as_web bash "${apply}" "${dir}"
 }
 
 # First-boot provisioning hooks mounted into CK_INIT_D, run in lexical order:

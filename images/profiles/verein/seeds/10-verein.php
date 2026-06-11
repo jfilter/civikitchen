@@ -6,43 +6,21 @@
 // Verein org already exists (the apply re-runs if an earlier first boot died
 // before the provisioning marker was written).
 
-use Civi\Api4\Address;
-use Civi\Api4\Contact;
+require_once __DIR__ . '/../../lib.php';
+
 use Civi\Api4\Contribution;
-use Civi\Api4\Email;
-use Civi\Api4\Group;
-use Civi\Api4\GroupContact;
 use Civi\Api4\Membership;
 use Civi\Api4\MembershipType;
 
-$existing = Contact::get(FALSE)
-  ->addWhere('organization_name', '=', 'Musterverein e.V.')
-  ->selectRowCount()
-  ->execute();
-if ($existing->count()) {
+if (ck_seed_org_exists('Musterverein e.V.')) {
   echo "Verein already seeded, skipping\n";
   return;
 }
 
 \Civi::settings()->set('defaultCurrency', 'EUR');
 
-$verein = Contact::create(FALSE)
-  ->addValue('contact_type', 'Organization')
-  ->addValue('organization_name', 'Musterverein e.V.')
-  ->execute()->first();
-Email::create(FALSE)
-  ->addValue('contact_id', $verein['id'])
-  ->addValue('email', 'kontakt@musterverein.example.de')
-  ->execute();
-Address::create(FALSE)
-  ->addValue('contact_id', $verein['id'])
-  ->addValue('location_type_id:name', 'Main')
-  ->addValue('street_address', 'Vereinsweg 1')
-  ->addValue('postal_code', '10115')
-  ->addValue('city', 'Berlin')
-  ->addValue('country_id:name', 'Germany')
-  ->execute();
-echo "created Musterverein e.V. (contact {$verein['id']})\n";
+$vereinId = ck_seed_org('Musterverein e.V.', 'kontakt@musterverein.example.de', ['Vereinsweg 1', '10115', 'Berlin']);
+echo "created Musterverein e.V. (contact {$vereinId})\n";
 
 // Membership types: annual fees, rolling periods (join any time of year).
 $types = [
@@ -53,7 +31,7 @@ $types = [
 foreach ($types as [$name, $fee]) {
   MembershipType::create(FALSE)
     ->addValue('name', $name)
-    ->addValue('member_of_contact_id', $verein['id'])
+    ->addValue('member_of_contact_id', $vereinId)
     ->addValue('financial_type_id:name', 'Member Dues')
     ->addValue('duration_unit', 'year')
     ->addValue('duration_interval', 1)
@@ -65,11 +43,7 @@ foreach ($types as [$name, $fee]) {
 echo "created 3 membership types\n";
 
 foreach ([['vorstand', 'Vorstand'], ['aktive', 'Aktive Mitglieder'], ['newsletter', 'Newsletter']] as [$gname, $gtitle]) {
-  Group::create(FALSE)
-    ->addValue('name', $gname)
-    ->addValue('title', $gtitle)
-    ->addValue('is_active', TRUE)
-    ->execute();
+  ck_seed_group($gname, $gtitle);
 }
 echo "created 3 groups\n";
 
@@ -104,29 +78,12 @@ $members = [
 
 $created = 0;
 foreach ($members as $i => [$first, $last, $street, $plz, $city, $type, $groups]) {
-  $contact = Contact::create(FALSE)
-    ->addValue('contact_type', 'Individual')
-    ->addValue('first_name', $first)
-    ->addValue('last_name', $last)
-    ->execute()->first();
-  $email = strtolower(strtr("{$first}.{$last}", ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss'])) . '@example-verein.de';
-  Email::create(FALSE)
-    ->addValue('contact_id', $contact['id'])
-    ->addValue('email', $email)
-    ->execute();
-  Address::create(FALSE)
-    ->addValue('contact_id', $contact['id'])
-    ->addValue('location_type_id:name', 'Home')
-    ->addValue('street_address', $street)
-    ->addValue('postal_code', $plz)
-    ->addValue('city', $city)
-    ->addValue('country_id:name', 'Germany')
-    ->execute();
+  $cid = ck_seed_individual($first, $last, ck_seed_email($first, $last, 'example-verein.de'), [$street, $plz, $city]);
 
   // Join dates spread over the past years (deterministic, index-based).
   $joined = date('Y-m-d', strtotime('-' . (3 + $i * 2) . ' months'));
   Membership::create(FALSE)
-    ->addValue('contact_id', $contact['id'])
+    ->addValue('contact_id', $cid)
     ->addValue('membership_type_id:name', $type)
     ->addValue('join_date', $joined)
     ->addValue('start_date', date('Y-m-d', strtotime('-2 months')))
@@ -137,7 +94,7 @@ foreach ($members as $i => [$first, $last, $street, $plz, $city, $type, $groups]
   $fee = ['Vollmitgliedschaft' => 120.00, 'Fördermitgliedschaft' => 60.00, 'Ehrenmitgliedschaft' => 0.00][$type];
   if ($fee > 0) {
     Contribution::create(FALSE)
-      ->addValue('contact_id', $contact['id'])
+      ->addValue('contact_id', $cid)
       ->addValue('financial_type_id:name', 'Member Dues')
       ->addValue('total_amount', $fee)
       ->addValue('currency', 'EUR')
@@ -148,11 +105,7 @@ foreach ($members as $i => [$first, $last, $street, $plz, $city, $type, $groups]
   }
 
   foreach ($groups as $g) {
-    GroupContact::create(FALSE)
-      ->addValue('group_id:name', $g)
-      ->addValue('contact_id', $contact['id'])
-      ->addValue('status', 'Added')
-      ->execute();
+    ck_seed_group_contact($cid, $g);
   }
   $created++;
 }
