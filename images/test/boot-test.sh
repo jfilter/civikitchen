@@ -77,4 +77,4 @@ ver=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${APP}"
     | tr -d '[:space:]' || true)
 check "CiviCRM responds via cv (Domain version: ${ver:-none})" "echo '${ver}' | grep -q 'version'"
 
-[ "${fail}" = 0 ] && echo "==> PASS: ${IMAGE}" || { echo "==> FAIL: ${IMAGE}"; exit 1; }
+if [ "${fail}" = 0 ]; then echo "==> PASS: ${IMAGE}"; else echo "==> FAIL: ${IMAGE}"; exit 1; fi

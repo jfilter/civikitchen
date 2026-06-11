@@ -1,0 +1,5 @@
+# SC1091: sourced files live at container-absolute paths (/usr/local/share/
+#         civikitchen/*.sh) that don't exist at lint time.
+# SC2016: embedded PHP (cv ev/scr) and sed programs intentionally use single
+#         quotes — the $vars belong to PHP/sed, not the shell.
+disable=SC1091,SC2016

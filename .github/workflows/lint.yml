@@ -1,0 +1,43 @@
+# Static checks for everything that has no compiler: shell scripts (strict
+# shellcheck, style level), workflow files (actionlint, which also shellchecks
+# embedded run blocks), PHP syntax for seeds/scripts, and profile.json shape.
+# Runs on every push/PR — fast, no Docker, no build dependency.
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: shellcheck (style level, fails on any finding)
+        run: |
+          find images examples -name '*.sh' -print0 | xargs -0 shellcheck -S style
+          echo "shellcheck clean"
+
+      - name: actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 .
+          ./actionlint -color
+
+      - name: php -l (seeds + profile scripts)
+        run: |
+          rc=0
+          while IFS= read -r -d '' f; do
+            php -l "$f" >/dev/null || rc=1
+          done < <(find images -name '*.php' -print0)
+          [ "$rc" = 0 ] && echo "php syntax clean"
+
+      - name: profile.json well-formed + complete
+        run: |
+          for f in images/profiles/*/profile.json; do
+            jq -e '.description and (.dependencies | type == "array")' "$f" >/dev/null \
+              || { echo "invalid: $f" >&2; exit 1; }
+          done
+          echo "profiles valid"

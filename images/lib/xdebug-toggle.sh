@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Xdebug toggle — sourced from each image's entrypoint.
 # pcov is always enabled (cheap, coverage-only). Xdebug is opt-in because it
 # slows down every request. Set XDEBUG_MODE to debug, develop, or any combo

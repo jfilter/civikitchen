@@ -53,3 +53,15 @@ docker run --rm -v "$(pwd)/images/test:/civikitchen-test:ro" \
     ghcr.io/jfilter/civikitchen:standalone \
     bash /civikitchen-test/test-dev-tools.sh
 ```
+
+## Linting
+
+Every push runs the `Lint` workflow: strict shellcheck (style level, see
+`.shellcheckrc` for the two disabled false-positive classes) over all shell
+scripts, actionlint over the workflows, `php -l` over the seed/profile
+scripts, and a shape check on the `profile.json` files. Locally:
+
+```bash
+find images examples -name '*.sh' -print0 | xargs -0 shellcheck -S style
+actionlint
+```

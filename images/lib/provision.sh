@@ -166,7 +166,7 @@ ck_apply_profile() {
     local dir="${CK_PROFILE_DIR}/${CIVIKITCHEN_PROFILE}"
     if [[ ! -f "${dir}/profile.json" ]]; then
         echo "[civikitchen] ERROR: unknown profile '${CIVIKITCHEN_PROFILE}'." >&2
-        echo "[civikitchen] Available profiles: $(cd "${CK_PROFILE_DIR}" 2>/dev/null && ls -d -- */ 2>/dev/null | tr -d '/' | tr '\n' ' ')" >&2
+        echo "[civikitchen] Available profiles: $(cd "${CK_PROFILE_DIR}" 2>/dev/null && for d in */; do printf '%s ' "${d%/}"; done)" >&2
         return 1
     fi
     # Profiles share CK_PROFILE_DIR/apply.sh; a profile can ship its own

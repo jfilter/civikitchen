@@ -44,8 +44,8 @@ done
 # 2. phpcs has Drupal + DrupalPractice
 echo "== phpcs standards =="
 STANDARDS="$(phpcs -i 2>&1)"
-echo "${STANDARDS}" | grep -q Drupal         && ok "Drupal standard registered"        || fail "Drupal standard missing ($STANDARDS)"
-echo "${STANDARDS}" | grep -q DrupalPractice && ok "DrupalPractice standard registered" || fail "DrupalPractice standard missing"
+if echo "${STANDARDS}" | grep -q Drupal; then ok "Drupal standard registered"; else fail "Drupal standard missing ($STANDARDS)"; fi
+if echo "${STANDARDS}" | grep -q DrupalPractice; then ok "DrupalPractice standard registered"; else fail "DrupalPractice standard missing"; fi
 
 # ---------------------------------------------------------------------------
 # 3. phpcs lints a sample file
@@ -152,7 +152,7 @@ fi
 # pcov should always be loaded; xdebug should only load when XDEBUG_MODE is set
 # via the entrypoint.
 echo "== xdebug toggle =="
-php -m | grep -qiE "^pcov$" && ok "pcov enabled by default" || fail "pcov not enabled"
+if php -m | grep -qiE "^pcov$"; then ok "pcov enabled by default"; else fail "pcov not enabled"; fi
 if php -m | grep -qiE "^xdebug$"; then
     fail "xdebug enabled by default (should be off until XDEBUG_MODE is set)"
 else
