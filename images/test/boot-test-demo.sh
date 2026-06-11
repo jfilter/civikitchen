@@ -10,7 +10,7 @@
 # Usage:
 #   bash images/test/boot-test-demo.sh <image> [profile]
 #   bash images/test/boot-test-demo.sh civikitchen:drupal10-demo
-#   bash images/test/boot-test-demo.sh civikitchen:drupal10-demo eu-ngo
+#   bash images/test/boot-test-demo.sh civikitchen:drupal10-demo verein
 set -euo pipefail
 
 IMAGE="${1:?usage: boot-test-demo.sh <image> [profile]}"
@@ -97,6 +97,14 @@ if [ -n "${PROFILE}" ]; then
     fi
     check "API credentials printed to docker logs" \
         "grep -q 'API User Credentials' '${LOGFILE}'"
+    # Seeds are deliberately non-fatal in apply.sh (one flaky seeder must not
+    # block the boot), so a broken seed still turns the container healthy —
+    # catch it here instead.
+    if grep -q 'WARN: .*failed (non-fatal)' "${LOGFILE}"; then
+        echo "  ✗ profile seed failure in logs:"; grep 'WARN: .*failed (non-fatal)' "${LOGFILE}"; fail=1
+    else
+        echo "  ✓ no profile seed failures in logs"
+    fi
 fi
 
 [ "${fail}" = 0 ] && echo "==> PASS: ${IMAGE}" || { echo "==> FAIL: ${IMAGE}"; exit 1; }

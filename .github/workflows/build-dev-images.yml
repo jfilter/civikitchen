@@ -421,7 +421,7 @@ jobs:
       packages: write
 
     # Single-container demo images (embedded MariaDB, baked demo data) from the
-    # same images/buildkit/Dockerfile `demo` target. Profiles (e.g. eu-ngo) are
+    # same images/buildkit/Dockerfile `demo` target. Profiles (e.g. verein) are
     # no longer baked into a separate image — they apply at first boot via
     # CIVIKITCHEN_PROFILE, so there is exactly one demo image per CMS flavor.
     strategy:
@@ -503,14 +503,14 @@ jobs:
       contents: read
       packages: read
 
-    # The drupal10-demo + eu-ngo leg exercises the runtime profile path:
+    # The drupal10-demo + verein leg exercises the runtime profile path:
     # first boot clones + enables the profile extensions and seeds demo data.
     strategy:
       matrix:
         variant:
           - { tag: standalone-demo, profile: '' }
           - { tag: drupal10-demo,   profile: '' }
-          - { tag: drupal10-demo,   profile: eu-ngo }
+          - { tag: drupal10-demo,   profile: verein }
           - { tag: wordpress-demo,  profile: '' }
 
     steps:
@@ -532,7 +532,7 @@ jobs:
 
   promote-demo:
     # Stable demo tags only move once the candidates passed the smoke tests
-    # (including the runtime eu-ngo profile leg).
+    # (including the runtime verein profile leg).
     needs: smoke-test-demo
     runs-on: ubuntu-24.04
     permissions:
