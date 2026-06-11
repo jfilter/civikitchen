@@ -17,7 +17,6 @@ export CIVICRM_DB_ROOT_PASSWORD="${CIVICRM_DB_ROOT_PASSWORD:-root}"
 # tags ship drupal10-demo, :wordpress tags ship wp-demo. Users can override
 # at runtime by setting CIVICRM_SITE_TYPE.
 CIVICRM_SITE_TYPE="${CIVICRM_SITE_TYPE:-${CIVICRM_SITE_TYPE_DEFAULT:-drupal10-demo}}"
-CIVICRM_VERSION="${CIVICRM_VERSION:-6.12.1}"
 
 # Legacy name: SITE_URL was renamed to CIVIKITCHEN_SITE_URL (kitchen-owned
 # behavior knob); the old spelling keeps working with a warning.

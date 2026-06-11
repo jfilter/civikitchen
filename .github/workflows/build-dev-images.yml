@@ -5,18 +5,48 @@ on:
     branches: [main]
     paths:
       - 'images/**'
+      - '.github/workflows/build-dev-images.yml'
   schedule:
-    # Monthly on the 1st: pick up upstream civicrm/civicrm patch releases.
-    # Floating tags (`latest`, `6.12`) make this enough — every run rebuilds
-    # against the current latest patch of each tracked minor.
-    - cron: '0 6 1 * *'
+    # Weekly (Mondays 04:00 UTC, an hour before the GHCR cleanup cron): the
+    # resolve-civicrm job picks up the current upstream stable release each
+    # run, so a new CiviCRM patch/minor is at most a week away. Unchanged
+    # weeks are cheap (full layer-cache hit) and still refresh base-image
+    # security patches.
+    - cron: '0 4 * * 1'
   workflow_dispatch:
 
 env:
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/civikitchen
 
 jobs:
+  resolve-civicrm:
+    # Single source of truth for the CiviCRM version every image bakes.
+    # latest.civicrm.org/stable.php returns the current stable (e.g. 6.15.1);
+    # buildkit/demo pin that exact version, standalone tracks its minor.
+    runs-on: ubuntu-24.04
+    outputs:
+      stable: ${{ steps.resolve.outputs.stable }}
+      minor: ${{ steps.resolve.outputs.minor }}
+      standalone_versions: ${{ steps.resolve.outputs.standalone_versions }}
+    steps:
+      - name: Resolve current CiviCRM stable
+        id: resolve
+        run: |
+          STABLE=$(curl -fsS https://latest.civicrm.org/stable.php)
+          echo "upstream stable: ${STABLE}"
+          if ! [[ "${STABLE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "unexpected version string from stable.php: '${STABLE}'" >&2
+            exit 1
+          fi
+          MINOR=${STABLE%.*}
+          {
+            echo "stable=${STABLE}"
+            echo "minor=${MINOR}"
+            echo "standalone_versions=[\"latest\",\"${MINOR}\"]"
+          } >> "$GITHUB_OUTPUT"
+
   build-standalone:
+    needs: resolve-civicrm
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -24,7 +54,7 @@ jobs:
 
     strategy:
       matrix:
-        version: [latest, '6.12']
+        version: ${{ fromJSON(needs.resolve-civicrm.outputs.standalone_versions) }}
         arch: [arm64, amd64]
         include:
           - arch: arm64
@@ -67,7 +97,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=standalone-${{ matrix.version }}-${{ matrix.arch }}
 
   merge-standalone:
-    needs: build-standalone
+    needs: [resolve-civicrm, build-standalone]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -75,7 +105,7 @@ jobs:
 
     strategy:
       matrix:
-        version: [latest, '6.12']
+        version: ${{ fromJSON(needs.resolve-civicrm.outputs.standalone_versions) }}
 
     steps:
       - name: Log in to GHCR
@@ -92,7 +122,7 @@ jobs:
             ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}-amd64
 
   smoke-test-standalone:
-    needs: merge-standalone
+    needs: [resolve-civicrm, merge-standalone]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -100,7 +130,7 @@ jobs:
 
     strategy:
       matrix:
-        version: [latest, '6.12']
+        version: ${{ fromJSON(needs.resolve-civicrm.outputs.standalone_versions) }}
         platform: [linux/arm64, linux/amd64]
         include:
           - platform: linux/arm64
@@ -230,7 +260,7 @@ jobs:
     # Stable tags only move once the candidate passed smoke + e2e.
     # `imagetools create` from an existing manifest list copies it intact,
     # so the promoted tag stays multi-arch.
-    needs: [smoke-test-standalone, e2e-test-standalone]
+    needs: [resolve-civicrm, smoke-test-standalone, e2e-test-standalone]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -238,7 +268,7 @@ jobs:
 
     strategy:
       matrix:
-        version: [latest, '6.12']
+        version: ${{ fromJSON(needs.resolve-civicrm.outputs.standalone_versions) }}
 
     steps:
       - name: Log in to GHCR
@@ -260,6 +290,7 @@ jobs:
             ${{ env.IMAGE_PREFIX }}:standalone-latest-${{ github.sha }}
 
   build-buildkit:
+    needs: resolve-civicrm
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -315,6 +346,7 @@ jobs:
           build-args: |
             PHP_VERSION=${{ matrix.php }}
             DEFAULT_SITE_TYPE=${{ matrix.variant.site_type }}
+            CIVICRM_VERSION=${{ needs.resolve-civicrm.outputs.stable }}
           cache-from: type=gha,scope=buildkit-${{ matrix.php }}-${{ matrix.suffix }}
           cache-to: type=gha,mode=max,scope=buildkit-${{ matrix.php }}-${{ matrix.suffix }}
 
@@ -415,6 +447,7 @@ jobs:
             ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }}
 
   build-demo:
+    needs: resolve-civicrm
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -469,6 +502,7 @@ jobs:
             ${{ env.IMAGE_PREFIX }}:${{ matrix.variant.name }}-${{ github.sha }}-${{ matrix.suffix }}
           build-args: |
             DEFAULT_SITE_TYPE=${{ matrix.variant.site_type }}
+            CIVICRM_VERSION=${{ needs.resolve-civicrm.outputs.stable }}
           cache-from: type=gha,scope=demo-${{ matrix.variant.name }}-${{ matrix.suffix }}
           cache-to: type=gha,mode=max,scope=demo-${{ matrix.variant.name }}-${{ matrix.suffix }}
 

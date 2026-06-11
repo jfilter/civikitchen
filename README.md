@@ -342,7 +342,6 @@ Two prefixes, by ownership: `CIVIKITCHEN_*` vars are this project's own behavior
 | `CIVIKITCHEN_CV_AS_ROOT` | `0` | standalone | `cv` inside the container is wrapped to always run as `www-data`, even from `docker compose exec` (root) — root-run `cv` leaves root-owned caches/locks that break the web workers. Set to `1` to bypass the wrapper and run `cv` as root. |
 | `CIVICRM_DB_ROOT_PASSWORD` | `root` | drupal10/wordpress | DB **admin** password. civibuild uses it to create the per-site database and user during the first-run site build. |
 | `CIVICRM_SITE_TYPE` | tag default | drupal10/wordpress | civibuild site type. The `:drupal10` tag defaults to `drupal10-demo`, `:wordpress` to `wp-demo`. Override to use any [civibuild template](https://docs.civicrm.org/dev/en/latest/tools/civibuild/). |
-| `CIVICRM_VERSION` | `6.12.1` | drupal10/wordpress | CiviCRM version civibuild installs. |
 
 ### Headless test setup
 
@@ -362,17 +361,22 @@ If you roll your own compose file, replicate this — otherwise headless tests f
 
 ## Tags & versions
 
-The standalone image is published in two flavors on GHCR:
+All images rebuild **weekly** (and on every `images/**` change) against the
+current CiviCRM stable release, resolved from
+[latest.civicrm.org](https://latest.civicrm.org/stable.php) at build time. The
+pipeline is test-then-promote: a release that breaks the build or the boot
+tests never reaches the stable tags — they keep serving the last good image
+until the breakage is fixed.
 
 | Tag | What it points at |
 |-----|-------------------|
-| `:standalone` | The most recent CiviCRM `latest` build (rebuilt on every `images/**` change and monthly). |
+| `:standalone` | The most recent CiviCRM `latest` build. |
 | `:standalone-latest` | Same as `:standalone`. |
-| `:standalone-<minor>` | Latest patch of an upstream minor (e.g. `:standalone-6.12` follows `civicrm/civicrm:6.12`). |
+| `:standalone-<minor>` | Latest patch of the **current** stable minor (e.g. `:standalone-6.15` while 6.15.x is current). When upstream moves to the next minor, a new tag appears and the old one freezes at its last patch — handy as a known-good fallback right after a minor bump. |
+| `:drupal10`, `:wordpress`, `:*-demo` | Bake the current stable at image-build time. Check what a pulled image contains without booting it: `docker inspect <image> --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`. |
 
-Use a minor-pinned tag for reproducible CI matrix testing across CiviCRM versions, or to test an extension against the previous minor before upgrading.
-
-To track an additional minor, edit the `version: [...]` matrix in [`.github/workflows/build-dev-images.yml`](.github/workflows/build-dev-images.yml). Only minors actually published as `civicrm/civicrm:<x.y>` on Docker Hub work.
+Need a minor pinned longer than that? Build your own image — see below
+(`--build-arg CIVICRM_VERSION=...` works for all flavors).
 
 ## Building locally
 
@@ -384,15 +388,18 @@ docker build -f images/standalone/Dockerfile -t civikitchen:standalone images/
 
 # Standalone pinned to a specific CiviCRM minor (or any tag civicrm/civicrm publishes)
 docker build -f images/standalone/Dockerfile \
-    --build-arg CIVICRM_VERSION=6.12 \
-    -t civikitchen:standalone-6.12 images/
+    --build-arg CIVICRM_VERSION=6.15 \
+    -t civikitchen:standalone-6.15 images/
 
 # Buildkit-based images. The :drupal10 and :wordpress tags are built from
 # the same Dockerfile (images/buildkit/) — DEFAULT_SITE_TYPE picks which
-# civibuild site type the entrypoint creates on first run.
+# civibuild site type the entrypoint creates on first run. CIVICRM_VERSION
+# pins the baked CiviCRM (any civicrm-core tag/branch civibuild can fetch);
+# omitted, it falls back to the version pinned in the Dockerfile.
 docker build -f images/buildkit/Dockerfile \
     --build-arg PHP_VERSION=8.3 \
     --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
+    --build-arg CIVICRM_VERSION=6.15.1 \
     -t civikitchen:drupal10 images/
 
 docker build -f images/buildkit/Dockerfile \

@@ -27,7 +27,9 @@
 #     civikitchen:drupal10
 
 ARG PHP_VERSION=8.3
-ARG CIVICRM_VERSION=6.12.1
+# Local-build fallback only: CI resolves the current stable from
+# latest.civicrm.org and passes it as --build-arg CIVICRM_VERSION.
+ARG CIVICRM_VERSION=6.15.1
 ARG DEFAULT_SITE_TYPE=drupal10-demo
 
 # =============================================================================
@@ -178,6 +180,9 @@ RUN CIVICRM_VERSION="${CIVICRM_VERSION}" DEFAULT_SITE_TYPE="${DEFAULT_SITE_TYPE}
 FROM builder AS demo
 
 ARG DEFAULT_SITE_TYPE
+ARG CIVICRM_VERSION
+# Which CiviCRM the image bakes, readable via `docker inspect` without booting.
+LABEL org.opencontainers.image.version="${CIVICRM_VERSION}"
 ENV PATH="/opt/composer/vendor/bin:/home/buildkit/buildkit/bin:${PATH}" \
     CIVIBUILD_ADMIN_PASS="admin" \
     CIVICRM_SITE_TYPE_DEFAULT="${DEFAULT_SITE_TYPE}"
@@ -234,6 +239,9 @@ FROM base AS final
 # wins over the plain phpcs that civi-download-tools installs into buildkit's
 # own bin dir.
 ARG DEFAULT_SITE_TYPE
+ARG CIVICRM_VERSION
+# Which CiviCRM the image bakes, readable via `docker inspect` without booting.
+LABEL org.opencontainers.image.version="${CIVICRM_VERSION}"
 ENV PATH="/opt/composer/vendor/bin:/home/buildkit/buildkit/bin:${PATH}" \
     CIVIBUILD_ADMIN_PASS="admin" \
     CIVICRM_SITE_TYPE_DEFAULT="${DEFAULT_SITE_TYPE}"
