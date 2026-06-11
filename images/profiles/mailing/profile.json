@@ -1,0 +1,51 @@
+{
+  "description": "Email campaigns: Mosaico drag-and-drop templates, segmented newsletter groups, draft mailing",
+  "cms": "drupal10",
+  "authx": {
+    "header_cred": ["jwt", "api_key", "pass"]
+  },
+  "apiUsers": [
+    {
+      "username": "readonly",
+      "role": "api_readonly",
+      "permissions": [
+        "access CiviCRM",
+        "access AJAX API",
+        "view all contacts",
+        "access Contact Dashboard",
+        "access CiviMail",
+        "view public CiviMail content",
+        "access CiviReport"
+      ]
+    },
+    {
+      "username": "mailer",
+      "role": "api_mailer",
+      "permissions": [
+        "access CiviCRM",
+        "access AJAX API",
+        "view all contacts",
+        "edit all contacts",
+        "add contacts",
+        "access CiviMail",
+        "create mailings",
+        "schedule mailings",
+        "approve mailings",
+        "delete in CiviMail",
+        "view public CiviMail content",
+        "access CiviReport"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "org.civicrm.flexmailer",
+      "enable": true
+    },
+    {
+      "name": "uk.co.vedaconsulting.mosaico",
+      "registry": true,
+      "enable": true
+    }
+  ]
+}

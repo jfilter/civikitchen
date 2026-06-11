@@ -503,14 +503,17 @@ jobs:
       contents: read
       packages: read
 
-    # The drupal10-demo + verein leg exercises the runtime profile path:
-    # first boot clones + enables the profile extensions and seeds demo data.
+    # The drupal10-demo + profile legs exercise the runtime profile path:
+    # first boot installs the profile extensions and seeds demo data.
     strategy:
       matrix:
         variant:
           - { tag: standalone-demo, profile: '' }
           - { tag: drupal10-demo,   profile: '' }
           - { tag: drupal10-demo,   profile: verein }
+          - { tag: drupal10-demo,   profile: fundraising }
+          - { tag: drupal10-demo,   profile: events }
+          - { tag: drupal10-demo,   profile: mailing }
           - { tag: wordpress-demo,  profile: '' }
 
     steps:

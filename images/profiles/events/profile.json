@@ -1,0 +1,77 @@
+{
+  "description": "Event management: remote registration, event messages, past + upcoming events with participants",
+  "cms": "drupal10",
+  "authx": {
+    "header_cred": ["jwt", "api_key", "pass"]
+  },
+  "apiUsers": [
+    {
+      "username": "readonly",
+      "role": "api_readonly",
+      "permissions": [
+        "access CiviCRM",
+        "access AJAX API",
+        "view all contacts",
+        "access Contact Dashboard",
+        "access CiviEvent",
+        "view event info",
+        "view event participants",
+        "access CiviReport",
+        "view all activities"
+      ]
+    },
+    {
+      "username": "eventmanager",
+      "role": "api_eventmanager",
+      "permissions": [
+        "access CiviCRM",
+        "access AJAX API",
+        "view all contacts",
+        "edit all contacts",
+        "add contacts",
+        "access CiviEvent",
+        "edit all events",
+        "delete in CiviEvent",
+        "register for events",
+        "view event info",
+        "edit event participants",
+        "view event participants",
+        "access CiviReport",
+        "view all activities",
+        "edit all activities"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "de.systopia.xcm",
+      "repo": "https://github.com/systopia/de.systopia.xcm.git",
+      "version": "master",
+      "enable": true
+    },
+    {
+      "name": "de.systopia.identitytracker",
+      "repo": "https://github.com/systopia/de.systopia.identitytracker.git",
+      "version": "master",
+      "enable": true
+    },
+    {
+      "name": "de.systopia.remotetools",
+      "repo": "https://github.com/systopia/de.systopia.remotetools.git",
+      "version": "master",
+      "enable": true
+    },
+    {
+      "name": "de.systopia.remoteevent",
+      "repo": "https://github.com/systopia/de.systopia.remoteevent.git",
+      "version": "master",
+      "enable": true
+    },
+    {
+      "name": "de.systopia.eventmessages",
+      "repo": "https://github.com/systopia/de.systopia.eventmessages.git",
+      "version": "master",
+      "enable": true
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "description": "Fundraising: campaigns, pledges, recurring donors, CiviRules automation, donation receipts",
+  "cms": "drupal10",
+  "authx": {
+    "header_cred": ["jwt", "api_key", "pass"]
+  },
+  "apiUsers": [
+    {
+      "username": "readonly",
+      "role": "api_readonly",
+      "permissions": [
+        "access CiviCRM",
+        "access AJAX API",
+        "view all contacts",
+        "access Contact Dashboard",
+        "access CiviContribute",
+        "access CiviPledge",
+        "access CiviReport",
+        "view all activities"
+      ]
+    },
+    {
+      "username": "fundraiser",
+      "role": "api_fundraiser",
+      "permissions": [
+        "access CiviCRM",
+        "access AJAX API",
+        "view all contacts",
+        "edit all contacts",
+        "add contacts",
+        "access CiviContribute",
+        "edit contributions",
+        "delete in CiviContribute",
+        "access CiviPledge",
+        "edit pledges",
+        "access CiviCampaign",
+        "manage campaign",
+        "administer CiviCampaign",
+        "access CiviReport",
+        "view all activities",
+        "edit all activities",
+        "delete activities"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "org.civicoop.civirules",
+      "repo": "https://lab.civicrm.org/extensions/civirules.git",
+      "version": "master",
+      "enable": true
+    },
+    {
+      "name": "de.systopia.donrec",
+      "repo": "https://github.com/systopia/de.systopia.donrec.git",
+      "version": "master",
+      "enable": true
+    }
+  ]
+}

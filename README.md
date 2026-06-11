@@ -131,14 +131,16 @@ docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:drupal10-demo
 #### Profiles (`CIVIKITCHEN_PROFILE`)
 
 A profile layers a curated extension stack + seed data + API users on top of
-the base site at **first boot**. The `verein` profile (Drupal 10 only) sets up
-a German association: CiviBanking, CiviSEPA, GDPRX, XCM, Contract, Twingle,
-IdentityTracker, and ContactLayout, seeded with a sample Verein — membership
-types (Voll-/Förder-/Ehrenmitgliedschaft), two dozen members with addresses
-and contribution history, SEPA creditor + direct-debit mandates — plus 5
-ready-made API users (readonly / fundraiser / eventmanager / caseworker /
-bankimporter). Its manifest lives in
-[`images/profiles/verein/`](images/profiles/verein/).
+the base site at **first boot**. All profiles are Drupal 10 only and live in
+[`images/profiles/`](images/profiles/) (one dir per profile: `profile.json` +
+`seeds/*.php`, applied by the shared driver):
+
+| Profile | Extensions | Seed data | API users |
+|---|---|---|---|
+| `verein` | CiviBanking, CiviSEPA, Contract, Twingle, GDPRX, XCM, IdentityTracker, ContactLayout | Musterverein e.V.: membership types (Voll-/Förder-/Ehrenmitglied), 24 members with addresses + fee history, SEPA creditor + 21 direct-debit mandates | readonly, fundraiser, eventmanager, caseworker, bankimporter |
+| `fundraising` | CiviRules, DonRec | 2 campaigns, 18 donors with varied giving history, 6 recurring donors, 4 pledges with installment schedules | readonly, fundraiser |
+| `events` | RemoteEvent, EventMessages | 6 past + upcoming events, 18 contacts with participant records in varied statuses | readonly, eventmanager |
+| `mailing` | Mosaico (+ core FlexMailer) | 3 segmented mailing lists, 30 subscribers, a draft newsletter | readonly, mailer |
 
 ```bash
 # German Verein showcase: Drupal 10 + DACH extension stack + seed data + API users
@@ -333,7 +335,7 @@ Two prefixes, by ownership: `CIVIKITCHEN_*` vars are this project's own behavior
 | `CIVIKITCHEN_SMTP_PORT` | `1025` | all | Port for `CIVIKITCHEN_SMTP_HOST`. |
 | `CIVIKITCHEN_EXTRA_EXTENSIONS` | _(unset)_ | all | Comma-separated extension keys downloaded + enabled after install — e.g. `de.systopia.xcm,de.systopia.twingle`. Each entry can also be `key@URL` for a pinned or forked release (passed to `cv ext:download` verbatim). Replaces hand-rolled `cv ext:download` / `cv ext:enable` boilerplate in extension test setups. Runs once during first-boot provisioning (standalone gates it on `CIVICRM_AUTO_INSTALL=1`; buildkit runs it after the civibuild site build). |
 | `CIVIKITCHEN_ENABLE_EXTENSIONS` | _(unset)_ | all | Comma-separated keys of extensions that are already present (e.g. bind-mounted into `/var/www/html/ext`) to enable after install — e.g. `mailattachment,de.systopia.civioffice,mailbatch`. Complements `CIVIKITCHEN_EXTRA_EXTENSIONS`, which downloads from the registry. Runs once during first-boot provisioning (standalone gates it on `CIVICRM_AUTO_INSTALL=1`; buildkit runs it after the civibuild site build). |
-| `CIVIKITCHEN_PROFILE` | _(unset)_ | drupal10/wordpress + demos | Named profile from [`images/profiles/`](images/profiles/) applied once at first boot: clones + enables the profile's extensions, loads seed data, and creates API users. Only `verein` (Drupal 10 only) ships today. Needs network and takes a few minutes; credentials land in the logs and in `/home/buildkit/api-credentials.txt`. |
+| `CIVIKITCHEN_PROFILE` | _(unset)_ | drupal10/wordpress + demos | Named profile from [`images/profiles/`](images/profiles/) applied once at first boot: clones + enables the profile's extensions, loads seed data, and creates API users. Available: `verein`, `fundraising`, `events`, `mailing` (all Drupal 10 only). Needs network and takes a few minutes; credentials land in the logs and in `/home/buildkit/api-credentials.txt`. |
 | `CIVIKITCHEN_AUTO_COMPOSER` | `1` | all | If `1`, scan `/var/www/html/ext/*/composer.json` on every container start and run `composer install` in each extension directory whose `vendor/` is missing. Removes the manual gate before `vendor/bin/phpunit` works. Idempotent (skips when `vendor/` exists), non-fatal on failure. Set to `0` if you ship `vendor/` in your repo or want full control. |
 | `CIVIKITCHEN_TEST_DB` | `1` | standalone | If `1`, configure an isolated headless-test database on first install: create `<db>_test` (e.g. `civicrm_test`) and write `TEST_DB_DSN` to `~/.cv.json` (root + www-data) so `CIVICRM_UF=UnitTests` runs against it instead of the dev DB. Prevents a headless `phpunit` run from wiping the main database. Set to `0` to manage `TEST_DB_DSN` yourself. |
 | `CIVIKITCHEN_EXTRA_PACKAGES` | _(unset)_ | standalone | Comma- or space-separated Debian packages installed on container start (e.g. `libreoffice-writer,unoconv` for CiviOffice rendering) — heavyweight or niche deps stay out of the image. Restarts skip packages that are already present. |
