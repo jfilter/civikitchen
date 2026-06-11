@@ -1,28 +1,51 @@
 #!/bin/bash
-# Configure API users from civikitchen.json
+# Configure API users from profile.json (apiUsers + authx sections).
 #
-# This script reads the apiUsers configuration from civikitchen.json
-# and creates Drupal users, CiviCRM contacts, assigns permissions,
-# and generates API keys based on the declarative configuration.
+# CMS-agnostic driver: the shared steps (AuthX settings, CiviCRM contacts,
+# API keys, credentials file) run through cv; only user/role creation goes
+# through a small per-UF adapter — drush on Drupal, wp-cli on WordPress, the
+# standaloneusers User/Role APIv4 entities on Standalone.
 
 set -e
 
-cd /home/buildkit/buildkit/build/site/web
+# civibuild layout if present (demo + buildkit dev images); the standalone
+# dev image has cv on the global PATH and resolves the site via env, so a
+# cd is only needed where the civibuild tree exists.
+[[ -d /home/buildkit/buildkit/bin ]] && export PATH="/home/buildkit/buildkit/bin:${PATH}"
+[[ -d /home/buildkit/buildkit/build/site/web ]] && cd /home/buildkit/buildkit/build/site/web
 
 CONFIG_FILE="${1:-/config/civikitchen.json}"
 
 if [[ ! -f "${CONFIG_FILE}" ]]; then
-    echo "  ⚠️  No civikitchen.json found, skipping API user configuration"
+    echo "  ⚠️  No profile config found, skipping API user configuration"
     exit 0
 fi
 
 # Check if apiUsers section exists
 if ! jq -e '.apiUsers' "${CONFIG_FILE}" > /dev/null 2>&1; then
-    echo "  ℹ️  No apiUsers configured in civikitchen.json"
+    echo "  ℹ️  No apiUsers configured"
     exit 0
 fi
 
-echo "  🔑 Configuring API access from civikitchen.json..."
+# Which user framework backs this site: Drupal8 (= Drupal 9/10/11),
+# WordPress, or Standalone. Everything CMS-specific branches on this.
+UF="$(cv ev 'echo CRM_Core_Config::singleton()->userFramework;')"
+case "${UF}" in
+    Drupal8|WordPress|Standalone) ;;
+    *)
+        echo "  ERROR: unsupported user framework '${UF}' for API user creation" >&2
+        exit 1
+        ;;
+esac
+
+echo "  🔑 Configuring API access (${UF})..."
+
+# CiviCRM permission → WordPress capability, the same mapping core applies in
+# CRM_Core_Permission_WordPress::check(): munge(strtolower($perm)) — every
+# char outside [a-z0-9_] becomes an underscore.
+wp_cap() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]/_/g'
+}
 
 # === Configure AuthX ===
 echo "     Configuring AuthX extension..."
@@ -31,28 +54,43 @@ echo "     Configuring AuthX extension..."
 header_cred=$(jq -r '.authx.header_cred // ["jwt", "api_key", "pass"] | @json' "${CONFIG_FILE}")
 cv ev "\\Civi::settings()->set(\"authx_header_cred\", ${header_cred});" 2>/dev/null || true
 
-# Add "authenticate with password" permission (required for authx with perm guard)
-echo "     Adding authentication permissions..."
-drush role:perm:add authenticated 'authenticate with password' 2>/dev/null || true
-drush role:perm:add administrator 'authenticate with password' 2>/dev/null || true
-
-# Ensure CiviCRM permissions are registered in Drupal FIRST
-echo "     Syncing CiviCRM permissions to Drupal..."
+# Make CiviCRM's permission list known to the CMS before granting any.
 cv api System.flush 2>/dev/null || true
 
-# Grant all CiviCRM permissions to administrator role
-echo "     Granting CiviCRM permissions to administrator role..."
-drush role:perm:add administrator 'access civicrm' 2>/dev/null || true
-drush role:perm:add administrator 'administer civicrm' 2>/dev/null || true
+case "${UF}" in
+    Drupal8)
+        # "authenticate with password" is required for authx with perm guard.
+        echo "     Adding authentication permissions..."
+        drush role:perm:add authenticated 'authenticate with password' 2>/dev/null || true
+        drush role:perm:add administrator 'authenticate with password' 2>/dev/null || true
 
-# Reset passwords for built-in users and update civibuild config
-echo "     Resetting passwords for built-in users..."
-drush user:password admin 'admin' 2>/dev/null || true
-drush user:password demo 'demo' 2>/dev/null || true
+        # Grant all CiviCRM permissions to administrator role
+        echo "     Granting CiviCRM permissions to administrator role..."
+        drush role:perm:add administrator 'access civicrm' 2>/dev/null || true
+        drush role:perm:add administrator 'administer civicrm' 2>/dev/null || true
+
+        # Reset passwords for built-in users and update civibuild config
+        echo "     Resetting passwords for built-in users..."
+        drush user:password admin 'admin' 2>/dev/null || true
+        drush user:password demo 'demo' 2>/dev/null || true
+        ;;
+    WordPress)
+        echo "     Adding authentication capability to administrator..."
+        wp cap add administrator authenticate_with_password 2>/dev/null || true
+        echo "     Resetting passwords for built-in users..."
+        wp user update admin --user_pass=admin --skip-email 2>/dev/null || true
+        wp user update demo --user_pass=demo --skip-email 2>/dev/null || true
+        ;;
+    Standalone)
+        # Built-in admin role already carries every permission; the per-user
+        # roles below get "authenticate with password" added explicitly.
+        :
+        ;;
+esac
 
 # Update civibuild site config to reflect new passwords
-echo "     Updating civibuild site configuration..."
 if [[ -f "/home/buildkit/buildkit/build/site.sh" ]]; then
+  echo "     Updating civibuild site configuration..."
   sed -i 's/^ADMIN_PASS=.*/ADMIN_PASS="admin"/' /home/buildkit/buildkit/build/site.sh 2>/dev/null || true
   sed -i 's/^DEMO_PASS=.*/DEMO_PASS="demo"/' /home/buildkit/buildkit/build/site.sh 2>/dev/null || true
 fi
@@ -110,38 +148,66 @@ for i in $(seq 0 $((user_count - 1))); do
     # shellcheck disable=SC2311
     last_name=$(get_last_name)
 
-    # Create custom Drupal role if it doesn't exist
-    drush role:create "${role}" "${role}" 2>/dev/null || true
-
-    # Create Drupal user
-    drush user:create "${username}" --mail="${email}" --password="${password}" 2>/dev/null || true
-
-    # Assign role
-    drush user:role:add "${role}" "${username}" 2>/dev/null || true
-
-    # Reset password (ensures it works for authentication)
-    drush user:password "${username}" "${password}" 2>/dev/null || true
-
     # Create CiviCRM contact
     contact_result=$(cv api4 Contact.create values="{\"contact_type\":\"Individual\",\"first_name\":\"${first_name}\",\"last_name\":\"${last_name}\",\"email\":\"${email}\"}" --out=json 2>/dev/null || echo '[]')
     contact_id=$(echo "${contact_result}" | jq -r '.[0].id // empty')
 
-    # Get Drupal user ID
-    USER_INFO=$(drush user:information "${username}" --format=json 2>/dev/null || true)
-    uid=$(echo "${USER_INFO}" | jq -r 'to_entries[0].value.uid // empty' || echo "")
+    uid=""
+    case "${UF}" in
+        Drupal8)
+            # Create custom Drupal role if it doesn't exist
+            drush role:create "${role}" "${role}" 2>/dev/null || true
 
-    # Create UFMatch record (link Drupal user to CiviCRM contact)
-    if [[ -n "${uid}" ]] && [[ -n "${contact_id}" ]]; then
+            # Create Drupal user
+            drush user:create "${username}" --mail="${email}" --password="${password}" 2>/dev/null || true
+
+            # Assign role
+            drush user:role:add "${role}" "${username}" 2>/dev/null || true
+
+            # Reset password (ensures it works for authentication)
+            drush user:password "${username}" "${password}" 2>/dev/null || true
+
+            # Assign permissions (Civi permission names are registered with Drupal)
+            jq -r ".apiUsers[${i}].permissions[]" "${CONFIG_FILE}" | while IFS= read -r permission; do
+                [[ -n "${permission}" ]] && drush role:perm:add "${role}" "${permission}" 2>/dev/null || true
+            done
+
+            USER_INFO=$(drush user:information "${username}" --format=json 2>/dev/null || true)
+            uid=$(echo "${USER_INFO}" | jq -r 'to_entries[0].value.uid // empty' || echo "")
+            ;;
+        WordPress)
+            wp role create "${role}" "${role}" 2>/dev/null || true
+            wp user create "${username}" "${email}" --user_pass="${password}" --role="${role}" 2>/dev/null || true
+            wp user update "${username}" --user_pass="${password}" --skip-email 2>/dev/null || true
+
+            # authx perm guard + the profile's permissions, as WP capabilities
+            wp cap add "${role}" authenticate_with_password 2>/dev/null || true
+            jq -r ".apiUsers[${i}].permissions[]" "${CONFIG_FILE}" | while IFS= read -r permission; do
+                # shellcheck disable=SC2311
+                [[ -n "${permission}" ]] && wp cap add "${role}" "$(wp_cap "${permission}")" 2>/dev/null || true
+            done
+
+            uid=$(wp user get "${username}" --field=ID 2>/dev/null || echo "")
+            ;;
+        Standalone)
+            # Role + user via the standaloneusers APIv4 entities. save+match
+            # keeps re-runs idempotent; "password" is a write-only field that
+            # gets hashed on save; "roles" wants role IDs. The User row IS the
+            # uf_match record on Standalone, so no separate UFMatch below.
+            perms_json=$(jq -c ".apiUsers[${i}].permissions + [\"authenticate with password\"]" "${CONFIG_FILE}")
+            role_id=$(cv api4 Role.save "{\"records\":[{\"name\":\"${role}\",\"label\":\"${role}\",\"permissions\":${perms_json},\"is_active\":true}],\"match\":[\"name\"]}" --out=json | jq -r '.[0].id // empty')
+            if [[ -n "${role_id}" && -n "${contact_id}" ]]; then
+                uid=$(cv api4 User.save "{\"records\":[{\"username\":\"${username}\",\"uf_name\":\"${email}\",\"contact_id\":${contact_id},\"password\":\"${password}\",\"roles\":[${role_id}],\"is_active\":true}],\"match\":[\"username\"]}" --out=json | jq -r '.[0].id // empty')
+            fi
+            [[ -n "${uid}" ]] || echo "     WARN: could not create standalone user '${username}'" >&2
+            ;;
+    esac
+
+    # Create UFMatch record (link CMS user to CiviCRM contact); Standalone
+    # maintains this itself via the User entity.
+    if [[ "${UF}" != "Standalone" && -n "${uid}" && -n "${contact_id}" ]]; then
         cv api4 UFMatch.create values="{\"uf_id\":${uid},\"contact_id\":${contact_id},\"uf_name\":\"${username}\"}" --out=json 2>/dev/null || true
     fi
-
-    # Assign permissions
-    permissions=$(jq -r ".apiUsers[${i}].permissions[]" "${CONFIG_FILE}")
-    while IFS= read -r permission; do
-        if [[ -n "${permission}" ]]; then
-            drush role:perm:add "${role}" "${permission}" 2>/dev/null || true
-        fi
-    done <<< "${permissions}"
 
     # Generate API key
     if [[ -n "${contact_id}" ]]; then
@@ -181,9 +247,14 @@ EOF
 echo ""
 echo "=========================================="
 
-# Clear Drupal cache to ensure permissions take effect
+# Flush caches so new roles/permissions take effect
 echo ""
-echo "     Clearing Drupal cache..."
-drush cache:rebuild 2>/dev/null || true
+echo "     Flushing caches..."
+case "${UF}" in
+    Drupal8)   drush cache:rebuild 2>/dev/null || true ;;
+    WordPress) wp cache flush 2>/dev/null || true ;;
+    Standalone) : ;;
+esac
+cv flush 2>/dev/null || true
 
 echo "     Credentials saved to ${API_KEYS_FILE}"

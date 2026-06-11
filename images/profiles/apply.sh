@@ -1,10 +1,11 @@
 #!/bin/bash
 # Shared profile driver: apply a demo profile (extensions + seed data + API
-# users) to a civibuild site. Runs at FIRST BOOT as the buildkit user, invoked
-# by provision.sh's ck_apply_profile when CIVIKITCHEN_PROFILE=<name> is set —
+# users) to a site. Runs at FIRST BOOT as the web user, invoked by
+# provision.sh's ck_apply_profile when CIVIKITCHEN_PROFILE=<name> is set —
 # works on the demo images (embedded DB) and the dev images (external DB)
-# alike. Needs network and takes a few minutes; it is marker-gated by the
-# caller, so it applies exactly once per container.
+# alike, on every flavor (standalone, drupal10, wordpress). Needs network and
+# takes a few minutes; it is marker-gated by the caller, so it applies
+# exactly once per container.
 #
 # Entirely driven by the profile dir (profile.json + seeds/*.php), so every
 # profile shares this one script; a profile may ship its own apply.sh to
@@ -19,13 +20,16 @@ set -euo pipefail
 PROFILE_DIR="${1:?usage: apply.sh <profile-dir>}"
 PROFILE_NAME="$(basename "${PROFILE_DIR}")"
 JSON="${PROFILE_DIR}/profile.json"
+# civibuild layout if present (demo + buildkit dev images); on the standalone
+# dev image cv is on the global PATH and finds the site via env, no cd needed.
 SITE_WEB="/home/buildkit/buildkit/build/site/web"
-export PATH="/home/buildkit/buildkit/bin:${PATH}"
+if [ -d "${SITE_WEB}" ]; then
+    export PATH="/home/buildkit/buildkit/bin:${PATH}"
+    cd "${SITE_WEB}"
+fi
 
-cd "${SITE_WEB}"
-
-# Extension dir (cv-discovered, so this stays CMS-agnostic even though the
-# profiles are drupal10-only today). The DB is up at this point, so cv boots.
+# Extension dir (cv-discovered, so this stays CMS-agnostic across all three
+# flavors). The DB is up at this point, so cv boots.
 EXT_DIR="$(cv ev 'echo rtrim(CRM_Core_Config::singleton()->extensionsDir, "/");')"
 [ -n "${EXT_DIR}" ] || { echo "apply.sh: could not resolve extensionsDir" >&2; exit 1; }
 mkdir -p "${EXT_DIR}"
@@ -71,6 +75,15 @@ jq -r '.dependencies[] | select(.enable) | .name' "${JSON}" \
     [ -n "${name}" ] || continue
     cv ext:enable "${name}"
 done
+
+# Seeds run as the admin CMS user. civibuild sites always have one; the
+# standalone dev image only after an auto-install with a demo admin — fail
+# with a hint instead of a cryptic cv error per seed.
+if ! cv ev --user=admin 'echo "ok";' >/dev/null 2>&1; then
+    echo "apply.sh: no 'admin' user on this site — profiles need one." >&2
+    echo "apply.sh: on the standalone dev image set CIVICRM_AUTO_INSTALL=1 and CIVIKITCHEN_DEMO_USER=admin." >&2
+    exit 1
+fi
 
 echo "==> [${PROFILE_NAME}] seeding demo data"
 # Seeds are PHP scripts run with a booted CiviCRM (cv scr): one process per

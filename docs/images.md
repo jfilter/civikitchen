@@ -106,9 +106,12 @@ docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:drupal10-demo
 ### Profiles (`CIVIKITCHEN_PROFILE`)
 
 A profile layers a curated extension stack + seed data + API users on top of
-the base site at **first boot**. All profiles are Drupal 10 only and live in
-[`images/profiles/`](../images/profiles/) (one dir per profile: `profile.json` +
-`seeds/*.php`, applied by the shared driver):
+the base site at **first boot**. Profiles work on **all three flavors**
+(standalone, drupal10, wordpress — demo and dev images alike); API users are
+created through the matching mechanism per CMS (Drupal roles via drush,
+WordPress roles/capabilities via wp-cli, native users on Standalone). They
+live in [`images/profiles/`](../images/profiles/) (one dir per profile:
+`profile.json` + `seeds/*.php`, applied by the shared driver):
 
 | Profile | Extensions | Seed data | API users |
 |---|---|---|---|
@@ -130,8 +133,11 @@ GitHub, so it **needs network access and takes a few minutes** (watch
 generated API-user credentials are printed to the logs and kept in the
 container: `docker exec civicrm cat /home/buildkit/api-credentials.txt`.
 
-Profiles also work on the dev images (`:drupal10`, `:wordpress`) — set the
-same env var in your compose file to develop against a realistic stack.
+Profiles also work on the dev images (`:standalone`, `:drupal10`,
+`:wordpress`) — set the same env var in your compose file to develop against
+a realistic stack. On the `:standalone` dev image the profile needs an admin
+user to seed as, so combine it with `CIVICRM_AUTO_INSTALL=1` and
+`CIVIKITCHEN_DEMO_USER=admin`.
 
 > **Migrating from `civicrm-eu-ngo:latest`?** That pre-baked image is retired;
 > use `civikitchen:drupal10-demo` with `CIVIKITCHEN_PROFILE=verein` instead —

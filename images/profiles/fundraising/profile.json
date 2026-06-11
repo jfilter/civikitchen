@@ -1,6 +1,5 @@
 {
   "description": "Fundraising: campaigns, pledges, recurring donors, CiviRules automation, donation receipts",
-  "cms": "drupal10",
   "authx": {
     "header_cred": ["jwt", "api_key", "pass"]
   },

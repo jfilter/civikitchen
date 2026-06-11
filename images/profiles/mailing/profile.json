@@ -1,6 +1,5 @@
 {
   "description": "Email campaigns: Mosaico drag-and-drop templates, segmented newsletter groups, draft mailing",
-  "cms": "drupal10",
   "authx": {
     "header_cred": ["jwt", "api_key", "pass"]
   },

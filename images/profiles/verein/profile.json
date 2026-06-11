@@ -1,6 +1,5 @@
 {
   "description": "German Verein (association): membership management, SEPA direct debit, bank reconciliation, GDPR",
-  "cms": "drupal10",
   "authx": {
     "header_cred": ["jwt", "api_key", "pass"]
   },

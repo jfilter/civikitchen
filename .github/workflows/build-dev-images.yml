@@ -537,18 +537,27 @@ jobs:
       contents: read
       packages: read
 
-    # The drupal10-demo + profile legs exercise the runtime profile path:
-    # first boot installs the profile extensions and seeds demo data.
+    # The profile legs exercise the runtime profile path on every flavor:
+    # first boot installs the profile extensions, seeds demo data, and
+    # creates API users (drush / wp-cli / standaloneusers APIs, per CMS).
     strategy:
       matrix:
         variant:
           - { tag: standalone-demo, profile: '' }
+          - { tag: standalone-demo, profile: verein }
+          - { tag: standalone-demo, profile: fundraising }
+          - { tag: standalone-demo, profile: events }
+          - { tag: standalone-demo, profile: mailing }
           - { tag: drupal10-demo,   profile: '' }
           - { tag: drupal10-demo,   profile: verein }
           - { tag: drupal10-demo,   profile: fundraising }
           - { tag: drupal10-demo,   profile: events }
           - { tag: drupal10-demo,   profile: mailing }
           - { tag: wordpress-demo,  profile: '' }
+          - { tag: wordpress-demo,  profile: verein }
+          - { tag: wordpress-demo,  profile: fundraising }
+          - { tag: wordpress-demo,  profile: events }
+          - { tag: wordpress-demo,  profile: mailing }
 
     steps:
       - name: Log in to GHCR
@@ -569,7 +578,7 @@ jobs:
 
   promote-demo:
     # Stable demo tags only move once the candidates passed the smoke tests
-    # (including the runtime verein profile leg).
+    # (including the runtime profile legs on all three flavors).
     needs: smoke-test-demo
     runs-on: ubuntu-24.04
     permissions:

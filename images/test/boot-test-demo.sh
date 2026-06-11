@@ -108,6 +108,24 @@ if [ -n "${PROFILE}" ]; then
     else
         echo "  ✓ no profile seed failures in logs"
     fi
+
+    # 7) An API user can actually authenticate and call the API (authx basic
+    # auth). This exercises the per-CMS user/role/permission wiring end to
+    # end — an install-only check can't see a broken permission mapping.
+    cred=$(docker exec "${APP}" cat /home/buildkit/api-credentials.txt 2>/dev/null | head -n 1 || true)
+    api_user="${cred%%:*}"
+    api_pass="$(echo "${cred}" | cut -d: -f2)"
+    if [ -n "${api_user}" ] && [ -n "${api_pass}" ]; then
+        basic=$(printf '%s:%s' "${api_user}" "${api_pass}" | base64)
+        auth_body=$(docker exec "${APP}" curl -s -X POST 'http://localhost/civicrm/ajax/api4/Contact/get' \
+            -H "Authorization: Basic ${basic}" \
+            -H 'X-Requested-With: XMLHttpRequest' \
+            --data-urlencode 'params={"limit":1}' 2>/dev/null || true)
+        check "API user '${api_user}' authenticates via authx basic auth" \
+            "echo '${auth_body}' | grep -q '\"values\"'"
+    else
+        echo "  ✗ no API credentials file in the container"; fail=1
+    fi
 fi
 
 [ "${fail}" = 0 ] && echo "==> PASS: ${IMAGE}" || { echo "==> FAIL: ${IMAGE}"; exit 1; }

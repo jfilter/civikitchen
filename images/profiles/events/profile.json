@@ -1,6 +1,5 @@
 {
   "description": "Event management: remote registration, event messages, past + upcoming events with participants",
-  "cms": "drupal10",
   "authx": {
     "header_cred": ["jwt", "api_key", "pass"]
   },

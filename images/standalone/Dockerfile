@@ -19,8 +19,9 @@ FROM civicrm/civicrm:${CIVICRM_VERSION}
 # - unzip/git: composer needs them for dist/source installs
 # - default-mysql-client: for poking the DB from inside the container
 # - nodejs/npm: required by extensions with Angular/JS assets
+# - jq: the profile driver (CIVIKITCHEN_PROFILE) parses profile.json with it
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl git unzip zip default-mysql-client \
+        ca-certificates curl git unzip zip default-mysql-client jq \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && apt-get clean \
@@ -68,6 +69,11 @@ COPY standalone/demo-user.php /usr/local/share/civikitchen/demo-user.php
 # also used by the buildkit image so the two stay in lockstep.
 COPY lib/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.sh
 COPY lib/provision.sh /usr/local/share/civikitchen/provision.sh
+
+# Demo profiles (CIVIKITCHEN_PROFILE) — same set as the buildkit images;
+# applied at first boot after the auto-install (needs an admin user, see
+# docs/images.md).
+COPY profiles /usr/local/share/civikitchen/profiles
 
 COPY standalone/entrypoint.sh /usr/local/bin/civikitchen-entrypoint
 RUN chmod +x /usr/local/bin/civikitchen-entrypoint
