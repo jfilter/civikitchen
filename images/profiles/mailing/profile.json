@@ -27,9 +27,6 @@
         "edit all contacts",
         "add contacts",
         "access CiviMail",
-        "create mailings",
-        "schedule mailings",
-        "approve mailings",
         "delete in CiviMail",
         "view public CiviMail content",
         "access CiviReport"

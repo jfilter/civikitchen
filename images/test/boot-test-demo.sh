@@ -123,9 +123,20 @@ if [ -n "${PROFILE}" ]; then
             --data-urlencode 'params={"limit":1}' 2>/dev/null || true)
         check "API user '${api_user}' authenticates via authx basic auth" \
             "echo '${auth_body}' | grep -q '\"values\"'"
+
+        # Also exercise the api_key credential: it has its own failure mode
+        # (civicrm_contact.api_key is varchar(32) — an oversized generated
+        # key gets mangled on save and only this check would catch it).
+        api_key="$(echo "${cred}" | cut -d: -f3)"
+        key_body=$(docker exec "${APP}" curl -s -X POST 'http://localhost/civicrm/ajax/api4/Contact/get' \
+            -H "X-Civi-Auth: Bearer ${api_key}" \
+            -H 'X-Requested-With: XMLHttpRequest' \
+            --data-urlencode 'params={"limit":1}' 2>/dev/null || true)
+        check "API user '${api_user}' authenticates via authx api_key" \
+            "echo '${key_body}' | grep -q '\"values\"'"
     else
         echo "  ✗ no API credentials file in the container"; fail=1
     fi
 fi
 
-[ "${fail}" = 0 ] && echo "==> PASS: ${IMAGE}" || { echo "==> FAIL: ${IMAGE}"; exit 1; }
+if [ "${fail}" = 0 ]; then echo "==> PASS: ${IMAGE}"; else echo "==> FAIL: ${IMAGE}"; exit 1; fi

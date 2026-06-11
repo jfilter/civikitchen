@@ -34,12 +34,10 @@
         "access CiviContribute",
         "edit contributions",
         "delete in CiviContribute",
-        "access CiviCampaign",
         "manage campaign",
         "administer CiviCampaign",
         "access CiviReport",
         "view all activities",
-        "edit all activities",
         "delete activities"
       ]
     },
@@ -60,8 +58,7 @@
         "edit event participants",
         "view event participants",
         "access CiviReport",
-        "view all activities",
-        "edit all activities"
+        "view all activities"
       ]
     },
     {
@@ -80,7 +77,6 @@
         "administer CiviCase",
         "access CiviReport",
         "view all activities",
-        "edit all activities",
         "delete activities"
       ]
     },
@@ -96,7 +92,6 @@
         "edit contributions",
         "administer CiviCRM",
         "view all activities",
-        "edit all activities",
         "delete activities"
       ]
     }

@@ -32,12 +32,10 @@
         "delete in CiviContribute",
         "access CiviPledge",
         "edit pledges",
-        "access CiviCampaign",
         "manage campaign",
         "administer CiviCampaign",
         "access CiviReport",
         "view all activities",
-        "edit all activities",
         "delete activities"
       ]
     }

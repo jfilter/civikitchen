@@ -101,7 +101,9 @@ done
 
 if jq -e '.apiUsers' "${JSON}" >/dev/null 2>&1; then
     echo "==> [${PROFILE_NAME}] configuring API users + AuthX"
-    bash "$(dirname "$0")/configure-api-users.sh" "${JSON}"
+    # PHP via cv scr: cv boots CiviCRM + the host CMS, so user/role creation
+    # uses the native CMS APIs on every flavor (no drush/wp-cli dependency).
+    CK_PROFILE_JSON="${JSON}" cv scr "$(dirname "$0")/configure-api-users.php"
 fi
 
 cv flush
