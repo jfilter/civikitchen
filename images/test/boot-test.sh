@@ -17,8 +17,12 @@ set -euo pipefail
 IMAGE="${1:?usage: boot-test.sh <image> <site_type>}"
 SITE_TYPE="${2:?usage: boot-test.sh <image> <site_type>}"
 
-# Unique names so parallel CI matrix legs / local runs don't collide.
-SLUG="boottest-$(echo "${IMAGE}_${SITE_TYPE}" | tr -c 'a-z0-9' '-')"
+# Unique names so parallel CI matrix legs / local runs don't collide. The DB
+# container name doubles as its DNS hostname on the test network, and DNS
+# labels are capped at 63 chars — CI image refs carry a 40-char sha tag, so
+# keep a short readable prefix and a checksum for uniqueness.
+RAW="$(echo "${IMAGE}_${SITE_TYPE}" | tr -c 'a-z0-9' '-')"
+SLUG="boottest-$(echo "${RAW}" | cut -c1-32)$(echo "${RAW}" | cksum | cut -d' ' -f1)"
 NET="${SLUG}-net"
 DB="${SLUG}-db"
 APP="${SLUG}-app"

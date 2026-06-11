@@ -16,7 +16,10 @@ set -euo pipefail
 IMAGE="${1:?usage: boot-test-demo.sh <image> [profile]}"
 PROFILE="${2:-}"
 
-SLUG="demotest-$(echo "${IMAGE}${PROFILE:+-${PROFILE}}" | tr -c 'a-z0-9' '-')"
+# Same name-length cap as boot-test.sh: keep container names DNS-label-safe
+# (<63 chars) even with a 40-char sha in the CI image tag.
+RAW="$(echo "${IMAGE}${PROFILE:+-${PROFILE}}" | tr -c 'a-z0-9' '-')"
+SLUG="demotest-$(echo "${RAW}" | cut -c1-32)$(echo "${RAW}" | cksum | cut -d' ' -f1)"
 APP="${SLUG}-app"
 if [ -n "${PROFILE}" ]; then
     HEALTH_TIMEOUT=900   # profile apply = git clones + seeds at first boot
