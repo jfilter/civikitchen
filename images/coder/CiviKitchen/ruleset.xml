@@ -9,7 +9,7 @@
     NoRequiredOnExternalAction (the @required trap — inert until an extension
     lists its externally reachable actions).
 
-    Use it directly (`phpcs --standard=CiviKitchen` / `civilint`) or reference
+    Use it directly (`phpcs --standard=CiviKitchen` / `cklint`) or reference
     it from a project phpcs.xml.dist (`<rule ref="CiviKitchen"/>`) and add
     project-specific paths, config and sniffs on top — the per-extension layer
     is always yours.

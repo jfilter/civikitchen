@@ -45,12 +45,12 @@ ARG PHPSTAN_VERSION
 ARG CODER_REF
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
-# install-dev-tools.sh) and the civilint wrapper that runs it.
+# install-dev-tools.sh) and the cklint linter that runs it.
 COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
-COPY lib/civilint /usr/local/bin/civilint
+COPY lib/cklint /usr/local/bin/cklint
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
-    && chmod +x /usr/local/bin/civilint
+    && chmod +x /usr/local/bin/cklint
 
 # Add our vhost extras (e.g. the bare-/ → /civicrm/login redirect) via the
 # standard apache conf-available + a2enconf flow rather than editing the

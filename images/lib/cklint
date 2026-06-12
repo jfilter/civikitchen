@@ -1,0 +1,88 @@
+#!/bin/bash
+#
+# cklint — fast PHP linting for CiviCRM extensions, using the bundled
+# CiviKitchen phpcs standard, or the project's own phpcs.xml/.dist when one is
+# present (so the per-extension layer always wins). A modern, deliberately
+# PHP-only take on civicrm-buildkit's civilint: syntax + style in one command,
+# changed-files by default. PHPStan stays a separate step (it needs the
+# project's bootstrap/config).
+#
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+cklint — PHP linting for CiviCRM extensions (CiviKitchen phpcs standard).
+
+  cklint                  lint PHP files with uncommitted git changes (default)
+  cklint --all            lint the whole project (phpcs.xml.dist scope, or .)
+  cklint path ...         lint the given files/dirs
+  cklint --fix [path...]  auto-fix with phpcbf instead of reporting
+
+Each PHP file is syntax-checked (php -l) before phpcs. Run from the project
+root. If the project ships a phpcs.xml/.dist it is used as-is; otherwise the
+bundled CiviKitchen standard applies.
+EOF
+}
+
+fix=0
+all=0
+paths=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --fix)     fix=1 ;;
+    --all)     all=1 ;;
+    -h|--help) usage; exit 0 ;;
+    --)        shift; break ;;
+    -*)        echo "cklint: unknown option: $1" >&2; usage >&2; exit 2 ;;
+    *)         paths+=("$1") ;;
+  esac
+  shift
+done
+while [ "$#" -gt 0 ]; do paths+=("$1"); shift; done
+
+# Default targets: PHP files with uncommitted changes (tracked edits + new
+# untracked files) — the civilint contract. Skipped when paths or --all given.
+if [ "${#paths[@]}" -eq 0 ] && [ "$all" -eq 0 ]; then
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    while IFS= read -r f; do
+      [ -n "$f" ] && paths+=("$f")
+    done < <(
+      { git diff --name-only --diff-filter=d HEAD --;
+        git ls-files --others --exclude-standard; } 2>/dev/null \
+        | grep -E '\.php$' | sort -u
+    )
+  fi
+  if [ "${#paths[@]}" -eq 0 ]; then
+    echo "cklint: no changed PHP files to lint."
+    exit 0
+  fi
+fi
+
+# Build the phpcs/phpcbf argument list. A project phpcs.xml(.dist) wins; else
+# the bundled CiviKitchen standard.
+args=(-q)
+if [ ! -f phpcs.xml ] && [ ! -f phpcs.xml.dist ]; then
+  args+=(--standard=CiviKitchen --extensions=php)
+fi
+
+# Syntax-check explicit PHP files first (php -l). Dir scope (--all) skips this.
+if [ "$all" -eq 0 ]; then
+  for f in "${paths[@]}"; do
+    case "$f" in
+      *.php) [ -f "$f" ] && { php -l "$f" >/dev/null || exit 1; } ;;
+    esac
+  done
+fi
+
+if [ "${#paths[@]}" -gt 0 ]; then
+  args+=("${paths[@]}")
+elif [ ! -f phpcs.xml ] && [ ! -f phpcs.xml.dist ]; then
+  # --all without a project config: scan the whole tree.
+  args+=(.)
+fi
+# else (--all with a project config): pass no path so phpcs uses the config's
+# own <file> scope instead of rescanning everything under '.'.
+
+bin=phpcs
+[ "$fix" -eq 1 ] && bin=phpcbf
+exec "$bin" "${args[@]}"

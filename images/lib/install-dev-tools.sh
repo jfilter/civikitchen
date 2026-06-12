@@ -77,7 +77,7 @@ rm -rf "${CODER_DIR}/.git"
 # the setting applies to every user that invokes phpcs in this image.
 # Two paths (comma-separated): the civicrm-coder fork (Drupal/DrupalPractice)
 # AND the bundled CiviKitchen standard (CiviCRM-tuned Drupal + footgun sniffs,
-# what `civilint` runs). The Dockerfile COPYs the CiviKitchen dir to
+# what `cklint` runs). The Dockerfile COPYs the CiviKitchen dir to
 # ${CIVIKITCHEN_CODER_DIR} before this script runs.
 CIVIKITCHEN_CODER_DIR=/opt/civikitchen-coder
 phpcs --config-set installed_paths "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR}"
