@@ -31,6 +31,9 @@
 : "${CK_TEST_DB_CV_KEY:=/var/www/html/civicrm.standalone.php}"
 # Where named profiles (images/profiles/<name>/) ship inside the image.
 : "${CK_PROFILE_DIR:=/usr/local/share/civikitchen/profiles}"
+# Optional civibuild-style settings.d dir (loaded into civicrm.settings.php).
+# Only the buildkit entrypoint sets this; see ck_smtp.
+: "${CK_SETTINGS_D:=}"
 
 # --- functions -------------------------------------------------------------
 
@@ -85,6 +88,13 @@ ck_smtp() {
     echo "[civikitchen] Configuring mail backend → ${CIVIKITCHEN_SMTP_HOST}:${smtp_port}..."
     ck_as_web env SMTP_HOST="${CIVIKITCHEN_SMTP_HOST}" SMTP_PORT="${smtp_port}" \
         cv ev '\Civi::settings()->set("mailing_backend", ["outBound_option" => 0, "smtpServer" => getenv("SMTP_HOST"), "smtpPort" => (int) getenv("SMTP_PORT"), "smtpAuth" => 0, "smtpUsername" => "", "smtpPassword" => ""]);'
+    # buildkit only: its app/civicrm.settings.d/100-mail.php cannot see the
+    # DB-level setting above (it only checks the $civicrm_setting override)
+    # and so defines CIVICRM_MAIL_LOG=/dev/null — send() returns TRUE while
+    # every outbound mail silently vanishes. With an explicit SMTP host there
+    # is nothing left for that heuristic to decide: drop it. (The standalone
+    # flavor never had it — this aligns the flavors.)
+    [[ -n "${CK_SETTINGS_D}" ]] && rm -f "${CK_SETTINGS_D}/100-mail.php"
 }
 
 # Demo login user. Opt-in via CIVIKITCHEN_DEMO_USER.
