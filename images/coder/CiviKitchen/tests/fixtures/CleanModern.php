@@ -31,4 +31,8 @@ class CiviKitchenFixtureClean {
     return $key;
   }
 
+  public function civikitchen_fixture_civicrm_managed(): array {
+    return [];
+  }
+
 }

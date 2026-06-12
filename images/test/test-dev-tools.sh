@@ -75,6 +75,9 @@ fi
 echo "== CiviKitchen standard + cklint =="
 cat > "${WORKDIR}/Legacy.php" <<'PHP'
 <?php
+function myext_civicrm_managed(&$entities) {
+  $entities = [];
+}
 function f() {
   CRM_Core_Error::debug_log_message(ts('hello'));
   return civicrm_api3('Contact', 'get', []);
@@ -96,6 +99,11 @@ if echo "${CK_OUT}" | grep -qi "translation domain"; then
     ok "CiviKitchen UseExtensionTs flags bare ts()"
 else
     fail "CiviKitchen UseExtensionTs didn't flag bare ts() (output: ${CK_OUT:0:200})"
+fi
+if echo "${CK_OUT}" | grep -q "civicrm_managed"; then
+    ok "CiviKitchen UseMixinsForStandardHooks flags legacy mixin hooks"
+else
+    fail "CiviKitchen UseMixinsForStandardHooks didn't flag legacy hook (output: ${CK_OUT:0:200})"
 fi
 
 if cklint --help 2>&1 | grep -q "uncommitted git changes"; then

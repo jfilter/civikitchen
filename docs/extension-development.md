@@ -114,6 +114,16 @@ docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpcs --sta
 docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpcbf --standard=Drupal ."  # auto-fix
 ```
 
+For the stricter CiviKitchen extension checks, use `cklint` instead. It wraps
+`php -l` + `phpcs`, defaults to changed PHP files, and uses the bundled
+`CiviKitchen` standard when the extension does not provide its own
+`phpcs.xml(.dist)`:
+
+```bash
+docker compose exec app bash -c "cd /var/www/html/ext/myextension && cklint"
+docker compose exec app bash -c "cd /var/www/html/ext/myextension && cklint --all"
+```
+
 Most extensions ship a `phpcs.xml.dist` that scopes the run to the right files and excludes generated DAOs — see `extensions/de.systopia.contract/phpcs.xml.dist` for a working reference.
 
 ## IDE step debugging

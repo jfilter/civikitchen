@@ -19,7 +19,10 @@ use PHPUnit\Framework\TestCase;
  */
 final class SniffsTest extends TestCase {
 
-  private const SNIFFS = 'CiviKitchen.Legacy.NoLegacyCall,CiviKitchen.I18n.UseExtensionTs,CiviKitchen.Api.NoRequiredOnExternalAction';
+  private const SNIFFS = 'CiviKitchen.Legacy.NoLegacyCall,'
+    . 'CiviKitchen.I18n.UseExtensionTs,'
+    . 'CiviKitchen.Api.NoRequiredOnExternalAction,'
+    . 'CiviKitchen.Extension.UseMixinsForStandardHooks';
 
   /**
    * Run phpcs over one fixture, restricted to the CiviKitchen sniffs, and
@@ -84,6 +87,19 @@ final class SniffsTest extends TestCase {
     $expected = [
       7 => ['CiviKitchen.I18n.UseExtensionTs.BareTs'],
       8 => ['CiviKitchen.I18n.UseExtensionTs.BareTs'],
+    ];
+    self::assertSame($expected, $findings);
+  }
+
+  public function testUseMixinsForStandardHooksFlagsLegacyMixinHooks(): void {
+    $findings = $this->phpcs('LegacyMixinHooks.php');
+
+    $expected = [
+      6 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
+      9 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
+      12 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
+      15 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
+      18 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
     ];
     self::assertSame($expected, $findings);
   }
