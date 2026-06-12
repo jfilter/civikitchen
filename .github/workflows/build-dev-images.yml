@@ -14,6 +14,15 @@ on:
     # security patches.
     - cron: '0 4 * * 1'
   workflow_dispatch:
+    inputs:
+      extra_standalone_minors:
+        description: >-
+          Extra standalone minors to build alongside the current stable
+          (comma-separated, e.g. "6.12"). For downstreams pinned to an older
+          minor: its :standalone-<minor> tag freezes once upstream moves on,
+          so image/tooling changes never reach it without an explicit rebuild.
+        required: false
+        default: ''
 
 env:
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/civikitchen
@@ -31,6 +40,9 @@ jobs:
     steps:
       - name: Resolve current CiviCRM stable
         id: resolve
+        env:
+          # Empty on push/schedule; only workflow_dispatch can request extras.
+          EXTRA_MINORS: ${{ inputs.extra_standalone_minors }}
         run: |
           STABLE=$(curl -fsS https://latest.civicrm.org/stable.php)
           echo "upstream stable: ${STABLE}"
@@ -39,10 +51,26 @@ jobs:
             exit 1
           fi
           MINOR=${STABLE%.*}
+          # Requested extra minors flow through the whole standalone chain
+          # (build → merge → smoke → e2e → promote) via this one array.
+          VERSIONS="[\"latest\",\"${MINOR}\""
+          IFS=',' read -ra EXTRAS <<< "${EXTRA_MINORS}"
+          for v in "${EXTRAS[@]}"; do
+            v="${v// /}"
+            [ -z "${v}" ] && continue
+            if ! [[ "${v}" =~ ^[0-9]+\.[0-9]+$ ]]; then
+              echo "invalid extra standalone minor: '${v}'" >&2
+              exit 1
+            fi
+            [ "${v}" = "${MINOR}" ] && continue
+            VERSIONS="${VERSIONS},\"${v}\""
+          done
+          VERSIONS="${VERSIONS}]"
+          echo "standalone versions: ${VERSIONS}"
           {
             echo "stable=${STABLE}"
             echo "minor=${MINOR}"
-            echo "standalone_versions=[\"latest\",\"${MINOR}\"]"
+            echo "standalone_versions=${VERSIONS}"
           } >> "$GITHUB_OUTPUT"
 
   build-standalone:
