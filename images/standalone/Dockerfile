@@ -74,6 +74,7 @@ COPY standalone/demo-user.php /usr/local/share/civikitchen/demo-user.php
 # also used by the buildkit image so the two stay in lockstep.
 COPY lib/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.sh
 COPY lib/provision.sh /usr/local/share/civikitchen/provision.sh
+COPY lib/patch-test-db-boot.php /usr/local/share/civikitchen/patch-test-db-boot.php
 
 # Demo profiles (CIVIKITCHEN_PROFILE) — same set as the buildkit images;
 # applied at first boot after the auto-install (needs an admin user, see
