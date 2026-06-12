@@ -29,6 +29,11 @@
 # ~/.cv.json site key under which TEST_DB_DSN is stored. Standalone keys by its
 # bootstrap file; other CMSes key the site differently (resolved per image).
 : "${CK_TEST_DB_CV_KEY:=/var/www/html/civicrm.standalone.php}"
+# Boot stub patched by ck_setup_test_db so CIVICRM_UF=UnitTests boots define
+# the test DSN before core's env-based DSN composition (see
+# patch-test-db-boot.php). Empty or missing file = skip (buildkit flavors
+# boot through their CMS, not a stub).
+: "${CK_BOOT_STUB:=/var/www/html/civicrm.standalone.php}"
 # Where named profiles (images/profiles/<name>/) ship inside the image.
 : "${CK_PROFILE_DIR:=/usr/local/share/civikitchen/profiles}"
 # Optional civibuild-style settings.d dir (loaded into civicrm.settings.php).
@@ -123,9 +128,22 @@ ck_setup_test_db() {
     local test_db_name="${CIVICRM_DB_NAME}_test"
     local test_db_dsn="mysql://${CIVICRM_DB_USER}:${CIVICRM_DB_PASSWORD}@${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}/${test_db_name}?new_link=true"
     echo "[civikitchen] Configuring isolated test DB → ${test_db_name} (TEST_DB_DSN)..."
-    mysql -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" \
-        -e "CREATE DATABASE IF NOT EXISTS \`${test_db_name}\`" 2>/dev/null \
-        || echo "[civikitchen] WARN: could not pre-create ${test_db_name}; the test framework will create it on demand" >&2
+    if mysql -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" \
+        -e "CREATE DATABASE IF NOT EXISTS \`${test_db_name}\`" 2>/dev/null; then
+        # Seed the test DB from the freshly installed main DB. An EMPTY test
+        # DB is unusable: the headless harness boots CiviCRM against
+        # TEST_DB_DSN before \Civi\Test can (re)build any schema, and that
+        # boot dies on a schema-less database. civibuild does the same
+        # main→test copy for its sites.
+        echo "[civikitchen] Seeding ${test_db_name} from ${CIVICRM_DB_NAME}..."
+        if ! mysqldump -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" \
+                --single-transaction --routines --triggers "${CIVICRM_DB_NAME}" 2>/dev/null \
+            | mysql -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" "${test_db_name}" 2>/dev/null; then
+            echo "[civikitchen] WARN: could not seed ${test_db_name}; grant the DB user rights on it (GRANT ALL ON \`${test_db_name//_/\\_}\`.* ...) and re-provision" >&2
+        fi
+    else
+        echo "[civikitchen] WARN: could not pre-create ${test_db_name}; grant the DB user rights on it (GRANT ALL ON \`${test_db_name//_/\\_}\`.* ...) — headless tests need a seeded test DB" >&2
+    fi
     # cv merges ~/.cv.json into $GLOBALS['_CV'], keyed by the site bootstrap
     # path; civicrm.settings.php reads _CV['TEST_DB_DSN'] under
     # CIVICRM_UF=UnitTests. Write it for root (docker exec default) and the web
@@ -134,6 +152,15 @@ ck_setup_test_db() {
     cv_json=$(printf '{\n  "sites": {\n    "%s": {\n      "TEST_DB_DSN": "%s"\n    }\n  }\n}' "${CK_TEST_DB_CV_KEY}" "${test_db_dsn}")
     [[ -f /root/.cv.json ]] || printf '%s\n' "${cv_json}" > /root/.cv.json
     [[ -f "${CK_WEB_USER_HOME}/.cv.json" ]] || ck_as_web bash -c "printf '%s\n' '${cv_json}' > ${CK_WEB_USER_HOME}/.cv.json"
+
+    # TEST_DB_DSN in ~/.cv.json alone is NOT enough: core's SettingsManager
+    # composes CIVICRM_DSN from the CIVICRM_DB_* env vars before the settings
+    # file loads, so its UnitTests/TEST_DB_DSN branch never fires in an
+    # env-configured container and headless phpunit would silently hit the
+    # dev DB. Patch the boot stub to define the test DSN first (idempotent).
+    if [[ -n "${CK_BOOT_STUB}" ]]; then
+        php /usr/local/share/civikitchen/patch-test-db-boot.php "${CK_BOOT_STUB}"
+    fi
 }
 
 # Download + enable a comma-separated list of registry extensions.
