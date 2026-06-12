@@ -94,7 +94,11 @@ ck_smtp() {
     # every outbound mail silently vanishes. With an explicit SMTP host there
     # is nothing left for that heuristic to decide: drop it. (The standalone
     # flavor never had it — this aligns the flavors.)
-    [[ -n "${CK_SETTINGS_D}" ]] && rm -f "${CK_SETTINGS_D}/100-mail.php"
+    # NOT `[[ ... ]] && rm`: as the function's last statement it returns 1
+    # when CK_SETTINGS_D is empty (standalone), and the entrypoints run set -e.
+    if [[ -n "${CK_SETTINGS_D}" ]]; then
+        rm -f "${CK_SETTINGS_D}/100-mail.php"
+    fi
 }
 
 # Demo login user. Opt-in via CIVIKITCHEN_DEMO_USER.
