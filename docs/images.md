@@ -15,7 +15,7 @@ Official `civicrm/civicrm` image with dev tools added:
 - **phpunit 9** — pinned for CiviCRM compatibility
 - **phpstan** — static analysis
 - **phpcs + civicrm/coder** — the de-facto CiviCRM style guide (relaxed Drupal CS)
-- **cklint + the `CiviKitchen` phpcs standard** — opinionated extension linting: the Drupal base minus the doc-comment sniffs that fight PHPStan array-shape PHPDocs, plus footgun sniffs (bans APIv3 calls, `CRM_Utils_Array::value`, `PEAR::raiseError`; guards `@required` on externally reachable APIv4 actions). `cklint` lints your uncommitted changes by default (`--all`, `--fix`, explicit paths supported) and always defers to a project's own `phpcs.xml(.dist)`.
+- **cklint + the `CiviKitchen` phpcs standard** — opinionated extension linting: the Drupal base minus the doc-comment sniffs that fight PHPStan array-shape PHPDocs, plus footgun sniffs (bans APIv3 calls and removed/deprecated core helpers like `CRM_Utils_Array::value` and `CRM_Core_Error::fatal|debug_*`; flags bare `ts()` — extensions must use `E::ts()` for their own translation domain; guards `@required` on externally reachable APIv4 actions). `cklint` lints your uncommitted changes by default (`--all`, `--fix`, explicit paths supported) and always defers to a project's own `phpcs.xml(.dist)`.
 
 CiviCRM is auto-installed on first container start when `CIVICRM_AUTO_INSTALL=1`. See [Extension development](extension-development.md) for the full setup.
 

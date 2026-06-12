@@ -76,6 +76,7 @@ echo "== CiviKitchen standard + cklint =="
 cat > "${WORKDIR}/Legacy.php" <<'PHP'
 <?php
 function f() {
+  CRM_Core_Error::debug_log_message(ts('hello'));
   return civicrm_api3('Contact', 'get', []);
 }
 PHP
@@ -85,6 +86,16 @@ if echo "${CK_OUT}" | grep -q "civicrm_api3"; then
     ok "CiviKitchen NoLegacyCall flags civicrm_api3"
 else
     fail "CiviKitchen NoLegacyCall didn't flag civicrm_api3 (output: ${CK_OUT:0:200})"
+fi
+if echo "${CK_OUT}" | grep -q "debug_log_message"; then
+    ok "CiviKitchen NoLegacyCall flags CRM_Core_Error::debug_log_message"
+else
+    fail "CiviKitchen NoLegacyCall didn't flag debug_log_message (output: ${CK_OUT:0:200})"
+fi
+if echo "${CK_OUT}" | grep -qi "translation domain"; then
+    ok "CiviKitchen UseExtensionTs flags bare ts()"
+else
+    fail "CiviKitchen UseExtensionTs didn't flag bare ts() (output: ${CK_OUT:0:200})"
 fi
 
 if cklint --help 2>&1 | grep -q "uncommitted git changes"; then
@@ -100,6 +111,15 @@ if echo "${CKLINT_OUT}" | grep -q "civicrm_api3"; then
     ok "cklint lints with the CiviKitchen fallback standard"
 else
     fail "cklint didn't report the legacy call (output: ${CKLINT_OUT:0:200})"
+fi
+
+# The sniffs' own unit tests ship with the standard (exact codes + line
+# numbers per fixture, zero findings on the modern counterparts, the
+# externalActions arming behavior).
+if SNIFF_TESTS_OUT="$(phpunit --no-configuration /opt/civikitchen-coder/CiviKitchen/tests 2>&1)"; then
+    ok "CiviKitchen sniff unit tests"
+else
+    fail "CiviKitchen sniff unit tests (${SNIFF_TESTS_OUT:0:300})"
 fi
 
 # ---------------------------------------------------------------------------

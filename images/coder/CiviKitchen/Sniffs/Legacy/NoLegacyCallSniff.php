@@ -42,6 +42,9 @@ final class NoLegacyCallSniff implements Sniff {
   public $bannedStaticCalls = [
     'CRM_Utils_Array::value' => 'use the null-coalescing operator: $array[$key] ?? $default',
     'PEAR::raiseError' => 'construct new \\PEAR_Error(...) — raiseError throws under UnitTests',
+    'CRM_Core_Error::fatal' => 'throw an exception — fatal() is gone from core',
+    'CRM_Core_Error::debug_log_message' => 'use \\Civi::log()',
+    'CRM_Core_Error::debug_var' => 'use \\Civi::log() with a context array',
   ];
 
   /**

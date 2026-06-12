@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<ruleset name="CiviKitchenTestExternalActions">
+  <description>
+    Test ruleset: the @required guard armed for RequiredOnIntake. References
+    the sniff by relative file path so it resolves without any installed_paths
+    registration.
+  </description>
+  <rule ref="../../Sniffs/Api/NoRequiredOnExternalActionSniff.php">
+    <properties>
+      <property name="externalActions" type="array">
+        <element value="RequiredOnIntake"/>
+      </property>
+    </properties>
+  </rule>
+</ruleset>
