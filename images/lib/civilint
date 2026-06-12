@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+# civilint — phpcs for CiviCRM extensions with the bundled CiviKitchen
+# standard (CiviCRM's Drupal base minus the PHPStan-conflicting doc sniffs,
+# plus the reusable footgun sniffs). A thin wrapper over phpcs:
+#
+#   civilint Civi CRM           # lint paths with the CiviKitchen standard
+#   civilint                    # lint . with the CiviKitchen standard
+#
+# If the project ships its own phpcs.xml / phpcs.xml.dist (to add paths,
+# project sniffs or config such as the external-action list), that takes
+# precedence — civilint then just runs phpcs with the project config, so the
+# per-extension layer always wins.
+#
+set -euo pipefail
+
+for cfg in phpcs.xml phpcs.xml.dist; do
+  if [ -f "$cfg" ]; then
+    exec phpcs -q "$@"
+  fi
+done
+
+if [ "$#" -eq 0 ]; then
+  set -- .
+fi
+exec phpcs -q --standard=CiviKitchen --extensions=php "$@"

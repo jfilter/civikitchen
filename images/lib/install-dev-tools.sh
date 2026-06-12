@@ -75,7 +75,12 @@ rm -rf "${CODER_DIR}/.git"
 # Register with phpcs. --config-set writes to the CodeSniffer.conf alongside
 # the phpcs install (in /opt/composer/vendor/squizlabs/php_codesniffer/), so
 # the setting applies to every user that invokes phpcs in this image.
-phpcs --config-set installed_paths "${CODER_DIR}/coder_sniffer"
+# Two paths (comma-separated): the civicrm-coder fork (Drupal/DrupalPractice)
+# AND the bundled CiviKitchen standard (CiviCRM-tuned Drupal + footgun sniffs,
+# what `civilint` runs). The Dockerfile COPYs the CiviKitchen dir to
+# ${CIVIKITCHEN_CODER_DIR} before this script runs.
+CIVIKITCHEN_CODER_DIR=/opt/civikitchen-coder
+phpcs --config-set installed_paths "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR}"
 
 rm -rf /opt/composer/cache
-chmod -R a+rX /opt/composer "${CODER_DIR}"
+chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}"

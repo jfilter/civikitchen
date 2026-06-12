@@ -44,8 +44,13 @@ ENV PATH="/opt/composer/vendor/bin:${PATH}"
 ARG PHPSTAN_VERSION
 ARG CODER_REF
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
+# The bundled CiviKitchen phpcs standard (registered into installed_paths by
+# install-dev-tools.sh) and the civilint wrapper that runs it.
+COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
+COPY lib/civilint /usr/local/bin/civilint
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" \
-        bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh
+        bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
+    && chmod +x /usr/local/bin/civilint
 
 # Add our vhost extras (e.g. the bare-/ → /civicrm/login redirect) via the
 # standard apache conf-available + a2enconf flow rather than editing the
