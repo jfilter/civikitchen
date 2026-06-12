@@ -173,12 +173,26 @@ ck_extra_extensions() {
     local ext_spec ext_key
     local -a specs
     IFS=',' read -ra specs <<< "${CIVIKITCHEN_EXTRA_EXTENSIONS}"
+    local attempt
     for ext_spec in "${specs[@]}"; do
         ext_spec="${ext_spec// /}"
         [[ -z "${ext_spec}" ]] && continue
         ext_key="${ext_spec%%@*}"
         echo "[civikitchen]   - ${ext_key}"
-        ck_as_web cv ext:download -n --no-install "${ext_spec}"
+        # Release-asset downloads (GitHub et al.) fail transiently often
+        # enough that one cURL timeout shouldn't abort the whole first-boot
+        # provisioning — retry a few times before giving up.
+        for attempt in 1 2 3; do
+            if ck_as_web cv ext:download -n --no-install "${ext_spec}"; then
+                break
+            fi
+            if [[ "${attempt}" == "3" ]]; then
+                echo "[civikitchen] ERROR: download of ${ext_key} failed after ${attempt} attempts" >&2
+                return 1
+            fi
+            echo "[civikitchen] WARN: download of ${ext_key} failed (attempt ${attempt}/3); retrying in 5s..." >&2
+            sleep 5
+        done
         ck_as_web cv ext:enable "${ext_key}"
     done
 }
