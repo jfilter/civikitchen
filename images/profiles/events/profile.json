@@ -63,7 +63,9 @@
       "name": "de.systopia.remoteevent",
       "repo": "https://github.com/systopia/de.systopia.remoteevent.git",
       "version": "master",
-      "enable": true
+      "enable": true,
+      "skipUf": ["Standalone"],
+      "skipUfReason": "its civicrm_session table DROPs/replaces standaloneusers' session storage, after which every web request fatals with HTTP 500 - see https://github.com/systopia/de.systopia.remoteevent/issues/128"
     },
     {
       "name": "de.systopia.eventmessages",

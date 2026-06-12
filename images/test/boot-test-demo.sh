@@ -116,24 +116,38 @@ if [ -n "${PROFILE}" ]; then
     api_user="${cred%%:*}"
     api_pass="$(echo "${cred}" | cut -d: -f2)"
     if [ -n "${api_user}" ] && [ -n "${api_pass}" ]; then
+        # Each call asserts BOTH the body and the HTTP status. The body alone
+        # is not enough: a fatal during request shutdown (e.g. the standalone
+        # session writer failing after output was sent — exactly what the
+        # remoteevent civicrm_session table collision caused) still produces
+        # a complete JSON body, but with HTTP 500 on every request. A
+        # body-only grep shipped that breakage as a green test.
         basic=$(printf '%s:%s' "${api_user}" "${api_pass}" | base64)
-        auth_body=$(docker exec "${APP}" curl -s -X POST 'http://localhost/civicrm/ajax/api4/Contact/get' \
+        auth_out=$(docker exec "${APP}" curl -s -w '\n%{http_code}' -X POST 'http://localhost/civicrm/ajax/api4/Contact/get' \
             -H "Authorization: Basic ${basic}" \
             -H 'X-Requested-With: XMLHttpRequest' \
             --data-urlencode 'params={"limit":1}' 2>/dev/null || true)
+        auth_code="${auth_out##*$'\n'}"
+        auth_body="${auth_out%$'\n'*}"
         check "API user '${api_user}' authenticates via authx basic auth" \
             "echo '${auth_body}' | grep -q '\"values\"'"
+        check "basic-auth API call returns HTTP 200 (got ${auth_code})" \
+            "[ '${auth_code}' = '200' ]"
 
         # Also exercise the api_key credential: it has its own failure mode
         # (civicrm_contact.api_key is varchar(32) — an oversized generated
         # key gets mangled on save and only this check would catch it).
         api_key="$(echo "${cred}" | cut -d: -f3)"
-        key_body=$(docker exec "${APP}" curl -s -X POST 'http://localhost/civicrm/ajax/api4/Contact/get' \
+        key_out=$(docker exec "${APP}" curl -s -w '\n%{http_code}' -X POST 'http://localhost/civicrm/ajax/api4/Contact/get' \
             -H "X-Civi-Auth: Bearer ${api_key}" \
             -H 'X-Requested-With: XMLHttpRequest' \
             --data-urlencode 'params={"limit":1}' 2>/dev/null || true)
+        key_code="${key_out##*$'\n'}"
+        key_body="${key_out%$'\n'*}"
         check "API user '${api_user}' authenticates via authx api_key" \
             "echo '${key_body}' | grep -q '\"values\"'"
+        check "api_key API call returns HTTP 200 (got ${key_code})" \
+            "[ '${key_code}' = '200' ]"
     else
         echo "  ✗ no API credentials file in the container"; fail=1
     fi

@@ -42,10 +42,26 @@ mkdir -p "${EXT_DIR}"
 LOCAL_KEYS="$(cv ev 'foreach (CRM_Extension_System::singleton()->getFullContainer()->getKeys() as $k) { echo $k . PHP_EOL; }')"
 ext_present() { grep -qx "$1" <<<"${LOCAL_KEYS}" || [ -d "${EXT_DIR}/$1" ]; }
 
+# The UF (CMS framework) this site runs on — "Standalone", "WordPress",
+# "Drupal8", ... A dependency may declare `"skipUf": ["Standalone"]` (values
+# compared against CIVICRM_UF verbatim) plus an optional human "skipUfReason";
+# it is then neither fetched nor enabled on that framework. This exists
+# because an extension can be structurally incompatible with one flavor —
+# e.g. remoteevent's `civicrm_session` table DROPs/replaces standaloneusers'
+# session storage on Standalone, after which every web request fatals
+# (https://github.com/systopia/de.systopia.remoteevent/issues/128).
+UF="$(cv ev 'echo CIVICRM_UF;')"
+# jq filter fragment: dependencies NOT skipped on this UF.
+NOT_SKIPPED='select((.skipUf // []) | index($uf) | not)'
+jq -r --arg uf "${UF}" \
+    '.dependencies[] | select((.skipUf // []) | index($uf))
+     | "  SKIP \(.name) on \($uf): \(.skipUfReason // "declared incompatible in profile.json")"' \
+    "${JSON}"
+
 echo "==> [${PROFILE_NAME}] cloning extensions into ${EXT_DIR}"
 # Tab-separated so URLs/names never collide with the field separator. A failed
 # clone/checkout aborts the apply (loud) — a missing extension must not ship.
-jq -r '.dependencies[] | select(.repo) | "\(.repo)\t\(.name)\t\(.version)"' "${JSON}" \
+jq -r --arg uf "${UF}" ".dependencies[] | ${NOT_SKIPPED} | select(.repo) | \"\(.repo)\t\(.name)\t\(.version)\"" "${JSON}" \
 | while IFS=$'\t' read -r repo name version; do
     if ext_present "${name}"; then echo "  ${name} already present"; continue; fi
     echo "  cloning ${name} @ ${version}"
@@ -57,7 +73,7 @@ jq -r '.dependencies[] | select(.repo) | "\(.repo)\t\(.name)\t\(.version)"' "${J
 done
 
 echo "==> [${PROFILE_NAME}] downloading registry extensions"
-jq -r '.dependencies[] | select(.registry == true) | .name' "${JSON}" \
+jq -r --arg uf "${UF}" ".dependencies[] | ${NOT_SKIPPED} | select(.registry == true) | .name" "${JSON}" \
 | while IFS= read -r name; do
     [ -n "${name}" ] || continue
     if ext_present "${name}"; then echo "  ${name} already present"; continue; fi
@@ -70,7 +86,7 @@ echo "==> [${PROFILE_NAME}] enabling extensions"
 # guarantee install order, and extension installers may depend on artifacts
 # (option groups etc.) created by an earlier dependency's installer. Also
 # covers bundled core extensions like flexmailer (no repo, no registry).
-jq -r '.dependencies[] | select(.enable) | .name' "${JSON}" \
+jq -r --arg uf "${UF}" ".dependencies[] | ${NOT_SKIPPED} | select(.enable) | .name" "${JSON}" \
 | while IFS= read -r name; do
     [ -n "${name}" ] || continue
     cv ext:enable "${name}"

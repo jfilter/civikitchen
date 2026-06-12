@@ -39,5 +39,12 @@ jobs:
           for f in images/profiles/*/profile.json; do
             jq -e '.description and (.dependencies | type == "array")' "$f" >/dev/null \
               || { echo "invalid: $f" >&2; exit 1; }
+            # skipUf, when present, must be an array of known CIVICRM_UF names —
+            # a typo here would silently NOT skip (and e.g. re-break Standalone).
+            jq -e '.dependencies | all(
+                     (.skipUf // []) | type == "array" and
+                     all(. as $u | ["Standalone", "Drupal", "Drupal8", "WordPress", "Backdrop", "Joomla"] | index($u))
+                   )' "$f" >/dev/null \
+              || { echo "invalid skipUf in: $f (must be an array of CIVICRM_UF names)" >&2; exit 1; }
           done
           echo "profiles valid"
