@@ -12,8 +12,9 @@
 #
 # What it checks:
 #   1. Every binary responds to --version
-#   2. phpcs has the Drupal + DrupalPractice standards registered
+#   2. phpcs has the Drupal + DrupalPractice + CiviKitchen standards registered
 #   3. phpcs actually lints a sample file (intentionally non-conforming)
+#   3b. The CiviKitchen footgun sniffs fire, and cklint applies them
 #   4. phpstan actually analyses a sample file (intentionally with type errors)
 #   5. phpunit actually runs a passing assertion
 #   6. composer can install a real package from packagist
@@ -41,11 +42,12 @@ for bin in composer node npm civix phpunit phpstan phpcs phpcbf cv; do
 done
 
 # ---------------------------------------------------------------------------
-# 2. phpcs has Drupal + DrupalPractice
+# 2. phpcs has Drupal + DrupalPractice + the bundled CiviKitchen standard
 echo "== phpcs standards =="
 STANDARDS="$(phpcs -i 2>&1)"
 if echo "${STANDARDS}" | grep -q Drupal; then ok "Drupal standard registered"; else fail "Drupal standard missing ($STANDARDS)"; fi
 if echo "${STANDARDS}" | grep -q DrupalPractice; then ok "DrupalPractice standard registered"; else fail "DrupalPractice standard missing"; fi
+if echo "${STANDARDS}" | grep -q CiviKitchen; then ok "CiviKitchen standard registered"; else fail "CiviKitchen standard missing"; fi
 
 # ---------------------------------------------------------------------------
 # 3. phpcs lints a sample file
@@ -66,6 +68,38 @@ if echo "${PHPCS_OUT}" | grep -qiE "error|warning|FOUND"; then
     ok "phpcs --standard=Drupal reports issues"
 else
     fail "phpcs --standard=Drupal didn't report any issue (output: ${PHPCS_OUT:0:200})"
+fi
+
+# ---------------------------------------------------------------------------
+# 3b. The CiviKitchen footgun sniffs fire, and cklint runs them
+echo "== CiviKitchen standard + cklint =="
+cat > "${WORKDIR}/Legacy.php" <<'PHP'
+<?php
+function f() {
+  return civicrm_api3('Contact', 'get', []);
+}
+PHP
+
+CK_OUT="$(phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/Legacy.php" 2>&1 || true)"
+if echo "${CK_OUT}" | grep -q "civicrm_api3"; then
+    ok "CiviKitchen NoLegacyCall flags civicrm_api3"
+else
+    fail "CiviKitchen NoLegacyCall didn't flag civicrm_api3 (output: ${CK_OUT:0:200})"
+fi
+
+if cklint --help 2>&1 | grep -q "uncommitted git changes"; then
+    ok "cklint --help"
+else
+    fail "cklint --help"
+fi
+
+# Explicit-path mode without a project phpcs.xml(.dist) in cwd: cklint must
+# syntax-check (php -l) and then apply the CiviKitchen fallback standard.
+CKLINT_OUT="$( (cd "${WORKDIR}" && cklint Legacy.php) 2>&1 || true)"
+if echo "${CKLINT_OUT}" | grep -q "civicrm_api3"; then
+    ok "cklint lints with the CiviKitchen fallback standard"
+else
+    fail "cklint didn't report the legacy call (output: ${CKLINT_OUT:0:200})"
 fi
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@ Official `civicrm/civicrm` image with dev tools added:
 - **phpunit 9** — pinned for CiviCRM compatibility
 - **phpstan** — static analysis
 - **phpcs + civicrm/coder** — the de-facto CiviCRM style guide (relaxed Drupal CS)
+- **cklint + the `CiviKitchen` phpcs standard** — opinionated extension linting: the Drupal base minus the doc-comment sniffs that fight PHPStan array-shape PHPDocs, plus footgun sniffs (bans APIv3 calls, `CRM_Utils_Array::value`, `PEAR::raiseError`; guards `@required` on externally reachable APIv4 actions). `cklint` lints your uncommitted changes by default (`--all`, `--fix`, explicit paths supported) and always defers to a project's own `phpcs.xml(.dist)`.
 
 CiviCRM is auto-installed on first container start when `CIVICRM_AUTO_INSTALL=1`. See [Extension development](extension-development.md) for the full setup.
 
@@ -66,7 +67,7 @@ Ready-to-run: [`examples/drupal10/`](../examples/drupal10/)
 
 ## WordPress (dev)
 
-CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10. The `:wordpress` and `:drupal10` tags are built from the same Dockerfile (`images/buildkit/`) — only the default civibuild site type differs (`wp-demo` vs `drupal10-demo`). Both images carry the same dev tools as the standalone image (composer, node/npm, phpunit, phpstan, phpcs+coder, civix, pcov, xdebug).
+CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10. The `:wordpress` and `:drupal10` tags are built from the same Dockerfile (`images/buildkit/`) — only the default civibuild site type differs (`wp-demo` vs `drupal10-demo`). Both images carry the same dev tools as the standalone image (composer, node/npm, phpunit, phpstan, phpcs+coder, cklint, civix, pcov, xdebug).
 
 Ready-to-run: [`examples/wordpress/`](../examples/wordpress/)
 
