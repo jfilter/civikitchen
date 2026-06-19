@@ -9,9 +9,13 @@
 # and SHIPS this /var/lib/mysql as its embedded DB — hence the verified clean
 # shutdown at the end.
 #
-# Reads CIVICRM_VERSION + DEFAULT_SITE_TYPE + KEEP_GIT from the environment
-# (Dockerfile ARGs).
+# Reads CIVICRM_VERSION + CIVICRM_BUILD_VERSION + DEFAULT_SITE_TYPE + KEEP_GIT
+# from the environment (Dockerfile ARGs). CIVICRM_BUILD_VERSION lets CI feed
+# civibuild a minor branch (e.g. 6.15) while labels still record the resolved
+# upstream stable patch (e.g. 6.15.4).
 set -euxo pipefail
+
+CIVICRM_CREATE_VERSION="${CIVICRM_BUILD_VERSION:-${CIVICRM_VERSION}}"
 
 service mariadb start
 for i in $(seq 1 60); do
@@ -22,14 +26,14 @@ done
 mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root'; FLUSH PRIVILEGES;"
 
 # Run civibuild as the buildkit user (it owns the site tree). The heredoc is
-# expanded by THIS shell (so ${DEFAULT_SITE_TYPE}/${CIVICRM_VERSION} resolve);
-# \$PATH is escaped so it expands inside the buildkit shell.
+# expanded by THIS shell (so ${DEFAULT_SITE_TYPE}/${CIVICRM_CREATE_VERSION}
+# resolve); \$PATH is escaped so it expands inside the buildkit shell.
 su -s /bin/bash buildkit <<BK
 set -e
 export PATH=/home/buildkit/buildkit/bin:\$PATH
 printf '[client]\nhost=127.0.0.1\nport=3306\nuser=root\npassword=root\n' > /home/buildkit/.my.cnf
 amp config:set --mysql_type=mycnf --httpd_type=none --perm_type=none
-civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_VERSION}' --url http://localhost --admin-pass admin
+civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_CREATE_VERSION}' --url http://localhost --admin-pass admin
 # brick/money 0.12+ renamed ISOCurrencyProvider; CiviCRM still references the old
 # name. Pin compatible (non-fatal — only matters for some CMS/Civi combos).
 { cd /home/buildkit/buildkit/build/site && [ -f composer.json ] && composer require 'brick/money:<0.12' -W --no-interaction; } || true

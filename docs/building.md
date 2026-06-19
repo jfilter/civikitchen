@@ -15,8 +15,10 @@ docker build -f images/standalone/Dockerfile \
 # tags are built from the same Dockerfile (images/buildkit/) —
 # DEFAULT_SITE_TYPE picks which civibuild site type the entrypoint creates on
 # first run. CIVICRM_VERSION
-# pins the baked CiviCRM (any civicrm-core tag/branch civibuild can fetch);
-# omitted, it falls back to the version pinned in the Dockerfile.
+# pins the baked CiviCRM (any civicrm-core tag/branch civibuild can fetch).
+# CIVICRM_BUILD_VERSION can override only the civibuild input; CI uses this to
+# pass the stable minor branch (e.g. 6.15) while keeping the resolved patch
+# version in image metadata.
 docker build -f images/buildkit/Dockerfile \
     --build-arg PHP_VERSION=8.3 \
     --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
