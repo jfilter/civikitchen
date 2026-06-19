@@ -1,7 +1,8 @@
 # CiviCRM Buildkit Development Image
 #
-# Used for both Drupal 10 and WordPress dev images — the only difference is
-# the default civibuild site type, set via the DEFAULT_SITE_TYPE build arg.
+# Used for Drupal 10, Drupal 11, WordPress, and Joomla 5 dev images — the only
+# difference is the default civibuild site type, set via the DEFAULT_SITE_TYPE
+# build arg.
 # Pre-built CiviCRM site via buildkit for instant startup on first run.
 # Requires external MariaDB (not embedded).
 #
@@ -18,8 +19,16 @@
 #                -t civikitchen:drupal10 images/
 #   docker build -f images/buildkit/Dockerfile \
 #                --build-arg PHP_VERSION=8.3 \
+#                --build-arg DEFAULT_SITE_TYPE=drupal11-dev \
+#                -t civikitchen:drupal11 images/
+#   docker build -f images/buildkit/Dockerfile \
+#                --build-arg PHP_VERSION=8.3 \
 #                --build-arg DEFAULT_SITE_TYPE=wp-demo \
 #                -t civikitchen:wordpress images/
+#   docker build -f images/buildkit/Dockerfile \
+#                --build-arg PHP_VERSION=8.3 \
+#                --build-arg DEFAULT_SITE_TYPE=joomla5-empty \
+#                -t civikitchen:joomla5 images/
 #
 # Run (needs MariaDB):
 #   docker run -d -p 8080:80 \
@@ -74,20 +83,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pecl install pcov xdebug \
     && docker-php-ext-enable pcov
 
-# Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder).
+# Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder,
+# rector/ckmodernize).
 # Lives in images/lib/ so the standalone image uses the same script.
-# PHPSTAN_VERSION / CODER_REF are pinned in the script; pass --build-arg to override.
+# PHPSTAN_VERSION / CODER_REF / RECTOR_VERSION are pinned in the script; pass
+# --build-arg to override.
 ENV PATH="/opt/composer/vendor/bin:${PATH}"
 ARG PHPSTAN_VERSION
 ARG CODER_REF
+ARG RECTOR_VERSION
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
 # install-dev-tools.sh) and the cklint linter that runs it.
 COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
-RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" \
+# rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
+COPY lib/civikitchen-rector /opt/civikitchen-rector
+COPY lib/ckmodernize /usr/local/bin/ckmodernize
+RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
-    && chmod +x /usr/local/bin/cklint
+    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckmodernize
 
 # PHP runtime tuning — matches what civibuild expects for site builds.
 RUN { \

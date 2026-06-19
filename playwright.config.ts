@@ -1,14 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Smoke tests for the standalone dev image. Boot the example compose stack,
-// wait for /civicrm/login, then run `npx playwright test`. Locally:
+// Browser smoke tests for civikitchen dev images. Boot one of the example
+// compose stacks, wait for it to become healthy, then run `npx playwright test`.
+// Locally for the standalone stack:
 //
 //   cd examples/standalone && docker compose up -d && cd ../..
 //   npm install
 //   npx playwright install chromium --with-deps
 //   npx playwright test
 //
-// CI runs the same sequence in .github/workflows/build-dev-images.yml.
+// CI runs equivalent sequences for standalone and each buildkit CMS flavor in
+// .github/workflows/build-dev-images.yml.
 
 const BASE_URL = process.env.CIVICRM_BASE_URL ?? 'http://localhost:8080';
 

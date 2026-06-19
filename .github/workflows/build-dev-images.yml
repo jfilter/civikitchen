@@ -94,7 +94,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -175,7 +175,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout (for the dev-tools test script)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Functional test of bundled dev tools
         run: |
@@ -199,7 +199,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -324,14 +324,16 @@ jobs:
       contents: read
       packages: write
 
-    # Both :drupal10 and :wordpress are built from images/buildkit; the only
+    # Buildkit-backed CMS dev images. They all share images/buildkit; the only
     # difference is DEFAULT_SITE_TYPE, which sets the civibuild site type the
     # entrypoint creates on first run.
     strategy:
       matrix:
         variant:
           - { name: drupal10,  site_type: drupal10-demo }
+          - { name: drupal11,  site_type: drupal11-dev }
           - { name: wordpress, site_type: wp-demo }
+          - { name: joomla5,   site_type: joomla5-empty }
         php: ['8.3']
         platform:
           - linux/arm64
@@ -346,7 +348,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -359,8 +361,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Test-then-promote: only sha-suffixed candidate tags here; the stable
-      # tags (:drupal10, :wordpress, :*-php8.3) are created by promote-buildkit
-      # after the smoke tests pass.
+      # tags (:drupal10, :drupal11, :wordpress, :joomla5, :*-php8.3) are
+      # created by promote-buildkit after the smoke tests pass.
       - name: Build and push ${{ matrix.variant.name }} candidate image
         uses: docker/build-push-action@v5
         with:
@@ -387,7 +389,7 @@ jobs:
 
     strategy:
       matrix:
-        variant: [drupal10, wordpress]
+        variant: [drupal10, drupal11, wordpress, joomla5]
 
     steps:
       - name: Log in to GHCR
@@ -412,7 +414,7 @@ jobs:
 
     strategy:
       matrix:
-        variant: [drupal10, wordpress]
+        variant: [drupal10, drupal11, wordpress, joomla5]
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
@@ -426,7 +428,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout (for the test scripts)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Functional test of bundled dev tools
         run: |
@@ -442,13 +444,112 @@ jobs:
         run: |
           case "${{ matrix.variant }}" in
             drupal10)  SITE_TYPE=drupal10-demo ;;
+            drupal11)  SITE_TYPE=drupal11-dev ;;
             wordpress) SITE_TYPE=wp-demo ;;
+            joomla5)   SITE_TYPE=joomla5-empty ;;
           esac
           bash images/test/boot-test.sh ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }} "$SITE_TYPE"
 
-  promote-buildkit:
-    # Stable tags only move once the candidate passed the smoke tests.
+  e2e-test-buildkit:
+    # Runs each CMS example compose stack with the candidate image and exercises
+    # it in real Chromium. This complements boot-test.sh's cv/API assertions by
+    # catching browser-visible Apache/SITE_URL/asset failures.
     needs: smoke-test-buildkit
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      matrix:
+        variant:
+          - { name: drupal10,  compose: examples/drupal10/docker-compose.yml,  path: "/civicrm" }
+          - { name: drupal11,  compose: examples/drupal11/docker-compose.yml,  path: "/civicrm" }
+          - { name: wordpress, compose: examples/wordpress/docker-compose.yml, path: "/wp-admin/admin.php?page=CiviCRM" }
+          - { name: joomla5,   compose: examples/joomla5/docker-compose.yml,  path: "/administrator/index.php?option=com_civicrm" }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Boot the example stack
+        env:
+          IMAGE: ${{ env.IMAGE_PREFIX }}:${{ matrix.variant.name }}-${{ github.sha }}
+        run: |
+          docker compose -f ${{ matrix.variant.compose }} up -d --pull always
+
+      - name: Wait for the app healthcheck
+        run: |
+          for _ in $(seq 1 120); do
+            cid=$(docker compose -f ${{ matrix.variant.compose }} ps -q civicrm)
+            health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || echo starting)
+            if [ "$health" = healthy ]; then
+              echo "ready"
+              exit 0
+            fi
+            if [ "$health" = exited ] || [ "$health" = unhealthy ]; then
+              echo "container became ${health}" >&2
+              docker compose -f ${{ matrix.variant.compose }} logs civicrm
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "site never became healthy" >&2
+          docker compose -f ${{ matrix.variant.compose }} logs civicrm
+          exit 1
+
+      - name: Verify CiviCRM responds via cv
+        run: |
+          docker compose -f ${{ matrix.variant.compose }} exec -T \
+            -u buildkit \
+            -w /home/buildkit/buildkit/build/site/web \
+            civicrm \
+            bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv api4 Domain.get +s version'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Playwright + Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright e2e
+        env:
+          CIVIKITCHEN_E2E_TARGET: ${{ matrix.variant.name }}
+          CIVICRM_BASE_URL: http://localhost:8080
+          CIVICRM_E2E_PATH: ${{ matrix.variant.path }}
+        run: npx playwright test
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-buildkit-${{ matrix.variant.name }}
+          path: playwright-report/
+          retention-days: 7
+
+      - name: App container logs on failure
+        if: failure()
+        run: docker compose -f ${{ matrix.variant.compose }} logs civicrm
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f ${{ matrix.variant.compose }} down -v
+
+  promote-buildkit:
+    # Stable tags only move once the candidate passed smoke + e2e.
+    needs: e2e-test-buildkit
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -456,7 +557,7 @@ jobs:
 
     strategy:
       matrix:
-        variant: [drupal10, wordpress]
+        variant: [drupal10, drupal11, wordpress, joomla5]
         php: ['8.3']
 
     steps:
@@ -484,7 +585,9 @@ jobs:
     # Single-container demo images (embedded MariaDB, baked demo data) from the
     # same images/buildkit/Dockerfile `demo` target. Profiles (e.g. verein) are
     # no longer baked into a separate image — they apply at first boot via
-    # CIVIKITCHEN_PROFILE, so there is exactly one demo image per CMS flavor.
+    # CIVIKITCHEN_PROFILE, so there is exactly one demo image per supported
+    # demo flavor. Drupal 11 and Joomla 5 stay dev-image-only until their
+    # profile/API-user paths are wired and tested.
     strategy:
       matrix:
         variant:
@@ -504,7 +607,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -596,7 +699,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout (for the test script)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Boot test (single-container demo)
         run: |
@@ -606,7 +709,7 @@ jobs:
 
   promote-demo:
     # Stable demo tags only move once the candidates passed the smoke tests
-    # (including the runtime profile legs on all three flavors).
+    # (including the runtime profile legs on all tested demo flavors).
     needs: smoke-test-demo
     runs-on: ubuntu-24.04
     permissions:

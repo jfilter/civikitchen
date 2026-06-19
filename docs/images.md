@@ -1,7 +1,8 @@
 # Images
 
-Four image flavors, all published to `ghcr.io/jfilter/civikitchen`. For the
-first-boot knobs each flavor understands, see the
+Development and demo image flavors, all published to
+`ghcr.io/jfilter/civikitchen`. For the first-boot knobs each flavor
+understands, see the
 [configuration reference](configuration.md).
 
 ## Standalone (dev)
@@ -16,6 +17,7 @@ Official `civicrm/civicrm` image with dev tools added:
 - **phpstan** — static analysis
 - **phpcs + civicrm/coder** — the de-facto CiviCRM style guide (relaxed Drupal CS)
 - **cklint + the `CiviKitchen` phpcs standard** — opinionated extension linting: the Drupal base minus the doc-comment sniffs that fight PHPStan array-shape PHPDocs, plus footgun sniffs (bans APIv3 calls and removed/deprecated core helpers like `CRM_Utils_Array::value` and `CRM_Core_Error::fatal|debug_*`; flags bare `ts()` — extensions must use `E::ts()` for their own translation domain; flags legacy managed/menu/settings/entity/angular hook implementations where standard mixins should be used; guards `@required` on externally reachable APIv4 actions). `cklint` lints your uncommitted changes by default (`--all`, `--fix`, explicit paths supported) and always defers to a project's own `phpcs.xml(.dist)`.
+- **ckmodernize + rector** — opt-in code modernization for extension repos: previews by default, applies with `--fix`, and includes CiviKitchen rules for the same CiviCRM footguns `cklint` flags.
 
 CiviCRM is auto-installed on first container start when `CIVICRM_AUTO_INSTALL=1`. See [Extension development](extension-development.md) for the full setup.
 
@@ -65,13 +67,36 @@ services:
 
 Ready-to-run: [`examples/drupal10/`](../examples/drupal10/)
 
+## Drupal 11 (dev)
+
+CiviCRM on Drupal 11 via buildkit. Same runtime model as Drupal 10, but using
+civicrm-buildkit's `drupal11-dev` site type. Requires an external MariaDB and
+is meant for extension compatibility checks on current Drupal.
+
+Ready-to-run: [`examples/drupal11/`](../examples/drupal11/)
+
 ## WordPress (dev)
 
-CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10. The `:wordpress` and `:drupal10` tags are built from the same Dockerfile (`images/buildkit/`) — only the default civibuild site type differs (`wp-demo` vs `drupal10-demo`). Both images carry the same dev tools as the standalone image (composer, node/npm, phpunit, phpstan, phpcs+coder, cklint, civix, pcov, xdebug).
+CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10. The
+`:wordpress`, `:drupal10`, `:drupal11`, and `:joomla5` tags are built from the
+same Dockerfile (`images/buildkit/`) — only the default civibuild site type
+differs (`wp-demo`, `drupal10-demo`, `drupal11-dev`, or `joomla5-empty`). All
+buildkit dev images carry the same dev tools as the standalone image (composer,
+node/npm, phpunit, phpstan, phpcs+coder, cklint, ckmodernize, civix, pcov,
+xdebug).
 
 Ready-to-run: [`examples/wordpress/`](../examples/wordpress/)
 
-> **Scope note.** The buildkit images (`:drupal10`, `:wordpress`) share
+## Joomla 5 (dev)
+
+CiviCRM on Joomla 5 via buildkit, using civicrm-buildkit's `joomla5-empty` site
+type. This is the Joomla compatibility target for extension development and
+requires an external MariaDB.
+
+Ready-to-run: [`examples/joomla5/`](../examples/joomla5/)
+
+> **Scope note.** The buildkit images (`:drupal10`, `:drupal11`, `:wordpress`,
+> `:joomla5`) share
 > [`images/lib/provision.sh`](../images/lib/provision.sh) with standalone, so the
 > same first-boot knobs work: `CIVIKITCHEN_AUTO_COMPOSER`,
 > `CIVIKITCHEN_SMTP_HOST`, `CIVIKITCHEN_EXTRA_EXTENSIONS` /
@@ -81,7 +106,7 @@ Ready-to-run: [`examples/wordpress/`](../examples/wordpress/)
 > — `CIVICRM_AUTO_INSTALL`, the `CIVICRM_DB_NAME`/`_USER`/`_PASSWORD` app-user
 > vars, `CIVIKITCHEN_TEST_DB`, and the `CIVIKITCHEN_DEMO_*` /
 > `CIVIKITCHEN_COMPONENTS` knobs don't apply: civibuild builds the site, so it
-> provides the equivalent admin/demo users, components, and an isolated
+> provides the equivalent admin users, components, and an isolated
 > `sitetest_*` test DB itself. Use buildkit to test CMS-specific behaviour.
 
 ## Demo images
@@ -91,8 +116,9 @@ compose, no external DB. `docker run` and you have a working CiviCRM with demo
 content in a few seconds. For demos, evaluation, and screenshots — **not** for
 development (the DB is inside the container; data resets on `docker rm`).
 
-Three flavors (one per CMS), all built from the same `images/buildkit/` `demo`
-target:
+Three demo flavors, all built from the same `images/buildkit/` `demo` target.
+Drupal 11 and Joomla 5 are currently dev-image-only because the demo profile
+API-user path is wired and tested for the original three flavors:
 
 ```bash
 # Pick a flavor: standalone-demo (CMS-less), drupal10-demo, or wordpress-demo
@@ -107,11 +133,11 @@ docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:drupal10-demo
 ### Profiles (`CIVIKITCHEN_PROFILE`)
 
 A profile layers a curated extension stack + seed data + API users on top of
-the base site at **first boot**. Profiles work on **all three flavors**
-(standalone, drupal10, wordpress — demo and dev images alike); API users are
-created through the matching mechanism per CMS (Drupal roles via drush,
-WordPress roles/capabilities via wp-cli, native users on Standalone). They
-live in [`images/profiles/`](../images/profiles/) (one dir per profile:
+the base site at **first boot**. Profiles work on the tested profile targets
+(`standalone`, `drupal10`, `wordpress`), for both demo and dev images; API
+users are created through the matching mechanism per CMS (Drupal roles via
+drush, WordPress roles/capabilities via wp-cli, native users on Standalone).
+They live in [`images/profiles/`](../images/profiles/) (one dir per profile:
 `profile.json` + `seeds/*.php`, applied by the shared driver):
 
 | Profile | Extensions | Seed data | API users |
@@ -134,11 +160,11 @@ GitHub, so it **needs network access and takes a few minutes** (watch
 generated API-user credentials are printed to the logs and kept in the
 container: `docker exec civicrm cat /home/buildkit/api-credentials.txt`.
 
-Profiles also work on the dev images (`:standalone`, `:drupal10`,
-`:wordpress`) — set the same env var in your compose file to develop against
-a realistic stack. On the `:standalone` dev image the profile needs an admin
-user to seed as, so combine it with `CIVICRM_AUTO_INSTALL=1` and
-`CIVIKITCHEN_DEMO_USER=admin`.
+Profiles also work on the tested dev images (`:standalone`, `:drupal10`,
+`:wordpress`) — set the same env var in your compose file to develop against a
+realistic stack. They are not enabled for `:joomla5` yet. On the `:standalone`
+dev image the profile needs an admin user to seed as, so combine it with
+`CIVICRM_AUTO_INSTALL=1` and `CIVIKITCHEN_DEMO_USER=admin`.
 
 > **Migrating from `civicrm-eu-ngo:latest`?** That pre-baked image is retired;
 > use `civikitchen:drupal10-demo` with `CIVIKITCHEN_PROFILE=verein` instead —
@@ -159,8 +185,43 @@ until the breakage is fixed.
 | `:standalone` | The most recent CiviCRM `latest` build. |
 | `:standalone-latest` | Same as `:standalone`. |
 | `:standalone-<minor>` | Latest patch of the **current** stable minor (e.g. `:standalone-6.15` while 6.15.x is current). When upstream moves to the next minor, a new tag appears and the old one freezes at its last patch — handy as a known-good fallback right after a minor bump. |
-| `:drupal10`, `:wordpress`, `:*-demo` | Bake the current stable at image-build time. Check what a pulled image contains without booting it: `docker inspect <image> --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`. |
+| `:drupal10`, `:drupal11`, `:wordpress`, `:joomla5`, `:*-demo` | Bake the current stable at image-build time. Check what a pulled image contains without booting it: `docker inspect <image> --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`. |
 
-Need a minor pinned longer than that? Build your own image — see
-[Building locally](building.md) (`--build-arg CIVICRM_VERSION=...` works for
-all flavors).
+Need a minor pinned longer than that — or a version the published images don't
+offer at all? Build your own: see
+[Custom or older CiviCRM versions](#custom-or-older-civicrm-versions) below.
+
+## Custom or older CiviCRM versions
+
+The published tags track **current** CiviCRM. To run an older or arbitrary
+version — e.g. to mirror a production server — build the image yourself with
+`--build-arg CIVICRM_VERSION=<tag/branch>`. **Which flavor you can build
+matters:**
+
+- **Standalone** (`images/standalone/`) is `FROM civicrm/civicrm:<version>`, so
+  it only reaches versions the official image publishes (~6.0+) — and
+  Standalone itself only exists from ~5.69. `--build-arg CIVICRM_VERSION` on
+  this flavor fails for anything older (no such base image).
+- **Buildkit** (`:drupal10` / `:drupal11` / `:wordpress` / `:joomla5`,
+  `images/buildkit/`) bakes the site
+  with `civibuild create --civi-ver <version>`, which fetches **any** civicrm
+  tag/branch. The Drupal 10 site type is the right path for modern older
+  versions such as CiviCRM 5.78.x; for pre-Drupal-10 versions, switch the
+  civibuild site type to Drupal 9 / 7. A Drupal target also mirrors a real
+  Drupal server's CMS, not just its CiviCRM version.
+
+So: **for an older/custom version, build the buildkit (Drupal) flavor**, not
+standalone.
+
+```bash
+docker build -f images/buildkit/Dockerfile \
+    --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
+    --build-arg CIVICRM_VERSION=5.78.2 \
+    --build-arg PHP_VERSION=8.1 \
+    -t civikitchen:drupal10-5.78.2 images/
+```
+
+Or let compose build it on demand (no prebuilt image needed) — ready-to-run:
+[`examples/custom-version/`](../examples/custom-version/), parameterized by
+`CIVICRM_VERSION` / `PHP_VERSION`. For CiviCRM older than ~5.47 (pre-Drupal-10),
+switch `DEFAULT_SITE_TYPE` to a Drupal 9 / 7 civibuild site type.

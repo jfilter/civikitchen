@@ -1,5 +1,5 @@
 #!/bin/bash
-# Boot test for the buildkit (drupal10/wordpress) baked images.
+# Boot test for the buildkit-backed CMS dev images.
 #
 # Unlike test-dev-tools.sh (which runs WITH the entrypoint overridden and only
 # checks the bundled tools), this exercises the real first-boot path end to end:
@@ -11,7 +11,9 @@
 # Usage:
 #   bash images/test/boot-test.sh <image> <site_type>
 #   bash images/test/boot-test.sh civikitchen:drupal10  drupal10-demo
+#   bash images/test/boot-test.sh civikitchen:drupal11  drupal11-dev
 #   bash images/test/boot-test.sh civikitchen:wordpress wp-demo
+#   bash images/test/boot-test.sh civikitchen:joomla5   joomla5-empty
 set -euo pipefail
 
 IMAGE="${1:?usage: boot-test.sh <image> <site_type>}"

@@ -126,6 +126,21 @@ docker compose exec app bash -c "cd /var/www/html/ext/myextension && cklint --al
 
 Most extensions ship a `phpcs.xml.dist` that scopes the run to the right files and excludes generated DAOs — see `extensions/de.systopia.contract/phpcs.xml.dist` for a working reference.
 
+## Modernizing
+
+`ckmodernize` runs the bundled Rector setup from an extension root. By default
+it previews changes; pass `--fix` to apply them. If the extension ships its own
+`rector.php`, that config wins.
+
+```bash
+docker compose exec app bash -c "cd /var/www/html/ext/myextension && ckmodernize"
+docker compose exec app bash -c "cd /var/www/html/ext/myextension && ckmodernize --fix --php 8.2"
+```
+
+The default config combines Rector's PHP-version / code-quality sets with
+CiviKitchen rules for CiviCRM-specific footguns such as
+`CRM_Utils_Array::value()` and `CRM_Core_Error::fatal()`.
+
 ## IDE step debugging
 
 Xdebug is installed but disabled until you set `XDEBUG_MODE`. Add it to your compose file:

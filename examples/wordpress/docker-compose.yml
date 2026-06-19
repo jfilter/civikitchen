@@ -6,7 +6,8 @@
 
 services:
   civicrm:
-    image: ghcr.io/jfilter/civikitchen:wordpress
+    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:wordpress}
+    pull_policy: always
     depends_on:
       db:
         condition: service_started
@@ -16,9 +17,9 @@ services:
       CIVICRM_DB_HOST: db
       CIVICRM_DB_ROOT_PASSWORD: root
       CIVIKITCHEN_SITE_URL: "http://localhost:8080"
-      # The :wordpress and :drupal10 tags share the same image — only the
-      # default civibuild site type differs. Setting it explicitly here makes
-      # the example self-documenting.
+      # Buildkit CMS tags share the same Dockerfile — only the default
+      # civibuild site type differs. Setting it explicitly here makes the
+      # example self-documenting.
       CIVICRM_SITE_TYPE: wp-demo
 
   db:

@@ -1,0 +1,13 @@
+{
+    "name": "civikitchen/rector-rules",
+    "description": "CiviKitchen rector setup: off-the-shelf PHP-version + quality sets plus CiviCRM-specific modernization rules (the footguns cklint flags, auto-fixed).",
+    "license": "AGPL-3.0-or-later",
+    "autoload": {
+        "psr-4": {
+            "CiviKitchen\\Rector\\": "src/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

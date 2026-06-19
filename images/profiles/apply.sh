@@ -2,9 +2,9 @@
 # Shared profile driver: apply a demo profile (extensions + seed data + API
 # users) to a site. Runs at FIRST BOOT as the web user, invoked by
 # provision.sh's ck_apply_profile when CIVIKITCHEN_PROFILE=<name> is set —
-# works on the demo images (embedded DB) and the dev images (external DB)
-# alike, on every flavor (standalone, drupal10, wordpress). Needs network and
-# takes a few minutes; it is marker-gated by the caller, so it applies
+# works on the tested profile flavors (standalone, drupal10, wordpress), on
+# demo images (embedded DB) and dev images (external DB) alike. Needs network
+# and takes a few minutes; it is marker-gated by the caller, so it applies
 # exactly once per container.
 #
 # Entirely driven by the profile dir (profile.json + seeds/*.php), so every
@@ -28,8 +28,8 @@ if [ -d "${SITE_WEB}" ]; then
     cd "${SITE_WEB}"
 fi
 
-# Extension dir (cv-discovered, so this stays CMS-agnostic across all three
-# flavors). The DB is up at this point, so cv boots.
+# Extension dir (cv-discovered, so this stays CMS-agnostic across the tested
+# profile flavors). The DB is up at this point, so cv boots.
 EXT_DIR="$(cv ev 'echo rtrim(CRM_Core_Config::singleton()->extensionsDir, "/");')"
 [ -n "${EXT_DIR}" ] || { echo "apply.sh: could not resolve extensionsDir" >&2; exit 1; }
 mkdir -p "${EXT_DIR}"
