@@ -1,12 +1,12 @@
-# CiviCRM on Drupal 10 — quickstart
+# CiviCRM on Joomla 5 — quickstart
 # docker compose up -d
-# CiviCRM:    http://localhost:8080  (admin / admin)
-# phpMyAdmin: http://localhost:8081
-# Maildev:    http://localhost:1080
+# CiviCRM/Joomla: http://localhost:8080  (admin / admin)
+# phpMyAdmin:    http://localhost:8081
+# Maildev:       http://localhost:1080
 
 services:
   civicrm:
-    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:drupal10}
+    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:joomla5}
     pull_policy: always
     depends_on:
       db:
@@ -17,7 +17,8 @@ services:
       CIVICRM_DB_HOST: db
       CIVICRM_DB_ROOT_PASSWORD: root
       CIVIKITCHEN_SITE_URL: "http://localhost:8080"
-      CIVICRM_SITE_TYPE: drupal10-demo
+      # The Joomla image uses civicrm-buildkit's Joomla 5 template.
+      CIVICRM_SITE_TYPE: joomla5-empty
 
   db:
     image: mariadb:10.11

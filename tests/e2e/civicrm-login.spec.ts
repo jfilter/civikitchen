@@ -6,11 +6,14 @@ import { test, expect } from '@playwright/test';
 // through `runuser -- env ... cv scr`).
 //
 // Credentials match examples/standalone/docker-compose.yml:
-//   CIVICRM_DEMO_USER: admin    (no defaults set, so pass=admin too)
+//   CIVIKITCHEN_DEMO_USER: admin    (no defaults set, so pass=admin too)
 const DEMO_USER = process.env.DEMO_USER ?? 'admin';
 const DEMO_PASS = process.env.DEMO_PASS ?? 'admin';
+const TARGET = process.env.CIVIKITCHEN_E2E_TARGET ?? 'standalone';
 
 test.describe('demo user login', () => {
+  test.skip(TARGET !== 'standalone', 'Standalone demo-user login is image-specific');
+
   test('admin/admin logs in and lands inside CiviCRM', async ({ page }) => {
     await page.goto('/civicrm/login');
 

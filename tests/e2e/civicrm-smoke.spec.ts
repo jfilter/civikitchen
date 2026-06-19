@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const TARGET = process.env.CIVIKITCHEN_E2E_TARGET ?? 'standalone';
+
 // E2E smoke tests for the standalone dev image. Boots via the example compose
 // stack (or any reachable CIVICRM_BASE_URL) and verifies the auto-installed
 // site renders.
@@ -13,6 +15,8 @@ import { test, expect } from '@playwright/test';
 //   - settings.php missing/broken so /civicrm/* hits a 500
 
 test.describe('standalone CiviCRM site', () => {
+  test.skip(TARGET !== 'standalone', 'Standalone-specific routes and login form');
+
   test('homepage redirects anonymous users to login', async ({ page }) => {
     // Upstream CiviCRM's standaloneusers extension sends /civicrm/home to a
     // 403 for unauthenticated users instead of redirecting to login — bad UX

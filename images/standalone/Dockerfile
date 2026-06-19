@@ -36,21 +36,27 @@ RUN pecl install pcov xdebug \
 RUN curl -sS https://getcomposer.org/installer \
     | php -- --install-dir=/usr/local/bin --filename=composer
 
-# Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder).
+# Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder,
+# rector/ckmodernize).
 # Lives in images/lib/ so the buildkit image uses the same script.
-# PHPSTAN_VERSION / CODER_REF are pinned in the script; pass --build-arg to
-# override (e.g. to test a newer phpstan before bumping the default).
+# PHPSTAN_VERSION / CODER_REF / RECTOR_VERSION are pinned in the script; pass
+# --build-arg to override (e.g. to test a newer phpstan before bumping the
+# default).
 ENV PATH="/opt/composer/vendor/bin:${PATH}"
 ARG PHPSTAN_VERSION
 ARG CODER_REF
+ARG RECTOR_VERSION
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
 # install-dev-tools.sh) and the cklint linter that runs it.
 COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
-RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" \
+# rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
+COPY lib/civikitchen-rector /opt/civikitchen-rector
+COPY lib/ckmodernize /usr/local/bin/ckmodernize
+RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
-    && chmod +x /usr/local/bin/cklint
+    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckmodernize
 
 # Add our vhost extras (e.g. the bare-/ → /civicrm/login redirect) via the
 # standard apache conf-available + a2enconf flow rather than editing the

@@ -13,9 +13,9 @@ export PATH="/home/buildkit/buildkit/bin:${PATH}"
 export CIVICRM_DB_HOST="${CIVICRM_DB_HOST:-db}"
 export CIVICRM_DB_PORT="${CIVICRM_DB_PORT:-3306}"
 export CIVICRM_DB_ROOT_PASSWORD="${CIVICRM_DB_ROOT_PASSWORD:-root}"
-# Default site type comes from the build arg DEFAULT_SITE_TYPE — :drupal10
-# tags ship drupal10-demo, :wordpress tags ship wp-demo. Users can override
-# at runtime by setting CIVICRM_SITE_TYPE.
+# Default site type comes from the build arg DEFAULT_SITE_TYPE — each published
+# CMS tag sets its own civibuild template. Users can override at runtime by
+# setting CIVICRM_SITE_TYPE.
 CIVICRM_SITE_TYPE="${CIVICRM_SITE_TYPE:-${CIVICRM_SITE_TYPE_DEFAULT:-drupal10-demo}}"
 
 # Legacy name: SITE_URL was renamed to CIVIKITCHEN_SITE_URL (kitchen-owned

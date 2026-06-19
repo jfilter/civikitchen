@@ -11,9 +11,10 @@ docker build -f images/standalone/Dockerfile \
     --build-arg CIVICRM_VERSION=6.15 \
     -t civikitchen:standalone-6.15 images/
 
-# Buildkit-based images. The :drupal10 and :wordpress tags are built from
-# the same Dockerfile (images/buildkit/) — DEFAULT_SITE_TYPE picks which
-# civibuild site type the entrypoint creates on first run. CIVICRM_VERSION
+# Buildkit-based images. The :drupal10, :drupal11, :wordpress, and :joomla5
+# tags are built from the same Dockerfile (images/buildkit/) —
+# DEFAULT_SITE_TYPE picks which civibuild site type the entrypoint creates on
+# first run. CIVICRM_VERSION
 # pins the baked CiviCRM (any civicrm-core tag/branch civibuild can fetch);
 # omitted, it falls back to the version pinned in the Dockerfile.
 docker build -f images/buildkit/Dockerfile \
@@ -24,8 +25,18 @@ docker build -f images/buildkit/Dockerfile \
 
 docker build -f images/buildkit/Dockerfile \
     --build-arg PHP_VERSION=8.3 \
+    --build-arg DEFAULT_SITE_TYPE=drupal11-dev \
+    -t civikitchen:drupal11 images/
+
+docker build -f images/buildkit/Dockerfile \
+    --build-arg PHP_VERSION=8.3 \
     --build-arg DEFAULT_SITE_TYPE=wp-demo \
     -t civikitchen:wordpress images/
+
+docker build -f images/buildkit/Dockerfile \
+    --build-arg PHP_VERSION=8.3 \
+    --build-arg DEFAULT_SITE_TYPE=joomla5-empty \
+    -t civikitchen:joomla5 images/
 ```
 
 ## Keeping the CiviCRM git history (`KEEP_GIT=1`)
@@ -45,7 +56,7 @@ docker build -f images/buildkit/Dockerfile \
 
 ## Verifying a built image
 
-`images/test/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through phpcs, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, and verifies the xdebug toggle. The same script runs in CI against both `:standalone` and `:drupal10`/`:wordpress`.
+`images/test/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through phpcs, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, and verifies the xdebug toggle. The same script runs in CI against both `:standalone` and the buildkit images. CI also boots each dev flavor's compose example and runs Playwright browser smoke tests before promoting stable tags.
 
 ```bash
 docker run --rm -v "$(pwd)/images/test:/civikitchen-test:ro" \

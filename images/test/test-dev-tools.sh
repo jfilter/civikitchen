@@ -15,6 +15,7 @@
 #   2. phpcs has the Drupal + DrupalPractice + CiviKitchen standards registered
 #   3. phpcs actually lints a sample file (intentionally non-conforming)
 #   3b. The CiviKitchen footgun sniffs fire, and cklint applies them
+#   3c. ckmodernize boots rector and previews a CiviCRM footgun rewrite
 #   4. phpstan actually analyses a sample file (intentionally with type errors)
 #   5. phpunit actually runs a passing assertion
 #   6. composer can install a real package from packagist
@@ -128,6 +129,29 @@ if SNIFF_TESTS_OUT="$(phpunit --no-configuration /opt/civikitchen-coder/CiviKitc
     ok "CiviKitchen sniff unit tests"
 else
     fail "CiviKitchen sniff unit tests (${SNIFF_TESTS_OUT:0:300})"
+fi
+
+# ---------------------------------------------------------------------------
+# 3c. ckmodernize boots rector and previews a CiviCRM-specific rewrite
+echo "== ckmodernize =="
+cat > "${WORKDIR}/Modernize.php" <<'PHP'
+<?php
+function f(array $a) {
+    return CRM_Utils_Array::value('k', $a, 'd');
+}
+PHP
+
+if ckmodernize --help 2>&1 | grep -q "modernize a CiviCRM extension"; then
+    ok "ckmodernize --help"
+else
+    fail "ckmodernize --help"
+fi
+
+CKMOD_OUT="$( (cd "${WORKDIR}" && ckmodernize Modernize.php) 2>&1 || true)"
+if echo "${CKMOD_OUT}" | grep -q '\?\?'; then
+    ok "ckmodernize previews CRM_Utils_Array::value rewrite"
+else
+    fail "ckmodernize did not preview the array-value rewrite (output: ${CKMOD_OUT:0:300})"
 fi
 
 # ---------------------------------------------------------------------------

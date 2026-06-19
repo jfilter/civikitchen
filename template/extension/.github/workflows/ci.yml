@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # civikitchen auto-installs CiviCRM, enables the mounted extension,
+      # seeds the civicrm_test scratch DB and runs the init.d hooks. --wait
+      # blocks until the app healthcheck passes (the entrypoint finishes
+      # install + hooks before httpd starts).
+      - name: Start CiviCRM stack
+        run: docker compose -f .docker/docker-compose.ci.yml up -d --wait --quiet-pull
+
+      - name: PHPUnit (with coverage) + PHPStan
+        run: |
+          docker compose -f .docker/docker-compose.ci.yml exec -T -u www-data app bash -c \
+            'cd /var/www/html/ext/__EXTKEY__ && CIVICRM_UF=UnitTests phpunit --coverage-text tests/phpunit && phpstan analyse'
+
+      - name: App logs on failure
+        if: failure()
+        run: docker compose -f .docker/docker-compose.ci.yml logs app | tail -200

@@ -1,4 +1,4 @@
-# CiviCRM on Drupal 10 — quickstart
+# CiviCRM on Drupal 11 — quickstart
 # docker compose up -d
 # CiviCRM:    http://localhost:8080  (admin / admin)
 # phpMyAdmin: http://localhost:8081
@@ -6,7 +6,7 @@
 
 services:
   civicrm:
-    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:drupal10}
+    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:drupal11}
     pull_policy: always
     depends_on:
       db:
@@ -17,7 +17,8 @@ services:
       CIVICRM_DB_HOST: db
       CIVICRM_DB_ROOT_PASSWORD: root
       CIVIKITCHEN_SITE_URL: "http://localhost:8080"
-      CIVICRM_SITE_TYPE: drupal10-demo
+      # The Drupal 11 image uses civicrm-buildkit's drupal11-dev template.
+      CIVICRM_SITE_TYPE: drupal11-dev
 
   db:
     image: mariadb:10.11

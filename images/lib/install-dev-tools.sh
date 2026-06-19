@@ -7,6 +7,8 @@
 #   - phpcs + the civicrm/coder fork of drupal/coder (the de-facto CiviCRM
 #              style guide — registers as the standard "Drupal" /
 #              "DrupalPractice" phpcs standards).
+#   - rector   (isolated; powers `ckmodernize` — rector's PHP-version + quality
+#              sets plus CiviKitchen's CiviCRM footgun rules)
 #
 # Prerequisites (handled per image):
 #   - composer, php, curl, git on PATH
@@ -22,6 +24,9 @@ set -euo pipefail
 PHPSTAN_VERSION="${PHPSTAN_VERSION:-2.2.2}"
 # civicrm/coder has no usable release tags, so pin to a commit on 8.x-2.x-civi.
 CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
+# rector powers `ckmodernize`; pin it too so a rebuild can't silently change
+# what gets rewritten.
+RECTOR_VERSION="${RECTOR_VERSION:-2.4.6}"
 # civix is intentionally NOT pinned: it ships only as a floating phar on
 # download.civicrm.org (no versioned URLs), and as a scaffolding tool it
 # generates code on demand rather than running in CI, so its drift doesn't turn
@@ -82,5 +87,12 @@ rm -rf "${CODER_DIR}/.git"
 CIVIKITCHEN_CODER_DIR=/opt/civikitchen-coder
 phpcs --config-set installed_paths "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR}"
 
+# ---------------------------------------------------------------------------
+# rector (isolated install in its own dir) — powers `ckmodernize`. Its config +
+# CiviCRM rules dir is COPYed to /opt/civikitchen-rector by the Dockerfile
+# before this script runs; here we add the pinned rector and dump the autoload.
+composer require --working-dir=/opt/civikitchen-rector --no-interaction --no-progress \
+    "rector/rector:${RECTOR_VERSION}"
+
 rm -rf /opt/composer/cache
-chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}"
+chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" /opt/civikitchen-rector
