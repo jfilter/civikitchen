@@ -167,6 +167,7 @@ ENV PATH="/home/buildkit/buildkit/bin:${PATH}"
 FROM buildkit-setup AS builder
 
 ARG CIVICRM_VERSION
+ARG CIVICRM_BUILD_VERSION
 ARG DEFAULT_SITE_TYPE
 # KEEP_GIT=1 keeps the ~550MB of git history civibuild clones into the site
 # (vendor/civicrm/civicrm-core etc.). Default strips it — the published images
@@ -181,7 +182,8 @@ RUN apt-get update \
 
 # Bake the site (logic in buildkit/bake.sh to keep the shell quoting sane).
 COPY buildkit/bake.sh /tmp/bake.sh
-RUN CIVICRM_VERSION="${CIVICRM_VERSION}" DEFAULT_SITE_TYPE="${DEFAULT_SITE_TYPE}" \
+RUN CIVICRM_VERSION="${CIVICRM_VERSION}" CIVICRM_BUILD_VERSION="${CIVICRM_BUILD_VERSION}" \
+        DEFAULT_SITE_TYPE="${DEFAULT_SITE_TYPE}" \
         KEEP_GIT="${KEEP_GIT}" \
         bash /tmp/bake.sh && rm /tmp/bake.sh
 
