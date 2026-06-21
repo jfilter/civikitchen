@@ -12,6 +12,9 @@
 # and the readiness marker the HEALTHCHECK looks for.
 
 SITE_WEB="/home/buildkit/buildkit/build/site/web"
+if [[ "${CIVICRM_SITE_TYPE:-}" == joomla* ]]; then
+    export CIVICRM_SETTINGS="${SITE_WEB}/administrator/components/com_civicrm/civicrm.settings.php"
+fi
 
 # Accept legacy CIVICRM_-spelled kitchen vars (parity with the standalone image).
 _ck_legacy() {
@@ -45,7 +48,7 @@ export CK_PROVISIONED_MARKER=/home/buildkit/.civikitchen-provisioned
 # civibuild loads app/civicrm.settings.d/*.php into civicrm.settings.php;
 # ck_smtp removes the 100-mail.php mail-to-/dev/null heuristic there.
 export CK_SETTINGS_D=/home/buildkit/buildkit/app/civicrm.settings.d
-# Discover the extension dir from cv (CMS-agnostic: Drupal + WordPress).
+# Discover the extension dir from cv (CMS-agnostic; Joomla uses CIVICRM_SETTINGS above).
 CK_EXT_DIR="$(ck_as_web cv ev 'echo rtrim(CRM_Core_Config::singleton()->extensionsDir, "/");' 2>/dev/null || true)"
 export CK_EXT_DIR
 

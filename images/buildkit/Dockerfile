@@ -1,6 +1,6 @@
 # CiviCRM Buildkit Development Image
 #
-# Used for Drupal 10, Drupal 11, WordPress, and Joomla 5 dev images — the only
+# Used for Drupal 10, Drupal 11, WordPress, and Joomla dev images — the only
 # difference is the default civibuild site type, set via the DEFAULT_SITE_TYPE
 # build arg.
 # Pre-built CiviCRM site via buildkit for instant startup on first run.
@@ -27,8 +27,8 @@
 #                -t civikitchen:wordpress images/
 #   docker build -f images/buildkit/Dockerfile \
 #                --build-arg PHP_VERSION=8.3 \
-#                --build-arg DEFAULT_SITE_TYPE=joomla5-empty \
-#                -t civikitchen:joomla5 images/
+#                --build-arg DEFAULT_SITE_TYPE=joomla-demo \
+#                -t civikitchen:joomla images/
 #
 # Run (needs MariaDB):
 #   docker run -d -p 8080:80 \

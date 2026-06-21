@@ -78,25 +78,26 @@ Ready-to-run: [`examples/drupal11/`](../examples/drupal11/)
 ## WordPress (dev)
 
 CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10. The
-`:wordpress`, `:drupal10`, `:drupal11`, and `:joomla5` tags are built from the
+`:wordpress`, `:drupal10`, `:drupal11`, and `:joomla` tags are built from the
 same Dockerfile (`images/buildkit/`) — only the default civibuild site type
-differs (`wp-demo`, `drupal10-demo`, `drupal11-dev`, or `joomla5-empty`). All
+differs (`wp-demo`, `drupal10-demo`, `drupal11-dev`, or `joomla-demo`). All
 buildkit dev images carry the same dev tools as the standalone image (composer,
 node/npm, phpunit, phpstan, phpcs+coder, cklint, ckmodernize, civix, pcov,
 xdebug).
 
 Ready-to-run: [`examples/wordpress/`](../examples/wordpress/)
 
-## Joomla 5 (dev)
+## Joomla (dev)
 
-CiviCRM on Joomla 5 via buildkit, using civicrm-buildkit's `joomla5-empty` site
+CiviCRM on Joomla via buildkit, using civicrm-buildkit's `joomla-demo` site
 type. This is the Joomla compatibility target for extension development and
-requires an external MariaDB.
+requires an external MariaDB. Buildkit's `joomla5-empty` template is a CMS-only
+site, so CiviKitchen does not publish it as a CiviCRM flavor.
 
-Ready-to-run: [`examples/joomla5/`](../examples/joomla5/)
+Ready-to-run: [`examples/joomla/`](../examples/joomla/)
 
 > **Scope note.** The buildkit images (`:drupal10`, `:drupal11`, `:wordpress`,
-> `:joomla5`) share
+> `:joomla`) share
 > [`images/lib/provision.sh`](../images/lib/provision.sh) with standalone, so the
 > same first-boot knobs work: `CIVIKITCHEN_AUTO_COMPOSER`,
 > `CIVIKITCHEN_SMTP_HOST`, `CIVIKITCHEN_EXTRA_EXTENSIONS` /
@@ -117,7 +118,7 @@ content in a few seconds. For demos, evaluation, and screenshots — **not** for
 development (the DB is inside the container; data resets on `docker rm`).
 
 Three demo flavors, all built from the same `images/buildkit/` `demo` target.
-Drupal 11 and Joomla 5 are currently dev-image-only because the demo profile
+Drupal 11 and Joomla are currently dev-image-only because the demo profile
 API-user path is wired and tested for the original three flavors:
 
 ```bash
@@ -162,7 +163,7 @@ container: `docker exec civicrm cat /home/buildkit/api-credentials.txt`.
 
 Profiles also work on the tested dev images (`:standalone`, `:drupal10`,
 `:wordpress`) — set the same env var in your compose file to develop against a
-realistic stack. They are not enabled for `:joomla5` yet. On the `:standalone`
+realistic stack. They are not enabled for `:joomla` yet. On the `:standalone`
 dev image the profile needs an admin user to seed as, so combine it with
 `CIVICRM_AUTO_INSTALL=1` and `CIVIKITCHEN_DEMO_USER=admin`.
 
@@ -185,7 +186,7 @@ until the breakage is fixed.
 | `:standalone` | The most recent CiviCRM `latest` build. |
 | `:standalone-latest` | Same as `:standalone`. |
 | `:standalone-<minor>` | Latest patch of the **current** stable minor (e.g. `:standalone-6.15` while 6.15.x is current). When upstream moves to the next minor, a new tag appears and the old one freezes at its last patch — handy as a known-good fallback right after a minor bump. |
-| `:drupal10`, `:drupal11`, `:wordpress`, `:joomla5`, `:*-demo` | Bake the current stable at image-build time. Check what a pulled image contains without booting it: `docker inspect <image> --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`. |
+| `:drupal10`, `:drupal11`, `:wordpress`, `:joomla`, `:*-demo` | Bake the current stable at image-build time. Check what a pulled image contains without booting it: `docker inspect <image> --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`. |
 
 Need a minor pinned longer than that — or a version the published images don't
 offer at all? Build your own: see
@@ -202,7 +203,7 @@ matters:**
   it only reaches versions the official image publishes (~6.0+) — and
   Standalone itself only exists from ~5.69. `--build-arg CIVICRM_VERSION` on
   this flavor fails for anything older (no such base image).
-- **Buildkit** (`:drupal10` / `:drupal11` / `:wordpress` / `:joomla5`,
+- **Buildkit** (`:drupal10` / `:drupal11` / `:wordpress` / `:joomla`,
   `images/buildkit/`) bakes the site
   with `civibuild create --civi-ver <version>`, which fetches **any** civicrm
   tag/branch. The Drupal 10 site type is the right path for modern older

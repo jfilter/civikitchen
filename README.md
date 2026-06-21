@@ -10,10 +10,10 @@ CiviCRM Docker images for development, testing, and demos. All published to GHCR
 | [`:drupal10`](docs/images.md#drupal-10-dev) | Test extensions against the Drupal 10 stack | external (compose) | runs `civibuild` |
 | [`:drupal11`](docs/images.md#drupal-11-dev) | Test extensions against the Drupal 11 stack | external (compose) | runs `civibuild` |
 | [`:wordpress`](docs/images.md#wordpress-dev) | Test extensions against the WordPress stack | external (compose) | runs `civibuild` |
-| [`:joomla5`](docs/images.md#joomla-5-dev) | Test extensions against the Joomla 5 stack | external (compose) | runs `civibuild` |
+| [`:joomla`](docs/images.md#joomla-dev) | Test extensions against the Joomla stack | external (compose) | runs `civibuild` |
 | [`:{standalone,drupal10,wordpress}-demo`](docs/images.md#demo-images) | Single-container demos — `docker run` and go | embedded (baked) | boots from baked data dir |
 
-**Most users want `standalone`** — it's the fastest dev loop and works for any extension that doesn't depend on a specific CMS. Use the buildkit images (`drupal10`, `drupal11`, `wordpress`, `joomla5`) only when you need to test CMS-specific behavior.
+**Most users want `standalone`** — it's the fastest dev loop and works for any extension that doesn't depend on a specific CMS. Use the buildkit images (`drupal10`, `drupal11`, `wordpress`, `joomla`) only when you need to test CMS-specific behavior.
 
 ## Quickstart
 
@@ -21,7 +21,7 @@ Each dev image has a ready-to-run compose example with phpMyAdmin and Maildev:
 
 ```bash
 git clone https://github.com/jfilter/civikitchen
-cd civikitchen/examples/standalone   # or drupal10 / drupal11 / wordpress / joomla5
+cd civikitchen/examples/standalone   # or drupal10 / drupal11 / wordpress / joomla
 docker compose up -d
 # CiviCRM:    http://localhost:8080   (login: admin / admin)
 # phpMyAdmin: http://localhost:8081
