@@ -2,6 +2,9 @@
 
 declare(strict_types = 1);
 
+use CiviKitchen\Rector\Rules\Api3ToApi4AssistRector;
+use CiviKitchen\Rector\Rules\Api3ToApi4OopAssistRector;
+use CiviKitchen\Rector\Rules\Api4ArrayToOopRector;
 use CiviKitchen\Rector\Rules\CrmCoreErrorFatalToExceptionRector;
 use CiviKitchen\Rector\Rules\CrmUtilsArrayValueToCoalesceRector;
 use Rector\Config\RectorConfig;
@@ -27,6 +30,25 @@ $target = getenv('CK_PHP_VERSION') ?: '8.1';
   default => [PhpVersion::PHP_81, 'php81'],
 };
 
+$rules = [
+  CrmUtilsArrayValueToCoalesceRector::class,
+  CrmCoreErrorFatalToExceptionRector::class,
+];
+// API style. Safe by DEFAULT: restyle existing api4 array-form calls to the OO
+// builder (same version, same semantics). The risky api3 -> api4 migration is
+// opt-in via `ckmodernize --api`. `--api=array` instead keeps the array style
+// (migrate api3 to the array form, leave api4 arrays as-is).
+$apiStyle = getenv('CK_API_MIGRATE');
+if ($apiStyle === 'array') {
+  $rules[] = Api3ToApi4AssistRector::class;
+}
+else {
+  $rules[] = Api4ArrayToOopRector::class;
+  if ($apiStyle === 'oop') {
+    $rules[] = Api3ToApi4OopAssistRector::class;
+  }
+}
+
 return RectorConfig::configure()
   // PHP version migration — rector-maintained, we write none of it.
   ->withPhpVersion($phpVersion)
@@ -38,10 +60,7 @@ return RectorConfig::configure()
     SetList::EARLY_RETURN,
   ])
   // The only custom part: CiviCRM footgun fixes (no package ships these).
-  ->withRules([
-    CrmUtilsArrayValueToCoalesceRector::class,
-    CrmCoreErrorFatalToExceptionRector::class,
-  ])
+  ->withRules($rules)
   // Never rewrite generated / vendored code.
   ->withSkip([
     '*/vendor/*',
