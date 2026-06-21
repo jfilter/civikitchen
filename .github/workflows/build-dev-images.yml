@@ -507,21 +507,14 @@ jobs:
           exit 1
 
       - name: Verify CiviCRM responds
+        # cv works on every flavor including Joomla (the buildkit image ships the
+        # joomla-cli-bootstrap.php settings.d shim), so no Joomla DB-direct case.
         run: |
-          if [ '${{ matrix.variant.name }}' = 'joomla' ]; then
-            docker compose -f ${{ matrix.variant.compose }} exec -T \
-              -u buildkit \
-              -w /home/buildkit/buildkit/build/site/web \
-              civicrm \
-              bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; echo "SELECT version FROM civicrm_domain LIMIT 1;" | amp sql -Ncivi --root=/home/buildkit/buildkit/build/site/web' \
-              | grep -Eq '^[0-9]+[.][0-9]+'
-          else
-            docker compose -f ${{ matrix.variant.compose }} exec -T \
-              -u buildkit \
-              -w /home/buildkit/buildkit/build/site/web \
-              civicrm \
-              bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv api4 Domain.get +s version'
-          fi
+          docker compose -f ${{ matrix.variant.compose }} exec -T \
+            -u buildkit \
+            -w /home/buildkit/buildkit/build/site/web \
+            civicrm \
+            bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv api4 Domain.get +s version'
 
       - name: Set up Node
         uses: actions/setup-node@v4

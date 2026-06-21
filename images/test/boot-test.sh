@@ -74,19 +74,12 @@ code=$(docker exec "${APP}" curl -s -o /dev/null -w '%{http_code}' -L http://loc
 check "home page serves HTTP 200 (got ${code})" "[ '${code}' = '200' ]"
 
 # 2) CiviCRM is live against the EXTERNAL db (the thing the host-rewrite fixes).
-if [[ "${SITE_TYPE}" == joomla* ]]; then
-    # Joomla's web UI is covered by Playwright. Its CLI bootstrap currently pulls
-    # in Joomla's web application and conflicts with cv-as-phar, so validate the
-    # same Civi DB directly through buildkit's amp SQL wrapper.
-    ver=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${APP}" \
-        bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; echo "SELECT version FROM civicrm_domain LIMIT 1;" | amp sql -Ncivi --root=/home/buildkit/buildkit/build/site/web 2>/dev/null' \
-        | tail -n 1 | tr -d '[:space:]' || true)
-    check "CiviCRM responds via DB (Domain version: ${ver:-none})" "echo '${ver}' | grep -Eq '^[0-9]+[.][0-9]+'"
-else
-    ver=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${APP}" \
-        bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv api4 Domain.get +s version 2>/dev/null' \
-        | tr -d '[:space:]' || true)
-    check "CiviCRM responds via cv (Domain version: ${ver:-none})" "echo '${ver}' | grep -q 'version'"
-fi
+# cv works on every flavor including Joomla now — the buildkit images ship a
+# civicrm.settings.d bootstrap shim (joomla-cli-bootstrap.php) that loads
+# Joomla's framework for cv — so no DB-direct fallback is needed.
+ver=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${APP}" \
+    bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv api4 Domain.get +s version 2>/dev/null' \
+    | tr -d '[:space:]' || true)
+check "CiviCRM responds via cv (Domain version: ${ver:-none})" "echo '${ver}' | grep -q 'version'"
 
 if [ "${fail}" = 0 ]; then echo "==> PASS: ${IMAGE}"; else echo "==> FAIL: ${IMAGE}"; exit 1; fi
