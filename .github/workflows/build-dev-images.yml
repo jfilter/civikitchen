@@ -596,14 +596,23 @@ jobs:
     # same images/buildkit/Dockerfile `demo` target. Profiles (e.g. verein) are
     # no longer baked into a separate image — they apply at first boot via
     # CIVIKITCHEN_PROFILE, so there is exactly one demo image per supported
-    # demo flavor. Drupal 11 and Joomla stay dev-image-only until their
-    # profile/API-user paths are wired and tested.
+    # demo flavor.
+    #
+    # joomla-demo has the same profile support as the others: the bake finishes
+    # civibuild's deliberately-incomplete joomla-demo install (it leaves the
+    # Joomla component registration as a commented-out "#fixme" and enables only
+    # civi_contribute) by registering CiviCRM's Joomla plugins and enabling the
+    # standard component extensions. The one difference is that authx's
+    # password/basic-auth flow doesn't work on Joomla, so its profile boot test
+    # exercises the api_key credential only. Drupal 11 stays dev-image-only until
+    # its profile/API-user path is wired and tested.
     strategy:
       matrix:
         variant:
           - { name: standalone-demo, site_type: standalone-demo }
           - { name: drupal10-demo,   site_type: drupal10-demo }
           - { name: wordpress-demo,  site_type: wp-demo }
+          - { name: joomla-demo,     site_type: joomla-demo }
         platform:
           - linux/arm64
           - linux/amd64
@@ -657,7 +666,7 @@ jobs:
 
     strategy:
       matrix:
-        tag: [standalone-demo, drupal10-demo, wordpress-demo]
+        tag: [standalone-demo, drupal10-demo, wordpress-demo, joomla-demo]
 
     steps:
       - name: Log in to GHCR
@@ -700,6 +709,11 @@ jobs:
           - { tag: wordpress-demo,  profile: fundraising }
           - { tag: wordpress-demo,  profile: events }
           - { tag: wordpress-demo,  profile: mailing }
+          - { tag: joomla-demo,     profile: '' }
+          - { tag: joomla-demo,     profile: verein }
+          - { tag: joomla-demo,     profile: fundraising }
+          - { tag: joomla-demo,     profile: events }
+          - { tag: joomla-demo,     profile: mailing }
 
     steps:
       - name: Log in to GHCR
@@ -729,7 +743,7 @@ jobs:
 
     strategy:
       matrix:
-        tag: [standalone-demo, drupal10-demo, wordpress-demo]
+        tag: [standalone-demo, drupal10-demo, wordpress-demo, joomla-demo]
 
     steps:
       - name: Log in to GHCR

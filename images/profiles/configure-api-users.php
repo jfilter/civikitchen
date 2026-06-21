@@ -27,7 +27,7 @@ if (!$apiUsers) {
 }
 
 $uf = CRM_Core_Config::singleton()->userFramework;
-if (!in_array($uf, ['Drupal8', 'WordPress', 'Standalone'], TRUE)) {
+if (!in_array($uf, ['Drupal8', 'WordPress', 'Standalone', 'Joomla'], TRUE)) {
   throw new \RuntimeException("configure-api-users: unsupported user framework '{$uf}'");
 }
 echo "  🔑 Configuring API access ({$uf})...\n";
@@ -97,6 +97,39 @@ switch ($uf) {
   case 'Standalone':
     // Built-in admin role already carries every permission; the per-user
     // roles below get "authenticate with password" added explicitly.
+    break;
+
+  case 'Joomla':
+    // Reset the demo admin/demo logins to their documented passwords via
+    // Joomla's user API (civibuild may set its own).
+    $jUserFactory = \Joomla\CMS\Factory::getContainer()->get(\Joomla\CMS\User\UserFactoryInterface::class);
+    foreach (['admin' => 'admin', 'demo' => 'demo'] as $name => $pass) {
+      $jid = (int) \Joomla\CMS\User\UserHelper::getUserId($name);
+      if ($jid) {
+        $acct = $jUserFactory->loadUserById($jid);
+        // 'password2' mirrors 'password' so Joomla's User::bind() password-match
+        // path doesn't warn on the missing confirmation field.
+        $acctData = ['password' => $pass, 'password2' => $pass];
+        $acct->bind($acctData);
+        $acct->save();
+      }
+    }
+    // CRM_Core_Permission_Joomla checks permissions via $user->authorise(perm,
+    // 'com_civicrm'), which needs a com_civicrm ACL asset. civibuild never
+    // registers the component (its install script can't run on the layout), so
+    // that asset is absent — create it the way Joomla's installer would, once,
+    // so the per-user grants below have something to attach to. Idempotent.
+    $jdb = \Joomla\CMS\Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
+    $civiAsset = new \Joomla\CMS\Table\Asset($jdb);
+    if (!$civiAsset->loadByName('com_civicrm')) {
+      $civiAsset->name = 'com_civicrm';
+      $civiAsset->title = 'CiviCRM';
+      $civiAsset->setLocation((new \Joomla\CMS\Table\Asset($jdb))->getRootId(), 'last-child');
+      $civiAsset->rules = '{}';
+      if (!$civiAsset->check() || !$civiAsset->store()) {
+        throw new \RuntimeException('configure-api-users: could not create com_civicrm ACL asset: ' . $civiAsset->getError());
+      }
+    }
     break;
 }
 
@@ -185,6 +218,60 @@ foreach ($apiUsers as $spec) {
         wp_set_password($password, $uid);
         (new WP_User($uid))->set_role($roleName);
       }
+      break;
+
+    case 'Joomla':
+      // Fine-grained Joomla ACL — the same least-privilege model as the other
+      // CMSs, no Super User. Create a usergroup named after the role, grant it
+      // exactly $perms (+ the authx guards) on the com_civicrm asset (ensured in
+      // the prep step above), and put the user in that group. CiviCRM's
+      // CRM_Core_Permission_Joomla maps each permission to a 'civicrm.<munged>'
+      // action on that asset, so this grants precisely what the role needs.
+      $db = \Joomla\CMS\Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
+      $grp = new \Joomla\CMS\Table\Usergroup($db);
+      if (!$grp->load(['title' => $roleName])) {
+        $grpData = ['title' => $roleName, 'parent_id' => 2];
+        $grp->bind($grpData);
+        if (!$grp->check() || !$grp->store()) {
+          throw new \RuntimeException("configure-api-users: Joomla usergroup '{$roleName}': " . $grp->getError());
+        }
+      }
+      $gid = (int) $grp->id;
+
+      // Grant this role's permissions to the group on the com_civicrm asset.
+      $permObj = new \CRM_Core_Permission_Joomla();
+      $rules = json_decode($db->setQuery(
+        $db->getQuery(TRUE)->select('rules')->from('#__assets')->where($db->quoteName('name') . ' = ' . $db->quote('com_civicrm'))
+      )->loadResult() ?: '{}', TRUE);
+      foreach (array_merge($perms, ['authenticate with password', 'authenticate with api key']) as $perm) {
+        $action = $permObj->translateJoomlaPermission($perm);
+        if (is_array($action)) {
+          $rules[$action[0]][$gid] = 1;
+        }
+      }
+      $db->setQuery(
+        $db->getQuery(TRUE)->update('#__assets')->set($db->quoteName('rules') . ' = ' . $db->quote(json_encode($rules)))
+          ->where($db->quoteName('name') . ' = ' . $db->quote('com_civicrm'))
+      )->execute();
+
+      // Create/load the user in Registered + the role group (NOT Super Users).
+      $jUserFactory = \Joomla\CMS\Factory::getContainer()->get(\Joomla\CMS\User\UserFactoryInterface::class);
+      $uid = (int) \Joomla\CMS\User\UserHelper::getUserId($username);
+      $jUser = $uid ? $jUserFactory->loadUserById($uid) : new \Joomla\CMS\User\User();
+      $jData = [
+        'name' => ucfirst(strtolower($username)) . ' User',
+        'username' => $username,
+        'email' => $email,
+        'password' => $password,
+        'password2' => $password,
+        'groups' => [2, $gid],
+        'block' => 0,
+      ];
+      $jUser->bind($jData);
+      if (!$jUser->save()) {
+        throw new \RuntimeException("configure-api-users: Joomla user '{$username}': " . $jUser->getError());
+      }
+      $uid = (int) $jUser->id;
       break;
 
     case 'Standalone':

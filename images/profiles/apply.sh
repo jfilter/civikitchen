@@ -92,6 +92,13 @@ jq -r --arg uf "${UF}" ".dependencies[] | ${NOT_SKIPPED} | select(.enable) | .na
     cv ext:enable "${name}"
 done
 
+# On Joomla, civibuild's install doesn't link the CMS admin to a CiviCRM contact
+# (Drupal/WordPress/Standalone do at install time), so cv --user=admin below
+# can't resolve a contact. Create the link the way CiviCRM does (idempotent).
+if [ "${UF}" = "Joomla" ]; then
+    cv scr "$(dirname "$0")/joomla-link-admin.php"
+fi
+
 # Seeds run as the admin CMS user. civibuild sites always have one; the
 # standalone dev image only after an auto-install with a demo admin — fail
 # with a hint instead of a cryptic cv error per seed.
@@ -117,6 +124,11 @@ done
 
 if jq -e '.apiUsers' "${JSON}" >/dev/null 2>&1; then
     echo "==> [${PROFILE_NAME}] configuring API users + AuthX"
+    # authx powers the api_key / basic-auth the API users rely on. It ships with
+    # core but isn't enabled on every CMS build (civibuild's joomla-demo leaves
+    # it uninstalled), so enable it here — in its own process, before the script
+    # below uses it. Idempotent, and a no-op where it is already on.
+    cv ext:enable authx
     # PHP via cv scr: cv boots CiviCRM + the host CMS, so user/role creation
     # uses the native CMS APIs on every flavor (no drush/wp-cli dependency).
     CK_PROFILE_JSON="${JSON}" cv scr "$(dirname "$0")/configure-api-users.php"

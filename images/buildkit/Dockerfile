@@ -112,6 +112,13 @@ RUN { \
         echo 'max_execution_time = 300'; \
     } > /usr/local/etc/php/conf.d/civikitchen.ini
 
+# Joomla CLI bootstrap shim (see the file header). Inert on every other flavor
+# (CLI + CIVICRM_UF==Joomla guarded), so it ships on all buildkit images. The
+# civibuild site settings auto-load /etc/civicrm.settings.d/post.d/*.php, which
+# is what makes cv/civibuild/phpunit able to boot CiviCRM on Joomla at all —
+# during the build-time bake (builder stage) and at runtime (demo + final).
+COPY buildkit/joomla-cli-bootstrap.php /etc/civicrm.settings.d/post.d/000-joomla-cli-bootstrap.php
+
 # buildkit user owns the site tree so civibuild can write to it. Apache is
 # reconfigured to run as buildkit so the served files match the writer's uid
 # — otherwise Civi's runtime cache writes (templates_c, files/civicrm) from
@@ -181,11 +188,15 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Bake the site (logic in buildkit/bake.sh to keep the shell quoting sane).
+# joomla-enable-plugins.php and ext/ (the ckjoomlaidentity extension) are used
+# by bake.sh's joomla-demo path.
 COPY buildkit/bake.sh /tmp/bake.sh
+COPY buildkit/joomla-enable-plugins.php /tmp/joomla-enable-plugins.php
+COPY buildkit/ext /tmp/ck-ext
 RUN CIVICRM_VERSION="${CIVICRM_VERSION}" CIVICRM_BUILD_VERSION="${CIVICRM_BUILD_VERSION}" \
         DEFAULT_SITE_TYPE="${DEFAULT_SITE_TYPE}" \
         KEEP_GIT="${KEEP_GIT}" \
-        bash /tmp/bake.sh && rm /tmp/bake.sh
+        bash /tmp/bake.sh && rm -rf /tmp/bake.sh /tmp/joomla-enable-plugins.php /tmp/ck-ext
 
 # =============================================================================
 # Stage 4: Demo image — single-container, embedded MariaDB, baked demo data

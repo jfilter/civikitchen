@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<extension key="ckjoomlaidentity" type="module">
+  <file>ckjoomlaidentity</file>
+  <name>CiviKitchen Joomla Identity Sync</name>
+  <description>On Joomla, load the Joomla session identity matching the authx-authenticated CiviCRM user, so permission checks (which CRM_Core_Permission_Joomla resolves from Joomla's own identity) work for cv --user and api_key requests.</description>
+  <urls>
+    <url desc="Documentation">https://github.com/jfilter/civikitchen</url>
+  </urls>
+  <maintainer>
+    <author>CiviKitchen</author>
+    <email>hi@jfilter.de</email>
+  </maintainer>
+  <compatibility>
+    <ver>5.0</ver>
+  </compatibility>
+  <requires>
+    <ext>authx</ext>
+  </requires>
+  <releaseDate>2026-06-21</releaseDate>
+  <version>1.0</version>
+  <develStage>stable</develStage>
+  <comments>Shipped with the civikitchen Joomla images.</comments>
+</extension>
