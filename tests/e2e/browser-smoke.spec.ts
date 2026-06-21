@@ -96,7 +96,7 @@ async function loginToCms(page: import('@playwright/test').Page, target: string,
 async function submitLogin(page: import('@playwright/test').Page) {
   await Promise.all([
     page.waitForLoadState('domcontentloaded').catch(() => {}),
-    page.locator('button[type="submit"], input[type="submit"]').first().click(),
+    page.locator('button[type="submit"]:visible, input[type="submit"]:visible').first().click(),
   ]);
 }
 
