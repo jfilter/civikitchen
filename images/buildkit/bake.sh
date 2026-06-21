@@ -33,6 +33,27 @@ set -e
 export PATH=/home/buildkit/buildkit/bin:\$PATH
 printf '[client]\nhost=127.0.0.1\nport=3306\nuser=root\npassword=root\n' > /home/buildkit/.my.cnf
 amp config:set --mysql_type=mycnf --httpd_type=none --perm_type=none
+if [ '${DEFAULT_SITE_TYPE}' = 'joomla-demo' ]; then
+  # Upstream buildkit's joomla-demo currently downloads Joomla to
+  # \$WEB_ROOT/web but links CiviCRM into \$WEB_ROOT/joomla. Its install step
+  # also calls joomlaxml.php without DM_TMPDIR, which makes CiviCRM 6.15 write
+  # XML files below /com_civicrm. Finally, setup.sh can leave the install canary
+  # table behind after a successful Joomla install; drop it before snapshotting.
+  sed -i 's|pushd "\$WEB_ROOT/joomla"|pushd "\$WEB_ROOT/web"|' /home/buildkit/buildkit/app/config/joomla-demo/download.sh
+  sed -i \
+    -e 's|cvutil_mkdir "\$TMPDIR/\$SITE_NAME"{,/joomlaxml,/joomlaxml/admin}|cvutil_mkdir "\$TMPDIR/\$SITE_NAME"{,/com_civicrm,/com_civicrm/admin}|' \
+    -e 's|php "\$CIVI_CORE/distmaker/utils/joomlaxml.php"|DM_TMPDIR="\$TMPDIR/\$SITE_NAME" php "\$CIVI_CORE/distmaker/utils/joomlaxml.php"|' \
+    -e 's|"\$TMPDIR/\$SITE_NAME/joomlaxml/civicrm.xml"|"\$TMPDIR/\$SITE_NAME/com_civicrm/civicrm.xml"|' \
+    -e 's|"\$TMPDIR/\$SITE_NAME/joomlaxml/admin/access.xml"|"\$TMPDIR/\$SITE_NAME/com_civicrm/admin/access.xml"|' \
+    /home/buildkit/buildkit/app/config/joomla-demo/install.sh
+  sed -i '/^civicrm_install$/a\
+echo "DROP TABLE IF EXISTS civicrm_install_canary;" | cvutil_php_nodbg amp sql -Ncivi --root="\$CMS_ROOT" || true' \
+    /home/buildkit/buildkit/app/config/joomla-demo/install.sh
+  sed -i '/pushd "\$WEB_ROOT" >> \/dev\/null/a\
+  [ -f web/configuration.php ] && rm -f web/configuration.php\
+  [ ! -d web/installation ] && [ -f web/installation.zip ] && unzip -q web/installation.zip -d web' \
+    /home/buildkit/buildkit/app/config/joomla-demo/uninstall.sh
+fi
 civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_CREATE_VERSION}' --url http://localhost --admin-pass admin
 # brick/money 0.12+ renamed ISOCurrencyProvider; CiviCRM still references the old
 # name. Pin compatible (non-fatal — only matters for some CMS/Civi combos).

@@ -11,7 +11,7 @@ docker build -f images/standalone/Dockerfile \
     --build-arg CIVICRM_VERSION=6.15 \
     -t civikitchen:standalone-6.15 images/
 
-# Buildkit-based images. The :drupal10, :drupal11, :wordpress, and :joomla5
+# Buildkit-based images. The :drupal10, :drupal11, :wordpress, and :joomla
 # tags are built from the same Dockerfile (images/buildkit/) —
 # DEFAULT_SITE_TYPE picks which civibuild site type the entrypoint creates on
 # first run. CIVICRM_VERSION
@@ -37,8 +37,8 @@ docker build -f images/buildkit/Dockerfile \
 
 docker build -f images/buildkit/Dockerfile \
     --build-arg PHP_VERSION=8.3 \
-    --build-arg DEFAULT_SITE_TYPE=joomla5-empty \
-    -t civikitchen:joomla5 images/
+    --build-arg DEFAULT_SITE_TYPE=joomla-demo \
+    -t civikitchen:joomla images/
 ```
 
 ## Keeping the CiviCRM git history (`KEEP_GIT=1`)

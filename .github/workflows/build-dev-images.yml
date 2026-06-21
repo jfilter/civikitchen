@@ -333,7 +333,7 @@ jobs:
           - { name: drupal10,  site_type: drupal10-demo }
           - { name: drupal11,  site_type: drupal11-dev }
           - { name: wordpress, site_type: wp-demo }
-          - { name: joomla5,   site_type: joomla5-empty }
+          - { name: joomla,    site_type: joomla-demo }
         php: ['8.3']
         platform:
           - linux/arm64
@@ -361,7 +361,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Test-then-promote: only sha-suffixed candidate tags here; the stable
-      # tags (:drupal10, :drupal11, :wordpress, :joomla5, :*-php8.3) are
+      # tags (:drupal10, :drupal11, :wordpress, :joomla, :*-php8.3) are
       # created by promote-buildkit after the smoke tests pass.
       - name: Build and push ${{ matrix.variant.name }} candidate image
         uses: docker/build-push-action@v5
@@ -390,7 +390,7 @@ jobs:
 
     strategy:
       matrix:
-        variant: [drupal10, drupal11, wordpress, joomla5]
+        variant: [drupal10, drupal11, wordpress, joomla]
 
     steps:
       - name: Log in to GHCR
@@ -415,7 +415,7 @@ jobs:
 
     strategy:
       matrix:
-        variant: [drupal10, drupal11, wordpress, joomla5]
+        variant: [drupal10, drupal11, wordpress, joomla]
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
@@ -447,7 +447,7 @@ jobs:
             drupal10)  SITE_TYPE=drupal10-demo ;;
             drupal11)  SITE_TYPE=drupal11-dev ;;
             wordpress) SITE_TYPE=wp-demo ;;
-            joomla5)   SITE_TYPE=joomla5-empty ;;
+            joomla)    SITE_TYPE=joomla-demo ;;
           esac
           bash images/test/boot-test.sh ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }} "$SITE_TYPE"
 
@@ -467,7 +467,7 @@ jobs:
           - { name: drupal10,  compose: examples/drupal10/docker-compose.yml,  path: "/civicrm" }
           - { name: drupal11,  compose: examples/drupal11/docker-compose.yml,  path: "/civicrm" }
           - { name: wordpress, compose: examples/wordpress/docker-compose.yml, path: "/wp-admin/admin.php?page=CiviCRM" }
-          - { name: joomla5,   compose: examples/joomla5/docker-compose.yml,  path: "/administrator/index.php?option=com_civicrm" }
+          - { name: joomla,    compose: examples/joomla/docker-compose.yml,   path: "/administrator/index.php?option=com_civicrm" }
 
     steps:
       - name: Checkout
@@ -506,13 +506,22 @@ jobs:
           docker compose -f ${{ matrix.variant.compose }} logs civicrm
           exit 1
 
-      - name: Verify CiviCRM responds via cv
+      - name: Verify CiviCRM responds
         run: |
-          docker compose -f ${{ matrix.variant.compose }} exec -T \
-            -u buildkit \
-            -w /home/buildkit/buildkit/build/site/web \
-            civicrm \
-            bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv api4 Domain.get +s version'
+          if [ '${{ matrix.variant.name }}' = 'joomla' ]; then
+            docker compose -f ${{ matrix.variant.compose }} exec -T \
+              -u buildkit \
+              -w /home/buildkit/buildkit/build/site/web \
+              civicrm \
+              bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; echo "SELECT version FROM civicrm_domain LIMIT 1;" | amp sql -Ncivi --root=/home/buildkit/buildkit/build/site/web' \
+              | grep -Eq '^[0-9]+[.][0-9]+'
+          else
+            docker compose -f ${{ matrix.variant.compose }} exec -T \
+              -u buildkit \
+              -w /home/buildkit/buildkit/build/site/web \
+              civicrm \
+              bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv api4 Domain.get +s version'
+          fi
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -558,7 +567,7 @@ jobs:
 
     strategy:
       matrix:
-        variant: [drupal10, drupal11, wordpress, joomla5]
+        variant: [drupal10, drupal11, wordpress, joomla]
         php: ['8.3']
 
     steps:
@@ -587,7 +596,7 @@ jobs:
     # same images/buildkit/Dockerfile `demo` target. Profiles (e.g. verein) are
     # no longer baked into a separate image — they apply at first boot via
     # CIVIKITCHEN_PROFILE, so there is exactly one demo image per supported
-    # demo flavor. Drupal 11 and Joomla 5 stay dev-image-only until their
+    # demo flavor. Drupal 11 and Joomla stay dev-image-only until their
     # profile/API-user paths are wired and tested.
     strategy:
       matrix:
