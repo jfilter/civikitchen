@@ -33,6 +33,11 @@ ckmodernize — modernize a CiviCRM extension (structure via civix + code via re
   ckmodernize --php 8.2      target PHP version for rector's upgrade sets (default 8.1)
   ckmodernize --no-civix     code only (skip the civix structure step)
   ckmodernize --no-rector    structure only (skip the rector code step)
+  ckmodernize --api          ALSO migrate api3 -> api4 OO (safe get() subset; preview!)
+  ckmodernize --api=array    array API style: migrate api3 -> api4 array, keep arrays
+
+By default, existing api4 array-form calls are restyled to the OO builder (safe,
+same semantics). --api adds the riskier api3 -> api4 migration (review it!).
   ckmodernize path ...       limit the rector step to the given files/dirs
   ckmodernize --all          run rector over the whole tree
 
@@ -52,6 +57,8 @@ while [ "$#" -gt 0 ]; do
     --all)       all=1 ;;
     --no-civix)  do_civix=0 ;;
     --no-rector) do_rector=0 ;;
+    --api)       export CK_API_MIGRATE=oop ;;
+    --api=*)     export CK_API_MIGRATE="${1#--api=}" ;;
     --php)       shift; export CK_PHP_VERSION="${1:-}" ;;
     --php=*)     export CK_PHP_VERSION="${1#--php=}" ;;
     -h|--help)   usage; exit 0 ;;
@@ -97,4 +104,10 @@ if [ "${do_rector}" -eq 1 ]; then
   rargs=(process "${paths[@]}" "${config[@]}" --no-progress-bar)
   [ "${fix}" -eq 0 ] && rargs+=(--dry-run)
   php -d memory_limit=1G "${RECTOR_BIN}" "${rargs[@]}"
+  rc=$?
+  if [ -n "${CK_API_MIGRATE:-}" ]; then
+    echo >&2
+    echo "ckmodernize --api: assisted only the safe literal get() calls (checkPermissions + limit guardrails kept). Other actions, operators, chaining, dynamic params, and ALL return-value handling stay api3 — review manually; cklint flags every remaining civicrm_api3 call." >&2
+  fi
+  exit "${rc}"
 fi
