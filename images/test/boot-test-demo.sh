@@ -56,6 +56,19 @@ done
 fail=0
 check() { if eval "$2"; then echo "  ✓ $1"; else echo "  ✗ $1"; fail=1; fi; }
 
+# CiviCRM's HTTP API entry differs per CMS: Standalone/Drupal/WP expose the
+# clean /civicrm route, but on Joomla CiviCRM has no clean URL — requests go
+# through Joomla's component router (index.php?option=com_civicrm&task=...).
+# Detect the framework so the api-auth checks below hit the right endpoint.
+WEB=/home/buildkit/buildkit/build/site/web
+UF=$(docker exec -u buildkit -w "${WEB}" "${APP}" \
+    bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv ev "echo CIVICRM_UF;" 2>/dev/null' | tr -d '[:space:]' || true)
+if [ "${UF}" = Joomla ]; then
+    API_URL='http://localhost/index.php?option=com_civicrm&task=civicrm/ajax/api4/Contact/get'
+else
+    API_URL='http://localhost/civicrm/ajax/api4/Contact/get'
+fi
+
 # 1) The site serves 200 (follow the standalone bare-/ -> /civicrm/login redirect).
 code=$(docker exec "${APP}" curl -s -o /dev/null -w '%{http_code}' -L http://localhost/ 2>/dev/null || echo 000)
 check "site serves HTTP 200 (got ${code})" "[ '${code}' = '200' ]"
@@ -122,23 +135,13 @@ if [ -n "${PROFILE}" ]; then
         # remoteevent civicrm_session table collision caused) still produces
         # a complete JSON body, but with HTTP 500 on every request. A
         # body-only grep shipped that breakage as a green test.
-        basic=$(printf '%s:%s' "${api_user}" "${api_pass}" | base64)
-        auth_out=$(docker exec "${APP}" curl -s -w '\n%{http_code}' -X POST 'http://localhost/civicrm/ajax/api4/Contact/get' \
-            -H "Authorization: Basic ${basic}" \
-            -H 'X-Requested-With: XMLHttpRequest' \
-            --data-urlencode 'params={"limit":1}' 2>/dev/null || true)
-        auth_code="${auth_out##*$'\n'}"
-        auth_body="${auth_out%$'\n'*}"
-        check "API user '${api_user}' authenticates via authx basic auth" \
-            "echo '${auth_body}' | grep -q '\"values\"'"
-        check "basic-auth API call returns HTTP 200 (got ${auth_code})" \
-            "[ '${auth_code}' = '200' ]"
-
-        # Also exercise the api_key credential: it has its own failure mode
-        # (civicrm_contact.api_key is varchar(32) — an oversized generated
-        # key gets mangled on save and only this check would catch it).
+        #
+        # api_key (X-Civi-Auth: Bearer) is the canonical credential and works on
+        # every flavor, Joomla included. It also has its own failure mode
+        # (civicrm_contact.api_key is varchar(32) — an oversized generated key
+        # gets mangled on save and only this check would catch it).
         api_key="$(echo "${cred}" | cut -d: -f3)"
-        key_out=$(docker exec "${APP}" curl -s -w '\n%{http_code}' -X POST 'http://localhost/civicrm/ajax/api4/Contact/get' \
+        key_out=$(docker exec "${APP}" curl -s -w '\n%{http_code}' -X POST "${API_URL}" \
             -H "X-Civi-Auth: Bearer ${api_key}" \
             -H 'X-Requested-With: XMLHttpRequest' \
             --data-urlencode 'params={"limit":1}' 2>/dev/null || true)
@@ -148,6 +151,25 @@ if [ -n "${PROFILE}" ]; then
             "echo '${key_body}' | grep -q '\"values\"'"
         check "api_key API call returns HTTP 200 (got ${key_code})" \
             "[ '${key_code}' = '200' ]"
+
+        # Basic/password auth: authx's password flow needs the CMS's full auth
+        # stack, which Joomla doesn't run for a headless API request, so it only
+        # works on Standalone/Drupal/WP. (api_key above is Joomla's path.)
+        if [ "${UF}" != Joomla ]; then
+            basic=$(printf '%s:%s' "${api_user}" "${api_pass}" | base64)
+            auth_out=$(docker exec "${APP}" curl -s -w '\n%{http_code}' -X POST "${API_URL}" \
+                -H "Authorization: Basic ${basic}" \
+                -H 'X-Requested-With: XMLHttpRequest' \
+                --data-urlencode 'params={"limit":1}' 2>/dev/null || true)
+            auth_code="${auth_out##*$'\n'}"
+            auth_body="${auth_out%$'\n'*}"
+            check "API user '${api_user}' authenticates via authx basic auth" \
+                "echo '${auth_body}' | grep -q '\"values\"'"
+            check "basic-auth API call returns HTTP 200 (got ${auth_code})" \
+                "[ '${auth_code}' = '200' ]"
+        else
+            echo "  ⊘ basic-auth skipped on Joomla (authx password flow unsupported; api_key covers it)"
+        fi
     else
         echo "  ✗ no API credentials file in the container"; fail=1
     fi

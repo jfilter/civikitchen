@@ -117,16 +117,26 @@ compose, no external DB. `docker run` and you have a working CiviCRM with demo
 content in a few seconds. For demos, evaluation, and screenshots — **not** for
 development (the DB is inside the container; data resets on `docker rm`).
 
-Three demo flavors, all built from the same `images/buildkit/` `demo` target.
-Drupal 11 and Joomla are currently dev-image-only because the demo profile
-API-user path is wired and tested for the original three flavors:
+Four demo flavors, all built from the same `images/buildkit/` `demo` target:
 
 ```bash
-# Pick a flavor: standalone-demo (CMS-less), drupal10-demo, or wordpress-demo
+# Pick a flavor: standalone-demo (CMS-less), drupal10-demo, wordpress-demo, joomla-demo
 docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:drupal10-demo
 
 # then open http://localhost  —  login: admin / admin
 ```
+
+All four support the demo profiles below (`CIVIKITCHEN_PROFILE`). `joomla-demo`
+needed extra work to get there — civibuild's `joomla-demo` install is
+deliberately incomplete (it leaves CiviCRM's Joomla component registration as a
+commented-out `#fixme` and enables only the `civi_contribute` component) — so the
+image build finishes that install: it registers CiviCRM's Joomla plugins (giving
+the API an HTTP route) and enables the standard component extensions
+(`civi_member`, `civi_event`, …) the other demos ship. The **one** Joomla
+difference: authx's password/basic-auth flow doesn't work there, so API access on
+the Joomla demo is via the **api_key** credential (`X-Civi-Auth: Bearer …`), not
+HTTP basic auth. Drupal 11 stays dev-image-only until its profile/API-user path
+is wired and tested.
 
 > Map to port **80** (`-p 80:80`): the site is baked at `http://localhost`, so a
 > different host port would serve CiviCRM's assets at the wrong base URL.
@@ -134,12 +144,18 @@ docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:drupal10-demo
 ### Profiles (`CIVIKITCHEN_PROFILE`)
 
 A profile layers a curated extension stack + seed data + API users on top of
-the base site at **first boot**. Profiles work on the tested profile targets
-(`standalone`, `drupal10`, `wordpress`), for both demo and dev images; API
-users are created through the matching mechanism per CMS (Drupal roles via
-drush, WordPress roles/capabilities via wp-cli, native users on Standalone).
-They live in [`images/profiles/`](../images/profiles/) (one dir per profile:
-`profile.json` + `seeds/*.php`, applied by the shared driver):
+the base site at **first boot**. Profiles work on `standalone`, `drupal10`, and
+`wordpress` (demo and dev images) and on `joomla-demo`. API users are created
+through each CMS's native API — `cv` boots CiviCRM *and* the host CMS, so the
+driver uses the Drupal entity API / WordPress users+roles / Standalone APIv4 /
+Joomla users+usergroups directly, with no drush or wp-cli. On Joomla each role
+gets exactly its permissions (the same least-privilege model as the other CMSs):
+civibuild registers no `com_civicrm` ACL asset, so the build creates one and
+grants per-role on it, and a small bundled extension (`ckjoomlaidentity`) loads
+the matching Joomla identity for headless requests so both api_key reads and
+writes enforce those permissions. They live in
+[`images/profiles/`](../images/profiles/) (one dir per profile: `profile.json` +
+`seeds/*.php`, applied by the shared driver):
 
 | Profile | Extensions | Seed data | API users |
 |---|---|---|---|
