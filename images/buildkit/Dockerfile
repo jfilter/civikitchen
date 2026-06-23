@@ -164,11 +164,23 @@ ARG CIVICRM_VERSION
 USER buildkit
 WORKDIR /home/buildkit
 
-# Clone buildkit (remove .git to save space)
-RUN git clone https://github.com/civicrm/civicrm-buildkit.git buildkit \
-    && rm -rf buildkit/.git \
-    && cd buildkit \
-    && ./bin/civi-download-tools
+# Clone buildkit + download its tools (composer, drush, cv, node, ...). Both pull
+# from github.com / CDNs with no built-in resilience, so a single transient 5xx
+# would fail the whole image (same flaky-download class as bake.sh's civibuild
+# create — see the dc-js/dc.js 502 that motivated this). Retry the network-heavy
+# setup; --depth 1 trims the clone (its .git is dropped anyway) to shrink the
+# failure surface. (.git removed to save space.)
+RUN for attempt in 1 2 3; do \
+        rm -rf buildkit; \
+        if git clone --depth 1 https://github.com/civicrm/civicrm-buildkit.git buildkit \
+            && rm -rf buildkit/.git \
+            && ( cd buildkit && ./bin/civi-download-tools ); then \
+            break; \
+        fi; \
+        if [ "$attempt" = 3 ]; then echo "Dockerfile: buildkit clone/download-tools failed after 3 attempts" >&2; exit 1; fi; \
+        echo "Dockerfile: buildkit setup attempt $attempt failed (transient download?); retrying..." >&2; \
+        sleep $((attempt * 15)); \
+    done
 
 ENV PATH="/home/buildkit/buildkit/bin:${PATH}"
 

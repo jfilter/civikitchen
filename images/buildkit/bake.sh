@@ -54,7 +54,28 @@ echo "DROP TABLE IF EXISTS civicrm_install_canary;" | cvutil_php_nodbg amp sql -
   [ ! -d web/installation ] && [ -f web/installation.zip ] && unzip -q web/installation.zip -d web' \
     /home/buildkit/buildkit/app/config/joomla-demo/uninstall.sh
 fi
-civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_CREATE_VERSION}' --url http://localhost --admin-pass admin
+# civibuild create downloads the CMS + civicrm-core, including dozens of bundled
+# JS assets the composer-downloads-plugin fetches from github.com. A single
+# transient github.com 5xx on ANY one of them (seen in CI: dc-js/dc.js 2.1.10.zip
+# -> HTTP 502, after composer's own retries) makes composer — and thus the whole
+# multi-arch image build — fail, with civibuild's bash then dying noisily
+# ("pop_var_context: ... not a function context"). Retry the create so a
+# transient blip doesn't sink the build; the composer cache (cleared only at the
+# end of this heredoc) means a retry re-fetches just the asset that failed, not
+# the whole tree. </dev/null on both keeps a stray prompt from hanging the
+# non-interactive build; destroy resets partial state between attempts.
+for attempt in 1 2 3; do
+  if civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_CREATE_VERSION}' --url http://localhost --admin-pass admin </dev/null; then
+    break
+  fi
+  if [ "\$attempt" = 3 ]; then
+    echo "bake.sh: civibuild create failed after 3 attempts (last was likely a transient github.com download)" >&2
+    exit 1
+  fi
+  echo "bake.sh: civibuild create attempt \$attempt failed (transient download?); resetting + retrying..." >&2
+  civibuild destroy site </dev/null >/dev/null 2>&1 || true
+  sleep \$((attempt * 15))
+done
 # brick/money 0.12+ renamed ISOCurrencyProvider; CiviCRM still references the old
 # name. Pin compatible (non-fatal — only matters for some CMS/Civi combos).
 { cd /home/buildkit/buildkit/build/site && [ -f composer.json ] && composer require 'brick/money:<0.12' -W --no-interaction; } || true
