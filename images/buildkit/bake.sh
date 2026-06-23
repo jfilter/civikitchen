@@ -59,44 +59,12 @@ civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_CREATE
 # name. Pin compatible (non-fatal — only matters for some CMS/Civi combos).
 { cd /home/buildkit/buildkit/build/site && [ -f composer.json ] && composer require 'brick/money:<0.12' -W --no-interaction; } || true
 if [ '${DEFAULT_SITE_TYPE}' = 'joomla-demo' ]; then
-  # civibuild's joomla-demo install is deliberately incomplete: its install.sh
-  # leaves the Joomla component registration as a commented-out "#fixme" and
-  # enables only the civi_contribute component extension. Finish that install so
-  # the demo matches the Drupal/WordPress ones. (cv here relies on the Joomla CLI
-  # bootstrap shim baked in the base stage.)
-  cd /home/buildkit/buildkit/build/site/web
-  # (a) Register + enable CiviCRM's Joomla plugins (civibuild's #fixme step):
-  #     this gives CiviCRM its HTTP request hook, so the api_key API works. The
-  #     com_civicrm *component* install fails on civibuild's path layout
-  #     (script.civicrm.php -> admin/admin/configure.php) and isn't needed for
-  #     the API route, so only the plugins are installed.
-  php cli/joomla.php extension:discover
-  cv scr /tmp/joomla-enable-plugins.php
-  # (b) Enable the standard component extensions the Drupal/WP demo types enable
-  #     (joomla-demo ships only civi_contribute) so CIVIKITCHEN_PROFILE seeds
-  #     find their APIv4 entities (MembershipType, …). One at a time, deps first
-  #     (afform needs search_kit; civi_case needs afform) — a batched enable
-  #     can't autoload a just-enabled dependency in the same process.
-  for ext in org.civicrm.search_kit org.civicrm.afform civi_member civi_event civi_case civi_campaign civi_pledge civi_report civi_mail; do
-    cv ext:enable "\$ext"
-  done
-  # (c) Joomla bundles an ancient brick/math (0.8.17) that nothing in Joomla
-  #     uses, but which shadows CiviCRM's at runtime (both autoload in one
-  #     process, Joomla's wins) — breaking every CiviCRM Money operation
-  #     (Money::of() type error → contributions, membership fees, SEPA seeds).
-  #     Align Joomla's copy to CiviCRM's bundled version so Money works.
-  jbm=/home/buildkit/buildkit/build/site/web/libraries/vendor/brick/math
-  cbm=/home/buildkit/buildkit/build/site/src/civicrm/admin/civicrm/vendor/brick/math
-  if [ -d "\$jbm" ] && [ -d "\$cbm" ]; then
-    rm -rf "\$jbm" && cp -a "\$cbm" "\$jbm"
-  fi
-  # (d) Ship + enable the ckjoomlaidentity extension. On Joomla it loads the
-  #     Joomla identity matching the authx-authenticated CiviCRM user, so
-  #     permission-checked operations work on headless requests (api_key writes
-  #     and cv --user seeds) — which cv/authx otherwise leave running as guest.
-  mkdir -p media/civicrm/ext/ckjoomlaidentity
-  cp -a /tmp/ck-ext/ckjoomlaidentity/. media/civicrm/ext/ckjoomlaidentity/
-  cv ext:enable ckjoomlaidentity
+  # civibuild's joomla-demo install is deliberately incomplete (it leaves the
+  # Joomla component registration as a commented-out "#fixme" and enables only
+  # civi_contribute). Finish it so the demo matches the Drupal/WordPress ones.
+  # Same script the dev image re-runs after its first-boot reinstall (see
+  # joomla-finish.sh) — kept out of line here so there is one source of truth.
+  bash /usr/local/share/civikitchen/joomla-finish.sh
 fi
 # Drop build-time download caches (composer + npm, ~800MB). The final image
 # COPYs ~buildkit wholesale, so clearing them here keeps them out. The runtime

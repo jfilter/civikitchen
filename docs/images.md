@@ -94,6 +94,16 @@ type. This is the Joomla compatibility target for extension development and
 requires an external MariaDB. Buildkit's `joomla5-empty` template is a CMS-only
 site, so CiviKitchen does not publish it as a CiviCRM flavor.
 
+civibuild's `joomla-demo` install is deliberately incomplete (it leaves
+CiviCRM's Joomla component registration as a `#fixme`). On first boot the dev
+image runs `civibuild reinstall` against your external DB and then re-runs the
+same finish the demo image bakes in — registering CiviCRM's Joomla
+component/plugins, enabling the standard component extensions, and the
+`ckjoomlaidentity` identity shim (see
+[`joomla-finish.sh`](../images/buildkit/joomla-finish.sh)). So `option=com_civicrm`
+(the admin UI and the api_key API) and the demo profiles behave the same as on
+the other dev flavors.
+
 Ready-to-run: [`examples/joomla/`](../examples/joomla/)
 
 > **Scope note.** The buildkit images (`:drupal10`, `:drupal11`, `:wordpress`,
@@ -178,10 +188,10 @@ generated API-user credentials are printed to the logs and kept in the
 container: `docker exec civicrm cat /home/buildkit/api-credentials.txt`.
 
 Profiles also work on the tested dev images (`:standalone`, `:drupal10`,
-`:wordpress`) — set the same env var in your compose file to develop against a
-realistic stack. They are not enabled for `:joomla` yet. On the `:standalone`
-dev image the profile needs an admin user to seed as, so combine it with
-`CIVICRM_AUTO_INSTALL=1` and `CIVIKITCHEN_DEMO_USER=admin`.
+`:wordpress`, `:joomla`) — set the same env var in your compose file to develop
+against a realistic stack. On the `:standalone` dev image the profile needs an
+admin user to seed as, so combine it with `CIVICRM_AUTO_INSTALL=1` and
+`CIVIKITCHEN_DEMO_USER=admin`.
 
 > **Migrating from `civicrm-eu-ngo:latest`?** That pre-baked image is retired;
 > use `civikitchen:drupal10-demo` with `CIVIKITCHEN_PROFILE=verein` instead —

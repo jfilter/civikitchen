@@ -119,6 +119,15 @@ RUN { \
 # during the build-time bake (builder stage) and at runtime (demo + final).
 COPY buildkit/joomla-cli-bootstrap.php /etc/civicrm.settings.d/post.d/000-joomla-cli-bootstrap.php
 
+# Joomla "finish install" helpers, shipped in the shared dir so the SAME script
+# runs both at build time (bake.sh, builder stage) and at runtime (entrypoint.sh,
+# after the dev image's first-boot `civibuild reinstall`). Putting them in the
+# `base` stage makes them present in builder (bake), demo, and final (dev) alike.
+# Inert on non-Joomla flavors (joomla-finish.sh self-guards on CIVICRM_UF).
+COPY buildkit/joomla-finish.sh /usr/local/share/civikitchen/joomla-finish.sh
+COPY buildkit/joomla-enable-plugins.php /usr/local/share/civikitchen/joomla-enable-plugins.php
+COPY buildkit/ext/ckjoomlaidentity /usr/local/share/civikitchen/ext/ckjoomlaidentity
+
 # buildkit user owns the site tree so civibuild can write to it. Apache is
 # reconfigured to run as buildkit so the served files match the writer's uid
 # — otherwise Civi's runtime cache writes (templates_c, files/civicrm) from
@@ -187,16 +196,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends mariadb-server procps \
     && rm -rf /var/lib/apt/lists/*
 
-# Bake the site (logic in buildkit/bake.sh to keep the shell quoting sane).
-# joomla-enable-plugins.php and ext/ (the ckjoomlaidentity extension) are used
-# by bake.sh's joomla-demo path.
+# Bake the site (logic in buildkit/bake.sh to keep the shell quoting sane). Its
+# joomla-demo path calls /usr/local/share/civikitchen/joomla-finish.sh, baked in
+# the base stage above (shared with the runtime dev-image path).
 COPY buildkit/bake.sh /tmp/bake.sh
-COPY buildkit/joomla-enable-plugins.php /tmp/joomla-enable-plugins.php
-COPY buildkit/ext /tmp/ck-ext
 RUN CIVICRM_VERSION="${CIVICRM_VERSION}" CIVICRM_BUILD_VERSION="${CIVICRM_BUILD_VERSION}" \
         DEFAULT_SITE_TYPE="${DEFAULT_SITE_TYPE}" \
         KEEP_GIT="${KEEP_GIT}" \
-        bash /tmp/bake.sh && rm -rf /tmp/bake.sh /tmp/joomla-enable-plugins.php /tmp/ck-ext
+        bash /tmp/bake.sh && rm -rf /tmp/bake.sh
 
 # =============================================================================
 # Stage 4: Demo image — single-container, embedded MariaDB, baked demo data

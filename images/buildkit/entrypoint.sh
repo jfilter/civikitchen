@@ -110,6 +110,19 @@ MYCNF
     # external host, regenerate settings for ${CIVIKITCHEN_SITE_URL}.
     ${BK} "export PATH='${PATH}' && civibuild reinstall site --url '${CIVIKITCHEN_SITE_URL}'"
 
+    # joomla-demo's civibuild install is deliberately incomplete (component
+    # registration left as a #fixme, only civi_contribute enabled). The demo
+    # image bakes the finish into its embedded DB; the dev image rebuilds the
+    # site from that incomplete install on every first boot (the reinstall above)
+    # and discards the baked DB — so re-run the same finish here, or the dev
+    # :joomla image's option=com_civicrm route (admin UI + api_key API) and the
+    # extra component extensions are missing. Idempotent + Joomla-only (the
+    # script self-guards); runs as buildkit, before the profile apply in
+    # entrypoint-common.sh below.
+    if [[ "${CIVICRM_SITE_TYPE}" == joomla* ]]; then
+        ${BK} "export PATH='${PATH}' && bash /usr/local/share/civikitchen/joomla-finish.sh"
+    fi
+
     touch "${MARKER_FILE}"
     echo "Site installed."
 else
