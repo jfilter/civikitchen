@@ -82,4 +82,24 @@ ver=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${APP}"
     | tr -d '[:space:]' || true)
 check "CiviCRM responds via cv (Domain version: ${ver:-none})" "echo '${ver}' | grep -q 'version'"
 
+# 3) Joomla only: the option=com_civicrm route must be registered. cv (check 2)
+# boots via the settings.d shim regardless of Joomla's component registration,
+# so it CANNOT catch a half-finished install — but that registration is exactly
+# what the dev image's first-boot finish restores (joomla-finish.sh, re-run after
+# `civibuild reinstall` wipes civibuild's incomplete state) and what the admin UI
+# and api_key HTTP API depend on. An unregistered component makes Joomla 404 the
+# route; a registered one routes into CiviCRM (200/redirect/permission, never a
+# Joomla 404). This is the regression guard for the dev :joomla finish.
+#
+# Gate on the SITE_TYPE arg, NOT a cv-derived UF: this must fail-closed — the
+# guard has to run on the Joomla image even if cv itself can't boot (that case
+# is already caught by check 2). It is the same flavor signal entrypoint.sh and
+# bake.sh gate the finish on.
+if [[ "${SITE_TYPE}" == joomla* ]]; then
+    jcode=$(docker exec "${APP}" curl -s -o /dev/null -w '%{http_code}' \
+        'http://localhost/index.php?option=com_civicrm' 2>/dev/null || echo 000)
+    check "Joomla com_civicrm route is registered (HTTP ${jcode}, not 404)" \
+        "[ '${jcode}' != '404' ] && [ '${jcode}' != '000' ]"
+fi
+
 if [ "${fail}" = 0 ]; then echo "==> PASS: ${IMAGE}"; else echo "==> FAIL: ${IMAGE}"; exit 1; fi
