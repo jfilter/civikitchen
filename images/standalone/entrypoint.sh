@@ -141,21 +141,26 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
     # leaves them root-owned and apache can't later write to the cache dir.
     runuser -u www-data -- cv core:install -n -K --url="${CIVIKITCHEN_SITE_URL}" --db="${DB_URL}" "${INSTALL_OPTS[@]}"
     echo "[civikitchen] CiviCRM installed."
-
-    # Shared post-install configuration (dev settings, SMTP backend, demo user,
-    # isolated test DB) — see images/lib/provision.sh.
-    ck_dev_settings
-    ck_smtp
-    ck_demo_user
-    ck_setup_test_db
 fi
 
 # ---------------------------------------------------------------------------
-# Post-install provisioning: extra/mounted extensions and first-boot hooks.
-# ck_post_install_provision is marker-gated (writes the marker last) so a
-# failed hook exits loudly AND retries on the next start, instead of being
-# silently skipped because the settings file already exists.
+# Post-install configuration + provisioning. Both bundles are marker-gated (each
+# writes its marker only on success) so a failed step exits the boot loudly AND
+# retries on the next start, instead of being silently skipped because the
+# settings file already exists.
+#
+# They run HERE (settings file present) — not inside the install block above,
+# which runs once and never again. That is what makes config retry-safe: a step
+# that hard-fails under set -e (the standaloneusers enable or the demo-user
+# creation in ck_post_install_config) re-runs next boot instead of being
+# stranded. In particular ck_post_install_config establishes test-DB isolation
+# (TEST_DB_DSN) BEFORE its auth/demo-user steps, so a demo-user failure can never
+# leave a headless phpunit run falling back to — and wiping — the dev DB.
+#   ck_post_install_config:    dev settings, SMTP, test DB, auth, demo user
+#                              (standalone-only — see images/lib/provision.sh).
+#   ck_post_install_provision: profile, extra/mounted extensions, init.d hooks.
 if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && -f "${SETTINGS_FILE}" ]]; then
+    ck_post_install_config
     ck_post_install_provision
 fi
 
