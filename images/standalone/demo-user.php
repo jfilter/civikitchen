@@ -20,23 +20,35 @@ $demoUser = getenv('DEMO_USER');
 $demoPass = getenv('DEMO_PASS');
 $demoEmail = getenv('DEMO_EMAIL');
 
-// `cv core:install` for Standalone already creates an `admin` user (see
-// civicrm-core's setup/plugins/init/StandaloneUsers.civi-setup.php) — but
-// with a random password the user can't know. So if a user with this name
-// exists, reset its password to the known DEMO_PASS instead of creating
-// a duplicate. Also covers the docker-compose down/up case where the db
-// volume persists but the settings file is gone.
+// When standaloneusers is installed *during* `cv core:install`, its init plugin
+// (civicrm-core's setup/plugins/init/StandaloneUsers.civi-setup.php) seeds an
+// `admin` user — but with a random password the user can't know. That seeding is
+// NOT reliable across versions, though: on some (e.g. standalone-6.12) cv
+// core:install leaves standaloneusers uninstalled, so no admin user exists until
+// the entrypoint enables it (ck_standalone_auth in images/lib/provision.sh).
+// Handle both paths: if a user with this name already exists — the seeded admin,
+// or a leftover from a docker-compose down/up where the DB volume persists but
+// the settings file is gone — reset its password to the known DEMO_PASS instead
+// of creating a duplicate; otherwise create it below.
 $existing = \Civi\Api4\User::get(FALSE)
   ->addWhere('username', '=', $demoUser)
   ->execute()
   ->first();
 
 if ($existing) {
+  // Don't only reset the password: also (re)assert the admin role + active flag.
+  // An existing row may be the standaloneusers init-plugin's seeded admin OR a
+  // leftover from a down/up where the DB volume persisted — and on some versions
+  // it can lack the admin role, which would leave the "admin" demo user unable to
+  // administer anything. `roles:name` resolves the role name -> its civicrm_role
+  // id (the raw `roles` field takes ids and would insert role_id 0 -> FK error).
   \Civi\Api4\User::update(FALSE)
     ->addWhere('id', '=', $existing['id'])
     ->addValue('password', $demoPass)
+    ->addValue('is_active', TRUE)
+    ->addValue('roles:name', ['admin'])
     ->execute();
-  echo "[demo-user] Reset password for existing user '{$demoUser}' (id={$existing['id']}).\n";
+  echo "[demo-user] Reset password + ensured admin role for existing user '{$demoUser}' (id={$existing['id']}).\n";
   return;
 }
 

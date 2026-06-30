@@ -25,6 +25,10 @@
 : "${CK_EXT_DIR:=/var/www/html/ext}"
 : "${CK_DATA_DIRS:=/var/www/html/private /var/www/html/public}"
 : "${CK_PROVISIONED_MARKER:=/var/www/html/private/.civikitchen-provisioned}"
+# Separate marker for the standalone post-install CONFIG bundle (ck_post_install_config:
+# dev settings / SMTP / test DB / auth / demo user). Kept distinct from
+# CK_PROVISIONED_MARKER so config and provisioning retry independently.
+: "${CK_CONFIGURED_MARKER:=/var/www/html/private/.civikitchen-configured}"
 : "${CK_INIT_D:=/civikitchen-init.d}"
 # ~/.cv.json site key under which TEST_DB_DSN is stored. Standalone keys by its
 # bootstrap file; other CMSes key the site differently (resolved per image).
@@ -106,23 +110,34 @@ ck_smtp() {
     fi
 }
 
-# Demo login user. Opt-in via CIVIKITCHEN_DEMO_USER.
+# Enable standaloneusers — the Standalone auth provider. It backs the
+# /civicrm/login route and supplies the \Civi\Api4\User entity. `cv core:install`
+# does NOT reliably install it across CiviCRM versions (it was absent on
+# standalone-6.12), which leaves the login route with no auth provider behind it.
+# Enable it explicitly so every Standalone boot has a working auth provider —
+# independent of CIVIKITCHEN_DEMO_USER, since a site without a demo user still
+# needs the provider. Idempotent: standaloneusers ships bundled with civicrm-core,
+# so this just enables the already-present extension. Standalone-only — buildkit
+# flavors authenticate through their CMS (Drupal/WordPress/Joomla) and must NOT
+# call this (their entrypoints don't).
+ck_standalone_auth() {
+    echo "[civikitchen] Ensuring standaloneusers (Standalone auth provider) is enabled..."
+    if ! ck_as_web cv ext:enable standaloneusers; then
+        echo "[civikitchen] ERROR: could not enable standaloneusers (Standalone auth provider)." >&2
+        return 1
+    fi
+}
+
+# Demo login user. Opt-in via CIVIKITCHEN_DEMO_USER. Needs the standaloneusers
+# \Civi\Api4\User entity, which ck_standalone_auth enables (it runs first in the
+# standalone config bundle, ck_post_install_config) — so this no longer enables
+# standaloneusers itself. Standalone-only: buildkit flavors get their CMS login
+# from civibuild and must NOT call this (their entrypoints don't).
 ck_demo_user() {
     [[ -n "${CIVIKITCHEN_DEMO_USER}" ]] || return 0
     local demo_user="${CIVIKITCHEN_DEMO_USER}"
     local demo_pass="${CIVIKITCHEN_DEMO_PASS:-admin}"
     local demo_email="${CIVIKITCHEN_DEMO_EMAIL:-admin@example.org}"
-    # standaloneusers is the Standalone auth provider and supplies the
-    # \Civi\Api4\User entity that demo-user.php uses. `cv core:install` does NOT
-    # reliably install it across CiviCRM versions; when it's absent demo-user.php
-    # fatals on the missing User entity and the demo user (and any API user/login)
-    # is silently never created. Ensure it here — idempotent, and standaloneusers
-    # ships bundled with civicrm-core, so this just enables the present extension.
-    echo "[civikitchen] Ensuring standaloneusers (Standalone auth provider) is enabled..."
-    if ! ck_as_web cv ext:enable standaloneusers; then
-        echo "[civikitchen] ERROR: could not enable standaloneusers; cannot create demo user '${demo_user}'." >&2
-        return 1
-    fi
     echo "[civikitchen] Creating demo user '${demo_user}'..."
     # Pass env explicitly via `env` rather than relying on preserve-environment.
     ck_as_web env DEMO_USER="${demo_user}" DEMO_PASS="${demo_pass}" DEMO_EMAIL="${demo_email}" \
@@ -282,6 +297,34 @@ ck_heal_perms() {
     # shellcheck disable=SC2086 # CK_DATA_DIRS is a space-separated path list.
     find ${CK_DATA_DIRS} ! -user "${CK_WEB_USER}" \
         -exec chown -h "${CK_WEB_USER}:${CK_WEB_GROUP}" {} + 2>/dev/null || true
+}
+
+# Marker-gated STANDALONE post-install CONFIG bundle, run once: the steps that
+# must follow `cv core:install` — dev settings, SMTP backend, isolated test DB,
+# the Standalone auth provider, and an optional demo user. The marker is written
+# only on success, so a step that hard-fails (the standaloneusers enable or the
+# demo-user creation) exits the boot loudly AND re-runs the WHOLE — idempotent —
+# sequence on the next start, instead of being silently skipped because the
+# settings file already exists.
+#
+# ck_setup_test_db is ordered BEFORE the auth/demo-user steps deliberately: those
+# can hard-fail (return 1 under the entrypoint's set -e), and test-DB isolation
+# must be established regardless. If TEST_DB_DSN were left unwritten, a later
+# headless phpunit run would fall back to — and WIPE — the dev DB. Putting it
+# first means a demo-user failure can never strand test-DB isolation, even if it
+# fails on every boot.
+#
+# Standalone-only — buildkit gets its demo user + isolated test DB from civibuild
+# and calls ck_smtp directly, so it must NOT call this bundle (its entrypoint
+# doesn't).
+ck_post_install_config() {
+    [[ -f "${CK_CONFIGURED_MARKER}" ]] && return 0
+    ck_dev_settings
+    ck_smtp
+    ck_setup_test_db
+    ck_standalone_auth
+    ck_demo_user
+    touch "${CK_CONFIGURED_MARKER}"
 }
 
 # Marker-gated post-install provisioning bundle: profile, registry + mounted
