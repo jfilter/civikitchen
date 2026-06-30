@@ -112,6 +112,17 @@ ck_demo_user() {
     local demo_user="${CIVIKITCHEN_DEMO_USER}"
     local demo_pass="${CIVIKITCHEN_DEMO_PASS:-admin}"
     local demo_email="${CIVIKITCHEN_DEMO_EMAIL:-admin@example.org}"
+    # standaloneusers is the Standalone auth provider and supplies the
+    # \Civi\Api4\User entity that demo-user.php uses. `cv core:install` does NOT
+    # reliably install it across CiviCRM versions; when it's absent demo-user.php
+    # fatals on the missing User entity and the demo user (and any API user/login)
+    # is silently never created. Ensure it here — idempotent, and standaloneusers
+    # ships bundled with civicrm-core, so this just enables the present extension.
+    echo "[civikitchen] Ensuring standaloneusers (Standalone auth provider) is enabled..."
+    if ! ck_as_web cv ext:enable standaloneusers; then
+        echo "[civikitchen] ERROR: could not enable standaloneusers; cannot create demo user '${demo_user}'." >&2
+        return 1
+    fi
     echo "[civikitchen] Creating demo user '${demo_user}'..."
     # Pass env explicitly via `env` rather than relying on preserve-environment.
     ck_as_web env DEMO_USER="${demo_user}" DEMO_PASS="${demo_pass}" DEMO_EMAIL="${demo_email}" \
