@@ -185,7 +185,8 @@ The profile applies once, on first boot — it clones the extensions from
 GitHub, so it **needs network access and takes a few minutes** (watch
 `docker logs -f civicrm`; the container turns healthy when done). The
 generated API-user credentials are printed to the logs and kept in the
-container: `docker exec civicrm cat /home/buildkit/api-credentials.txt`.
+container: `docker exec civicrm cat /home/buildkit/api-credentials.txt` (the
+default path — overridable via `CK_CREDENTIALS_FILE`).
 
 Profiles also work on the tested dev images (`:standalone`, `:drupal10`,
 `:wordpress`, `:joomla`) — set the same env var in your compose file to develop

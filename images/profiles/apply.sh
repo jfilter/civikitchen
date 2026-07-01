@@ -119,6 +119,9 @@ echo "==> [${PROFILE_NAME}] seeding demo data"
 for seed in "${PROFILE_DIR}/seeds/"*.php; do
     [ -e "${seed}" ] || continue
     echo "  -> $(basename "${seed}")"
+    # The WARN wording is load-bearing: images/test/boot-test-demo.sh and
+    # external consumers grep the logs for `WARN: .*failed \(non-fatal\)` —
+    # don't reword without updating them.
     cv scr --user=admin "${seed}" || echo "  WARN: $(basename "${seed}") failed (non-fatal)"
 done
 

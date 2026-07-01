@@ -146,10 +146,16 @@ if (is_file($siteSh) && is_writable($siteSh)) {
 echo "  👥 Creating API users...\n";
 
 // Credentials are kept in the container so they stay retrievable after the
-// log output scrolls away: docker exec <c> cat /home/buildkit/api-credentials.txt
+// log output scrolls away: docker exec <c> cat <credFile>. Default is the web
+// user's $HOME/api-credentials.txt; CK_CREDENTIALS_FILE overrides the path
+// (a public knob — external harnesses docker-cp the file out).
 $credFile = getenv('CK_CREDENTIALS_FILE') ?: ((getenv('HOME') ?: '/home/buildkit') . '/api-credentials.txt');
-file_put_contents($credFile, '');
-chmod($credFile, 0600);
+// file_put_contents only warns (and cv still exits 0) on an unwritable path,
+// so a missing/read-only directory would go green with no creds file — check
+// explicitly, per the fail-loud contract in the header.
+if (file_put_contents($credFile, '') === FALSE || !chmod($credFile, 0600)) {
+  throw new \RuntimeException("configure-api-users: cannot create credentials file {$credFile}");
+}
 
 $credentials = [];
 foreach ($apiUsers as $spec) {
@@ -323,7 +329,9 @@ foreach ($apiUsers as $spec) {
     ->execute();
 
   $credentials[] = [$username, $password, $apiKey];
-  file_put_contents($credFile, "{$username}:{$password}:{$apiKey}\n", FILE_APPEND);
+  if (file_put_contents($credFile, "{$username}:{$password}:{$apiKey}\n", FILE_APPEND) === FALSE) {
+    throw new \RuntimeException("configure-api-users: cannot append to credentials file {$credFile}");
+  }
 }
 
 echo "     ✓ API users configured successfully\n\n";
