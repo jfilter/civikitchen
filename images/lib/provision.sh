@@ -263,7 +263,12 @@ ck_apply_profile() {
         return 1
     fi
     echo "[civikitchen] Applying profile '${CIVIKITCHEN_PROFILE}' (needs network; this can take several minutes)..."
-    ck_as_web bash "${apply}" "${dir}"
+    # Pass CK_CREDENTIALS_FILE through explicitly (like ck_smtp/ck_demo_user above)
+    # so a profile's configure-api-users.php + seeds resolve it deterministically
+    # rather than relying on runuser's preserve-env. Empty when unset -> the
+    # script's `?:` falls back to $HOME/api-credentials.txt (no change for profiles
+    # that don't set it).
+    ck_as_web env CK_CREDENTIALS_FILE="${CK_CREDENTIALS_FILE:-}" bash "${apply}" "${dir}"
 }
 
 # First-boot provisioning hooks mounted into CK_INIT_D, run in lexical order:
