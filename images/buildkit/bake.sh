@@ -25,6 +25,22 @@ for i in $(seq 1 60); do
 done
 mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root'; FLUSH PRIVILEGES;"
 
+# Drupal 11.4+ (Standard profile) installs the new Navigation module instead of
+# Toolbar, so the 'access toolbar' permission no longer exists and upstream
+# buildkit's civicrm_apply_d8_perm_defaults (src/civibuild.lib.sh) hard-fails
+# the whole `civibuild create` on it — drush: "Permission(s) not found: access
+# toolbar" (first seen 2026-07-01, hours after Drupal 11.4.0 shipped; Drupal
+# =<11.3 and 10.x still install Toolbar and are unaffected). Grant whichever
+# admin-bar permission the installed core provides; neither is worth sinking a
+# build over. The patched clone is COPY'd into the demo and final images, so
+# the runtime `civibuild reinstall` takes the same path. Drop this once
+# upstream handles Drupal 11.4 (the sed then quietly no-ops and the grep
+# below says so).
+sed -i 's@^  drush8 -y role-add-perm demoadmin "access toolbar"$@  drush8 -y role-add-perm demoadmin "access toolbar" || drush8 -y role-add-perm demoadmin "access navigation" || true@' \
+    /home/buildkit/buildkit/src/civibuild.lib.sh
+grep -q 'access navigation' /home/buildkit/buildkit/src/civibuild.lib.sh \
+    || echo "bake.sh: NOTE: upstream 'access toolbar' line changed; Drupal 11.4 toolbar-perm patch no longer applies (probably fixed upstream)" >&2
+
 # Run civibuild as the buildkit user (it owns the site tree). The heredoc is
 # expanded by THIS shell (so ${DEFAULT_SITE_TYPE}/${CIVICRM_CREATE_VERSION}
 # resolve); \$PATH is escaped so it expands inside the buildkit shell.
