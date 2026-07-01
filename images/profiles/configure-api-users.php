@@ -147,7 +147,7 @@ echo "  👥 Creating API users...\n";
 
 // Credentials are kept in the container so they stay retrievable after the
 // log output scrolls away: docker exec <c> cat /home/buildkit/api-credentials.txt
-$credFile = (getenv('HOME') ?: '/home/buildkit') . '/api-credentials.txt';
+$credFile = getenv('CK_CREDENTIALS_FILE') ?: ((getenv('HOME') ?: '/home/buildkit') . '/api-credentials.txt');
 file_put_contents($credFile, '');
 chmod($credFile, 0600);
 
