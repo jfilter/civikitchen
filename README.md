@@ -50,7 +50,7 @@ docker compose up -d
 # Maildev:    http://localhost:1080
 ```
 
-Mount your extension, enable it, run its tests — the commands below use the recommended `examples/standalone/` stack (in the CMS examples the service is named `civicrm` instead of `app`):
+Mount your extension, enable it, run its tests (the mount path below is the standalone one — the CMS examples document their civibuild extension path in the compose file):
 
 ```bash
 # docker-compose.yml:  volumes: ["../my-extension:/var/www/html/ext/myextension"]
@@ -77,7 +77,7 @@ Available profiles: [`verein`, `fundraising`, `events`, `mailing`](docs/images.m
 
 ## CI usage
 
-Use the same images in CI: boot the matching example stack (or your own compose file), mount the extension, and run `phpunit` inside the container — headless via `CIVICRM_UF=UnitTests` as above. `CIVIKITCHEN_EXTRA_EXTENSIONS` and `/civikitchen-init.d` hooks replace hand-rolled provisioning scripts; see [Configuration](docs/configuration.md).
+Use the same images in CI: boot a compose stack, mount the extension, run `phpunit` inside the container — headless via `CIVICRM_UF=UnitTests` as above. A copy-pasteable GitHub Actions setup (workflow + minimal compose stack) is at [`examples/ci/`](examples/ci/); `CIVIKITCHEN_EXTRA_EXTENSIONS` and `/civikitchen-init.d` hooks replace hand-rolled provisioning scripts ([Configuration](docs/configuration.md)).
 
 ## Need an older CiviCRM?
 

@@ -1,0 +1,48 @@
+# Minimal CI stack for testing a CiviCRM extension against civikitchen.
+#
+# Copy this file + db-init/ into your extension repo (root), together with the
+# workflow from github-actions.yml. Replace `myextension` with your extension
+# key — the same name you use in the workflow.
+#
+# No ports beyond the app, no phpMyAdmin/Maildev, no persistent volume: this
+# stack is meant to be booted, tested against, and thrown away.
+services:
+  app:
+    # Pin a minor for reproducible CI (e.g. :standalone-6.15) or track the
+    # current stable with :standalone. Override per-run via IMAGE=... .
+    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:standalone}
+    pull_policy: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    environment:
+      CIVICRM_AUTO_INSTALL: "1"
+      CIVICRM_DB_HOST: db
+      CIVICRM_DB_NAME: civicrm
+      CIVICRM_DB_USER: civicrm
+      CIVICRM_DB_PASSWORD: civicrm
+      CIVIKITCHEN_SITE_URL: "http://localhost:8080"
+      # Registry dependencies your extension needs, comma-separated
+      # (key or key@URL for pinned releases):
+      # CIVIKITCHEN_EXTRA_EXTENSIONS: "de.systopia.xcm"
+    volumes:
+      # The repo this file lives in IS the extension under test.
+      - .:/var/www/html/ext/myextension
+
+  db:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: civicrm
+      MYSQL_USER: civicrm
+      MYSQL_PASSWORD: civicrm
+    volumes:
+      # Headless tests need global grants for the <db>_test scratch database.
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

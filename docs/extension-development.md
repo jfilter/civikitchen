@@ -67,6 +67,12 @@ in `setUpHeadless()`, e.g.
 All first-boot knobs (SMTP, extra extensions, demo users, …) are listed in the
 [configuration reference](configuration.md).
 
+## CI
+
+The same loop runs unattended in CI: boot the stack, enable the extension,
+run phpunit headless. A copy-pasteable GitHub Actions setup (workflow +
+minimal compose stack + DB grants) lives at [`examples/ci/`](../examples/ci/).
+
 ## Provisioning hooks
 
 Anything a test setup needs beyond `cv ext:enable` — renderer config, seed

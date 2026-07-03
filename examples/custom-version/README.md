@@ -22,7 +22,7 @@ Why this exists:
 CIVICRM_VERSION=5.78.2 docker compose up -d --build
 
 # Watch the first-boot install (civibuild reinstall against the db sidecar):
-docker compose logs -f civicrm
+docker compose logs -f app
 # Ready when the container is healthy. Then open:
 #   http://localhost:8080   (admin / admin)
 
@@ -50,9 +50,9 @@ buildkit CMS flavor the extension dir is the CMS `extensionsDir`
 mount note in the compose file. Then:
 
 ```bash
-docker compose exec civicrm cv ext:list                  # list extensions
+docker compose exec app cv ext:list                  # list extensions
 EXT=/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext
-docker compose exec -e CIVICRM_UF=UnitTests civicrm \
+docker compose exec -e CIVICRM_UF=UnitTests app \
     bash -c "cd $EXT/myextension && phpunit"
 ```
 

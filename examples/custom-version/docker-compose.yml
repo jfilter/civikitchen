@@ -25,7 +25,7 @@
 # switch DEFAULT_SITE_TYPE to a Drupal 9 / 7 civibuild type and lower PHP_VERSION.
 
 services:
-  civicrm:
+  app:
     # Tag the locally-built image so later `up` (without --build) reuses it,
     # and other stacks (e.g. your extension repo) can reference the same tag.
     image: civikitchen:drupal10-${CIVICRM_VERSION:-5.78.2}
