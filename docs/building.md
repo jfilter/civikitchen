@@ -55,6 +55,25 @@ docker build -f images/buildkit/Dockerfile \
     -t civikitchen:drupal10-git images/
 ```
 
+## Running the test suite locally
+
+`images/test/run-local.sh` runs the same test scripts CI runs — on a laptop or
+in a throwaway VM. It needs only bash and docker (no gh, no node):
+
+```bash
+bash images/test/run-local.sh                          # everything, published images
+bash images/test/run-local.sh drupal11 drupal11-demo   # a subset
+bash images/test/run-local.sh -p civikitchen drupal11-demo   # your locally built tags
+CK_PROFILE=verein bash images/test/run-local.sh drupal10-demo # + a profile leg
+```
+
+Per dev flavor it runs the dev-tools functional check and (buildkit flavors)
+the external-DB first-boot test; per demo flavor the single-container boot
+test, which includes the `CIVIKITCHEN_SITE_URL` rewrite leg on a non-80 host
+port. A summary table prints at the end and the exit code reflects failures.
+Budget roughly an hour for the full default run; profile legs add up to
+~15 min each.
+
 ## Verifying a built image
 
 `images/test/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through phpcs, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, and verifies the xdebug toggle. The same script runs in CI against both `:standalone` and the buildkit images. CI also boots each dev flavor's compose example and runs Playwright browser smoke tests before promoting stable tags.

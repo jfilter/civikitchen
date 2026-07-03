@@ -27,7 +27,7 @@ else
     HEALTH_TIMEOUT=300   # baked site → first boot is fast; allow slack
 fi
 
-cleanup() { docker rm -f "${APP}" >/dev/null 2>&1 || true; rm -f "${LOGFILE:-}"; }
+cleanup() { docker rm -f "${APP}" "${APP}-url" >/dev/null 2>&1 || true; rm -f "${LOGFILE:-}" "${URLPAGE:-}"; }
 trap cleanup EXIT
 
 echo "==> boot-test (demo) ${IMAGE}${PROFILE:+ profile=${PROFILE}}"
@@ -172,6 +172,58 @@ if [ -n "${PROFILE}" ]; then
         fi
     else
         echo "  ✗ no API credentials file in the container"; fail=1
+    fi
+fi
+
+# 8) CIVIKITCHEN_SITE_URL rewrite (no-profile runs only): the demo must also
+# work on a non-80 host port when CIVIKITCHEN_SITE_URL is set — the entrypoint
+# rewrites the baked http://localhost base at boot. This must be asserted from
+# the HOST side (the in-container checks above always see port 80), so a second
+# container runs with a mapped port. Opt out with CK_SKIP_SITE_URL_TEST=1
+# (e.g. when testing an image that predates the rewrite).
+if [ -z "${PROFILE}" ] && [ "${CK_SKIP_SITE_URL_TEST:-0}" != "1" ]; then
+    echo "==> site-url leg: boot with CIVIKITCHEN_SITE_URL on a non-80 host port"
+    # Find a free host port; a connect on /dev/tcp succeeding means taken.
+    URLPORT=""
+    for p in $(seq 8180 8199); do
+        if ! (exec 3<>"/dev/tcp/127.0.0.1/${p}") 2>/dev/null; then URLPORT="${p}"; break; fi
+    done
+    if [ -z "${URLPORT}" ]; then
+        echo "  ✗ no free host port in 8180-8199 for the site-url leg"; fail=1
+    else
+        docker run -d --name "${APP}-url" -p "${URLPORT}:80" \
+            -e "CIVIKITCHEN_SITE_URL=http://localhost:${URLPORT}" \
+            "${IMAGE}" >/dev/null
+        elapsed=0
+        while :; do
+            health=$(docker inspect -f '{{.State.Health.Status}}' "${APP}-url" 2>/dev/null || echo gone)
+            state=$(docker inspect -f '{{.State.Status}}' "${APP}-url" 2>/dev/null || echo gone)
+            [ "${health}" = "healthy" ] && break
+            if [ "${state}" = "exited" ] || [ "${state}" = "gone" ] || [ "${elapsed}" -ge 300 ]; then
+                echo "  ✗ site-url container not healthy (state=${state}) — last logs:"
+                docker logs --tail 20 "${APP}-url" 2>&1 || true
+                fail=1; break
+            fi
+            sleep 5; elapsed=$((elapsed + 5))
+        done
+        if [ "${health:-}" = "healthy" ]; then
+            check "entrypoint rewrote the base URL" \
+                "docker logs '${APP}-url' 2>&1 | grep -q 'Rewriting site base URL'"
+            URLPAGE="$(mktemp)"
+            url_code=$(curl -s -o "${URLPAGE}" -w '%{http_code}' -L "http://localhost:${URLPORT}/" 2>/dev/null || echo 000)
+            check "site serves HTTP 200 on the mapped port (got ${url_code})" \
+                "[ '${url_code}' = '200' ]"
+            # Any http://localhost/ (old base) left in the page means some URL
+            # was still composed from the bake-time base — assets would 404.
+            if grep -Eq "http://localhost(/|[\"'])" "${URLPAGE}"; then
+                echo "  ✗ page still references the baked base URL:"
+                grep -Eo "http://localhost[^\"' ]*" "${URLPAGE}" | head -3
+                fail=1
+            else
+                echo "  ✓ no stale references to the baked base URL"
+            fi
+        fi
+        docker rm -f "${APP}-url" >/dev/null 2>&1 || true
     fi
 fi
 
