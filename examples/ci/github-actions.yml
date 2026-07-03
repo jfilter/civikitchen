@@ -8,10 +8,15 @@ name: CiviCRM tests
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   phpunit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -19,14 +24,16 @@ jobs:
         run: docker compose -f docker-compose.ci.yml up -d --pull always
 
       # The app has no healthcheck of its own — poll the login page, which
-      # only serves once the first-boot auto-install has finished.
+      # only serves once the first-boot auto-install has finished. Generous
+      # budget (10 min): the auto composer install for a mounted extension
+      # with a large lock file runs before the install.
       - name: Wait for the auto-install
         run: |
-          for _ in $(seq 1 60); do
+          for _ in $(seq 1 120); do
             if curl -fs http://localhost:8080/civicrm/login >/dev/null; then
               echo "ready"; exit 0
             fi
-            sleep 3
+            sleep 5
           done
           echo "site never became reachable" >&2
           docker compose -f docker-compose.ci.yml logs app
@@ -38,11 +45,13 @@ jobs:
         run: docker compose -f docker-compose.ci.yml exec -T app cv ext:enable myextension
 
       # CIVICRM_UF=UnitTests runs against the isolated <db>_test scratch
-      # database the image configured at install — not the dev site.
+      # database the image configured at install — not the dev site. Prefers
+      # the extension's own vendor/bin/phpunit (from its lock file) over the
+      # image-global phpunit 9.
       - name: Run headless phpunit
         run: |
           docker compose -f docker-compose.ci.yml exec -T -e CIVICRM_UF=UnitTests app \
-            bash -c "cd /var/www/html/ext/myextension && phpunit"
+            bash -c "cd /var/www/html/ext/myextension && { [ -x vendor/bin/phpunit ] && vendor/bin/phpunit || phpunit; }"
 
       - name: Logs on failure
         if: failure()
