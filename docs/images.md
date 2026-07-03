@@ -16,7 +16,7 @@ Official `civicrm/civicrm` image with dev tools added:
 - **phpunit 9** — pinned for CiviCRM compatibility
 - **phpstan** — static analysis
 - **phpcs + civicrm/coder** — the de-facto CiviCRM style guide (relaxed Drupal CS)
-- **cklint + the `CiviKitchen` phpcs standard** — opinionated extension linting: the Drupal base minus the doc-comment sniffs that fight PHPStan array-shape PHPDocs, plus footgun sniffs (bans APIv3 calls and removed/deprecated core helpers like `CRM_Utils_Array::value` and `CRM_Core_Error::fatal|debug_*`; flags bare `ts()` — extensions must use `E::ts()` for their own translation domain; flags legacy managed/menu/settings/entity/angular hook implementations where standard mixins should be used; guards `@required` on externally reachable APIv4 actions). `cklint` lints your uncommitted changes by default (`--all`, `--fix`, explicit paths supported) and always defers to a project's own `phpcs.xml(.dist)`.
+- **cklint + the `CiviKitchen` phpcs standard** — opinionated extension linting. The standard is the Drupal base minus the doc-comment sniffs that fight PHPStan array-shape PHPDocs, plus CiviCRM footgun sniffs: bans APIv3 calls and removed/deprecated core helpers (`CRM_Utils_Array::value`, `CRM_Core_Error::fatal|debug_*`); flags bare `ts()` — extensions must use `E::ts()` for their own translation domain; flags legacy managed/menu/settings/entity/angular hook implementations where standard mixins should be used; guards `@required` on externally reachable APIv4 actions. `cklint` lints your uncommitted changes by default (`--all`, `--fix`, explicit paths supported) and always defers to a project's own `phpcs.xml(.dist)`.
 - **ckmodernize + rector** — opt-in code modernization for extension repos: previews by default, applies with `--fix`, and includes CiviKitchen rules for the same CiviCRM footguns `cklint` flags.
 
 CiviCRM is auto-installed on first container start when `CIVICRM_AUTO_INSTALL=1`. See [Extension development](extension-development.md) for the full setup.
@@ -69,9 +69,15 @@ Ready-to-run: [`examples/drupal10/`](../examples/drupal10/)
 
 ## Drupal 11 (dev)
 
-CiviCRM on Drupal 11 via buildkit. Same runtime model as Drupal 10, but using
-civicrm-buildkit's `drupal11-dev` site type. Requires an external MariaDB and
-is meant for extension compatibility checks on current Drupal.
+CiviCRM on Drupal 11 via buildkit. Same runtime model as Drupal 10, for
+extension compatibility checks on current Drupal; requires an external
+MariaDB. civibuild itself ships no `drupal11-demo` site type, so CiviKitchen
+vendors one:
+[`images/buildkit/site-types/drupal11-demo/`](../images/buildkit/site-types/drupal11-demo/)
+— `drupal10-demo`'s recipe adapted for Drupal 11.4 (content types now come
+from core recipes, Navigation replaced Toolbar; details in the file headers).
+`bake.sh` installs it into the buildkit clone, so Drupal 11 gets the same demo
+data, admin users, and profile support as the other flavors.
 
 Ready-to-run: [`examples/drupal11/`](../examples/drupal11/)
 
@@ -80,7 +86,7 @@ Ready-to-run: [`examples/drupal11/`](../examples/drupal11/)
 CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10. The
 `:wordpress`, `:drupal10`, `:drupal11`, and `:joomla` tags are built from the
 same Dockerfile (`images/buildkit/`) — only the default civibuild site type
-differs (`wp-demo`, `drupal10-demo`, `drupal11-dev`, or `joomla-demo`). All
+differs (`wp-demo`, `drupal10-demo`, `drupal11-demo`, or `joomla-demo`). All
 buildkit dev images carry the same dev tools as the standalone image (composer,
 node/npm, phpunit, phpstan, phpcs+coder, cklint, ckmodernize, civix, pcov,
 xdebug).
@@ -127,26 +133,22 @@ compose, no external DB. `docker run` and you have a working CiviCRM with demo
 content in a few seconds. For demos, evaluation, and screenshots — **not** for
 development (the DB is inside the container; data resets on `docker rm`).
 
-Four demo flavors, all built from the same `images/buildkit/` `demo` target:
+Five demo flavors, all built from the same `images/buildkit/` `demo` target:
 
 ```bash
-# Pick a flavor: standalone-demo (CMS-less), drupal10-demo, wordpress-demo, joomla-demo
+# Pick a flavor: standalone-demo (CMS-less), drupal10-demo, drupal11-demo,
+# wordpress-demo, joomla-demo
 docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:drupal10-demo
 
 # then open http://localhost  —  login: admin / admin
 ```
 
-All four support the demo profiles below (`CIVIKITCHEN_PROFILE`). `joomla-demo`
-needed extra work to get there — civibuild's `joomla-demo` install is
-deliberately incomplete (it leaves CiviCRM's Joomla component registration as a
-commented-out `#fixme` and enables only the `civi_contribute` component) — so the
-image build finishes that install: it registers CiviCRM's Joomla plugins (giving
-the API an HTTP route) and enables the standard component extensions
-(`civi_member`, `civi_event`, …) the other demos ship. The **one** Joomla
-difference: authx's password/basic-auth flow doesn't work there, so API access on
-the Joomla demo is via the **api_key** credential (`X-Civi-Auth: Bearer …`), not
-HTTP basic auth. Drupal 11 stays dev-image-only until its profile/API-user path
-is wired and tested.
+All five support the demo profiles below (`CIVIKITCHEN_PROFILE`). On Joomla the
+image build finishes civibuild's deliberately incomplete `joomla-demo` install
+(see [Joomla (dev)](#joomla-dev) above), so the demo behaves like the others —
+with **one** difference: authx's password/basic-auth flow doesn't work on
+Joomla, so API access there uses the **api_key** credential
+(`X-Civi-Auth: Bearer …`), not HTTP basic auth.
 
 > Map to port **80** (`-p 80:80`): the site is baked at `http://localhost`, so a
 > different host port would serve CiviCRM's assets at the wrong base URL.
@@ -154,8 +156,8 @@ is wired and tested.
 ### Profiles (`CIVIKITCHEN_PROFILE`)
 
 A profile layers a curated extension stack + seed data + API users on top of
-the base site at **first boot**. Profiles work on `standalone`, `drupal10`, and
-`wordpress` (demo and dev images) and on `joomla-demo`. API users are created
+the base site at **first boot**. Profiles work on every flavor, demo and dev
+images alike. API users are created
 through each CMS's native API — `cv` boots CiviCRM *and* the host CMS, so the
 driver uses the Drupal entity API / WordPress users+roles / Standalone APIv4 /
 Joomla users+usergroups directly, with no drush or wp-cli. On Joomla each role
@@ -188,7 +190,7 @@ generated API-user credentials are printed to the logs and kept in the
 container: `docker exec civicrm cat /home/buildkit/api-credentials.txt` (the
 default path — overridable via `CK_CREDENTIALS_FILE`).
 
-Profiles also work on the tested dev images (`:standalone`, `:drupal10`,
+Profiles also work on the dev images (`:standalone`, `:drupal10`, `:drupal11`,
 `:wordpress`, `:joomla`) — set the same env var in your compose file to develop
 against a realistic stack. On the `:standalone` dev image the profile needs an
 admin user to seed as, so combine it with `CIVICRM_AUTO_INSTALL=1` and

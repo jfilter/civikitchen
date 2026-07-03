@@ -11,7 +11,7 @@ CiviCRM Docker images for development, testing, and demos. All published to GHCR
 | [`:drupal11`](docs/images.md#drupal-11-dev) | Test extensions against the Drupal 11 stack | external (compose) | runs `civibuild` |
 | [`:wordpress`](docs/images.md#wordpress-dev) | Test extensions against the WordPress stack | external (compose) | runs `civibuild` |
 | [`:joomla`](docs/images.md#joomla-dev) | Test extensions against the Joomla stack | external (compose) | runs `civibuild` |
-| [`:{standalone,drupal10,wordpress,joomla}-demo`](docs/images.md#demo-images) | Single-container demos — `docker run` and go | embedded (baked) | boots from baked data dir |
+| [`:{standalone,drupal10,drupal11,wordpress,joomla}-demo`](docs/images.md#demo-images) | Single-container demos — `docker run` and go | embedded (baked) | boots from baked data dir |
 
 **Most users want `standalone`** — it's the fastest dev loop and works for any extension that doesn't depend on a specific CMS. Use the buildkit images (`drupal10`, `drupal11`, `wordpress`, `joomla`) only when you need to test CMS-specific behavior.
 
@@ -35,10 +35,11 @@ docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:drupal10-demo
 # then open http://localhost  —  login: admin / admin
 ```
 
-Need a CiviCRM version the published images don't offer (older than ~6.0, or to
-mirror a production server)? Build it locally via civibuild on a Drupal base —
-ready-to-run: [`examples/custom-version/`](examples/custom-version/)
-(`CIVICRM_VERSION=5.78.2 docker compose up -d --build`). See
+Need a CiviCRM version the published images don't offer — an older release, say,
+to mirror a production server? Build it locally via civibuild on a Drupal base.
+A ready-to-run compose setup is at
+[`examples/custom-version/`](examples/custom-version/)
+(`CIVICRM_VERSION=5.78.2 docker compose up -d --build`); background in
 [Custom or older CiviCRM versions](docs/images.md#custom-or-older-civicrm-versions).
 
 ## Documentation

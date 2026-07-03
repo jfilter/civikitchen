@@ -19,7 +19,7 @@
 #                -t civikitchen:drupal10 images/
 #   docker build -f images/buildkit/Dockerfile \
 #                --build-arg PHP_VERSION=8.3 \
-#                --build-arg DEFAULT_SITE_TYPE=drupal11-dev \
+#                --build-arg DEFAULT_SITE_TYPE=drupal11-demo \
 #                -t civikitchen:drupal11 images/
 #   docker build -f images/buildkit/Dockerfile \
 #                --build-arg PHP_VERSION=8.3 \
@@ -127,6 +127,12 @@ COPY buildkit/joomla-cli-bootstrap.php /etc/civicrm.settings.d/post.d/000-joomla
 COPY buildkit/joomla-finish.sh /usr/local/share/civikitchen/joomla-finish.sh
 COPY buildkit/joomla-enable-plugins.php /usr/local/share/civikitchen/joomla-enable-plugins.php
 COPY buildkit/ext/ckjoomlaidentity /usr/local/share/civikitchen/ext/ckjoomlaidentity
+
+# CiviKitchen-provided civibuild site types upstream buildkit lacks (currently
+# drupal11-demo). bake.sh installs them into the buildkit clone's app/config
+# before `civibuild create`; shipped in the base stage so the builder bake and
+# any runtime `civibuild` invocation see the same definition.
+COPY buildkit/site-types /usr/local/share/civikitchen/site-types
 
 # buildkit user owns the site tree so civibuild can write to it. Apache is
 # reconfigured to run as buildkit so the served files match the writer's uid

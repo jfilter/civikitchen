@@ -41,6 +41,25 @@ sed -i 's@^  drush8 -y role-add-perm demoadmin "access toolbar"$@  drush8 -y rol
 grep -q 'access navigation' /home/buildkit/buildkit/src/civibuild.lib.sh \
     || echo "bake.sh: NOTE: upstream 'access toolbar' line changed; Drupal 11.4 toolbar-perm patch no longer applies (probably fixed upstream)" >&2
 
+# Upstream civibuild has no drupal11-demo site type — only drupal11-dev (a
+# git/path-repo dev build without demo data, components, or a demoadmin) and
+# drupal11-empty (CMS-only). Install CiviKitchen's own drupal11-demo type
+# (images/buildkit/site-types/drupal11-demo/ — drupal10-demo's recipe with the
+# Drupal 11.4 adaptations documented there) so the drupal11 images get the
+# identical demo data / demoadmin / component set as every other flavor, and
+# CIVICRM_SITE_TYPE=drupal11-demo works at runtime on any buildkit image. The
+# version-agnostic demo assets (logo, config/, install-*.php, uninstall.sh)
+# are reused from the sibling drupal10-demo dir. Guarded: the day upstream
+# ships app/config/drupal11-demo, this block steps aside.
+BK_CONFIG=/home/buildkit/buildkit/app/config
+if [ ! -d "${BK_CONFIG}/drupal11-demo" ]; then
+    cp -r "${BK_CONFIG}/drupal10-demo" "${BK_CONFIG}/drupal11-demo"
+    cp /usr/local/share/civikitchen/site-types/drupal11-demo/download.sh \
+       /usr/local/share/civikitchen/site-types/drupal11-demo/install.sh \
+       "${BK_CONFIG}/drupal11-demo/"
+    chown -R buildkit:buildkit "${BK_CONFIG}/drupal11-demo"
+fi
+
 # Run civibuild as the buildkit user (it owns the site tree). The heredoc is
 # expanded by THIS shell (so ${DEFAULT_SITE_TYPE}/${CIVICRM_CREATE_VERSION}
 # resolve); \$PATH is escaped so it expands inside the buildkit shell.

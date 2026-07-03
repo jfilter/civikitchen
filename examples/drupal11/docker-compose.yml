@@ -17,8 +17,6 @@ services:
       CIVICRM_DB_HOST: db
       CIVICRM_DB_ROOT_PASSWORD: root
       CIVIKITCHEN_SITE_URL: "http://localhost:8080"
-      # The Drupal 11 image uses civicrm-buildkit's drupal11-dev template.
-      CIVICRM_SITE_TYPE: drupal11-dev
 
   db:
     image: mariadb:10.11
