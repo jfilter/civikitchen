@@ -6,7 +6,7 @@ Two prefixes, by ownership: `CIVIKITCHEN_*` vars are this project's own behavior
 |---------|---------|-------|---------|
 | `CIVICRM_DB_HOST` | `db` | both | DB hostname. |
 | `CIVICRM_DB_PORT` | `3306` | both | DB port. |
-| `CIVIKITCHEN_SITE_URL` | derived | both | Browser-facing URL Civi bakes into asset paths. Must match the host:port the user opens — set it to `http://localhost:8080` if you mapped `-p 8080:80`. |
+| `CIVIKITCHEN_SITE_URL` | derived | all | Browser-facing URL Civi bakes into asset paths. Must match the host:port the user opens — set it to `http://localhost:8080` if you mapped `-p 8080:80`. On the demo images this rewrites the baked `http://localhost` base at boot (settings files plus, on WordPress, the `siteurl`/`home` options), so demos can run on any host port. |
 | `CIVICRM_AUTO_INSTALL` | `0` | standalone | Set to `1` to auto-install CiviCRM on first start (when `civicrm.settings.php` is missing). |
 | `CIVICRM_DB_NAME` | `civicrm` | standalone | Database name (the standalone image connects with the app user; buildkit creates DB + user itself). |
 | `CIVICRM_DB_USER` | `civicrm` | standalone | DB user used by the running CiviCRM. |

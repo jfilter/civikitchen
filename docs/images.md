@@ -150,8 +150,10 @@ with **one** difference: authx's password/basic-auth flow doesn't work on
 Joomla, so API access there uses the **api_key** credential
 (`X-Civi-Auth: Bearer …`), not HTTP basic auth.
 
-> Map to port **80** (`-p 80:80`): the site is baked at `http://localhost`, so a
-> different host port would serve CiviCRM's assets at the wrong base URL.
+> The site is baked at `http://localhost`, so either map port **80**
+> (`-p 80:80`) or set `CIVIKITCHEN_SITE_URL` to the URL you actually open —
+> the entrypoint then rewrites the baked base URL at boot, e.g.
+> `-p 8080:80 -e CIVIKITCHEN_SITE_URL=http://localhost:8080`.
 
 ### Profiles (`CIVIKITCHEN_PROFILE`)
 

@@ -1,0 +1,42 @@
+# CMS-flavor variant of docker-compose.ci.yml — for extensions that need
+# testing against a real Drupal / WordPress / Joomla stack. First boot runs
+# `civibuild reinstall` (~1-2 min); the image's HEALTHCHECK turns healthy once
+# the site is provisioned, so `docker compose up -d --wait` blocks until ready.
+#
+# The workflow's matrix supplies IMAGE and CK_EXT_BASE (the flavor's CiviCRM
+# extensionsDir — it differs per CMS, see the volumes note). civibuild
+# provisions its own DB user and an isolated sitetest_* test database, so no
+# db-init grants are needed here.
+services:
+  app:
+    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:drupal10}
+    pull_policy: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    environment:
+      CIVICRM_DB_HOST: db
+      CIVICRM_DB_ROOT_PASSWORD: root
+      CIVIKITCHEN_SITE_URL: "http://localhost:8080"
+      # Enable after first boot happens via the workflow (cv ext:enable);
+      # registry dependencies can go here:
+      # CIVIKITCHEN_EXTRA_EXTENSIONS: "de.systopia.xcm"
+    volumes:
+      # On the CMS flavors the extension dir is the CMS extensionsDir, NOT
+      # /var/www/html/ext (that path is standalone-only):
+      #   drupal10/11: …/web/sites/default/files/civicrm/ext
+      #   wordpress:   …/web/wp-content/uploads/civicrm/ext
+      #   joomla:      …/web/media/civicrm/ext
+      - .:${CK_EXT_BASE:-/home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext}/myextension
+
+  db:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
