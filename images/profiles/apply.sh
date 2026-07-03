@@ -2,8 +2,8 @@
 # Shared profile driver: apply a demo profile (extensions + seed data + API
 # users) to a site. Runs at FIRST BOOT as the web user, invoked by
 # provision.sh's ck_apply_profile when CIVIKITCHEN_PROFILE=<name> is set —
-# works on the tested profile flavors (standalone, drupal10, wordpress), on
-# demo images (embedded DB) and dev images (external DB) alike. Needs network
+# works on every flavor (standalone, drupal10, drupal11, wordpress, joomla),
+# on demo images (embedded DB) and dev images (external DB) alike. Needs network
 # and takes a few minutes; it is marker-gated by the caller, so it applies
 # exactly once per container.
 #

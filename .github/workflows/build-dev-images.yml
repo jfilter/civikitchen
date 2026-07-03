@@ -331,7 +331,7 @@ jobs:
       matrix:
         variant:
           - { name: drupal10,  site_type: drupal10-demo }
-          - { name: drupal11,  site_type: drupal11-dev }
+          - { name: drupal11,  site_type: drupal11-demo }
           - { name: wordpress, site_type: wp-demo }
           - { name: joomla,    site_type: joomla-demo }
         php: ['8.3']
@@ -445,7 +445,7 @@ jobs:
         run: |
           case "${{ matrix.variant }}" in
             drupal10)  SITE_TYPE=drupal10-demo ;;
-            drupal11)  SITE_TYPE=drupal11-dev ;;
+            drupal11)  SITE_TYPE=drupal11-demo ;;
             wordpress) SITE_TYPE=wp-demo ;;
             joomla)    SITE_TYPE=joomla-demo ;;
           esac
@@ -597,13 +597,18 @@ jobs:
     # civi_contribute) by registering CiviCRM's Joomla plugins and enabling the
     # standard component extensions. The one difference is that authx's
     # password/basic-auth flow doesn't work on Joomla, so its profile boot test
-    # exercises the api_key credential only. Drupal 11 stays dev-image-only until
-    # its profile/API-user path is wired and tested.
+    # exercises the api_key credential only.
+    #
+    # drupal11-demo uses a site type civibuild doesn't ship: CiviKitchen
+    # vendors it in images/buildkit/site-types/drupal11-demo/ (drupal10-demo's
+    # recipe with the Drupal 11.4 adaptations documented there); bake.sh
+    # installs it into the buildkit clone before `civibuild create`.
     strategy:
       matrix:
         variant:
           - { name: standalone-demo, site_type: standalone-demo }
           - { name: drupal10-demo,   site_type: drupal10-demo }
+          - { name: drupal11-demo,   site_type: drupal11-demo }
           - { name: wordpress-demo,  site_type: wp-demo }
           - { name: joomla-demo,     site_type: joomla-demo }
         platform:
@@ -659,7 +664,7 @@ jobs:
 
     strategy:
       matrix:
-        tag: [standalone-demo, drupal10-demo, wordpress-demo, joomla-demo]
+        tag: [standalone-demo, drupal10-demo, drupal11-demo, wordpress-demo, joomla-demo]
 
     steps:
       - name: Log in to GHCR
@@ -697,6 +702,11 @@ jobs:
           - { tag: drupal10-demo,   profile: fundraising }
           - { tag: drupal10-demo,   profile: events }
           - { tag: drupal10-demo,   profile: mailing }
+          - { tag: drupal11-demo,   profile: '' }
+          - { tag: drupal11-demo,   profile: verein }
+          - { tag: drupal11-demo,   profile: fundraising }
+          - { tag: drupal11-demo,   profile: events }
+          - { tag: drupal11-demo,   profile: mailing }
           - { tag: wordpress-demo,  profile: '' }
           - { tag: wordpress-demo,  profile: verein }
           - { tag: wordpress-demo,  profile: fundraising }
@@ -736,7 +746,7 @@ jobs:
 
     strategy:
       matrix:
-        tag: [standalone-demo, drupal10-demo, wordpress-demo, joomla-demo]
+        tag: [standalone-demo, drupal10-demo, drupal11-demo, wordpress-demo, joomla-demo]
 
     steps:
       - name: Log in to GHCR

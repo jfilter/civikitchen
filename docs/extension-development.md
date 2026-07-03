@@ -195,15 +195,22 @@ PhpStorm: enable "Listen for PHP Debug Connections", set the port to 9003, and a
 
 `XDEBUG_START_WITH_REQUEST=trigger` (the default) means xdebug only activates when the request carries `XDEBUG_TRIGGER=1` (cookie, GET/POST param, or env var) — no overhead on regular requests. Use the [Xdebug Helper](https://xdebug.org/docs/step_debug#start_with_request) browser extension to send the trigger.
 
-## Headless test setup
+## Database grants for headless tests
 
-Headless extension tests (`cv('php:boot --level=classloader', …)`) create a scratch database `civicrm_test` on the fly, which needs global privileges — not just on `civicrm.*`. The `examples/standalone/` setup ships [`db-init/01-grants.sql`](../examples/standalone/db-init/01-grants.sql) which mariadb runs on first boot:
+The headless test harness needs more than rights on the dev database: it works
+in the separate `<db>_test` schema (created at first install, see above) and
+runs a `SET GLOBAL` performance tweak during schema init, which requires the
+`SUPER` privilege. The `examples/standalone/` setup ships
+[`db-init/01-grants.sql`](../examples/standalone/db-init/01-grants.sql), which
+mariadb applies on first boot:
 
 ```sql
 GRANT ALL PRIVILEGES ON *.* TO 'civicrm'@'%' WITH GRANT OPTION;
 ```
 
-If you roll your own compose file, replicate this — otherwise headless tests fail with "you need (at least one of) the SUPER privilege(s)".
+If you roll your own compose file, replicate this — otherwise headless tests
+fail with "you need (at least one of) the SUPER privilege(s)" or with access
+denied on `<db>_test`.
 
 ## Idempotency
 

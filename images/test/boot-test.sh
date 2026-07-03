@@ -11,7 +11,7 @@
 # Usage:
 #   bash images/test/boot-test.sh <image> <site_type>
 #   bash images/test/boot-test.sh civikitchen:drupal10  drupal10-demo
-#   bash images/test/boot-test.sh civikitchen:drupal11  drupal11-dev
+#   bash images/test/boot-test.sh civikitchen:drupal11  drupal11-demo
 #   bash images/test/boot-test.sh civikitchen:wordpress wp-demo
 #   bash images/test/boot-test.sh civikitchen:joomla    joomla-demo
 set -euo pipefail
