@@ -489,7 +489,7 @@ jobs:
       - name: Wait for the app healthcheck
         run: |
           for _ in $(seq 1 120); do
-            cid=$(docker compose -f ${{ matrix.variant.compose }} ps -q civicrm)
+            cid=$(docker compose -f ${{ matrix.variant.compose }} ps -q app)
             health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || echo starting)
             if [ "$health" = healthy ]; then
               echo "ready"
@@ -497,7 +497,7 @@ jobs:
             fi
             if [ "$health" = exited ] || [ "$health" = unhealthy ]; then
               echo "container became ${health}" >&2
-              docker compose -f ${{ matrix.variant.compose }} logs civicrm
+              docker compose -f ${{ matrix.variant.compose }} logs app
               exit 1
             fi
             sleep 5

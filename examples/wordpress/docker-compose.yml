@@ -5,7 +5,7 @@
 # Maildev:    http://localhost:1080
 
 services:
-  civicrm:
+  app:
     image: ${IMAGE:-ghcr.io/jfilter/civikitchen:wordpress}
     pull_policy: always
     depends_on:
@@ -21,6 +21,13 @@ services:
       # civibuild site type differs. Setting it explicitly here makes the
       # example self-documenting.
       CIVICRM_SITE_TYPE: wp-demo
+      # Enable extensions you bind-mount below (comma-separated keys):
+      # CIVIKITCHEN_ENABLE_EXTENSIONS: myextension
+    # Mount your extension under development. NOTE: on the buildkit CMS
+    # flavors the extension dir is the CMS extensionsDir, NOT
+    # /var/www/html/ext (that path is standalone-only). For this image:
+    # volumes:
+    #   - ../path/to/myextension:/home/buildkit/buildkit/build/site/web/wp-content/uploads/civicrm/ext/myextension
 
   db:
     image: mariadb:10.11

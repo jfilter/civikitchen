@@ -5,7 +5,7 @@
 # Maildev:       http://localhost:1080
 
 services:
-  civicrm:
+  app:
     image: ${IMAGE:-ghcr.io/jfilter/civikitchen:joomla}
     pull_policy: always
     depends_on:
@@ -19,6 +19,13 @@ services:
       CIVIKITCHEN_SITE_URL: "http://localhost:8080"
       # The Joomla image uses civicrm-buildkit's CiviCRM Joomla demo template.
       CIVICRM_SITE_TYPE: joomla-demo
+      # Enable extensions you bind-mount below (comma-separated keys):
+      # CIVIKITCHEN_ENABLE_EXTENSIONS: myextension
+    # Mount your extension under development. NOTE: on the buildkit CMS
+    # flavors the extension dir is the CMS extensionsDir, NOT
+    # /var/www/html/ext (that path is standalone-only). For this image:
+    # volumes:
+    #   - ../path/to/myextension:/home/buildkit/buildkit/build/site/web/media/civicrm/ext/myextension
 
   db:
     image: mariadb:10.11

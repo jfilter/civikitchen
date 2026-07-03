@@ -1,0 +1,49 @@
+# GitHub Actions workflow for a CiviCRM extension repo, using civikitchen.
+#
+# Copy into your extension repo as .github/workflows/civicrm-tests.yml,
+# together with docker-compose.ci.yml and db-init/ from this directory.
+# Replace `myextension` with your extension key (workflow + compose file).
+name: CiviCRM tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  phpunit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Boot CiviCRM (civikitchen standalone)
+        run: docker compose -f docker-compose.ci.yml up -d --pull always
+
+      # The app has no healthcheck of its own — poll the login page, which
+      # only serves once the first-boot auto-install has finished.
+      - name: Wait for the auto-install
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fs http://localhost:8080/civicrm/login >/dev/null; then
+              echo "ready"; exit 0
+            fi
+            sleep 3
+          done
+          echo "site never became reachable" >&2
+          docker compose -f docker-compose.ci.yml logs app
+          exit 1
+
+      # vendor/ is installed automatically on container start when your
+      # extension ships a composer.json (CIVIKITCHEN_AUTO_COMPOSER=1 default).
+      - name: Enable the extension
+        run: docker compose -f docker-compose.ci.yml exec -T app cv ext:enable myextension
+
+      # CIVICRM_UF=UnitTests runs against the isolated <db>_test scratch
+      # database the image configured at install — not the dev site.
+      - name: Run headless phpunit
+        run: |
+          docker compose -f docker-compose.ci.yml exec -T -e CIVICRM_UF=UnitTests app \
+            bash -c "cd /var/www/html/ext/myextension && phpunit"
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.ci.yml logs app
