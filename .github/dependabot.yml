@@ -1,0 +1,27 @@
+# Keep the pinned actions and base images current. Image *contents*
+# (CiviCRM, buildkit, dev tools) already track upstream via the weekly
+# rebuild — this only covers what the rebuild itself is pinned to.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+
+  # Base images in the Dockerfiles (php:*-apache, mariadb in builder, ...).
+  - package-ecosystem: docker
+    directories:
+      - /images/standalone
+      - /images/buildkit
+    schedule:
+      interval: weekly
+      day: monday
+
+  # Sidecar images in the example stacks (mariadb, phpmyadmin, maildev).
+  - package-ecosystem: docker-compose
+    directories:
+      - "/examples/*"
+    schedule:
+      interval: weekly
+      day: monday

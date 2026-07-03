@@ -760,3 +760,37 @@ jobs:
         run: |
           docker buildx imagetools create -t ${{ env.IMAGE_PREFIX }}:${{ matrix.tag }} \
             ${{ env.IMAGE_PREFIX }}:${{ matrix.tag }}-${{ github.sha }}
+
+  notify-scheduled-failure:
+    # The weekly cron rebuild fails SILENTLY otherwise: test-then-promote
+    # keeps serving the last good stable tags, so nothing user-visible breaks
+    # and a broken pipeline can go unnoticed for weeks. Open (or bump) an
+    # issue so the failure has a place to be seen. failure() is transitive
+    # over the needs chain, so any failed job anywhere in the pipeline
+    # triggers this — push-triggered runs are excluded (those failures are
+    # visible on the commit/PR already).
+    needs: [promote-standalone, promote-buildkit, promote-demo]
+    if: github.event_name == 'schedule' && failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+
+    steps:
+      - name: Open or bump the scheduled-build-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh label create ci-scheduled-failure --repo "$REPO" \
+            --description "Weekly image rebuild failed" --color B60205 2>/dev/null || true
+          existing=$(gh issue list --repo "$REPO" --label ci-scheduled-failure \
+            --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$REPO" \
+              --body "The scheduled image build failed again: $run_url"
+          else
+            gh issue create --repo "$REPO" --label ci-scheduled-failure \
+              --title "Scheduled image build is failing" \
+              --body "$(printf 'The weekly image rebuild failed: %s\n\nThe stable tags keep serving the last good images (test-then-promote), but no new CiviCRM release reaches users until this is fixed.' "$run_url")"
+          fi

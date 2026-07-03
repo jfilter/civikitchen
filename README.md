@@ -73,7 +73,7 @@ docker run -d -p 80:80 --name civicrm \
 docker logs -f civicrm            # first boot clones extensions — needs network, takes a few minutes
 ```
 
-Available profiles: [`verein`, `fundraising`, `events`, `mailing`](docs/images.md#profiles-civikitchen_profile) — each with seed data and least-privilege API users (credentials land in the logs and in the container). Two things to know about demo images: the database lives inside the container (great for demos and screenshots, wrong for data you want to keep), and the site is baked at `http://localhost`, so map port **80** as shown.
+Available profiles: [`verein`, `fundraising`, `events`, `mailing`](docs/images.md#profiles-civikitchen_profile) — each with seed data and least-privilege API users (credentials land in the logs and in the container). One thing to know about demo images: the database lives inside the container — great for demos and screenshots, wrong for data you want to keep. To run on a port other than 80, set `CIVIKITCHEN_SITE_URL` to match (e.g. `-p 8080:80 -e CIVIKITCHEN_SITE_URL=http://localhost:8080`).
 
 ## CI usage
 

@@ -12,6 +12,14 @@ using the `:standalone` image. Three files to copy into your extension repo:
 Then replace `myextension` with your extension key (in the workflow and the
 compose file) and push.
 
+**Testing against CMS flavors too?** The workflow ships a commented-out
+`phpunit-cms` matrix job (Drupal 10/11, WordPress, Joomla) that uses
+[`docker-compose.ci-cms.yml`](docker-compose.ci-cms.yml) — copy that file as
+well and uncomment the job. Two differences from standalone: the extension
+mounts at the CMS's own `extensionsDir` (the matrix carries the per-flavor
+path), and `cv` must run inside the civibuild site tree (the job's steps
+already do).
+
 How it works:
 
 - The repo itself is bind-mounted as `/var/www/html/ext/myextension`; if it

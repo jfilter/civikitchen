@@ -56,3 +56,45 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: docker compose -f docker-compose.ci.yml logs app
+
+  # Optional: also test against CMS flavors (Drupal 10/11, WordPress, Joomla).
+  # Uncomment this job and copy docker-compose.ci-cms.yml into your repo.
+  # Each flavor mounts the extension at its own CiviCRM extensionsDir
+  # (CK_EXT_BASE), and the dev images carry a HEALTHCHECK so --wait blocks
+  # until the first-boot civibuild reinstall is done.
+  #
+  # phpunit-cms:
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 30
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       include:
+  #         - image: ghcr.io/jfilter/civikitchen:drupal10
+  #           ext_base: /home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext
+  #         - image: ghcr.io/jfilter/civikitchen:drupal11
+  #           ext_base: /home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext
+  #         - image: ghcr.io/jfilter/civikitchen:wordpress
+  #           ext_base: /home/buildkit/buildkit/build/site/web/wp-content/uploads/civicrm/ext
+  #         - image: ghcr.io/jfilter/civikitchen:joomla
+  #           ext_base: /home/buildkit/buildkit/build/site/web/media/civicrm/ext
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Boot CiviCRM (first boot runs civibuild reinstall)
+  #       env:
+  #         IMAGE: ${{ matrix.image }}
+  #         CK_EXT_BASE: ${{ matrix.ext_base }}
+  #       run: docker compose -f docker-compose.ci-cms.yml up -d --wait --wait-timeout 900
+  #     # On the CMS images cv must run inside the civibuild site tree
+  #     # (unlike standalone, where cv works from anywhere).
+  #     - name: Enable the extension
+  #       run: |
+  #         docker compose -f docker-compose.ci-cms.yml exec -T app \
+  #           bash -c "cd /home/buildkit/buildkit/build/site/web && cv ext:enable myextension"
+  #     - name: Run headless phpunit
+  #       run: |
+  #         docker compose -f docker-compose.ci-cms.yml exec -T -e CIVICRM_UF=UnitTests app \
+  #           bash -c "cd ${{ matrix.ext_base }}/myextension && { [ -x vendor/bin/phpunit ] && vendor/bin/phpunit || phpunit; }"
+  #     - name: Logs on failure
+  #       if: failure()
+  #       run: docker compose -f docker-compose.ci-cms.yml logs app
