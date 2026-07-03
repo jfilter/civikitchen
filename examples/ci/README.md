@@ -16,7 +16,10 @@ How it works:
 
 - The repo itself is bind-mounted as `/var/www/html/ext/myextension`; if it
   ships a `composer.json`, `vendor/` is installed automatically on container
-  start (`CIVIKITCHEN_AUTO_COMPOSER`, default on).
+  start (`CIVIKITCHEN_AUTO_COMPOSER`, default on). One exception: lock files
+  that vendor `civicrm/civicrm-core` (the systopia dev-tooling pattern) are
+  deliberately skipped — build a runtime `vendor/` in a separate workflow
+  step instead.
 - Headless tests run with `CIVICRM_UF=UnitTests` against the `<db>_test`
   scratch database the image configures at install — never against the site DB.
 - Registry dependencies go into `CIVIKITCHEN_EXTRA_EXTENSIONS` (supports

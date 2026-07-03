@@ -50,7 +50,7 @@ docker compose up -d
 # Maildev:    http://localhost:1080
 ```
 
-Mount your extension, enable it, run its tests (the mount path below is the standalone one — the CMS examples document their civibuild extension path in the compose file):
+Mount your extension, enable it, run its tests. The mount path below is the standalone one; each CMS example documents its own extension path in its compose file:
 
 ```bash
 # docker-compose.yml:  volumes: ["../my-extension:/var/www/html/ext/myextension"]
@@ -73,7 +73,7 @@ docker run -d -p 80:80 --name civicrm \
 docker logs -f civicrm            # first boot clones extensions — needs network, takes a few minutes
 ```
 
-Available profiles: [`verein`, `fundraising`, `events`, `mailing`](docs/images.md#profiles-civikitchen_profile) — each with seed data and least-privilege API users (credentials land in the logs and in the container). Demo images keep their database inside the container: perfect for demos and screenshots, not for data you want to keep — map port **80** as shown, the site is baked at `http://localhost`.
+Available profiles: [`verein`, `fundraising`, `events`, `mailing`](docs/images.md#profiles-civikitchen_profile) — each with seed data and least-privilege API users (credentials land in the logs and in the container). Two things to know about demo images: the database lives inside the container (great for demos and screenshots, wrong for data you want to keep), and the site is baked at `http://localhost`, so map port **80** as shown.
 
 ## CI usage
 
@@ -99,7 +99,7 @@ Details in [Custom or older CiviCRM versions](docs/images.md#custom-or-older-civ
 
 ## Reliability
 
-Images rebuild **weekly** and on image-pipeline changes, against the current CiviCRM stable. Stable tags only move after every candidate passes functional dev-tool checks, first-boot and real-browser smoke tests, and demo profile boot tests on every flavor — if a candidate fails, the previous stable tag stays in place.
+Images rebuild **weekly** and on image-pipeline changes, against the current CiviCRM stable, and every tag is test-then-promote: dev tags move only after dev-tool checks, first-boot tests against an external DB, and real-browser smoke tests of the compose examples; demo tags move only after single-container boot tests, including every profile on every demo flavor. If a candidate fails its gate, the previous stable tag stays in place.
 
 ## License
 

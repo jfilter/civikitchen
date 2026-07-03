@@ -30,6 +30,9 @@ services:
     volumes:
       # The repo this file lives in IS the extension under test.
       - .:/var/www/html/ext/myextension
+      # Provisioning beyond env vars (seed data, system packages, config):
+      # mount first-boot hook scripts — see docs/extension-development.md.
+      # - ./civikitchen-init.d:/civikitchen-init.d:ro
 
   db:
     image: mariadb:10.11
