@@ -46,6 +46,24 @@ CiviCRM falls back to the main database and a headless `phpunit` run wipes your
 dev data** — so this is configured automatically. Opt out with
 `CIVIKITCHEN_TEST_DB=0` if you manage `TEST_DB_DSN` yourself.
 
+**Resetting the scratch DB — `cktestreset`.** A suite can leave `<db>_test`
+inconsistent: `Civi\Test`'s `installMe()` does *not* resolve `<requires>`, so
+a test that installs only its own extension leaves it enabled with its
+dependencies missing. Every later `CIVICRM_UF=UnitTests` boot then dies during
+the class scan (`Interface "..." not found`) — and it does not heal itself,
+because the stale class index also survives in the test DB's SQL cache and in
+the per-DSN `CachedCiviContainer.*`/`CachedExtLoader.*` files. `cktestreset`
+resets all layers in one go (drop + reseed `<db>_test` from the main DB, clear
+the cached containers/loaders):
+
+```bash
+docker compose exec app cktestreset
+```
+
+The durable fix belongs in the extension: list the dependency chain explicitly
+in `setUpHeadless()`, e.g.
+`\Civi\Test::headless()->install(['my-dependency'])->installMe(__DIR__)->apply()`.
+
 All first-boot knobs (SMTP, extra extensions, demo users, …) are listed in the
 [configuration reference](configuration.md).
 
