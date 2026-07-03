@@ -95,7 +95,7 @@ Details in [Custom or older CiviCRM versions](docs/images.md#custom-or-older-civ
 - [Images](docs/images.md) — every flavor in detail, demo profiles, tags & versioning
 - [Extension development](docs/extension-development.md) — mount, test (phpunit/headless/Playwright), civix, PHPStan, linting, IDE step debugging, provisioning hooks
 - [Configuration](docs/configuration.md) — every env var the images understand
-- [Building locally](docs/building.md) — build args, `KEEP_GIT=1`, verifying a built image
+- [Building locally](docs/building.md) — build args, `KEEP_GIT=1`, running the test suite locally
 
 ## Reliability
 
