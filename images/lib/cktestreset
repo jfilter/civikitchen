@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# cktestreset — restore a clean headless-test database + boot caches.
+#
+# A phpunit suite can leave the scratch DB inconsistent: Civi\Test's
+# installMe() does NOT resolve <requires>, so a suite that installs only its
+# own extension leaves it enabled while its dependencies are missing. Every
+# subsequent CIVICRM_UF=UnitTests boot then dies during the container class
+# scan ("Interface ... not found") — and nothing heals itself, because the
+# stale class index survives in THREE layers:
+#   1. the test DB's civicrm_extension/civicrm_cache tables,
+#   2. the per-DSN CachedCiviContainer.*.php in the compile dir,
+#   3. the per-DSN CachedExtLoader.*.php next to it.
+# This resets all three: drop + recreate + reseed <db>_test from the main DB
+# (same seed ck_setup_test_db does at provision time), then delete the cached
+# containers/loaders. Run it whenever headless boots fail mysteriously or you
+# want a pristine scratch DB between suites.
+#
+# Usage (inside the app container):  cktestreset
+set -euo pipefail
+
+: "${CIVICRM_DB_HOST:=db}"
+: "${CIVICRM_DB_PORT:=3306}"
+: "${CIVICRM_DB_NAME:=civicrm}"
+: "${CIVICRM_DB_USER:=civicrm}"
+: "${CIVICRM_DB_PASSWORD:=civicrm}"
+# Standalone compile dir; buildkit flavors override via env.
+: "${CK_COMPILE_DIR:=/var/www/html/private/cache}"
+
+test_db_name="${CIVICRM_DB_NAME}_test"
+mysql_args=(-h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}")
+
+echo "[cktestreset] Dropping and reseeding ${test_db_name} from ${CIVICRM_DB_NAME}..."
+mysql "${mysql_args[@]}" -e "DROP DATABASE IF EXISTS \`${test_db_name}\`; CREATE DATABASE \`${test_db_name}\`" 2>/dev/null
+mysqldump "${mysql_args[@]}" --single-transaction --routines --triggers "${CIVICRM_DB_NAME}" 2>/dev/null \
+    | mysql "${mysql_args[@]}" "${test_db_name}" 2>/dev/null
+
+echo "[cktestreset] Clearing cached containers/ext-loaders in ${CK_COMPILE_DIR}..."
+rm -f "${CK_COMPILE_DIR}"/CachedCiviContainer.* "${CK_COMPILE_DIR}"/CachedExtLoader.*
+
+echo "[cktestreset] Done — ${test_db_name} is a fresh copy of ${CIVICRM_DB_NAME}."

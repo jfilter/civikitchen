@@ -54,9 +54,12 @@ COPY lib/cklint /usr/local/bin/cklint
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
 COPY lib/civikitchen-rector /opt/civikitchen-rector
 COPY lib/ckmodernize /usr/local/bin/ckmodernize
+# Reset helper for the headless-test scratch DB (reseeds <db>_test, clears
+# the per-DSN boot caches — see the script header for the failure mode).
+COPY lib/cktestreset /usr/local/bin/cktestreset
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
-    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckmodernize
+    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckmodernize /usr/local/bin/cktestreset
 
 # Add our vhost extras (e.g. the bare-/ → /civicrm/login redirect) via the
 # standard apache conf-available + a2enconf flow rather than editing the
