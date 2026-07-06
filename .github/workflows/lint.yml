@@ -34,17 +34,14 @@ jobs:
           done < <(find images -name '*.php' -print0)
           [ "$rc" = 0 ] && echo "php syntax clean"
 
-      - name: profile.json well-formed + complete
+      - name: profile.json valid against schema
+        # packages/civicrm-profile-schema/profile.schema.json is the canonical spec
+        # for the profile format (draft 2020-12), published as @jfilter/civicrm-
+        # profile-schema. It subsumes the old jq shape checks (description,
+        # dependencies array, skipUf CIVICRM_UF enum) and adds real ones a key-blind
+        # jq filter can't: additionalProperties:false catches typos (skipUF), repo/
+        # registry are mutually exclusive, and version only pins a git `repo`.
         run: |
-          for f in images/profiles/*/profile.json; do
-            jq -e '.description and (.dependencies | type == "array")' "$f" >/dev/null \
-              || { echo "invalid: $f" >&2; exit 1; }
-            # skipUf, when present, must be an array of known CIVICRM_UF names —
-            # a typo here would silently NOT skip (and e.g. re-break Standalone).
-            jq -e '.dependencies | all(
-                     (.skipUf // []) | type == "array" and
-                     all(. as $u | ["Standalone", "Drupal", "Drupal8", "WordPress", "Backdrop", "Joomla"] | index($u))
-                   )' "$f" >/dev/null \
-              || { echo "invalid skipUf in: $f (must be an array of CIVICRM_UF names)" >&2; exit 1; }
-          done
-          echo "profiles valid"
+          pipx run check-jsonschema \
+            --schemafile packages/civicrm-profile-schema/profile.schema.json \
+            images/profiles/*/profile.json

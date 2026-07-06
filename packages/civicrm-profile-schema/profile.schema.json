@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jfilter/civikitchen/main/images/profiles/profile.schema.json",
+  "title": "civikitchen profile",
+  "description": "Canonical shape of images/profiles/<name>/profile.json — the declarative description of a civikitchen scenario (extensions, authx, API users). This is the single source of truth for the format; any tool that reads or writes these profiles validates against this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["description", "dependencies"],
+  "properties": {
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-line human summary of the scenario."
+    },
+    "authx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["header_cred"],
+      "description": "AuthX configuration for headless API access.",
+      "properties": {
+        "header_cred": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["jwt", "api_key", "pass"] },
+          "description": "Accepted credential flows in the Authorization header."
+        }
+      }
+    },
+    "apiUsers": {
+      "type": "array",
+      "description": "API users created after install; credentials land in the boot log / credentials file.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["username", "role", "permissions"],
+        "properties": {
+          "username": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "minLength": 1 },
+          "permissions": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "CiviCRM permission strings granted to the user's role."
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "description": "Extensions the scenario needs. Applied in array order (deps before dependents).",
+      "items": { "$ref": "#/$defs/dependency" }
+    }
+  },
+  "$defs": {
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "description": "One extension. Source is git (`repo` + `version`), the civicrm.org registry (`registry: true`), or core-bundled (neither — enable only).",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "description": "Extension key (e.g. de.systopia.xcm)."
+        },
+        "repo": {
+          "type": "string",
+          "format": "uri",
+          "description": "Git URL — cloned at `version` into the site's ext dir."
+        },
+        "registry": {
+          "type": "boolean",
+          "description": "true = fetch a packaged release from the civicrm.org registry (cv ext:download)."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Git ref (tag/branch/commit) to check out. Only meaningful with `repo`."
+        },
+        "track": {
+          "enum": ["pin", "branch"],
+          "description": "Update policy for a git dependency. \"pin\": stay on the exact `version` (a tag or commit). \"branch\": `version` is a moving branch — follow its HEAD on update. Absent: pin when `version` is set, else follow the latest release tag. Requires `version`."
+        },
+        "enable": {
+          "type": "boolean",
+          "description": "Enable the extension after install (cv ext:enable). Absent/false = fetch only."
+        },
+        "skip": {
+          "type": "boolean",
+          "description": "Leave this extension unmanaged: never auto-install, update, or remove it. For locally-patched or manually-maintained extensions."
+        },
+        "skipUf": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["Standalone", "Drupal", "Drupal8", "WordPress", "Backdrop", "Joomla"]
+          },
+          "description": "Host CMS frameworks (CIVICRM_UF values) on which this extension is neither fetched nor enabled."
+        },
+        "skipUfReason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable reason for skipUf, shown as a SKIP line in the boot log."
+        }
+      },
+      "dependentRequired": {
+        "version": ["repo"],
+        "track": ["version"],
+        "skipUfReason": ["skipUf"]
+      },
+      "dependentSchemas": {
+        "registry": {
+          "description": "Registry-sourced: no git repo, no git version/track — the release picks its own version.",
+          "properties": {
+            "repo": false,
+            "version": false,
+            "track": false
+          }
+        }
+      }
+    }
+  }
+}
