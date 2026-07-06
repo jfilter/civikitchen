@@ -52,7 +52,8 @@
       "items": { "$ref": "#/$defs/dependency" }
     },
     "config": { "$ref": "#/$defs/config" },
-    "seed": { "$ref": "#/$defs/seed" }
+    "seed": { "$ref": "#/$defs/seed" },
+    "scripts": { "$ref": "#/$defs/scripts" }
   },
   "$defs": {
     "dependency": {
@@ -193,13 +194,19 @@
         }
       }
     },
+    "scripts": {
+      "type": "array",
+      "description": "Optional imperative seed scripts (PHP run via `cv scr`), applied AFTER the declarative config + seed. The escape hatch for volume / complex fixtures that config/seed cannot express (a year of history, generated records, mandates). Each entry is a path relative to the profile file's directory. A consumer that only wants the declarative tier ignores it.",
+      "items": { "type": "string", "minLength": 1 }
+    },
     "contentProfile": {
       "type": "object",
       "additionalProperties": false,
-      "description": "A standalone declarative content document (config + seed) applied to an instance — e.g. civenv seed's --profile file. A full profile embeds the same config/seed shape inline.",
+      "description": "A standalone declarative content document (config + seed + optional scripts) applied to an instance — e.g. civenv seed's --profile file. A full profile embeds the same shape inline.",
       "properties": {
         "config": { "$ref": "#/$defs/config" },
-        "seed": { "$ref": "#/$defs/seed" }
+        "seed": { "$ref": "#/$defs/seed" },
+        "scripts": { "$ref": "#/$defs/scripts" }
       }
     }
   }
