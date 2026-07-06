@@ -29,9 +29,13 @@ test.describe('demo user login', () => {
     // login page and a known logged-in element renders.
     await expect(page).not.toHaveURL(/\/civicrm\/login/, { timeout: 15_000 });
 
-    // The user menu (with the demo username) is the most stable
-    // post-login marker — present on every Civi page once authenticated.
-    await expect(page.locator('body')).toContainText(DEMO_USER, {
+    // The CiviCRM menubar renders ONLY once authenticated — it is absent on the
+    // anonymous login page — so its presence is the version-stable "we logged in
+    // and landed inside CiviCRM" marker. (Earlier the test asserted the demo
+    // username as page text via the user menu, but CiviCRM 6.16's menubar no
+    // longer prints the raw username anywhere in the page text, so that check
+    // broke on every 6.16 build.)
+    await expect(page.locator('#civicrm-menu')).toBeAttached({
       timeout: 15_000,
     });
   });
