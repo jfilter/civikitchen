@@ -8,8 +8,14 @@ single source of truth any tool validates these profiles against.
 Reusable `$defs` for consumers that only need a slice:
 
 - `#/$defs/dependency` — one extension entry (an extension manifest).
-- `#/$defs/contentProfile` — a standalone `config` + `seed` document (e.g. a
-  seeding profile). A full profile embeds the same `config`/`seed` shape inline.
+- `#/$defs/contentProfile` — a standalone `config` + `seed` (+ optional
+  `scripts`) document (e.g. a seeding profile). A full profile embeds the same
+  shape inline.
+
+Content has two tiers: **declarative** `config` (asserted every run) + `seed`
+(created-once fixtures) for config and anchors, and optional **imperative**
+`scripts` (PHP run via `cv scr`, after the declarative tier) for volume /
+complex data that declarative YAML can't express. Nothing has to be declarative.
 
 ## Use
 
