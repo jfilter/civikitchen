@@ -19,6 +19,11 @@
 #   phpMyAdmin: http://localhost:8081
 #   Maildev:    http://localhost:1080
 
+# Distinct compose project name (rather than the CWD-derived default, e.g.
+# 'standalone') so parallel civikitchen examples don't collide on container
+# names / networks.
+name: civikitchen-extension-with-playwright
+
 services:
   app:
     image: ${IMAGE:-ghcr.io/jfilter/civikitchen:standalone}
