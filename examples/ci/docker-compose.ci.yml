@@ -35,7 +35,7 @@ services:
       # - ./civikitchen-init.d:/civikitchen-init.d:ro
 
   db:
-    image: mariadb:10.11
+    image: mariadb:12.3
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: civicrm
