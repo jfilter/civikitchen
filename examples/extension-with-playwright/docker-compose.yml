@@ -52,7 +52,7 @@ services:
       - ../../extensions/de.systopia.contract:/var/www/html/ext/myextension
 
   db:
-    image: mariadb:10.11
+    image: mariadb:12.3
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: civicrm
