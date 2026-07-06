@@ -191,8 +191,16 @@ if [ -z "${PROFILE}" ] && [ "${CK_SKIP_SITE_URL_TEST:-0}" != "1" ]; then
     if [ -z "${URLPORT}" ]; then
         echo "  ✗ no free host port in 8180-8199 for the site-url leg"; fail=1
     else
+        # Use 127.0.0.1 (not localhost) end-to-end for this leg. Two reasons:
+        #  - docker -p publishes on IPv4 (0.0.0.0) by default; on a runner where
+        #    `localhost` resolves to ::1 first, `curl localhost:PORT` hits an
+        #    unbound IPv6 address and fails (000). 127.0.0.1 is always the IPv4
+        #    publish, and matches the free-port probe above (/dev/tcp/127.0.0.1).
+        #  - the base URL must match the request Host, or WordPress issues a
+        #    canonical 301 to its configured host — a curl -L to that would then
+        #    chase the very ambiguity we are avoiding.
         docker run -d --name "${APP}-url" -p "${URLPORT}:80" \
-            -e "CIVIKITCHEN_SITE_URL=http://localhost:${URLPORT}" \
+            -e "CIVIKITCHEN_SITE_URL=http://127.0.0.1:${URLPORT}" \
             "${IMAGE}" >/dev/null
         elapsed=0
         while :; do
@@ -210,7 +218,7 @@ if [ -z "${PROFILE}" ] && [ "${CK_SKIP_SITE_URL_TEST:-0}" != "1" ]; then
             check "entrypoint rewrote the base URL" \
                 "docker logs '${APP}-url' 2>&1 | grep -q 'Rewriting site base URL'"
             URLPAGE="$(mktemp)"
-            url_code=$(curl -s -o "${URLPAGE}" -w '%{http_code}' -L "http://localhost:${URLPORT}/" 2>/dev/null || echo 000)
+            url_code=$(curl -s -o "${URLPAGE}" -w '%{http_code}' -L "http://127.0.0.1:${URLPORT}/" 2>/dev/null || echo 000)
             check "site serves HTTP 200 on the mapped port (got ${url_code})" \
                 "[ '${url_code}' = '200' ]"
             # Any http://localhost/ (old base) left in the page means some URL
