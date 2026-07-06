@@ -22,7 +22,8 @@ final class SniffsTest extends TestCase {
   private const SNIFFS = 'CiviKitchen.Legacy.NoLegacyCall,'
     . 'CiviKitchen.I18n.UseExtensionTs,'
     . 'CiviKitchen.Api.NoRequiredOnExternalAction,'
-    . 'CiviKitchen.Extension.UseMixinsForStandardHooks';
+    . 'CiviKitchen.Extension.UseMixinsForStandardHooks,'
+    . 'CiviKitchen.Files.MaxFileLength';
 
   /**
    * Run phpcs over one fixture, restricted to the CiviKitchen sniffs, and
@@ -106,6 +107,21 @@ final class SniffsTest extends TestCase {
 
   public function testModernCounterpartsProduceZeroFindings(): void {
     self::assertSame([], $this->phpcs('CleanModern.php'));
+  }
+
+  public function testMaxFileLengthFlagsOnlyFilesOverTheConfiguredCap(): void {
+    // Under the generous default cap (1000) a small file is never flagged.
+    self::assertSame([], $this->phpcs('LongFile.php'),
+      'a short file is well within the default cap');
+
+    // Armed with a low cap (maxLines=10), the same file trips on line 1 — the
+    // over-length is a whole-file fact, reported at the open tag.
+    $armed = __DIR__ . '/fixtures/max-file-length-ruleset.xml';
+    self::assertSame(
+      [1 => ['CiviKitchen.Files.MaxFileLength.TooLong']],
+      $this->phpcs('LongFile.php', $armed),
+      'a file over the configured cap is flagged on line 1'
+    );
   }
 
   public function testRequiredGuardIsInertWithoutConfiguredExternalActions(): void {
