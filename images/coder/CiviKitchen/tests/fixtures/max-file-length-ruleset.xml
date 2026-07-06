@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<ruleset name="CiviKitchenTestMaxFileLength">
+  <description>
+    Test ruleset: MaxFileLength armed with a low cap so a small fixture trips it.
+    References the sniff by relative file path so it resolves without any
+    installed_paths registration.
+  </description>
+  <rule ref="../../Sniffs/Files/MaxFileLengthSniff.php">
+    <properties>
+      <property name="maxLines" value="10"/>
+    </properties>
+  </rule>
+</ruleset>

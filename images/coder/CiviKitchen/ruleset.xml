@@ -9,9 +9,10 @@
     PEAR::raiseError / CRM_Core_Error::fatal|debug_*), UseExtensionTs (bare
     ts() resolves in core's translation domain — extensions must use E::ts()),
     UseMixinsForStandardHooks (no bespoke managed/menu/settings/entity/angular
-    hooks where standard mixins exist) and NoRequiredOnExternalAction (the
+    hooks where standard mixins exist), NoRequiredOnExternalAction (the
     @required trap — inert until an extension lists its externally reachable
-    actions).
+    actions) and MaxFileLength (a per-file line-count cap, default 1000, so a
+    runaway class gets split rather than sailing through every token check).
 
     Use it directly (`phpcs --standard=CiviKitchen` / `cklint`) or reference
     it from a project phpcs.xml.dist (`<rule ref="CiviKitchen"/>`) and add
