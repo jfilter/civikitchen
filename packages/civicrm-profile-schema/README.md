@@ -1,9 +1,15 @@
 # @jfilter/civicrm-profile-schema
 
 JSON Schema (draft 2020-12) for the civikitchen CiviCRM **profile** format — the
-declarative description of a scenario: `dependencies` (extensions), `authx`, and
-`apiUsers`. This package is the single source of truth any tool validates these
-profiles against.
+declarative description of a scenario: `dependencies` (extensions), `authx`,
+`apiUsers`, and declarative content (`config` + `seed`). This package is the
+single source of truth any tool validates these profiles against.
+
+Reusable `$defs` for consumers that only need a slice:
+
+- `#/$defs/dependency` — one extension entry (an extension manifest).
+- `#/$defs/contentProfile` — a standalone `config` + `seed` document (e.g. a
+  seeding profile). A full profile embeds the same `config`/`seed` shape inline.
 
 ## Use
 

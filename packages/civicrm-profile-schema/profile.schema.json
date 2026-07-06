@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/jfilter/civikitchen/main/images/profiles/profile.schema.json",
   "title": "civikitchen profile",
-  "description": "Canonical shape of images/profiles/<name>/profile.json — the declarative description of a civikitchen scenario (extensions, authx, API users). This is the single source of truth for the format; any tool that reads or writes these profiles validates against this schema.",
+  "description": "Canonical shape of images/profiles/<name>/profile.json — the declarative description of a civikitchen scenario (extensions, authx, API users, and declarative content). This is the single source of truth for the format; any tool that reads or writes these profiles validates against this schema.",
   "type": "object",
   "additionalProperties": false,
   "required": ["description", "dependencies"],
@@ -50,7 +50,9 @@
       "type": "array",
       "description": "Extensions the scenario needs. Applied in array order (deps before dependents).",
       "items": { "$ref": "#/$defs/dependency" }
-    }
+    },
+    "config": { "$ref": "#/$defs/config" },
+    "seed": { "$ref": "#/$defs/seed" }
   },
   "$defs": {
     "dependency": {
@@ -119,6 +121,85 @@
             "track": false
           }
         }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Instance configuration asserted on every apply (overwrite): a consumer re-asserts these so drift is corrected each run.",
+      "properties": {
+        "settings": {
+          "type": "object",
+          "description": "CiviCRM Settings (Setting.set), asserted every run — e.g. environment: Staging (jobs refused + mail off)."
+        },
+        "domain_name": { "type": "string", "minLength": 1, "description": "Default organization / domain name." },
+        "from_email": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Default from-address; replaces the fresh-install EXAMPLE.ORG placeholder."
+        },
+        "mailbox_domain": { "type": "string", "minLength": 1, "description": "Incoming mailbox domain (MailSettings)." },
+        "groups": {
+          "type": "array",
+          "description": "Groups asserted by machine name (idempotent).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "ref": { "type": "string", "minLength": 1, "description": "Stable handle to cross-link seed contacts to this group." },
+              "name": { "type": "string", "minLength": 1, "description": "Machine name — the idempotent match key." },
+              "title": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Sample content created once and never overwritten (UI edits survive re-apply).",
+      "properties": {
+        "contacts": {
+          "type": "array",
+          "description": "Anchored fixture contacts. Any other APIv4 Contact field may be set as an extra property.",
+          "items": {
+            "type": "object",
+            "required": ["ref"],
+            "properties": {
+              "ref": { "type": "string", "minLength": 1, "description": "Doubles as external_identifier — the idempotent match key." },
+              "contact_type": { "type": "string", "minLength": 1, "description": "Default: Individual." },
+              "email": { "type": "string", "minLength": 1 },
+              "groups": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "Group refs (config.groups[].ref) or bare group names."
+              }
+            }
+          }
+        },
+        "contributions": {
+          "type": "array",
+          "description": "Contributions linked to seed contacts. Idempotent via a synthetic trxn_id. Any other APIv4 Contribution field may be set as an extra property.",
+          "items": {
+            "type": "object",
+            "required": ["contact_ref", "total_amount"],
+            "properties": {
+              "ref": { "type": "string", "minLength": 1, "description": "Optional stable handle (used to build the idempotent trxn_id)." },
+              "contact_ref": { "type": "string", "minLength": 1, "description": "Links to a seed.contacts[].ref." },
+              "total_amount": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "contentProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A standalone declarative content document (config + seed) applied to an instance — e.g. civenv seed's --profile file. A full profile embeds the same config/seed shape inline.",
+      "properties": {
+        "config": { "$ref": "#/$defs/config" },
+        "seed": { "$ref": "#/$defs/seed" }
       }
     }
   }
