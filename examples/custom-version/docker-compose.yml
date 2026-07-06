@@ -24,6 +24,11 @@
 # to match your target server. For CiviCRM older than ~5.47 (pre-Drupal-10),
 # switch DEFAULT_SITE_TYPE to a Drupal 9 / 7 civibuild type and lower PHP_VERSION.
 
+# Distinct compose project name (rather than the CWD-derived default, e.g.
+# 'standalone') so parallel civikitchen examples don't collide on container
+# names / networks.
+name: civikitchen-custom-version
+
 services:
   app:
     # Tag the locally-built image so later `up` (without --build) reuses it,
