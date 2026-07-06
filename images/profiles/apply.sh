@@ -13,6 +13,9 @@
 #   "repo": <git url>     cloned at "version" into the site's ext dir
 #   "registry": true      cv ext:download (packaged release incl. built assets)
 #   neither               bundled with core (e.g. flexmailer), enable only
+# The full, canonical profile.json shape is packages/civicrm-profile-schema/
+# profile.schema.json (draft 2020-12, enforced in CI; published as
+# @jfilter/civicrm-profile-schema).
 #
 #   apply.sh <profile-dir>     # e.g. /usr/local/share/civikitchen/profiles/verein
 set -euo pipefail
