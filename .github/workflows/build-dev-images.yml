@@ -111,7 +111,7 @@ jobs:
       # promote-standalone AFTER the smoke + e2e tests pass, so a broken image
       # never goes live under a stable tag.
       - name: Build and push standalone candidate image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: images
           file: images/standalone/Dockerfile
@@ -364,7 +364,7 @@ jobs:
       # tags (:drupal10, :drupal11, :wordpress, :joomla, :*-php8.3) are
       # created by promote-buildkit after the smoke tests pass.
       - name: Build and push ${{ matrix.variant.name }} candidate image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: images
           file: images/buildkit/Dockerfile
@@ -639,7 +639,7 @@ jobs:
       # Test-then-promote: only sha-suffixed candidate tags here; the stable
       # demo tags are created by promote-demo after the smoke tests pass.
       - name: Build and push ${{ matrix.variant.name }} demo candidate image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: images
           file: images/buildkit/Dockerfile
