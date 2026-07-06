@@ -503,7 +503,7 @@ jobs:
             sleep 5
           done
           echo "site never became healthy" >&2
-          docker compose -f ${{ matrix.variant.compose }} logs civicrm
+          docker compose -f ${{ matrix.variant.compose }} logs app
           exit 1
 
       - name: Verify CiviCRM responds
@@ -513,7 +513,7 @@ jobs:
           docker compose -f ${{ matrix.variant.compose }} exec -T \
             -u buildkit \
             -w /home/buildkit/buildkit/build/site/web \
-            civicrm \
+            app \
             bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv api4 Domain.get +s version'
 
       - name: Set up Node
@@ -544,7 +544,7 @@ jobs:
 
       - name: App container logs on failure
         if: failure()
-        run: docker compose -f ${{ matrix.variant.compose }} logs civicrm
+        run: docker compose -f ${{ matrix.variant.compose }} logs app
 
       - name: Tear down
         if: always()
