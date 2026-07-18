@@ -185,6 +185,14 @@ docker run -d -p 80:80 --name civicrm \
     ghcr.io/jfilter/civikitchen:drupal10-demo
 ```
 
+Profiles are **combinable** — a comma-separated list is applied left to right
+(`CIVIKITCHEN_PROFILE=verein,mailing` gives the Verein world plus mailing
+lists and Mosaico). Each layer converges instead of colliding: extensions the
+site already has are skipped, seeds skip when their anchor org exists, and a
+username/role declared by several profiles ends up with the union of the
+permissions (one line per username in the credentials file; the last
+profile's api_key is the valid one).
+
 The profile applies once, on first boot — it clones the extensions from
 GitHub, so it **needs network access and takes a few minutes** (watch
 `docker logs -f civicrm`; the container turns healthy when done). The

@@ -4,13 +4,16 @@
 # demo image is self-contained: `docker run` it, wait for the HEALTHCHECK, and
 # assert the baked site + embedded DB come up. This guards the build-time bake
 # of the embedded DB and the demo entrypoint. An optional second argument
-# boots with CIVIKITCHEN_PROFILE=<profile> and additionally asserts the
-# runtime profile apply worked (extension installed, credentials in the logs).
+# boots with CIVIKITCHEN_PROFILE=<profile>[,<profile>...] and additionally
+# asserts the runtime profile apply worked (each profile's extension
+# installed, credentials in the logs, one credentials line per apiUser even
+# when combined profiles share usernames).
 #
 # Usage:
-#   bash images/test/boot-test-demo.sh <image> [profile]
+#   bash images/test/boot-test-demo.sh <image> [profile[,profile...]]
 #   bash images/test/boot-test-demo.sh civikitchen:drupal10-demo
 #   bash images/test/boot-test-demo.sh civikitchen:drupal10-demo verein
+#   bash images/test/boot-test-demo.sh civikitchen:drupal10-demo verein,mailing
 set -euo pipefail
 
 IMAGE="${1:?usage: boot-test-demo.sh <image> [profile]}"
@@ -98,21 +101,36 @@ else
     echo "  ✓ embedded MariaDB started clean (no InnoDB recovery)"
 fi
 
-# 5+6) Runtime profile apply worked: the profile's first enabled extension is
-# installed, and the API credentials were printed to the container logs.
+# 5+6) Runtime profile apply worked, per profile in the (possibly
+# comma-separated) list: its first enabled extension is installed. Across all
+# of them: credentials were printed to the logs, and the credentials file has
+# exactly one line per declared apiUser — combined profiles sharing a
+# username (e.g. "readonly") must upsert, not duplicate or drop.
 if [ -n "${PROFILE}" ]; then
-    ext_key=$(docker exec "${APP}" \
-        jq -r '[.dependencies[] | select(.enable)][0].name // empty' \
-        "/usr/local/share/civikitchen/profiles/${PROFILE}/profile.json" 2>/dev/null || true)
-    if [ -n "${ext_key}" ]; then
-        status=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${APP}" \
-            bash -lc "export PATH=/home/buildkit/buildkit/bin:\$PATH; cv api4 Extension.get +w key=${ext_key} +w status=installed +s key 2>/dev/null" || true)
-        check "profile extension ${ext_key} installed" "echo '${status}' | grep -q '${ext_key}'"
-    else
-        echo "  ✗ could not read profile.json for '${PROFILE}' from the image"; fail=1
-    fi
+    IFS=',' read -ra PROFILES <<< "${PROFILE}"
+    for prof in "${PROFILES[@]}"; do
+        ext_key=$(docker exec "${APP}" \
+            jq -r '[.dependencies[] | select(.enable)][0].name // empty' \
+            "/usr/local/share/civikitchen/profiles/${prof}/profile.json" 2>/dev/null || true)
+        if [ -n "${ext_key}" ]; then
+            status=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${APP}" \
+                bash -lc "export PATH=/home/buildkit/buildkit/bin:\$PATH; cv api4 Extension.get +w key=${ext_key} +w status=installed +s key 2>/dev/null" || true)
+            check "profile extension ${ext_key} installed (${prof})" "echo '${status}' | grep -q '${ext_key}'"
+        else
+            echo "  ✗ could not read profile.json for '${prof}' from the image"; fail=1
+        fi
+    done
     check "API credentials printed to docker logs" \
         "grep -q 'API User Credentials' '${LOGFILE}'"
+    creds_all=$(docker exec "${APP}" cat /home/buildkit/api-credentials.txt 2>/dev/null || true)
+    for prof in "${PROFILES[@]}"; do
+        while IFS= read -r u; do
+            [ -z "${u}" ] && continue
+            n=$(printf '%s\n' "${creds_all}" | grep -c "^${u}:" || true)
+            check "credentials file has exactly one line for '${u}' (${prof})" "[ '${n}' = 1 ]"
+        done < <(docker exec "${APP}" jq -r '.apiUsers[].username' \
+            "/usr/local/share/civikitchen/profiles/${prof}/profile.json" 2>/dev/null || true)
+    done
     # Seeds are deliberately non-fatal in apply.sh (one flaky seeder must not
     # block the boot), so a broken seed still turns the container healthy —
     # catch it here instead.

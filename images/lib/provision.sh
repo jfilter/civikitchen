@@ -237,38 +237,56 @@ ck_enable_extensions() {
     done
 }
 
-# Apply a named profile (extensions + seed data + API users) at first boot.
-# Opt-in via CIVIKITCHEN_PROFILE=<name>; profiles ship in CK_PROFILE_DIR (see
-# images/profiles/). Needs network (git clones) and can take several minutes.
+# Apply named profiles (extensions + seed data + API users) at first boot.
+# Opt-in via CIVIKITCHEN_PROFILE=<name>[,<name>...] — a comma-separated list
+# is applied left to right; profiles ship in CK_PROFILE_DIR (see
+# images/profiles/). Combining works because every layer converges instead of
+# colliding: apply.sh skips extensions the site already has, seeds skip when
+# their anchor org exists, and configure-api-users.php upserts users/roles
+# (merging role permissions), so a name shared across profiles ends up with
+# the union. Needs network (git clones) and can take several minutes.
 # Runs inside ck_post_install_provision, so it is marker-gated: it applies
 # once, and a failure aborts the boot (no marker) and re-runs on next start.
 ck_apply_profile() {
     [[ -n "${CIVIKITCHEN_PROFILE:-}" ]] || return 0
-    local dir="${CK_PROFILE_DIR}/${CIVIKITCHEN_PROFILE}"
-    if [[ ! -f "${dir}/profile.json" ]]; then
-        echo "[civikitchen] ERROR: unknown profile '${CIVIKITCHEN_PROFILE}'." >&2
-        echo "[civikitchen] Available profiles: $(cd "${CK_PROFILE_DIR}" 2>/dev/null && for d in */; do printf '%s ' "${d%/}"; done)" >&2
-        return 1
-    fi
-    # Profiles share CK_PROFILE_DIR/apply.sh; a profile can ship its own
-    # apply.sh to override the shared driver.
-    local apply="${CK_PROFILE_DIR}/apply.sh"
-    [[ -f "${dir}/apply.sh" ]] && apply="${dir}/apply.sh"
-    # CMS gate: profile.json declares the CMS family it needs (e.g. "drupal10");
-    # match it as a prefix of the civibuild site type (drupal10-demo, ...).
-    local want_cms
-    want_cms="$(jq -r '.cms // empty' "${dir}/profile.json" 2>/dev/null || true)"
-    if [[ -n "${want_cms}" && "${CIVICRM_SITE_TYPE:-}" != "${want_cms}"* ]]; then
-        echo "[civikitchen] ERROR: profile '${CIVIKITCHEN_PROFILE}' requires a ${want_cms} site; this site is '${CIVICRM_SITE_TYPE:-unknown}'." >&2
-        return 1
-    fi
-    echo "[civikitchen] Applying profile '${CIVIKITCHEN_PROFILE}' (needs network; this can take several minutes)..."
-    # Pass CK_CREDENTIALS_FILE through explicitly (like ck_smtp/ck_demo_user above)
-    # so a profile's configure-api-users.php + seeds resolve it deterministically
-    # rather than relying on runuser's preserve-env. Empty when unset -> the
-    # script's `?:` falls back to $HOME/api-credentials.txt (no change for profiles
-    # that don't set it).
-    ck_as_web env CK_CREDENTIALS_FILE="${CK_CREDENTIALS_FILE:-}" bash "${apply}" "${dir}"
+    local name dir apply want_cms
+    local -a names
+    IFS=',' read -ra names <<< "${CIVIKITCHEN_PROFILE}"
+    # Validate the whole list before applying anything — a typo in the last
+    # name must not leave a half-provisioned site behind the failed boot.
+    for name in "${names[@]}"; do
+        name="${name// /}"
+        [[ -z "${name}" ]] && continue
+        if [[ ! -f "${CK_PROFILE_DIR}/${name}/profile.json" ]]; then
+            echo "[civikitchen] ERROR: unknown profile '${name}'." >&2
+            echo "[civikitchen] Available profiles: $(cd "${CK_PROFILE_DIR}" 2>/dev/null && for d in */; do printf '%s ' "${d%/}"; done)" >&2
+            return 1
+        fi
+    done
+    for name in "${names[@]}"; do
+        name="${name// /}"
+        [[ -z "${name}" ]] && continue
+        dir="${CK_PROFILE_DIR}/${name}"
+        # Profiles share CK_PROFILE_DIR/apply.sh; a profile can ship its own
+        # apply.sh to override the shared driver.
+        apply="${CK_PROFILE_DIR}/apply.sh"
+        [[ -f "${dir}/apply.sh" ]] && apply="${dir}/apply.sh"
+        # CMS gate: profile.json declares the CMS family it needs (e.g.
+        # "drupal10"); match it as a prefix of the civibuild site type
+        # (drupal10-demo, ...).
+        want_cms="$(jq -r '.cms // empty' "${dir}/profile.json" 2>/dev/null || true)"
+        if [[ -n "${want_cms}" && "${CIVICRM_SITE_TYPE:-}" != "${want_cms}"* ]]; then
+            echo "[civikitchen] ERROR: profile '${name}' requires a ${want_cms} site; this site is '${CIVICRM_SITE_TYPE:-unknown}'." >&2
+            return 1
+        fi
+        echo "[civikitchen] Applying profile '${name}' (needs network; this can take several minutes)..."
+        # Pass CK_CREDENTIALS_FILE through explicitly (like ck_smtp/ck_demo_user
+        # above) so a profile's configure-api-users.php + seeds resolve it
+        # deterministically rather than relying on runuser's preserve-env. Empty
+        # when unset -> the script's `?:` falls back to $HOME/api-credentials.txt
+        # (no change for profiles that don't set it).
+        ck_as_web env CK_CREDENTIALS_FILE="${CK_CREDENTIALS_FILE:-}" bash "${apply}" "${dir}"
+    done
 }
 
 # First-boot provisioning hooks mounted into CK_INIT_D, run in lexical order:
