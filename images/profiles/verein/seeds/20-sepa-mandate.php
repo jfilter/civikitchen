@@ -88,6 +88,9 @@ $count = 0;
 foreach ($members as $i => $m) {
   $isFull = $m['membership.membership_type_id:name'] === 'Vollmitgliedschaft';
   civicrm_api3('SepaMandate', 'createfull', [
+    // Must be a real bool: the v3 wrapper feeds this untouched into the
+    // strictly typed Api4\SepaMandate::createFull(bool $checkPermissions).
+    'check_permissions' => FALSE,
     'contact_id' => $m['id'],
     'type' => 'RCUR',
     'iban' => $testIbans[$i % count($testIbans)],
@@ -99,7 +102,6 @@ foreach ($members as $i => $m) {
     'start_date' => date('Y-m-d'),
     'cycle_day' => 1,
     'creditor_id' => $creditorId,
-    'check_permissions' => 0,
   ]);
   $count++;
 }
