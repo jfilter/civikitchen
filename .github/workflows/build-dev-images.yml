@@ -697,6 +697,10 @@ jobs:
           - { tag: standalone-demo, profile: fundraising }
           - { tag: standalone-demo, profile: events }
           - { tag: standalone-demo, profile: mailing }
+          # Combined-profile leg: comma list applies in order; shared apiUser
+          # names ("readonly") must upsert, not duplicate (one leg is enough —
+          # the combining logic is CMS-independent).
+          - { tag: standalone-demo, profile: 'verein,mailing' }
           - { tag: drupal10-demo,   profile: '' }
           - { tag: drupal10-demo,   profile: verein }
           - { tag: drupal10-demo,   profile: fundraising }

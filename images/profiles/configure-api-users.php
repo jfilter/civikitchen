@@ -149,11 +149,22 @@ echo "  👥 Creating API users...\n";
 // log output scrolls away: docker exec <c> cat <credFile>. Default is the web
 // user's $HOME/api-credentials.txt; CK_CREDENTIALS_FILE overrides the path
 // (a public knob — external harnesses docker-cp the file out).
+// The file is upserted per username, NOT truncated: with CIVIKITCHEN_PROFILE
+// as a list this script runs once per profile, and truncating would drop the
+// earlier profiles' users. A later profile reusing a username regenerates the
+// api_key, so its line must replace the earlier one (whose key is gone from
+// the DB).
 $credFile = getenv('CK_CREDENTIALS_FILE') ?: ((getenv('HOME') ?: '/home/buildkit') . '/api-credentials.txt');
+$credLines = [];
+if (is_file($credFile)) {
+  foreach (file($credFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+    $credLines[explode(':', $line, 2)[0]] = $line;
+  }
+}
 // file_put_contents only warns (and cv still exits 0) on an unwritable path,
 // so a missing/read-only directory would go green with no creds file — check
 // explicitly, per the fail-loud contract in the header.
-if (file_put_contents($credFile, '') === FALSE || !chmod($credFile, 0600)) {
+if (file_put_contents($credFile, $credLines ? implode("\n", $credLines) . "\n" : '') === FALSE || !chmod($credFile, 0600)) {
   throw new \RuntimeException("configure-api-users: cannot create credentials file {$credFile}");
 }
 
@@ -284,12 +295,20 @@ foreach ($apiUsers as $spec) {
       // save+match keeps re-runs idempotent; "password" is a write-only field
       // hashed on save; "roles" wants role IDs. The User row IS the uf_match
       // record on Standalone, so the UFMatch step below is skipped.
+      // Merge onto an existing role's permissions instead of replacing them:
+      // combined profiles (CIVIKITCHEN_PROFILE list) may declare the same
+      // role name with different permission sets, and the other CMS branches
+      // (grantPermission / add_cap / ACL rules) accumulate too.
+      $existingPerms = \Civi\Api4\Role::get(FALSE)
+        ->addWhere('name', '=', $roleName)
+        ->addSelect('permissions')
+        ->execute()->first()['permissions'] ?? [];
       $roleId = \Civi\Api4\Role::save(FALSE)
         ->setRecords([
           [
             'name' => $roleName,
             'label' => $roleName,
-            'permissions' => array_merge($perms, ['authenticate with password', 'authenticate with api key']),
+            'permissions' => array_values(array_unique(array_merge($existingPerms, $perms, ['authenticate with password', 'authenticate with api key']))),
             'is_active' => TRUE,
           ],
         ])
@@ -329,9 +348,11 @@ foreach ($apiUsers as $spec) {
     ->execute();
 
   $credentials[] = [$username, $password, $apiKey];
-  if (file_put_contents($credFile, "{$username}:{$password}:{$apiKey}\n", FILE_APPEND) === FALSE) {
-    throw new \RuntimeException("configure-api-users: cannot append to credentials file {$credFile}");
-  }
+  $credLines[$username] = "{$username}:{$password}:{$apiKey}";
+}
+
+if (file_put_contents($credFile, implode("\n", $credLines) . "\n") === FALSE) {
+  throw new \RuntimeException("configure-api-users: cannot write credentials file {$credFile}");
 }
 
 echo "     ✓ API users configured successfully\n\n";
