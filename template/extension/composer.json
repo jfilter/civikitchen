@@ -1,0 +1,9 @@
+{
+  "name": "civico/__EXTKEY__",
+  "description": "CiviCRM extension __EXTKEY__",
+  "type": "civicrm-ext",
+  "license": "AGPL-3.0-or-later",
+  "require": {
+    "php": ">=8.1"
+  }
+}
