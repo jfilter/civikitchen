@@ -46,6 +46,9 @@ audits and as the target state when modernizing an existing extension.
   artifacts committed (frontend builds commit only `dist/`).
 - Dev stack: `.docker/docker-compose.yml` on a civikitchen image.
 
+The tooling section is machine-checked by `ckconform` (run from the extension
+root) — CI should run it alongside cklint.
+
 ## Workflow
 
 `cklint` → `phpstan` → `CIVICRM_UF=UnitTests phpunit` locally and in CI;

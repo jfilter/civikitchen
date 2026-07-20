@@ -1,0 +1,91 @@
+#!/bin/bash
+#
+# ckconform — repo-conformance check for CiviCRM extensions against the
+# civikitchen template (template/extension/). Complements cklint (code style)
+# and phpstan (types): this checks the REPO STRUCTURE — the gaps that showed
+# up in every extension audit. Run from the extension root.
+#
+# Checks (each is a FAIL unless noted):
+#   - phpcs.xml.dist referencing the CiviKitchen standard
+#   - phpstan.neon.dist at level 10, no blanket ignores (warn), no baseline
+#   - phpunit.xml.dist present when tests/phpunit exists
+#   - tests/phpunit/bootstrap.php contains the TEST_DB_DSN guard
+#   - composer.json present
+#   - CI workflow present (.github/workflows/*.yml)
+#   - no committed build/cache artifacts (.phpunit.result.cache, node_modules)
+#
+set -uo pipefail
+
+fails=0
+warns=0
+fail() { echo "FAIL $1"; fails=$((fails + 1)); }
+warn() { echo "warn $1"; warns=$((warns + 1)); }
+ok()   { echo "ok   $1"; }
+
+[ -f info.xml ] || { echo "ckconform: no info.xml here — run from the extension root." >&2; exit 2; }
+
+# phpcs project layer
+if [ -f phpcs.xml.dist ] || [ -f phpcs.xml ]; then
+  if grep -q 'ref="CiviKitchen"' phpcs.xml.dist phpcs.xml 2>/dev/null; then
+    ok "phpcs config references the CiviKitchen standard"
+  else
+    fail "phpcs config exists but does not <rule ref=\"CiviKitchen\"/>"
+  fi
+else
+  fail "no phpcs.xml.dist (cklint has no project anchor)"
+fi
+
+# phpstan
+if [ -f phpstan.neon.dist ] || [ -f phpstan.neon ]; then
+  [ -f phpstan.neon.dist ] || warn "phpstan.neon should be phpstan.neon.dist (local overrides stay untracked)"
+  stan=$(cat phpstan.neon.dist phpstan.neon 2>/dev/null)
+  if echo "$stan" | grep -qE 'level:\s*(10|max)'; then
+    ok "phpstan at level 10"
+  else
+    fail "phpstan below level 10 (template: level 10, no baseline)"
+  fi
+  echo "$stan" | grep -qE 'class\.notFound|function\.notFound' \
+    && warn "phpstan has blanket notFound ignores — use the bootstrap instead"
+  ls phpstan-baseline* >/dev/null 2>&1 && fail "phpstan baseline file present (template: none)"
+else
+  fail "no phpstan.neon.dist"
+fi
+
+# phpunit + bootstrap guard
+if [ -d tests/phpunit ]; then
+  [ -f phpunit.xml.dist ] || fail "tests/phpunit exists but no phpunit.xml.dist"
+  if [ -f tests/phpunit/bootstrap.php ]; then
+    if grep -q 'TEST_DB_DSN' tests/phpunit/bootstrap.php; then
+      ok "test bootstrap has the TEST_DB_DSN guard"
+    else
+      fail "tests/phpunit/bootstrap.php lacks the TEST_DB_DSN guard — headless runs can wipe the dev DB"
+    fi
+  else
+    fail "no tests/phpunit/bootstrap.php"
+  fi
+else
+  warn "no headless test suite (tests/phpunit)"
+fi
+
+# metadata + CI
+[ -f composer.json ] || fail "no composer.json (extension metadata)"
+if ls .github/workflows/*.yml >/dev/null 2>&1; then
+  ok "CI workflow present"
+  grep -ql 'cklint\|phpcs' .github/workflows/*.yml || warn "CI has no lint step (cklint/phpcs)"
+else
+  fail "no CI workflow (.github/workflows/)"
+fi
+
+# committed artifacts
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  for bad in .phpunit.result.cache node_modules; do
+    if git ls-files --error-unmatch "$bad" >/dev/null 2>&1 \
+      || [ -n "$(git ls-files "*/$bad/*" 2>/dev/null | head -1)" ]; then
+      fail "build/cache artifact committed: $bad"
+    fi
+  done
+fi
+
+echo
+echo "ckconform: $fails failure(s), $warns warning(s)"
+[ "$fails" -eq 0 ]
