@@ -22,7 +22,22 @@
     is always yours.
   </description>
 
+  <!-- PHP only, everywhere: a bare `phpcbf` run with this standard must never
+       rewrite markdown/CSS/JS (it has mangled code fences in docs before),
+       and generated/vendored code is not ours to style. Project rulesets can
+       widen this, but the safe default lives here. -->
+  <arg name="extensions" value="php"/>
+  <exclude-pattern>*/vendor/*</exclude-pattern>
+  <exclude-pattern>*/node_modules/*</exclude-pattern>
+  <exclude-pattern>*/dist/*</exclude-pattern>
+  <exclude-pattern>*.civix.php</exclude-pattern>
+  <exclude-pattern>*/CRM/*/DAO/*</exclude-pattern>
+
   <rule ref="Drupal">
+    <!-- Deprecated CSS/MySource sniffs (removed in phpcs 4.0) — pointless
+         under the PHP-only scope above and noisy at registration time. -->
+    <exclude name="Squiz.CSS"/>
+    <exclude name="MySource.Debug.DebugCode"/>
     <exclude name="Drupal.Commenting.FunctionComment"/>
     <exclude name="Drupal.Commenting.VariableComment"/>
     <exclude name="Drupal.Commenting.HookComment"/>
