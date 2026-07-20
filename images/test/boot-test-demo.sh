@@ -236,7 +236,15 @@ if [ -z "${PROFILE}" ] && [ "${CK_SKIP_SITE_URL_TEST:-0}" != "1" ]; then
             check "entrypoint rewrote the base URL" \
                 "docker logs '${APP}-url' 2>&1 | grep -q 'Rewriting site base URL'"
             URLPAGE="$(mktemp)"
-            url_code=$(curl -s -o "${URLPAGE}" -w '%{http_code}' -L "http://127.0.0.1:${URLPORT}/" 2>/dev/null || echo 000)
+            # Healthy != reachable from the host: the published-port forward can
+            # lag the container healthcheck by a few seconds (seen on GH
+            # runners as an immediate 000/connection refused). Retry briefly.
+            url_code=000
+            for _ in 1 2 3 4 5 6; do
+                url_code=$(curl -s -o "${URLPAGE}" -w '%{http_code}' -L "http://127.0.0.1:${URLPORT}/" 2>/dev/null) || url_code=000
+                [ "${url_code}" = "200" ] && break
+                sleep 5
+            done
             check "site serves HTTP 200 on the mapped port (got ${url_code})" \
                 "[ '${url_code}' = '200' ]"
             # Any http://localhost/ (old base) left in the page means some URL
