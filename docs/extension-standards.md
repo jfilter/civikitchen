@@ -20,6 +20,9 @@ audits and as the target state when modernizing an existing extension.
 - Enforced (as a warning) by `CiviKitchen.Legacy.NoLegacyPageForm`; the sniff
   only sees the direct `extends`, so audits should still grep for `.tpl`
   templates and page routes.
+- Afform gotcha: `permission` in `*.aff.json` must be a **string** — an array
+  crashes route authorization with an `implode()` TypeError (seen on
+  Standalone 6.x).
 
 ## Code
 
