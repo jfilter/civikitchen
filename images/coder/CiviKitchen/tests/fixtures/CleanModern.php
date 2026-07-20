@@ -36,3 +36,15 @@ class CiviKitchenFixtureClean {
   }
 
 }
+
+/**
+ * Near-misses for NoLegacyPageForm: base names that merely RESEMBLE the
+ * banned ones, and the banned names in non-extends positions.
+ */
+class CiviKitchenFixtureCleanScreen extends CRM_Core_PageLike {
+
+  public function bases(): array {
+    return ['CRM_Core_Page', CRM_Core_Form::class];
+  }
+
+}

@@ -20,6 +20,7 @@ use PHPUnit\Framework\TestCase;
 final class SniffsTest extends TestCase {
 
   private const SNIFFS = 'CiviKitchen.Legacy.NoLegacyCall,'
+    . 'CiviKitchen.Legacy.NoLegacyPageForm,'
     . 'CiviKitchen.I18n.UseExtensionTs,'
     . 'CiviKitchen.Api.NoRequiredOnExternalAction,'
     . 'CiviKitchen.Extension.UseMixinsForStandardHooks,'
@@ -101,6 +102,19 @@ final class SniffsTest extends TestCase {
       12 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
       15 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
       18 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
+    ];
+    self::assertSame($expected, $findings);
+  }
+
+  public function testNoLegacyPageFormWarnsOnEveryDefaultLegacyUiBase(): void {
+    $findings = $this->phpcs('LegacyPageForm.php');
+
+    $expected = [
+      6 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
+      8 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
+      10 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
+      12 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
+      14 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
     ];
     self::assertSame($expected, $findings);
   }
