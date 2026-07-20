@@ -150,6 +150,17 @@ docker compose exec app bash -c "cd /var/www/html/ext/myextension && cklint --al
 
 Most extensions ship a `phpcs.xml.dist` that scopes the run to the right files and excludes generated DAOs — see `extensions/de.systopia.contract/phpcs.xml.dist` for a working reference.
 
+`ckconform` checks the repo STRUCTURE against the extension template — the
+gaps that show up in every audit: missing `phpcs.xml.dist`/`phpstan.neon.dist`
+(level 10)/`composer.json`/CI workflow, a test bootstrap without the
+`TEST_DB_DSN` guard, committed cache artifacts. Run it from the extension
+root; see [extension-standards.md](extension-standards.md) for the checklist
+it enforces.
+
+```bash
+docker compose exec app bash -c "cd /var/www/html/ext/myextension && ckconform"
+```
+
 ## Modernizing
 
 `ckmodernize` runs the bundled Rector setup from an extension root. By default

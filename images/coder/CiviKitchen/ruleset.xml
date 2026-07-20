@@ -29,5 +29,13 @@
     <exclude name="Drupal.Commenting.DataTypeNamespace"/>
   </rule>
 
+  <!-- Commented-out code (dead civix example blocks are an audit regular).
+       Threshold raised from the default 35% to cut prose false positives. -->
+  <rule ref="Squiz.PHP.CommentedOutCode">
+    <properties>
+      <property name="maxPercentage" value="60"/>
+    </properties>
+  </rule>
+
   <!-- Sniffs in this standard's Sniffs/ dir are auto-discovered. -->
 </ruleset>

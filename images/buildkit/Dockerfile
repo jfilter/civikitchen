@@ -97,12 +97,14 @@ COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # install-dev-tools.sh) and the cklint linter that runs it.
 COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
+# repo-conformance check against the extension template (structure, not style)
+COPY lib/ckconform /usr/local/bin/ckconform
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
 COPY lib/civikitchen-rector /opt/civikitchen-rector
 COPY lib/ckmodernize /usr/local/bin/ckmodernize
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
-    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckmodernize
+    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckmodernize
 
 # PHP runtime tuning — matches what civibuild expects for site builds.
 RUN { \
