@@ -6,7 +6,9 @@
     sniffs that fight modern PHPStan array-shape / generic PHPDocs (which
     PHPStan validates far more precisely), PLUS reusable footgun sniffs:
     NoLegacyCall (no APIv3 entry points, no CRM_Utils_Array::value /
-    PEAR::raiseError / CRM_Core_Error::fatal|debug_*), UseExtensionTs (bare
+    PEAR::raiseError / CRM_Core_Error::fatal|debug_*), NoLegacyPageForm
+    (warning on classes extending the QuickForm/Smarty UI bases — new UI
+    belongs in SearchKit/Afform), UseExtensionTs (bare
     ts() resolves in core's translation domain — extensions must use E::ts()),
     UseMixinsForStandardHooks (no bespoke managed/menu/settings/entity/angular
     hooks where standard mixins exist), NoRequiredOnExternalAction (the
