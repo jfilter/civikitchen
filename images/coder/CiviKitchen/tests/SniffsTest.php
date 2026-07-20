@@ -23,6 +23,7 @@ final class SniffsTest extends TestCase {
     . 'CiviKitchen.Legacy.NoLegacyPageForm,'
     . 'CiviKitchen.I18n.UseExtensionTs,'
     . 'CiviKitchen.Api.NoRequiredOnExternalAction,'
+    . 'CiviKitchen.Api.NoGenericVarOnActionParam,'
     . 'CiviKitchen.Extension.UseMixinsForStandardHooks,'
     . 'CiviKitchen.Files.MaxFileLength';
 
@@ -115,6 +116,19 @@ final class SniffsTest extends TestCase {
       10 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
       12 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
       14 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
+    ];
+    self::assertSame($expected, $findings);
+  }
+
+  public function testNoGenericVarOnActionParamFlagsRuntimeParsedGenerics(): void {
+    $findings = $this->phpcs('GenericActionVar.php');
+
+    // Flags: generic @var on params of Civi\Api4 classes extending *Action
+    // (lines 12 + 33). Not flagged: plain @var with @phpstan-var, inline
+    // @var inside a method body, non-Action base class.
+    $expected = [
+      12 => ['CiviKitchen.Api.NoGenericVarOnActionParam.GenericActionVar'],
+      33 => ['CiviKitchen.Api.NoGenericVarOnActionParam.GenericActionVar'],
     ];
     self::assertSame($expected, $findings);
   }
