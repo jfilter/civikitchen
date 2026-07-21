@@ -58,6 +58,22 @@ audits and as the target state when modernizing an existing extension.
   Afform, CiviRules …) — a missing `<ext>` only surfaces on a fresh site.
 - Dev stack: `.docker/docker-compose.yml` on a civikitchen image.
 
+## Tests and coverage
+
+- Every extension with PHP source needs `tests/phpunit`. A config-only
+  extension may opt out in `.ckconform` — `tests=optional -- <reason>` — and
+  the reason is not optional.
+- `phpunit.xml.dist` must declare a `<coverage>` section scoped to real
+  extension code (exclude the civix shim and DAO/BAO boilerplate). Without it
+  `--coverage-text` measures nothing while still looking like a passing gate.
+- CI runs the suite **with** coverage: `ckcoverage` (or at minimum
+  `phpunit --coverage-text`).
+- `ckcoverage` reports line coverage and fails below the `min_coverage` floor
+  in `.ckconform`. Adopt it in that order: **measure first, set the floor to
+  what you actually have, then ratchet it up.** A floor nobody measured only
+  teaches people to ignore a red build — and a floor must never be lowered to
+  turn one green.
+
 Licence declarations (`info.xml`, `composer.json`, every `package.json`) must
 agree with each other. *Which* licence is your policy, not this standard's, so
 pin the expected values in an optional `.ckconform` in the extension root and

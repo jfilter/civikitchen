@@ -70,8 +70,36 @@ if [ -d tests/phpunit ]; then
   else
     fail "no tests/phpunit/bootstrap.php"
   fi
+
+  # Coverage has to be measurable before it can be demanded: without a
+  # <coverage> section `phpunit --coverage-text` reports on nothing, which
+  # reads like a passing gate.
+  if grep -q '<coverage' phpunit.xml.dist phpunit.xml 2>/dev/null; then
+    ok "phpunit config declares coverage sources"
+  else
+    fail "phpunit config has no <coverage> section — coverage runs measure nothing"
+  fi
+  if ls .github/workflows/*.yml >/dev/null 2>&1 \
+    && ! grep -q 'coverage\|ckcoverage' .github/workflows/*.yml 2>/dev/null; then
+    warn "CI runs tests without coverage — add ckcoverage (or phpunit --coverage-text)"
+  fi
 else
-  warn "no headless test suite (tests/phpunit)"
+  # A repo with real PHP logic and no suite is a gap, not a style preference.
+  # Config-only extensions can say so in .ckconform: tests=optional -- <reason>
+  optout=$(sed -n 's/^tests=//p' .ckconform 2>/dev/null | head -1)
+  # Count the real source surface: Civi/, CRM/ AND the extension's own root
+  # .php file, where a config-only extension keeps all of its logic.
+  phpfiles=$(
+    { find Civi CRM -name '*.php' 2>/dev/null; ls ./*.php 2>/dev/null; } \
+      | grep -vE '\.civix\.php|/DAO/|/BAO/|phpstanBootstrap\.php' | wc -l | tr -d ' '
+  )
+  if [ -n "$optout" ]; then
+    ok "no test suite — declared optional in .ckconform ($optout)"
+  elif [ "${phpfiles:-0}" -gt 0 ]; then
+    fail "no test suite (tests/phpunit) but $phpfiles PHP source file(s) — add tests, or declare 'tests=optional -- <reason>' in .ckconform"
+  else
+    ok "no test suite — no PHP source to cover"
+  fi
 fi
 
 # metadata + CI
