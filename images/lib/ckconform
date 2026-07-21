@@ -109,6 +109,32 @@ if ls .github/workflows/*.yml >/dev/null 2>&1; then
   [ -n "$floating" ] && warn "CI pins nothing (floating :latest): $(echo "$floating" | head -1 | cut -c1-70)"
 fi
 
+# lockfiles: a tracked manifest without a tracked lockfile means nobody can
+# reproduce a build — least of all the CI run that shipped the bundle. The
+# frozen install form is what makes the lockfile binding, so check it too.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  for manifest in $(git ls-files '*package.json' | grep -v node_modules); do
+    dir=$(dirname "$manifest")
+    found=""
+    for lock in package-lock.json yarn.lock pnpm-lock.yaml bun.lock bun.lockb; do
+      git ls-files --error-unmatch "${dir}/${lock}" >/dev/null 2>&1 && found="$lock"
+    done
+    [ -n "$found" ] || fail "$manifest has no tracked lockfile (builds are unreproducible)"
+  done
+  git ls-files composer.json >/dev/null 2>&1 \
+    && [ -n "$(sed -n '/"require"/,/}/p' composer.json 2>/dev/null | grep -vE '"(require|php)"|^\s*[}{]')" ] \
+    && ! git ls-files --error-unmatch composer.lock >/dev/null 2>&1 \
+    && fail "composer.json declares dependencies but composer.lock is not tracked"
+  for ignored in package-lock.json yarn.lock pnpm-lock.yaml bun.lock composer.lock; do
+    grep -qE "^/?${ignored//./\\.}$|/${ignored//./\\.}$" .gitignore 2>/dev/null \
+      && fail ".gitignore excludes $ignored — lockfiles belong in the repo"
+  done
+  if ls .github/workflows/*.yml >/dev/null 2>&1; then
+    grep -qE '(^|\s)npm install(\s|$)' .github/workflows/*.yml 2>/dev/null \
+      && warn "CI runs 'npm install' — use 'npm ci' so the lockfile is binding"
+  fi
+fi
+
 # committed artifacts
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   for bad in .phpunit.result.cache node_modules vendor; do
