@@ -32,6 +32,7 @@ final class Registry
         Check\LicensingUrlCheck::class,
         Check\NpmLicenseCheck::class,
         Check\FloatingTagCheck::class,
+        Check\ComposeFloatingTagCheck::class,
         Check\WorkflowPermissionsCheck::class,
         Check\FrontEndApi3Check::class,
         Check\Api4EntityCheck::class,
