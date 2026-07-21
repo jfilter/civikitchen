@@ -97,7 +97,11 @@ COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # install-dev-tools.sh) and the cklint linter that runs it.
 COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
-# repo-conformance check against the extension template (structure, not style)
+# repo-conformance check against the extension template (structure, not style).
+# A PHP application, not a script: it parses info.xml as XML and the manifests as
+# JSON, which is what the shell version kept getting wrong. `ckconform` in PATH
+# stays a thin shim so every caller and CI job is unaffected.
+COPY ckconform /opt/civikitchen-ckconform
 COPY lib/ckconform /usr/local/bin/ckconform
 # coverage gate: runs the suite with clover and enforces .ckconform's min_coverage
 COPY lib/ckcoverage /usr/local/bin/ckcoverage
