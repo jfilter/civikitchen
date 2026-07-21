@@ -103,4 +103,41 @@ final class GitignoreCoverageCheckTest extends CheckTestCase
         self::assertStringContainsString('.phpunit.result.cache', $message);
         self::assertStringContainsString('vendor/', $message);
     }
+
+    /**
+     * The exact pattern that let inflow track a build cache: TypeScript names
+     * the file after its tsconfig, so 'frontend/.tsbuildinfo' matches nothing.
+     * The first version of this check accepted it — the very bug it was written
+     * to catch.
+     */
+    public function testTheBrokenTsbuildinfoPatternIsNotAccepted(): void
+    {
+        $context = $this->repo([
+            'tsconfig.json' => '{}',
+            'package.json' => '{"name":"x"}',
+            '.gitignore' => "node_modules\nfrontend/.tsbuildinfo\n",
+        ], git: true);
+        $this->assertFails($this->run_(new GitignoreCoverageCheck(), $context), '*.tsbuildinfo');
+    }
+
+    /** A negation un-ignores; it must not read as coverage. */
+    public function testANegationIsNotCoverage(): void
+    {
+        $context = $this->repo([
+            'phpunit.xml.dist' => '<phpunit/>',
+            '.gitignore' => "!.phpunit.result.cache\n",
+        ], git: true);
+        $this->assertFails($this->run_(new GitignoreCoverageCheck(), $context), '.phpunit.result.cache');
+    }
+
+    /** A nested cache has to be covered too, not just one at the root. */
+    public function testANestedTsbuildinfoCounts(): void
+    {
+        $context = $this->repo([
+            'tsconfig.json' => '{}',
+            'package.json' => '{"name":"x"}',
+            '.gitignore' => "node_modules\n*.tsbuildinfo\n",
+        ], git: true);
+        $this->assertPasses($this->run_(new GitignoreCoverageCheck(), $context));
+    }
 }

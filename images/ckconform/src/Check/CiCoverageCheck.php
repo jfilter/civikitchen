@@ -35,10 +35,35 @@ final class CiCoverageCheck implements Check
             return;
         }
 
+        $ran = '';
         foreach ($workflows as $workflow) {
-            if (str_contains($context->read($workflow) ?? '', 'coverage')) {
-                return;
+            $contents = $context->read($workflow) ?? '';
+            if (preg_match('/(^|[^\w-])ckcoverage([^\w-]|$)/', $contents) === 1) {
+                $ran = 'ckcoverage';
+                break;
             }
+            if (str_contains($contents, '--coverage-')) {
+                $ran = 'report-only';
+            }
+        }
+
+        // A declared floor with nothing to enforce it is the worst of both: the
+        // number reads like a gate and stops nothing. Eight repos carried a
+        // min_coverage while CI ran `phpunit --coverage-text`, which prints a
+        // percentage and always exits 0.
+        if ($context->policyValue('min_coverage') !== null && $ran !== 'ckcoverage') {
+            $reporter->fail(
+                '.ckconform sets min_coverage but no workflow runs ckcoverage — '
+                . ($ran === 'report-only'
+                    ? 'phpunit --coverage-* only reports, it never fails'
+                    : 'nothing measures coverage at all')
+            );
+
+            return;
+        }
+
+        if ($ran !== '') {
+            return;
         }
 
         $reporter->warn('CI runs tests without coverage — add ckcoverage (or phpunit --coverage-text)');

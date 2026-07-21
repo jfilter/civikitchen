@@ -54,4 +54,40 @@ final class CiCoverageCheckTest extends CheckTestCase
         ]);
         $this->assertSilent($this->run_(new CiCoverageCheck(), $context));
     }
+
+    /**
+     * The failure this rule exists for: eight repos declared a min_coverage
+     * while CI ran `phpunit --coverage-text`, which prints a percentage and
+     * always exits 0. A floor nothing enforces reads like a gate and stops
+     * nothing.
+     */
+    public function testADeclaredFloorWithoutCkcoverageFails(): void
+    {
+        $context = $this->repo([
+            '.ckconform' => "min_coverage=54\n",
+            'tests/phpunit/SomeTest.php' => '<?php',
+            '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: phpunit --coverage-text tests/phpunit\n",
+        ]);
+        $this->assertFails($this->run_(new CiCoverageCheck(), $context), 'it never fails');
+    }
+
+    public function testADeclaredFloorWithCkcoveragePasses(): void
+    {
+        $context = $this->repo([
+            '.ckconform' => "min_coverage=54\n",
+            'tests/phpunit/SomeTest.php' => '<?php',
+            '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: ckcoverage tests/phpunit\n",
+        ]);
+        $this->assertPasses($this->run_(new CiCoverageCheck(), $context));
+    }
+
+    /** No floor declared: reporting-only coverage is still acceptable. */
+    public function testWithoutAFloorReportingCoverageIsEnough(): void
+    {
+        $context = $this->repo([
+            'tests/phpunit/SomeTest.php' => '<?php',
+            '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: phpunit --coverage-text\n",
+        ]);
+        $this->assertPasses($this->run_(new CiCoverageCheck(), $context));
+    }
 }

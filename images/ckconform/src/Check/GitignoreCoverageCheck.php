@@ -25,16 +25,11 @@ use CiviKitchen\Ckconform\Reporter;
 final class GitignoreCoverageCheck implements Check
 {
     /**
-     * pattern => [needle in .gitignore, what makes it relevant]
+     * pattern => [representative paths git is asked about, what makes it relevant]
      *
      * @var array<string, array{0: list<string>, 1: string}>
      */
-    private const ARTIFACTS = [
-        '.phpunit.result.cache' => [['.phpunit.result.cache'], 'phpunit'],
-        'vendor/' => [['vendor'], 'composer'],
-        'node_modules/' => [['node_modules'], 'npm'],
-        '*.tsbuildinfo' => [['tsbuildinfo'], 'typescript'],
-    ];
+    private const ARTIFACTS = ['.phpunit.result.cache', 'vendor/', 'node_modules/', '*.tsbuildinfo'];
 
     public function name(): string
     {
@@ -48,21 +43,18 @@ final class GitignoreCoverageCheck implements Check
             return;
         }
 
-        $lines = $this->ignoreLines($context);
         $missing = [];
-
-        foreach (self::ARTIFACTS as $pattern => [$needles, $producer]) {
-            if (!$this->produces($context, $producer)) {
+        foreach (self::ARTIFACTS as $pattern) {
+            $samples = $this->samplesFor($context, $pattern);
+            if ($samples === []) {
                 continue;
             }
-            foreach ($needles as $needle) {
-                foreach ($lines as $line) {
-                    if (str_contains($line, $needle)) {
-                        continue 3;
-                    }
+            foreach ($samples as $sample) {
+                if (!$this->isIgnored($context, $sample)) {
+                    $missing[] = $pattern;
+                    break;
                 }
             }
-            $missing[] = $pattern;
         }
 
         if ($missing !== []) {
@@ -75,35 +67,73 @@ final class GitignoreCoverageCheck implements Check
     }
 
     /**
-     * Whether the repo can generate a given artifact at all. Demanding an ignore
-     * for something that can never appear is the kind of noise that teaches
-     * people to stop reading the output.
+     * Where this artifact would actually appear, if anywhere.
+     *
+     * Derived from the real manifest locations rather than assumed at the repo
+     * root: npm creates node_modules beside the package.json that declared it,
+     * and TypeScript writes its cache beside its tsconfig. Demanding a
+     * root-level ignore for a repo whose frontend lives in frontend/ is a false
+     * positive, and noise is how a checker teaches people to stop reading it.
+     *
+     * An empty list means the repo cannot produce the artifact at all.
+     *
+     * @return list<string>
      */
-    private function produces(Context $context, string $producer): bool
+    private function samplesFor(Context $context, string $pattern): array
     {
-        return match ($producer) {
-            'phpunit' => $context->exists('phpunit.xml.dist') || $context->exists('phpunit.xml'),
-            'composer' => $context->exists('composer.json'),
-            'npm' => $context->tracked('*package.json', static fn (string $f): bool
-                => !str_contains($f, 'node_modules')) !== [],
-            'typescript' => $context->tracked('tsconfig*.json') !== [],
-            default => false,
+        $dirs = static function (array $files): array {
+            $out = [];
+            foreach ($files as $file) {
+                $dir = dirname($file);
+                $out[$dir === '.' ? '' : $dir . '/'] = TRUE;
+            }
+
+            return array_keys($out);
         };
+
+        switch ($pattern) {
+            case '.phpunit.result.cache':
+                return ($context->exists('phpunit.xml.dist') || $context->exists('phpunit.xml'))
+                    ? ['.phpunit.result.cache'] : [];
+
+            case 'vendor/':
+                return $context->exists('composer.json') ? ['vendor/autoload.php'] : [];
+
+            case 'node_modules/':
+                $manifests = $context->tracked('*package.json', static fn (string $f): bool
+                    => !str_contains($f, 'node_modules'));
+
+                return array_map(
+                    static fn (string $d): string => $d . 'node_modules/left-pad/package.json',
+                    $dirs($manifests)
+                );
+
+            case '*.tsbuildinfo':
+                return array_map(
+                    static fn (string $d): string => $d . 'tsconfig.tsbuildinfo',
+                    $dirs($context->tracked('tsconfig*.json'))
+                );
+        }
+
+        return [];
     }
 
     /**
-     * @return list<string>
+     * Whether git would ignore this path — asked of git, not guessed from the
+     * file.
+     *
+     * The first cut looked for a substring in .gitignore. It therefore accepted
+     * 'frontend/.tsbuildinfo', the exact broken pattern that let inflow track a
+     * build cache and that this check was written to catch — and it accepted a
+     * '!' negation, which does the opposite of ignoring. git resolves patterns,
+     * precedence, negation and nested .gitignore files; nothing else does.
      */
-    private function ignoreLines(Context $context): array
+    private function isIgnored(Context $context, string $path): bool
     {
-        $lines = [];
-        foreach (explode("\n", $context->read('.gitignore') ?? '') as $line) {
-            $line = trim($line);
-            if ($line !== '' && !str_starts_with($line, '#')) {
-                $lines[] = $line;
-            }
-        }
+        $command = 'git -C ' . escapeshellarg($context->root)
+            . ' check-ignore -q ' . escapeshellarg($path) . ' 2>/dev/null';
+        exec($command, $output, $status);
 
-        return $lines;
+        return $status === 0;
     }
 }
