@@ -18,3 +18,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# TypeScript's incremental build cache (named after the tsconfig it belongs
+# to, so a bare '.tsbuildinfo' pattern misses it)
+*.tsbuildinfo
