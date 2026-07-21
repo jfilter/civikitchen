@@ -99,12 +99,14 @@ COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
 # repo-conformance check against the extension template (structure, not style)
 COPY lib/ckconform /usr/local/bin/ckconform
+# coverage gate: runs the suite with clover and enforces .ckconform's min_coverage
+COPY lib/ckcoverage /usr/local/bin/ckcoverage
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
 COPY lib/civikitchen-rector /opt/civikitchen-rector
 COPY lib/ckmodernize /usr/local/bin/ckmodernize
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
-    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckmodernize
+    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage /usr/local/bin/ckmodernize
 
 # PHP runtime tuning — matches what civibuild expects for site builds.
 RUN { \

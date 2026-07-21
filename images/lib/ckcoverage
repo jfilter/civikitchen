@@ -1,0 +1,70 @@
+#!/bin/bash
+#
+# ckcoverage — run the headless suite with line coverage and enforce a floor.
+#
+# Complements cklint (style), phpstan (types) and ckconform (structure): those
+# all pass happily on code no test ever executed. Run from the extension root,
+# inside a civikitchen container (needs pcov/xdebug + the extension enabled).
+#
+# The floor is POLICY, so it lives in the consuming repo, not in this tool:
+#
+#     # .ckconform
+#     min_coverage=70
+#
+# Without min_coverage the percentage is reported and the run always passes —
+# that is the intended way to adopt this: measure first, then set the floor to
+# what you actually have, then ratchet it up. A floor that was never measured
+# only teaches people to ignore a red build.
+#
+set -uo pipefail
+
+[ -f info.xml ] || { echo "ckcoverage: no info.xml here — run from the extension root." >&2; exit 2; }
+[ -f phpunit.xml.dist ] || [ -f phpunit.xml ] || { echo "ckcoverage: no phpunit config." >&2; exit 2; }
+grep -q '<coverage' phpunit.xml.dist phpunit.xml 2>/dev/null || {
+  echo "ckcoverage: phpunit config declares no <coverage> section — nothing to measure." >&2
+  exit 2
+}
+
+clover=$(mktemp /tmp/ckcoverage-XXXXXX.xml)
+trap 'rm -f "$clover"' EXIT
+
+echo "ckcoverage: running the suite with coverage (this is slower than a plain run) ..."
+CIVICRM_UF=${CIVICRM_UF:-UnitTests} phpunit --coverage-clover "$clover" "$@" >/tmp/ckcoverage-run.log 2>&1
+run_status=$?
+if [ "$run_status" -ne 0 ]; then
+  echo "ckcoverage: the test suite itself failed — coverage is meaningless until it passes." >&2
+  tail -25 /tmp/ckcoverage-run.log >&2
+  exit "$run_status"
+fi
+
+[ -s "$clover" ] || { echo "ckcoverage: phpunit produced no clover report (is pcov/xdebug loaded?)" >&2; exit 2; }
+
+# Clover totals live on the last <metrics> element of the report.
+read -r covered total < <(php -r '
+  $xml = simplexml_load_file($argv[1]);
+  $m = $xml->project->metrics ?? NULL;
+  if ($m === NULL) { fwrite(STDERR, "no project metrics in clover\n"); exit(2); }
+  printf("%d %d", (int) $m["coveredstatements"], (int) $m["statements"]);
+' "$clover")
+
+if [ "${total:-0}" -eq 0 ]; then
+  echo "ckcoverage: zero executable statements measured — check the <coverage> include paths." >&2
+  exit 2
+fi
+
+pct=$(php -r 'printf("%.2f", $argv[1] * 100 / $argv[2]);' "$covered" "$total")
+echo "ckcoverage: ${pct}% line coverage (${covered}/${total} statements)"
+
+floor=""
+[ -f .ckconform ] && floor=$(sed -n 's/^min_coverage=//p' .ckconform | head -1)
+if [ -z "$floor" ]; then
+  echo "ckcoverage: no min_coverage in .ckconform — reporting only. Set it to what you have now, then ratchet."
+  exit 0
+fi
+
+if php -r 'exit($argv[1] + 0 >= $argv[2] + 0 ? 0 : 1);' "$pct" "$floor"; then
+  echo "ckcoverage: floor ${floor}% met."
+else
+  echo "ckcoverage: FAIL — ${pct}% is below the ${floor}% floor from .ckconform." >&2
+  exit 1
+fi
