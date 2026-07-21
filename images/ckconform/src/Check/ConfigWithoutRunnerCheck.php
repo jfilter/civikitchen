@@ -30,6 +30,9 @@ final class ConfigWithoutRunnerCheck implements Check
      * @var array<string, array{0: list<string>, 1: string}>
      */
     private const CONFIGS = [
+        // Either runner invokes the CiviKitchen standard — repos split between
+        // calling phpcs directly and the cklint wrapper, and both count.
+        'phpcs.xml.dist' => [['phpcs', 'cklint'], 'phpcs'],
         'phpstan.neon.dist' => [['phpstan'], 'phpstan'],
         'phpstan.neon' => [['phpstan'], 'phpstan'],
         'phpunit.xml.dist' => [['phpunit', 'ckcoverage'], 'phpunit'],
