@@ -76,14 +76,48 @@ else
   fail "no CI workflow (.github/workflows/)"
 fi
 
+# declared dependencies vs. what the code actually uses. A missing <ext> only
+# bites on a fresh site (the extension installs, then fatals on a SearchKit
+# entity that isn't there), so nothing catches it during normal development.
+extkey=$(sed -n 's/.*<extension[^>]*key="\([^"]*\)".*/\1/p' info.xml | head -1)
+requires=$(tr -d '\n' < info.xml | sed -n 's/.*<requires>\(.*\)<\/requires>.*/\1/p')
+needs_ext() { # needs_ext <ext-key> <human reason>
+  echo "$requires" | grep -q "$1" \
+    || fail "info.xml does not <requires> $1 — $2"
+}
+# -r/find rather than a shallow glob: repos nest these (ang/afform/*.aff.html).
+grep -rlq "'SavedSearch'\|'SearchDisplay'" managed 2>/dev/null \
+  && needs_ext org.civicrm.search_kit "managed/ ships SavedSearch/SearchDisplay entities"
+[ -n "$(find ang -name '*.aff.html' -o -name '*.aff.json' 2>/dev/null | head -1)" ] \
+  && needs_ext org.civicrm.afform "ang/ ships Afforms"
+grep -rlq "extends CRM_Civirules_\|extends CRM_CivirulesActions_" . --include='*.php' 2>/dev/null \
+  && needs_ext org.civicoop.civirules "PHP extends CiviRules base classes"
+
+# LICENSE.txt scaffolding leftovers: civix writes the key of whatever extension
+# the file was copied from, and a FIXME copyright holder.
+if [ -f LICENSE.txt ]; then
+  pkg=$(sed -n 's/^Package: *//p' LICENSE.txt | head -1)
+  [ -n "$pkg" ] && [ -n "$extkey" ] && [ "$pkg" != "$extkey" ] \
+    && fail "LICENSE.txt says 'Package: $pkg' but info.xml key is '$extkey' (copied skeleton)"
+  grep -q FIXME LICENSE.txt && warn "LICENSE.txt still contains FIXME (copyright holder unfilled)"
+fi
+
+# floating tags in CI: ':latest' and 'releases/latest/download' make a green run
+# unreproducible and a red one unattributable.
+if ls .github/workflows/*.yml >/dev/null 2>&1; then
+  floating=$(grep -n 'image:.*:latest\|releases/latest/download' .github/workflows/*.yml 2>/dev/null | head -3)
+  [ -n "$floating" ] && warn "CI pins nothing (floating :latest): $(echo "$floating" | head -1 | cut -c1-70)"
+fi
+
 # committed artifacts
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  for bad in .phpunit.result.cache node_modules; do
+  for bad in .phpunit.result.cache node_modules vendor; do
     if git ls-files --error-unmatch "$bad" >/dev/null 2>&1 \
-      || [ -n "$(git ls-files "*/$bad/*" 2>/dev/null | head -1)" ]; then
+      || [ -n "$(git ls-files "$bad/" "*/$bad/*" 2>/dev/null | head -1)" ]; then
       fail "build/cache artifact committed: $bad"
     fi
   done
+  [ -f .gitignore ] || fail "no .gitignore (build output and vendor/ land in git)"
 fi
 
 echo

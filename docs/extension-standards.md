@@ -20,9 +20,11 @@ audits and as the target state when modernizing an existing extension.
 - Enforced (as a warning) by `CiviKitchen.Legacy.NoLegacyPageForm`; the sniff
   only sees the direct `extends`, so audits should still grep for `.tpl`
   templates and page routes.
-- Afform gotcha: `permission` in `*.aff.json` must be a **string** — an array
-  crashes route authorization with an `implode()` TypeError (seen on
-  Standalone 6.x).
+- Afform: `permission` in `*.aff.json` is declared `data_type => Array` in core
+  (`Civi\Api4\Afform`), and all 36 afforms core ships use the list form
+  `["access foo"]`. Prefer it. A plain string is tolerated but non-canonical —
+  core silently `explode(',')`s it, so a permission name containing a comma
+  would be split into two.
 
 ## Code
 
