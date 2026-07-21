@@ -28,6 +28,7 @@ final class Registry
         Check\CiWorkflowCheck::class,
         Check\ConfigWithoutRunnerCheck::class,
         Check\RequiredExtensionsCheck::class,
+        Check\MixinDeclarationCheck::class,
         Check\LicenseSkeletonCheck::class,
         Check\LicenseCoherenceCheck::class,
         Check\CopyrightCheck::class,
