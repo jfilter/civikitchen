@@ -240,23 +240,46 @@ fi
 # only lands in a later release) and every static check stays green — the page
 # just fatals in production. Only checkable where core is on disk, i.e. inside
 # a civikitchen container.
+#
+# Existence alone is not enough: the container may run a newer core than the
+# customer does. An entity carries @since in its class docblock, so compare that
+# against the version this extension claims to support. Without it a check that
+# happens to run on a 6.17 build waves through code that fatals on 6.16.
 core_dir=${CIVICRM_CORE_DIR:-/var/www/html/core}
 if [ -d "$core_dir/Civi/Api4" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  missing=""
+  declared_ver=$(sed -n 's/.*<ver>\(.*\)<\/ver>.*/\1/p' info.xml | head -1)
+  missing=""; too_new=""
   for entity in $(git ls-files '*.php' | grep -vE '/DAO/|\.civix\.php' \
       | xargs grep -hoE '\\Civi\\Api4\\[A-Z][A-Za-z0-9_]*' 2>/dev/null \
       | sed 's/.*\\//' | sort -u); do
     case "$entity" in Generic|Action|Utils|Query|Service|Event) continue ;; esac
+    # Entities the extension defines itself are its own business.
+    find . -path "*Civi/Api4/$entity.php" 2>/dev/null | grep -q . && continue
     found=$(find "$core_dir/Civi/Api4/$entity.php" "$core_dir/ext" "$core_dir/../ext" \
       -maxdepth 6 -name "$entity.php" -path '*Civi/Api4*' 2>/dev/null | head -1)
-    [ -n "$found" ] && continue
-    find . -path "*Civi/Api4/$entity.php" 2>/dev/null | grep -q . && continue
-    missing="$missing $entity"
+    if [ -z "$found" ]; then
+      missing="$missing $entity"
+      continue
+    fi
+    [ -n "$declared_ver" ] || continue
+    # Portable BRE: BSD sed has no \+, and silently yields nothing for it — which
+    # would make this check pass on every entity instead of failing loudly.
+    since=$(sed -n 's/.*@since[[:space:]][[:space:]]*\([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' "$found" | head -1)
+    [ -n "$since" ] || continue
+    # sort -V puts the lower version first; if that is not @since, we are older.
+    if [ "$(printf '%s\n%s\n' "$since" "$declared_ver" | sort -V | head -1)" != "$since" ]; then
+      too_new="$too_new $entity(@since $since)"
+    fi
   done
   if [ -n "$missing" ]; then
     fail "APIv4 entities referenced but not found in core or this extension:$missing"
   else
     ok "every referenced APIv4 entity exists"
+  fi
+  if [ -n "$too_new" ]; then
+    fail "APIv4 entities newer than the declared <ver>$declared_ver</ver>:$too_new — they fatal on every supported site below that"
+  elif [ -n "$declared_ver" ]; then
+    ok "every referenced APIv4 entity exists as of the declared core $declared_ver"
   fi
 fi
 
