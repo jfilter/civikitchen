@@ -34,6 +34,16 @@ jobs:
           done < <(find images -name '*.php' -print0)
           [ "$rc" = 0 ] && echo "php syntax clean"
 
+      # ckconform is the tool that tells eleven repos what is wrong with them,
+      # and its 213 fixture tests ran nowhere but on a laptop. Most of its
+      # checks are silent on success, so a rule that quietly stops matching
+      # looks exactly like a clean repo — the tests are the only thing that
+      # tells the difference. It has no composer dependencies, hence the phar.
+      - name: ckconform test suite
+        run: |
+          curl -fsSLo /tmp/phpunit.phar https://phar.phpunit.de/phpunit-9.6.35.phar
+          php /tmp/phpunit.phar -c images/ckconform/phpunit.xml.dist
+
       - name: profile.json valid against schema
         # packages/civicrm-profile-schema/profile.schema.json is the canonical spec
         # for the profile format (draft 2020-12), published as @jfilter/civicrm-
