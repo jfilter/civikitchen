@@ -134,6 +134,11 @@ final class Api4EntityCheck implements Check
             if ($source === null || !str_contains($source, 'Civi\\Api4\\')) {
                 continue;
             }
+            // Strip comments first: `\Civi\Api4\Xxx` written in a docblock to
+            // name the pattern in prose ("rather than the concrete \Civi\Api4\Xxx
+            // classes") is not a reference to an entity, and Xxx does not exist.
+            // A check tripped by prose is the mirror of one satisfied by it.
+            $source = $this->withoutComments($source);
             // Fully qualified (\Civi\Api4\Foo) or imported (use Civi\Api4\Foo).
             // A bare `Civi\Api4\Foo` without the leading backslash is NOT a
             // reference to the entity — inside a namespaced file it resolves
@@ -150,6 +155,27 @@ final class Api4EntityCheck implements Check
         sort($names);
 
         return $names;
+    }
+
+    /**
+     * PHP source with comment bodies blanked, so an entity named only in prose
+     * is not read as a reference. Through the tokenizer, since a regex cannot
+     * tell a `//` inside a string from one that starts a comment.
+     */
+    private function withoutComments(string $source): string
+    {
+        $out = '';
+        foreach (token_get_all($source) as $token) {
+            if (is_array($token) && ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT)) {
+                // Keep newlines so line-based tooling and @since parsing elsewhere
+                // still line up; drop everything else in the comment.
+                $out .= str_repeat("\n", substr_count($token[1], "\n"));
+                continue;
+            }
+            $out .= is_array($token) ? $token[1] : $token;
+        }
+
+        return $out;
     }
 
     private function definedLocally(Context $context, string $entity): bool
