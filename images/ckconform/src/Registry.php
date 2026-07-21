@@ -35,6 +35,7 @@ final class Registry
         Check\FloatingTagCheck::class,
         Check\ComposeFloatingTagCheck::class,
         Check\ComposeProjectNameCheck::class,
+        Check\PlaywrightDiagnosticsCheck::class,
         Check\WorkflowPermissionsCheck::class,
         Check\FrontEndApi3Check::class,
         Check\Api4EntityCheck::class,
