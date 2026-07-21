@@ -58,11 +58,19 @@ audits and as the target state when modernizing an existing extension.
   phpunit → phpstan; add cklint).
 - `composer.json` with the extension metadata; no `node_modules`/`vendor`/build
   artifacts committed (frontend builds commit only `dist/`).
+- `.gitignore` covers every artifact the repo can regenerate — the phpunit
+  result cache, `vendor/`, `node_modules/`, `*.tsbuildinfo`. `ckconform` demands
+  only what the repo can actually produce, and only those: nagging a PHP-only
+  extension about `node_modules` is how a checker teaches people to stop reading
+  it. Prevention, not detection — phpunit writes its cache next to the config on
+  every run, so a `git add -A` right after a test run commits it.
 - **Lockfiles are committed** — every tracked `package.json` needs its
   `package-lock.json`/`bun.lock`/…, and a `composer.json` with real
   dependencies needs its `composer.lock`. Never `.gitignore` one: without it
   nobody can reproduce the build that shipped, and a red CI run cannot be told
-  from a moved dependency. CI installs with the frozen form (`npm ci`).
+  from a moved dependency. CI installs with the frozen form (`npm ci`). This is
+  the exact counterpart of the rule above: ignore what a build regenerates,
+  commit what pins it.
 - `info.xml` `<requires>` naming every extension actually used (SearchKit,
   Afform, CiviRules …) — a missing `<ext>` only surfaces on a fresh site.
 - Dev stack: `.docker/docker-compose.yml` on a civikitchen image.

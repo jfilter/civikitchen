@@ -39,6 +39,7 @@ final class Registry
         Check\NpmInstallCheck::class,
         Check\CommittedArtifactCheck::class,
         Check\GitignoreCheck::class,
+        Check\GitignoreCoverageCheck::class,
     ];
 
     /** @return list<Check> */
