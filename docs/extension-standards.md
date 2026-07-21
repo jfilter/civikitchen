@@ -58,6 +58,18 @@ audits and as the target state when modernizing an existing extension.
   Afform, CiviRules …) — a missing `<ext>` only surfaces on a fresh site.
 - Dev stack: `.docker/docker-compose.yml` on a civikitchen image.
 
+Licence declarations (`info.xml`, `composer.json`, every `package.json`) must
+agree with each other. *Which* licence is your policy, not this standard's, so
+pin the expected values in an optional `.ckconform` in the extension root and
+`ckconform` will enforce them — that file lives in your repo, so a private
+policy never has to be published here:
+
+```
+license=Proprietary          # info.xml <license> + composer.json
+npm_license=UNLICENSED       # every tracked package.json
+copyright=Example Ltd        # must appear in LICENSE.txt
+```
+
 The tooling section is machine-checked by `ckconform` (run from the extension
 root) — CI should run it alongside cklint.
 
