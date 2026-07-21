@@ -73,7 +73,14 @@ audits and as the target state when modernizing an existing extension.
   commit what pins it.
 - `info.xml` `<requires>` naming every extension actually used (SearchKit,
   Afform, CiviRules …) — a missing `<ext>` only surfaces on a fresh site.
-- Dev stack: `.docker/docker-compose.yml` on a civikitchen image.
+- Dev stack: `.docker/docker-compose.yml` on a civikitchen image. **Every image
+  in it is pinned** — a bare `image: mariadb` is `:latest` spelled shorter.
+  Floating tags in a workflow make a run unattributable; floating tags in the
+  stack CI boots stop the run happening at all. On 2026-07-06 `maildev:latest`
+  moved to a release candidate whose healthcheck queries a route its own app
+  answers with 404, and six stacks stopped coming up with no diff to point at.
+  The project's own image is the one exception: it is referenced through
+  `${CIVIKITCHEN_IMAGE:-…}` and is meant to track its tag.
 - Every workflow declares a `permissions:` block. Without one the job token
   inherits the repository default, which on older repos and orgs is write-all —
   a lint job does not need to be able to push. Set it per job where a step
