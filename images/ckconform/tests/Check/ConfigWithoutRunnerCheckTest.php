@@ -44,6 +44,28 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         $this->assertPasses($this->run_(new ConfigWithoutRunnerCheck(), $context));
     }
 
+    /** A phpcs.xml.dist that no job runs — style and the footgun sniffs go unenforced. */
+    public function testAPhpcsConfigNobodyRunsFails(): void
+    {
+        $context = $this->repo([
+            'phpcs.xml.dist' => '<ruleset/>',
+            '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: phpstan analyse\n",
+        ], git: true);
+        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpcs.xml.dist');
+    }
+
+    /** The cklint wrapper counts as running phpcs, as does phpcs directly. */
+    public function testCklintOrPhpcsCountsAsThePhpcsRunner(): void
+    {
+        foreach (['cklint --all', 'phpcs'] as $runner) {
+            $context = $this->repo([
+                'phpcs.xml.dist' => '<ruleset/>',
+                '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: {$runner}\n",
+            ], git: true);
+            $this->assertPasses($this->run_(new ConfigWithoutRunnerCheck(), $context));
+        }
+    }
+
     /**
      * The indirection that matters in practice: CI runs `npm run test`, and the
      * script is what names vitest. Without resolving it this would be a false
