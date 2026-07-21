@@ -82,4 +82,22 @@ final class NpmLicenseCheckTest extends CheckTestCase
         file_put_contents($context->path('later.package.json'), '{"license": "MIT"}');
         $this->assertSilent($this->run_(new NpmLicenseCheck(), $context));
     }
+
+    public function testADisjunctiveListIsAcceptedWhenItContainsTheExpectedLicence(): void
+    {
+        $context = $this->repo([
+            '.ckconform' => "npm_license=UNLICENSED\n",
+            'package.json' => '{"name": "x", "license": ["UNLICENSED", "MIT"]}',
+        ], git: true);
+        $this->assertPasses($this->run_(new NpmLicenseCheck(), $context));
+    }
+
+    public function testADisjunctiveListWithoutTheExpectedLicenceFails(): void
+    {
+        $context = $this->repo([
+            '.ckconform' => "npm_license=UNLICENSED\n",
+            'package.json' => '{"name": "x", "license": ["MIT", "Apache-2.0"]}',
+        ], git: true);
+        $this->assertFails($this->run_(new NpmLicenseCheck(), $context), "is 'MIT or Apache-2.0'");
+    }
 }
