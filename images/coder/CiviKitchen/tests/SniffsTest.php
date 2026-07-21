@@ -24,6 +24,8 @@ final class SniffsTest extends TestCase {
     . 'CiviKitchen.I18n.UseExtensionTs,'
     . 'CiviKitchen.Api.NoRequiredOnExternalAction,'
     . 'CiviKitchen.Api.NoGenericVarOnActionParam,'
+    . 'CiviKitchen.Security.NoUnsafeUnserialize,'
+    . 'CiviKitchen.Tests.NoTautologicalAssertion,'
     . 'CiviKitchen.Extension.UseMixinsForStandardHooks,'
     . 'CiviKitchen.Files.MaxFileLength';
 
@@ -129,6 +131,36 @@ final class SniffsTest extends TestCase {
     $expected = [
       12 => ['CiviKitchen.Api.NoGenericVarOnActionParam.GenericActionVar'],
       33 => ['CiviKitchen.Api.NoGenericVarOnActionParam.GenericActionVar'],
+    ];
+    self::assertSame($expected, $findings);
+  }
+
+  public function testNoUnsafeUnserializeFlagsOnlySingleArgumentCalls(): void {
+    $findings = $this->phpcs('UnsafeUnserialize.php');
+
+    // Flagged: the three one-argument calls (a comma inside a nested call
+    // argument must not read as a second argument, line 13). Not flagged:
+    // calls passing an options array, ->unserialize()/::unserialize() method
+    // calls, and the method declaration itself.
+    $expected = [
+      12 => ['CiviKitchen.Security.NoUnsafeUnserialize.UnsafeUnserialize'],
+      13 => ['CiviKitchen.Security.NoUnsafeUnserialize.UnsafeUnserialize'],
+      14 => ['CiviKitchen.Security.NoUnsafeUnserialize.UnsafeUnserialize'],
+    ];
+    self::assertSame($expected, $findings);
+  }
+
+  public function testNoTautologicalAssertionFlagsOnlyBareMatchingLiterals(): void {
+    $findings = $this->phpcs('TautologicalAssertion.php');
+
+    // Flagged: the four assertions on a bare literal that matches them. Not
+    // flagged: assertions on expressions, assertTrue(FALSE) (a deliberate
+    // failure, not a tautology), assertSame, and a bare function call.
+    $expected = [
+      12 => ['CiviKitchen.Tests.NoTautologicalAssertion.TautologicalAssertion'],
+      13 => ['CiviKitchen.Tests.NoTautologicalAssertion.TautologicalAssertion'],
+      14 => ['CiviKitchen.Tests.NoTautologicalAssertion.TautologicalAssertion'],
+      15 => ['CiviKitchen.Tests.NoTautologicalAssertion.TautologicalAssertion'],
     ];
     self::assertSame($expected, $findings);
   }
