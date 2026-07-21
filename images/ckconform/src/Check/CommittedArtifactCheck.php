@@ -22,6 +22,13 @@ final class CommittedArtifactCheck implements Check
 {
     private const ARTIFACTS = ['.phpunit.result.cache', 'node_modules', 'vendor'];
 
+    /**
+     * Suffix-matched artifacts, for caches named after the file they belong to.
+     * TypeScript writes <tsconfig-name>.tsbuildinfo, which is why inflow's
+     * '.tsbuildinfo' ignore pattern never matched and the cache ended up tracked.
+     */
+    private const ARTIFACT_SUFFIXES = ['.tsbuildinfo'];
+
     public function name(): string
     {
         return 'committed-artifact';
@@ -31,6 +38,15 @@ final class CommittedArtifactCheck implements Check
     {
         if (!$context->isGitRepo()) {
             return;
+        }
+
+        foreach (self::ARTIFACT_SUFFIXES as $suffix) {
+            foreach ($context->trackedFiles() as $file) {
+                if (str_ends_with($file, $suffix)) {
+                    $reporter->fail("build/cache artifact committed: {$file}");
+                    break;
+                }
+            }
         }
 
         foreach (self::ARTIFACTS as $bad) {

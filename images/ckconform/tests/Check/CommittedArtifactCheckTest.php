@@ -62,4 +62,18 @@ final class CommittedArtifactCheckTest extends CheckTestCase
         $context = $this->repo(['node_modules/some-dep/index.js' => '']);
         $this->assertSilent($this->run_(new CommittedArtifactCheck(), $context));
     }
+
+    /**
+     * TypeScript names its incremental cache after the tsconfig, so a
+     * '.tsbuildinfo' ignore pattern misses 'tsconfig.tsbuildinfo' — which is
+     * exactly how inflow ended up tracking one.
+     */
+    public function testATsbuildinfoCacheIsFlaggedWhateverItIsNamed(): void
+    {
+        $context = $this->repo(['frontend/tsconfig.tsbuildinfo' => '{}'], git: true);
+        $this->assertFails(
+            $this->run_(new CommittedArtifactCheck(), $context),
+            'build/cache artifact committed: frontend/tsconfig.tsbuildinfo'
+        );
+    }
 }
