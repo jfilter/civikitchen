@@ -49,7 +49,7 @@ final class TestBootstrapGuardCheck implements Check
             return;
         }
 
-        if (str_contains($context->read('tests/phpunit/bootstrap.php') ?? '', 'TEST_DB_DSN')) {
+        if ($this->guardsInCode($context->read('tests/phpunit/bootstrap.php') ?? '')) {
             $reporter->ok('test bootstrap has the TEST_DB_DSN guard');
         } else {
             $reporter->fail('tests/phpunit/bootstrap.php lacks the TEST_DB_DSN guard — headless runs can wipe the dev DB');
@@ -71,5 +71,30 @@ final class TestBootstrapGuardCheck implements Check
         }
 
         return false;
+    }
+
+    /**
+     * Whether the bootstrap actually executes the guard, rather than describing
+     * it in a comment.
+     *
+     * The first cut matched the raw source, so a file whose only mention of
+     * TEST_DB_DSN sat in three explanatory comments reported "has the guard".
+     * Two repos passed that way while having no guard at all — and this is the
+     * check that stands between a headless run and the main dev database.
+     */
+    private function guardsInCode(string $source): bool
+    {
+        if ($source === '') {
+            return false;
+        }
+        $code = '';
+        foreach (token_get_all($source) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        return str_contains($code, 'TEST_DB_DSN');
     }
 }

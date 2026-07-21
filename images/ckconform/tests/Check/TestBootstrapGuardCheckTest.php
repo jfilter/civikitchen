@@ -84,4 +84,29 @@ final class TestBootstrapGuardCheckTest extends CheckTestCase
         ]);
         $this->assertFails($this->run_(new TestBootstrapGuardCheck(), $context));
     }
+
+    /**
+     * The guard has to run, not be described. Two repos passed this check while
+     * mentioning TEST_DB_DSN only in explanatory comments — and this is what
+     * stands between a headless run and the main dev database.
+     */
+    public function testAMentionInACommentIsNotAGuard(): void
+    {
+        $context = $this->repo([
+            'phpunit.xml.dist' => '<phpunit/>',
+            'tests/phpunit/bootstrap.php' => "<?php\n// The suite boots against TEST_DB_DSN from ~/.cv.json.\n/** TEST_DB_DSN again */\n",
+            'tests/phpunit/SomeHeadlessTest.php' => '<?php class T implements \\Civi\\Test\\HeadlessInterface {}',
+        ]);
+        $this->assertFails($this->run_(new TestBootstrapGuardCheck(), $context), 'lacks the TEST_DB_DSN guard');
+    }
+
+    public function testTheGuardInExecutableCodeCounts(): void
+    {
+        $context = $this->repo([
+            'phpunit.xml.dist' => '<phpunit/>',
+            'tests/phpunit/bootstrap.php' => "<?php\n// Explained here.\nif (!str_contains(\$raw, 'TEST_DB_DSN')) { exit(1); }\n",
+            'tests/phpunit/SomeHeadlessTest.php' => '<?php class T implements \\Civi\\Test\\HeadlessInterface {}',
+        ]);
+        $this->assertPasses($this->run_(new TestBootstrapGuardCheck(), $context));
+    }
 }

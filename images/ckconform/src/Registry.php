@@ -25,6 +25,7 @@ final class Registry
         Check\TestSuiteRequiredCheck::class,
         Check\ComposerJsonCheck::class,
         Check\CiWorkflowCheck::class,
+        Check\ConfigWithoutRunnerCheck::class,
         Check\RequiredExtensionsCheck::class,
         Check\LicenseSkeletonCheck::class,
         Check\LicenseCoherenceCheck::class,
