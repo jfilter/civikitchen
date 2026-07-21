@@ -55,10 +55,17 @@ fi
 if [ -d tests/phpunit ]; then
   [ -f phpunit.xml.dist ] || fail "tests/phpunit exists but no phpunit.xml.dist"
   if [ -f tests/phpunit/bootstrap.php ]; then
-    if grep -q 'TEST_DB_DSN' tests/phpunit/bootstrap.php; then
-      ok "test bootstrap has the TEST_DB_DSN guard"
+    # Only Civi\Test rebuilds the database, so only a suite that uses it can
+    # wipe the dev data. A pure unit suite (plain TestCase, no CiviCRM boot)
+    # has nothing to guard, and demanding the guard there would just be noise.
+    if grep -rqE 'HeadlessInterface|TransactionalInterface|Civi\\Test\\' tests 2>/dev/null; then
+      if grep -q 'TEST_DB_DSN' tests/phpunit/bootstrap.php; then
+        ok "test bootstrap has the TEST_DB_DSN guard"
+      else
+        fail "tests/phpunit/bootstrap.php lacks the TEST_DB_DSN guard — headless runs can wipe the dev DB"
+      fi
     else
-      fail "tests/phpunit/bootstrap.php lacks the TEST_DB_DSN guard — headless runs can wipe the dev DB"
+      ok "unit-only suite (no Civi\\Test) — no test-database guard needed"
     fi
   else
     fail "no tests/phpunit/bootstrap.php"
@@ -100,6 +107,52 @@ if [ -f LICENSE.txt ]; then
   [ -n "$pkg" ] && [ -n "$extkey" ] && [ "$pkg" != "$extkey" ] \
     && fail "LICENSE.txt says 'Package: $pkg' but info.xml key is '$extkey' (copied skeleton)"
   grep -q FIXME LICENSE.txt && warn "LICENSE.txt still contains FIXME (copyright holder unfilled)"
+fi
+
+# Licence coherence. Three files declare it — info.xml, composer.json,
+# package.json — and they drift apart silently; a repo can end up publishing
+# itself under terms its LICENSE file never granted.
+#
+# WHICH licence is organisation policy, not this tool's business, so the
+# expected values are read from an optional `.ckconform` in the extension
+# root (KEY=VALUE, '#' comments). That file lives in your repo, so a private
+# policy stays private while the mechanism stays here:
+#
+#     license=Proprietary          # info.xml <license> + composer.json
+#     npm_license=UNLICENSED       # every tracked package.json
+#     copyright=Example Ltd        # must appear in LICENSE.txt
+#
+# Without a `.ckconform` the declarations only have to agree with each other.
+lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+lic_xml=$(sed -n 's/.*<license>\(.*\)<\/license>.*/\1/p' info.xml | head -1)
+lic_composer=$(sed -n 's/.*"license"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' composer.json 2>/dev/null | head -1)
+
+want_lic=""; want_npm=""; want_copyright=""
+if [ -f .ckconform ]; then
+  want_lic=$(sed -n 's/^license=//p' .ckconform | head -1)
+  want_npm=$(sed -n 's/^npm_license=//p' .ckconform | head -1)
+  want_copyright=$(sed -n 's/^copyright=//p' .ckconform | head -1)
+fi
+
+if [ -n "$want_lic" ]; then
+  [ "$(lc "$lic_xml")" = "$(lc "$want_lic")" ] \
+    || fail "info.xml <license> is '${lic_xml:-empty}', .ckconform expects '$want_lic'"
+  [ -z "$lic_composer" ] || [ "$(lc "$lic_composer")" = "$(lc "$want_lic")" ] \
+    || fail "composer.json license is '$lic_composer', .ckconform expects '$want_lic'"
+elif [ -n "$lic_xml" ] && [ -n "$lic_composer" ] && [ "$(lc "$lic_xml")" != "$(lc "$lic_composer")" ]; then
+  fail "licence declarations disagree: info.xml '$lic_xml' vs composer.json '$lic_composer'"
+fi
+
+if [ -n "$want_copyright" ] && [ -f LICENSE.txt ] && ! grep -qF "$want_copyright" LICENSE.txt; then
+  fail "LICENSE.txt does not name the copyright holder '$want_copyright' from .ckconform"
+fi
+
+if [ -n "$want_npm" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  for manifest in $(git ls-files '*package.json' | grep -v node_modules); do
+    have=$(sed -n 's/.*"license"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -1)
+    [ "$(lc "$have")" = "$(lc "$want_npm")" ] \
+      || fail "$manifest license is '${have:-unset}', .ckconform expects '$want_npm'"
+  done
 fi
 
 # floating tags in CI: ':latest' and 'releases/latest/download' make a green run
