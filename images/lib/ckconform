@@ -175,6 +175,28 @@ if [ -n "$want_copyright" ] && [ -f LICENSE.txt ] && ! grep -qF "$want_copyright
   fail "LICENSE.txt does not name the copyright holder '$want_copyright' from .ckconform"
 fi
 
+# The civix scaffold ships <url desc="Licensing"> pointing at the AGPL text. If
+# the extension is relicensed and only <license> is edited, the link survives —
+# so the extension browser shows terms nobody granted. Readers trust the link
+# over the tag, so a stale one is worse than none.
+lic_url=$(sed -n 's/.*desc="Licensing">\([^<]*\)<.*/\1/p' info.xml | head -1)
+if [ -n "$lic_url" ]; then
+  url_lic=""
+  case "$(lc "$lic_url")" in
+    *agpl*)                      url_lic="agpl" ;;
+    *lgpl*)                      url_lic="lgpl" ;;
+    *gpl*)                       url_lic="gpl" ;;
+    *mit-license*|*licenses/mit*) url_lic="mit" ;;
+    *apache.org/licenses*)       url_lic="apache" ;;
+    *mozilla.org/*mpl*)          url_lic="mpl" ;;
+  esac
+  if [ -n "$url_lic" ] && ! printf '%s' "$(lc "$lic_xml")" | grep -q "$url_lic"; then
+    fail "info.xml declares <license>$lic_xml</license> but its Licensing url points at the $url_lic text ($lic_url)"
+  else
+    ok "licensing url agrees with the declared licence"
+  fi
+fi
+
 if [ -n "$want_npm" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   for manifest in $(git ls-files '*package.json' | grep -v node_modules); do
     have=$(sed -n 's/.*"license"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -1)
@@ -188,6 +210,54 @@ fi
 if ls .github/workflows/*.yml >/dev/null 2>&1; then
   floating=$(grep -n 'image:.*:latest\|releases/latest/download' .github/workflows/*.yml 2>/dev/null | head -3)
   [ -n "$floating" ] && warn "CI pins nothing (floating :latest): $(echo "$floating" | head -1 | cut -c1-70)"
+
+  # Without an explicit `permissions:` the workflow token inherits the repo
+  # default, which is write-all on older repos and orgs. A lint job does not
+  # need to be able to push.
+  for wf in .github/workflows/*.yml; do
+    grep -q '^permissions:' "$wf" \
+      || warn "$wf declares no 'permissions:' block — the job token inherits the repo default"
+  done
+fi
+
+# CRM.api3 in JS/Smarty: the NoLegacyCall sniff only reads PHP, so an APIv3 call
+# in a template or a bundle survives a whole migration unnoticed. Some entities
+# genuinely have no APIv4 form yet, so there is an escape hatch — but it costs a
+# written reason, like every other ignore in this toolchain.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  for f in $(git ls-files '*.js' '*.tpl' '*.html' '*.vue' | grep -vE 'node_modules|/dist/|\.min\.js$'); do
+    grep -q 'CRM\.api3' "$f" 2>/dev/null || continue
+    if grep -qE 'ck-allow-api3[[:space:]]+--[[:space:]]*[^[:space:]]' "$f"; then
+      ok "$f uses CRM.api3 with a documented reason"
+    else
+      fail "$f calls CRM.api3 — migrate to CRM.api4, or annotate 'ck-allow-api3 -- <reason>'"
+    fi
+  done
+fi
+
+# APIv4 entities that do not exist. A \Civi\Api4\Foo reference is resolved at
+# runtime, so a migration can invent an entity core never shipped (or one that
+# only lands in a later release) and every static check stays green — the page
+# just fatals in production. Only checkable where core is on disk, i.e. inside
+# a civikitchen container.
+core_dir=${CIVICRM_CORE_DIR:-/var/www/html/core}
+if [ -d "$core_dir/Civi/Api4" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  missing=""
+  for entity in $(git ls-files '*.php' | grep -vE '/DAO/|\.civix\.php' \
+      | xargs grep -hoE '\\Civi\\Api4\\[A-Z][A-Za-z0-9_]*' 2>/dev/null \
+      | sed 's/.*\\//' | sort -u); do
+    case "$entity" in Generic|Action|Utils|Query|Service|Event) continue ;; esac
+    found=$(find "$core_dir/Civi/Api4/$entity.php" "$core_dir/ext" "$core_dir/../ext" \
+      -maxdepth 6 -name "$entity.php" -path '*Civi/Api4*' 2>/dev/null | head -1)
+    [ -n "$found" ] && continue
+    find . -path "*Civi/Api4/$entity.php" 2>/dev/null | grep -q . && continue
+    missing="$missing $entity"
+  done
+  if [ -n "$missing" ]; then
+    fail "APIv4 entities referenced but not found in core or this extension:$missing"
+  else
+    ok "every referenced APIv4 entity exists"
+  fi
 fi
 
 # lockfiles: a tracked manifest without a tracked lockfile means nobody can
