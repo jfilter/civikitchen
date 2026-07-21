@@ -29,7 +29,16 @@ audits and as the target state when modernizing an existing extension.
 ## Code
 
 - APIv4 only (`civicrm_api4()` / OO builders) — no `civicrm_api3()`
-  (`CiviKitchen.Legacy.NoLegacyCall`).
+  (`CiviKitchen.Legacy.NoLegacyCall`). The sniff reads PHP only, so `ckconform`
+  additionally rejects `CRM.api3` in JS/Smarty; annotate a genuine exception
+  with `ck-allow-api3 -- <reason>`.
+- **An APIv4 entity has to exist in the core you claim to support.** Entities
+  resolve at runtime, so `\Civi\Api4\Foo` compiles, passes phpstan and passes
+  every test that never loads that page — then fatals in production. Check the
+  entity's `@since` against `<compatibility><ver>`, and remember core ships
+  entities from bundled extensions (`ext/civi_mail` …), which then belong in
+  `<requires>`. `ckconform` verifies each referenced entity exists in the core
+  it runs against.
 - `E::ts()`, never bare `ts()` (`CiviKitchen.I18n.UseExtensionTs`).
 - Standard mixins for managed entities / menu / settings / Angular — no
   bespoke hooks (`CiviKitchen.Extension.UseMixinsForStandardHooks`).
@@ -57,6 +66,10 @@ audits and as the target state when modernizing an existing extension.
 - `info.xml` `<requires>` naming every extension actually used (SearchKit,
   Afform, CiviRules …) — a missing `<ext>` only surfaces on a fresh site.
 - Dev stack: `.docker/docker-compose.yml` on a civikitchen image.
+- Every workflow declares a `permissions:` block. Without one the job token
+  inherits the repository default, which on older repos and orgs is write-all —
+  a lint job does not need to be able to push. Set it per job where a step
+  genuinely writes (`packages: write` to push an image).
 
 ## Tests and coverage
 
@@ -85,6 +98,12 @@ license=Proprietary          # info.xml <license> + composer.json
 npm_license=UNLICENSED       # every tracked package.json
 copyright=Example Ltd        # must appear in LICENSE.txt
 ```
+
+The `<url desc="Licensing">` civix scaffolds points at the AGPL text. Relicensing
+usually edits `<license>` and leaves the link — and a reader trusts the link over
+the tag, so `ckconform` fails when the two disagree. A closed-source package also
+wants `"private": true` in `package.json`: `UNLICENSED` states intent, `private`
+is what makes `npm publish` refuse.
 
 The tooling section is machine-checked by `ckconform` (run from the extension
 root) — CI should run it alongside cklint.
