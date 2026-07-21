@@ -89,12 +89,43 @@ final class LicenseCoherenceCheckTest extends CheckTestCase
      * SPDX allows a disjunctive array. json_decode sees it; the bash regex did
      * not, and neither shape may be compared against a plain string.
      */
-    public function testAnArrayLicenseInComposerReadsAsUnset(): void
+    /**
+     * SPDX disjunctive licensing is allowed, and satisfied when the expected
+     * licence is one of the members.
+     */
+    public function testADisjunctiveListIsAcceptedWhenItContainsTheExpectedLicence(): void
     {
         $context = $this->repo([
             'info.xml' => $this->infoXml(license: 'MIT'),
             'composer.json' => '{"license": ["MIT", "GPL-2.0"]}',
+            '.ckconform' => "license=MIT\n",
         ]);
-        $this->assertSilent($this->run_(new LicenseCoherenceCheck(), $context));
+        $this->assertPasses($this->run_(new LicenseCoherenceCheck(), $context));
+    }
+
+    /**
+     * Permitted is not unchecked: before this, an array read as unset and
+     * skipped the policy, which made it the way to bypass every licence rule.
+     */
+    public function testADisjunctiveListWithoutTheExpectedLicenceFails(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(license: 'Proprietary'),
+            'composer.json' => '{"license": ["MIT", "GPL-2.0"]}',
+            '.ckconform' => "license=Proprietary\n",
+        ]);
+        $this->assertFails(
+            $this->run_(new LicenseCoherenceCheck(), $context),
+            "composer.json license is 'MIT or GPL-2.0', .ckconform expects 'Proprietary'"
+        );
+    }
+
+    public function testADisjunctiveListIsComparedAgainstInfoXmlWithoutAPolicy(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(license: 'Proprietary'),
+            'composer.json' => '{"license": ["MIT", "GPL-2.0"]}',
+        ]);
+        $this->assertFails($this->run_(new LicenseCoherenceCheck(), $context), 'MIT or GPL-2.0');
     }
 }

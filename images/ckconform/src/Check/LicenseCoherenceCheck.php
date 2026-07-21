@@ -32,7 +32,8 @@ final class LicenseCoherenceCheck implements Check
     public function run(Context $context, Reporter $reporter): void
     {
         $xml = $this->infoLicense($context);
-        $composer = $this->composerLicense($context);
+        $composerLicenses = $this->composerLicenses($context);
+        $composer = $this->describe($composerLicenses);
         $want = $context->policyValue('license');
 
         if ($want !== null) {
@@ -43,7 +44,7 @@ final class LicenseCoherenceCheck implements Check
                     $want,
                 ));
             }
-            if ($composer !== '' && !$this->sameLicense($composer, $want)) {
+            if ($composerLicenses !== [] && !$this->anyMatches($composerLicenses, $want)) {
                 $reporter->fail(
                     "composer.json license is '{$composer}', .ckconform expects '{$want}'"
                 );
@@ -52,7 +53,7 @@ final class LicenseCoherenceCheck implements Check
             return;
         }
 
-        if ($xml !== '' && $composer !== '' && !$this->sameLicense($xml, $composer)) {
+        if ($xml !== '' && $composerLicenses !== [] && !$this->anyMatches($composerLicenses, $xml)) {
             $reporter->fail(
                 "licence declarations disagree: info.xml '{$xml}' vs composer.json '{$composer}'"
             );
@@ -70,20 +71,62 @@ final class LicenseCoherenceCheck implements Check
     }
 
     /**
-     * SPDX allows `"license": ["MIT", "GPL-2.0"]` for disjunctive licensing.
-     * The bash regex could not see that shape at all, so it read as unset —
-     * which is what a non-string stays here.
+     * SPDX allows `"license": ["MIT", "GPL-2.0"]` for disjunctive licensing, and
+     * that form is permitted here — but permitted is not the same as unchecked.
+     * The bash regex could not see the shape at all, so an array read as unset
+     * and skipped the policy entirely; that would make an array the way to
+     * bypass every licence rule we have.
+     *
+     * So a disjunctive list satisfies the policy when the expected licence is
+     * one of its members, and is reported in full when it is not.
+     *
+     * @return list<string>
      */
-    private function composerLicense(Context $context): string
+    private function composerLicenses(Context $context): array
     {
         $composer = $context->json('composer.json');
         $license = $composer['license'] ?? null;
 
-        return is_string($license) ? $license : '';
+        if (is_string($license)) {
+            return $license === '' ? [] : [$license];
+        }
+        if (is_array($license)) {
+            return array_values(array_filter(
+                array_map(static fn ($entry): string => is_string($entry) ? $entry : '', $license),
+                static fn (string $entry): bool => $entry !== '',
+            ));
+        }
+
+        return [];
+    }
+
+    /**
+     * How the composer declaration reads in a message: a single licence as
+     * itself, a disjunctive list as the list.
+     *
+     * @param list<string> $licenses
+     */
+    private function describe(array $licenses): string
+    {
+        return count($licenses) === 1 ? $licenses[0] : implode(' or ', $licenses);
     }
 
     private function sameLicense(string $a, string $b): bool
     {
         return strtolower($a) === strtolower($b);
+    }
+
+    /**
+     * @param list<string> $licenses
+     */
+    private function anyMatches(array $licenses, string $want): bool
+    {
+        foreach ($licenses as $license) {
+            if ($this->sameLicense($license, $want)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

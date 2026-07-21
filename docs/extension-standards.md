@@ -99,6 +99,11 @@ npm_license=UNLICENSED       # every tracked package.json
 copyright=Example Ltd        # must appear in LICENSE.txt
 ```
 
+SPDX disjunctive licensing (`"license": ["MIT", "GPL-2.0"]`) is allowed in both
+manifests, and satisfies the policy when the expected licence is one of the
+members — permitted, but not unchecked: an unread array would be a hole straight
+through every licence rule.
+
 The `<url desc="Licensing">` civix scaffolds points at the AGPL text. Relicensing
 usually edits `<license>` and leaves the link — and a reader trusts the link over
 the tag, so `ckconform` fails when the two disagree. A closed-source package also
