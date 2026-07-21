@@ -11,14 +11,14 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
 {
     public function testSaysNothingForAnExtensionThatUsesNoneOfThem(): void
     {
-        $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $this->repo([])));
+        $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $this->repo([], git: true)));
     }
 
     public function testFailsWhenManagedShipsSearchKitEntitiesWithoutTheExt(): void
     {
         $context = $this->repo([
             'managed/MySearch.mgd.php' => "<?php\nreturn [['entity' => 'SavedSearch', 'name' => 'x']];\n",
-        ]);
+        ], git: true);
         $this->assertFails(
             $this->run_(new RequiredExtensionsCheck(), $context),
             'info.xml does not <requires> org.civicrm.search_kit — managed/ ships SavedSearch/SearchDisplay entities',
@@ -29,7 +29,7 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'managed/nested/Display.mgd.php' => "<?php\nreturn [['entity' => 'SearchDisplay']];\n",
-        ]);
+        ], git: true);
         $this->assertFails($this->run_(new RequiredExtensionsCheck(), $context), 'org.civicrm.search_kit');
     }
 
@@ -38,7 +38,7 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
         $context = $this->repo([
             'info.xml' => $this->infoXml(extra: "  <requires>\n    <ext>org.civicrm.search_kit</ext>\n  </requires>"),
             'managed/MySearch.mgd.php' => "<?php\nreturn [['entity' => 'SavedSearch']];\n",
-        ]);
+        ], git: true);
         $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $context));
     }
 
@@ -51,7 +51,7 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
         $context = $this->repo([
             'ang/afform/afGreeting.aff.html' => '<div af-fieldset=""></div>',
             'ang/afform/afGreeting.aff.json' => '{"title": "Greeting"}',
-        ]);
+        ], git: true);
         $this->assertFails(
             $this->run_(new RequiredExtensionsCheck(), $context),
             'info.xml does not <requires> org.civicrm.afform — ang/ ships Afforms',
@@ -62,7 +62,7 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'CRM/Fixture/Action/Thing.php' => "<?php\nclass CRM_Fixture_Action_Thing extends CRM_Civirules_Action {}\n",
-        ]);
+        ], git: true);
         $this->assertFails(
             $this->run_(new RequiredExtensionsCheck(), $context),
             'info.xml does not <requires> org.civicoop.civirules — PHP extends CiviRules base classes',
@@ -73,7 +73,7 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'CRM/Fixture/Action/Other.php' => "<?php\nclass X extends CRM_CivirulesActions_Generic_Api {}\n",
-        ]);
+        ], git: true);
         $this->assertFails($this->run_(new RequiredExtensionsCheck(), $context), 'org.civicoop.civirules');
     }
 
@@ -89,7 +89,7 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
                 extra: "  <requires>\n    <ext version=\"3.32\">org.civicoop.civirules</ext>\n  </requires>",
             ),
             'CRM/Fixture/Action/Thing.php' => "<?php\nclass T extends CRM_Civirules_Action {}\n",
-        ]);
+        ], git: true);
         $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $context));
     }
 
@@ -98,7 +98,7 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
         $context = $this->repo([
             'info.xml' => $this->infoXml(extra: "  <requires>\n    <ext>\n      org.civicrm.afform\n    </ext>\n  </requires>"),
             'ang/afform/x.aff.html' => '<div></div>',
-        ]);
+        ], git: true);
         $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $context));
     }
 
@@ -111,7 +111,7 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
         $context = $this->repo([
             'info.xml' => $this->infoXml(extra: "  <requires>\n    <ext>org.civicrm.afform_extras</ext>\n  </requires>"),
             'ang/afform/x.aff.html' => '<div></div>',
-        ]);
+        ], git: true);
         $this->assertFails($this->run_(new RequiredExtensionsCheck(), $context), 'org.civicrm.afform —');
     }
 
@@ -121,7 +121,7 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
             'managed/S.mgd.php' => "<?php\nreturn [['entity' => 'SavedSearch']];\n",
             'ang/afform/x.aff.json' => '{}',
             'CRM/T.php' => "<?php\nclass T extends CRM_Civirules_Action {}\n",
-        ]);
+        ], git: true);
         $reporter = $this->run_(new RequiredExtensionsCheck(), $context);
         self::assertSame(
             [
