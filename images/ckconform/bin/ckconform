@@ -1,0 +1,39 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * ckconform — repo-conformance check for CiviCRM extensions against the
+ * civikitchen template. Complements cklint (style) and phpstan (types): this
+ * checks the repo structure, the gaps every extension audit turned up.
+ *
+ * Run from the extension root. Deliberately dependency-free — no composer
+ * install in the image, no vendor/ to keep current.
+ */
+
+use CiviKitchen\Ckconform\Autoloader;
+use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\Registry;
+use CiviKitchen\Ckconform\Reporter;
+
+require_once __DIR__ . '/../src/Autoloader.php';
+Autoloader::register();
+
+$root = getcwd();
+if ($root === false || !is_file($root . '/info.xml')) {
+    fwrite(STDERR, "ckconform: no info.xml here — run from the extension root.\n");
+    exit(2);
+}
+
+$coreDir = getenv('CIVICRM_CORE_DIR') ?: '/var/www/html/core';
+$context = new Context($root, is_dir($coreDir . '/Civi/Api4') ? $coreDir : null);
+$reporter = new Reporter();
+
+foreach (Registry::all() as $check) {
+    $check->run($context, $reporter);
+}
+
+echo $reporter->render();
+
+exit($reporter->failures() === 0 ? 0 : 1);
