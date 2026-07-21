@@ -99,7 +99,7 @@ final class RequiredExtensionsCheck implements Check
      */
     private function shipsSearchKitEntities(Context $context): bool
     {
-        foreach ($context->findFiles('managed') as $file) {
+        foreach ($context->trackedUnder('managed') as $file) {
             $contents = $context->read($file);
             if ($contents === null) {
                 continue;
@@ -119,12 +119,12 @@ final class RequiredExtensionsCheck implements Check
      */
     private function shipsAfforms(Context $context): bool
     {
-        return $context->findFiles('ang', ['.aff.html', '.aff.json']) !== [];
+        return $context->trackedUnder('ang', ['.aff.html', '.aff.json']) !== [];
     }
 
     private function extendsCiviRules(Context $context): bool
     {
-        foreach ($context->findFiles('', ['.php']) as $file) {
+        foreach ($context->trackedUnder('', ['.php']) as $file) {
             $contents = $context->read($file);
             if ($contents === null) {
                 continue;

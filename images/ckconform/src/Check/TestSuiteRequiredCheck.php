@@ -58,8 +58,8 @@ final class TestSuiteRequiredCheck implements Check
     private function sourceFiles(Context $context): array
     {
         $candidates = array_merge(
-            $context->findFiles('Civi', ['.php']),
-            $context->findFiles('CRM', ['.php']),
+            $context->trackedUnder('Civi', ['.php']),
+            $context->trackedUnder('CRM', ['.php']),
             $this->rootFiles($context),
         );
 
@@ -78,21 +78,20 @@ final class TestSuiteRequiredCheck implements Check
     }
 
     /**
-     * The repo root only, not recursively — Context::findFiles() descends, and
-     * here everything below the root is either already counted via Civi//CRM/ or
-     * deliberately out of scope (tests/, ang/, vendor/).
+     * The repo root only, not recursively — everything below the root is either
+     * already counted via Civi//CRM/ or deliberately out of scope (tests/, ang/,
+     * vendor/). Tracked, not on-disk: an untracked <key>.php lying in the root
+     * must not turn a config-only repo into one that "has source to cover".
      *
      * @return list<string>
      */
     private function rootFiles(Context $context): array
     {
-        $entries = scandir($context->path('')) ?: [];
         $files = [];
-        foreach ($entries as $entry) {
-            if (!str_ends_with($entry, '.php') || !is_file($context->path($entry))) {
-                continue;
+        foreach ($context->trackedUnder('', ['.php']) as $file) {
+            if (!str_contains($file, '/')) {
+                $files[] = $file;
             }
-            $files[] = $entry;
         }
         sort($files);
 

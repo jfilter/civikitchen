@@ -33,11 +33,11 @@ final class TestBootstrapGuardCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        if (!is_dir($context->path('tests/phpunit'))) {
+        if ($context->trackedUnder('tests/phpunit') === []) {
             return;
         }
 
-        if (!$context->exists('tests/phpunit/bootstrap.php')) {
+        if (!$context->isTracked('tests/phpunit/bootstrap.php')) {
             $reporter->fail('no tests/phpunit/bootstrap.php');
 
             return;
@@ -58,7 +58,7 @@ final class TestBootstrapGuardCheck implements Check
 
     private function usesCiviTest(Context $context): bool
     {
-        foreach ($context->findFiles('tests') as $file) {
+        foreach ($context->trackedUnder('tests') as $file) {
             $contents = $context->read($file);
             if ($contents === null) {
                 continue;
@@ -75,12 +75,17 @@ final class TestBootstrapGuardCheck implements Check
 
     /**
      * Whether the bootstrap actually executes the guard, rather than describing
-     * it in a comment.
+     * it in a comment or merely naming the constant.
      *
-     * The first cut matched the raw source, so a file whose only mention of
-     * TEST_DB_DSN sat in three explanatory comments reported "has the guard".
-     * Two repos passed that way while having no guard at all — and this is the
-     * check that stands between a headless run and the main dev database.
+     * Two stages of tightening, both from real passes on unguarded files. First
+     * the raw source matched, so three explanatory comments naming TEST_DB_DSN
+     * read as "has the guard" — comments are stripped now. But a bare mention in
+     * code (`$x = getenv('TEST_DB_DSN');`) is still not a guard: a guard reads
+     * the value AND stops the run when it is missing. So the code must both name
+     * TEST_DB_DSN and reach a terminating statement — every real bootstrap in
+     * the estate does (throw / exit / die). The read itself is left loose on
+     * purpose: herald's guard does not getenv() it, it pulls TEST_DB_DSN out of
+     * a decoded ~/.cv.json, and that is a valid guard.
      */
     private function guardsInCode(string $source): bool
     {
@@ -95,6 +100,10 @@ final class TestBootstrapGuardCheck implements Check
             $code .= is_array($token) ? $token[1] : $token;
         }
 
-        return str_contains($code, 'TEST_DB_DSN');
+        if (!str_contains($code, 'TEST_DB_DSN')) {
+            return false;
+        }
+
+        return preg_match('/\b(throw\s+new\b|exit\s*\(|die\s*\()/', $code) === 1;
     }
 }

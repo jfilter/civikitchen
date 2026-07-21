@@ -187,6 +187,46 @@ final class Context
         return $matches;
     }
 
+    /**
+     * Git-tracked files under a directory, by extension — the tracked-only twin
+     * of findFiles().
+     *
+     * findFiles() walks the disk, which contradicts the rule the rest of this
+     * class follows: an untracked local file cannot break anyone else's build,
+     * so it must not decide a check. A repo check that asks "does this repo ship
+     * X" has to read what the repo ships, i.e. what is committed. An empty
+     * directory string means the whole tree.
+     *
+     * @param  list<string> $extensions
+     * @return list<string>
+     */
+    public function trackedUnder(string $directory, array $extensions = []): array
+    {
+        $prefix = $directory === '' ? '' : rtrim($directory, '/') . '/';
+        $found = [];
+        foreach ($this->trackedFiles() as $file) {
+            if ($prefix !== '' && !str_starts_with($file, $prefix)) {
+                continue;
+            }
+            if ($extensions !== []) {
+                $matched = false;
+                foreach ($extensions as $extension) {
+                    if (str_ends_with($file, $extension)) {
+                        $matched = true;
+                        break;
+                    }
+                }
+                if (!$matched) {
+                    continue;
+                }
+            }
+            $found[] = $file;
+        }
+        sort($found);
+
+        return $found;
+    }
+
     public function isTracked(string $relative): bool
     {
         return in_array(ltrim($relative, '/'), $this->trackedFiles(), true);

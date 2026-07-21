@@ -14,7 +14,7 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
         $context = $this->repo([
             'tests/phpunit/bootstrap.php' => '<?php',
             'Civi/Thing.php' => '<?php class Thing {}',
-        ]);
+        ], git: true);
         $this->assertSilent($this->run_(new TestSuiteRequiredCheck(), $context));
     }
 
@@ -23,7 +23,7 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
         $context = $this->repo([
             'Civi/Api4/Thing.php' => '<?php class Thing {}',
             'CRM/Fixture/Page.php' => '<?php class Page {}',
-        ]);
+        ], git: true);
         $this->assertFails(
             $this->run_(new TestSuiteRequiredCheck(), $context),
             "no test suite (tests/phpunit) but 2 PHP source file(s) — add tests, or declare 'tests=optional -- <reason>' in .ckconform",
@@ -39,7 +39,7 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'fixture.php' => '<?php function fixture_civicrm_config() {}',
-        ]);
+        ], git: true);
         $this->assertFails(
             $this->run_(new TestSuiteRequiredCheck(), $context),
             'but 1 PHP source file(s)',
@@ -54,7 +54,7 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
             'CRM/Fixture/DAO/Thing.php' => '<?php class Thing {}',
             'CRM/Fixture/BAO/Thing.php' => '<?php class Thing {}',
             'Civi/Api4/Thing.php' => '<?php class Thing {}',
-        ]);
+        ], git: true);
         $reporter = $this->run_(new TestSuiteRequiredCheck(), $context);
         $this->assertFails($reporter, 'but 1 PHP source file(s)');
     }
@@ -63,7 +63,7 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'ang/fixture.aff.html' => '<div></div>',
-        ]);
+        ], git: true);
         $reporter = $this->run_(new TestSuiteRequiredCheck(), $context);
         $this->assertPasses($reporter);
         self::assertSame(['no test suite — no PHP source to cover'], $reporter->messages('ok'));
@@ -74,7 +74,7 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
         $context = $this->repo([
             'Civi/Api4/Thing.php' => '<?php class Thing {}',
             '.ckconform' => "# policy\ntests=optional -- config/mgd-only extension, verified by the checks/ harness\n",
-        ]);
+        ], git: true);
         $reporter = $this->run_(new TestSuiteRequiredCheck(), $context);
         $this->assertPasses($reporter);
         self::assertSame(
