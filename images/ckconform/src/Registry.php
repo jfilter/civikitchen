@@ -41,7 +41,6 @@ final class Registry
         Check\FrontEndApi3Check::class,
         Check\Api4EntityCheck::class,
         Check\Api4SelfEntityCheck::class,
-        Check\Api4ActionVarCheck::class,
         Check\LockfileCheck::class,
         Check\NpmInstallCheck::class,
         Check\CommittedArtifactCheck::class,
