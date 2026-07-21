@@ -56,6 +56,45 @@ final class PhpstanConfigCheck implements Check
         if ($this->hasBaselineFile($context)) {
             $reporter->fail('phpstan baseline file present (template: none)');
         }
+
+        $escaping = $this->escapingScanPaths($config);
+        if ($escaping !== []) {
+            $reporter->fail(
+                'phpstan scans a path outside the repo: ' . implode(', ', $escaping)
+                . ' — a `../sibling` exists on the laptop it was written on and nowhere else,'
+                . ' so CI dies with "Scanned directory does not exist". If an optional'
+                . ' extension supplies a symbol, mount it at a fixed container path or cross'
+                . ' the boundary with an APIv4 call instead of a compile-time reference'
+            );
+        }
+    }
+
+    /**
+     * scanFiles / scanDirectories entries that climb out of the repo with `..`.
+     *
+     * mailjet scanned `../mailhealth` for an interface a class implemented — a
+     * sibling checkout that is real on a developer machine and absent in CI and
+     * on every other machine, so phpstan had in fact never run there. The honest
+     * forms are a fixed container path (herald scans
+     * /var/www/html/ext/org.civicoop.civirules) or no cross-repo type edge at
+     * all. This catches the `..` form before it reaches a red CI with a cryptic
+     * message.
+     *
+     * @return list<string>
+     */
+    private function escapingScanPaths(string $config): array
+    {
+        $escaping = [];
+        // A YAML list item under scanFiles:/scanDirectories: whose value starts
+        // with `..`. NEON quotes are optional; strip them if present.
+        if (preg_match_all('/^\s*-\s*[\'"]?(\.\.\/[^\'"\s]+)/m', $config, $matches) === false) {
+            return [];
+        }
+        foreach ($matches[1] as $path) {
+            $escaping[] = $path;
+        }
+
+        return array_values(array_unique($escaping));
     }
 
     /**

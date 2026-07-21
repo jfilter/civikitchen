@@ -176,6 +176,35 @@ final class Api4EntityCheckTest extends CheckTestCase
         $this->assertPasses($this->run_(new Api4EntityCheck(), $context));
     }
 
+    /**
+     * The fully-qualified form in a docblock is still prose. shuttle's
+     * EntityApplier says "rather than the concrete \Civi\Api4\Xxx classes"; Xxx
+     * exists nowhere, and matching it turned a comment into a build failure.
+     */
+    public function testAFullyQualifiedNameInACommentIsNotAReference(): void
+    {
+        $this->core(['Contact' => null]);
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(compatibility: '6.10'),
+            'Civi/Ext/Applier.php' => "<?php\nnamespace Civi\\Ext;\n"
+                . "/** Uses the generic applier rather than the concrete \\Civi\\Api4\\Xxx classes. */\n"
+                . "class Applier {}\n",
+        ], git: true);
+        $this->assertPasses($this->run_(new Api4EntityCheck(), $context));
+    }
+
+    /** A real fully-qualified reference in code is still caught. */
+    public function testAFullyQualifiedNameInCodeIsStillAReference(): void
+    {
+        $this->core(['Contact' => null]);
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(compatibility: '6.10'),
+            'Civi/Ext/Applier.php' => "<?php\nnamespace Civi\\Ext;\n"
+                . "class Applier { public function go() { return \\Civi\\Api4\\Ghost::get(); } }\n",
+        ], git: true);
+        $this->assertFails($this->run_(new Api4EntityCheck(), $context), 'Ghost');
+    }
+
     public function testAnImportCountsAsAReference(): void
     {
         $this->core([], ['MailingAB' => '6.17']);

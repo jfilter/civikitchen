@@ -90,4 +90,31 @@ final class PhpstanConfigCheckTest extends CheckTestCase
         ]);
         $this->assertPasses($this->run_(new PhpstanConfigCheck(), $context));
     }
+
+    /** A ../sibling scan path exists on one laptop and dies in CI. */
+    public function testAnEscapingScanPathFails(): void
+    {
+        $context = $this->repo([
+            'phpstan.neon.dist' => "parameters:\n  level: 10\n  scanDirectories:\n    - ../mailhealth\n",
+        ]);
+        $this->assertFails($this->run_(new PhpstanConfigCheck(), $context), 'outside the repo');
+    }
+
+    public function testAQuotedEscapingScanPathAlsoFails(): void
+    {
+        $context = $this->repo([
+            'phpstan.neon.dist' => "parameters:\n  level: 10\n  scanFiles:\n    - '../other/stub.php'\n",
+        ]);
+        $this->assertFails($this->run_(new PhpstanConfigCheck(), $context), '../other/stub.php');
+    }
+
+    /** A fixed container path is the honest form and must pass. */
+    public function testAnAbsoluteScanPathPasses(): void
+    {
+        $context = $this->repo([
+            'phpstan.neon.dist' => "parameters:\n  level: 10\n  scanDirectories:\n"
+                . "    - /var/www/html/ext/org.civicoop.civirules\n",
+        ]);
+        $this->assertPasses($this->run_(new PhpstanConfigCheck(), $context));
+    }
 }
