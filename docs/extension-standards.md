@@ -47,8 +47,15 @@ audits and as the target state when modernizing an existing extension.
 - `phpstan.neon.dist` (level 10, no baseline).
 - CI per `template/extension/.github/workflows/ci.yml` (compose stack →
   phpunit → phpstan; add cklint).
-- `composer.json` with the extension metadata; no `node_modules`/build
+- `composer.json` with the extension metadata; no `node_modules`/`vendor`/build
   artifacts committed (frontend builds commit only `dist/`).
+- **Lockfiles are committed** — every tracked `package.json` needs its
+  `package-lock.json`/`bun.lock`/…, and a `composer.json` with real
+  dependencies needs its `composer.lock`. Never `.gitignore` one: without it
+  nobody can reproduce the build that shipped, and a red CI run cannot be told
+  from a moved dependency. CI installs with the frozen form (`npm ci`).
+- `info.xml` `<requires>` naming every extension actually used (SearchKit,
+  Afform, CiviRules …) — a missing `<ext>` only surfaces on a fresh site.
 - Dev stack: `.docker/docker-compose.yml` on a civikitchen image.
 
 The tooling section is machine-checked by `ckconform` (run from the extension
