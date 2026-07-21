@@ -51,6 +51,15 @@ COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # install-dev-tools.sh) and the cklint linter that runs it.
 COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
+# repo-conformance check against the extension template (structure, not style).
+# This image is what the extension repos run their CI in, so it needs the same
+# tools the buildkit image has — ckconform and ckcoverage were added there only,
+# which would have made every repo's lint job fail on 'ckconform: command not
+# found' the moment CI first ran.
+COPY ckconform /opt/civikitchen-ckconform
+COPY lib/ckconform /usr/local/bin/ckconform
+# coverage gate: runs the suite with clover and enforces .ckconform's min_coverage
+COPY lib/ckcoverage /usr/local/bin/ckcoverage
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
 COPY lib/civikitchen-rector /opt/civikitchen-rector
 COPY lib/ckmodernize /usr/local/bin/ckmodernize
@@ -59,7 +68,8 @@ COPY lib/ckmodernize /usr/local/bin/ckmodernize
 COPY lib/cktestreset /usr/local/bin/cktestreset
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
-    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckmodernize /usr/local/bin/cktestreset
+    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
+        /usr/local/bin/ckmodernize /usr/local/bin/cktestreset
 
 # Add our vhost extras (e.g. the bare-/ → /civicrm/login redirect) via the
 # standard apache conf-available + a2enconf flow rather than editing the

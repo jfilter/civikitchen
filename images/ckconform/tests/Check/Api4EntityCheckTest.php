@@ -43,11 +43,7 @@ final class Api4EntityCheckTest extends CheckTestCase
             file_put_contents($this->core . '/Civi/Api4/' . $name . '.php', $this->entitySource($name, $since));
         }
         foreach ($bundled as $name => $since) {
-            $dir = $this->core . '/ext/civi_mail/Civi/Api4';
-            if (!is_dir($dir)) {
-                mkdir($dir, 0777, true);
-            }
-            file_put_contents($dir . '/' . $name . '.php', $this->entitySource($name, $since));
+            $this->bundle('civi_mail', $name, $since, 'component');
         }
     }
 
@@ -188,5 +184,65 @@ final class Api4EntityCheckTest extends CheckTestCase
             'CRM/X.php' => "<?php\nuse Civi\\Api4\\MailingAB;\n\$x = MailingAB::get();\n",
         ], git: true);
         $this->assertFails($this->run_(new Api4EntityCheck(), $context), 'MailingAB(@since 6.17)');
+    }
+
+    /**
+     * An entity shipped by a core-bundled extension. $tag is the info.xml tag
+     * that marks core plumbing (mgmt:required / component); pass null for a
+     * genuinely optional extension like riverlea.
+     */
+    private function bundle(string $ext, string $entity, ?string $since, ?string $tag): void
+    {
+        $dir = $this->core . '/ext/' . $ext;
+        if (!is_dir($dir . '/Civi/Api4')) {
+            mkdir($dir . '/Civi/Api4', 0777, true);
+        }
+        file_put_contents($dir . '/Civi/Api4/' . $entity . '.php', $this->entitySource($entity, $since));
+        $tags = $tag === null ? '' : "<tags><tag>{$tag}</tag></tags>";
+        file_put_contents(
+            $dir . '/info.xml',
+            '<?xml version="1.0"?><extension key="' . $ext . '" type="module">' . $tags . '</extension>'
+        );
+    }
+
+    public function testWarnsWhenAnOptionalProvidingExtensionIsNotRequired(): void
+    {
+        $this->core(['Contact' => null]);
+        $this->bundle('riverlea', 'RiverleaStream', null, null);
+        $context = $this->repo(['CRM/X.php' => '<?php $x = \Civi\Api4\RiverleaStream::get();'], git: true);
+
+        $reporter = $this->run_(new Api4EntityCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'info.xml does not <requires> riverlea');
+    }
+
+    public function testSilentOnceTheProvidingExtensionIsRequired(): void
+    {
+        $this->core(['Contact' => null]);
+        $this->bundle('riverlea', 'RiverleaStream', null, null);
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(extra: '<requires><ext>riverlea</ext></requires>'),
+            'CRM/X.php' => '<?php $x = \Civi\Api4\RiverleaStream::get();',
+        ], git: true);
+
+        $reporter = $this->run_(new Api4EntityCheck(), $context);
+        self::assertSame([], $reporter->messages('warn'), $reporter->render());
+    }
+
+    /**
+     * civi_mail, search_kit and flexmailer are core plumbing: no core extension
+     * declares them, so demanding it would be noise nobody reads.
+     */
+    public function testCorePlumbingIsNotDemanded(): void
+    {
+        $this->core(['Contact' => null]);
+        $this->bundle('civi_mail', 'Mailing', null, 'component');
+        $this->bundle('search_kit', 'SearchDisplay', null, 'mgmt:required');
+        $context = $this->repo([
+            'CRM/X.php' => '<?php $a = \Civi\Api4\Mailing::get(); $b = \Civi\Api4\SearchDisplay::get();',
+        ], git: true);
+
+        $reporter = $this->run_(new Api4EntityCheck(), $context);
+        self::assertSame([], $reporter->messages('warn'), $reporter->render());
     }
 }

@@ -47,6 +47,7 @@ final class Api4EntityCheck implements Check
         $declaredVer = $this->declaredVersion($context);
         $missing = [];
         $tooNew = [];
+        $undeclared = [];
 
         foreach ($this->referencedEntities($context) as $entity) {
             // Entities the extension defines itself are its own business.
@@ -60,6 +61,11 @@ final class Api4EntityCheck implements Check
                 continue;
             }
 
+            $provider = $this->providingExtension($classFile);
+            if ($provider !== null && !in_array($provider, $this->declaredRequires($context), true)) {
+                $undeclared[$provider] = $entity;
+            }
+
             if ($declaredVer === null) {
                 continue;
             }
@@ -67,6 +73,14 @@ final class Api4EntityCheck implements Check
             if ($since !== null && version_compare($since, $declaredVer, '>')) {
                 $tooNew[] = sprintf('%s(@since %s)', $entity, $since);
             }
+        }
+
+        foreach ($undeclared as $provider => $entity) {
+            $reporter->warn(sprintf(
+                'info.xml does not <requires> %s — \\Civi\\Api4\\%s comes from that extension',
+                $provider,
+                $entity
+            ));
         }
 
         if ($missing !== []) {
@@ -208,5 +222,55 @@ final class Api4EntityCheck implements Check
         }
 
         return null;
+    }
+
+    /**
+     * The extension key that provides this entity, when it is not core proper.
+     *
+     * Extensions tagged `mgmt:required` or `component` are core plumbing that is
+     * always present (search_kit, flexmailer, civi_mail) — no core extension
+     * declares those, and demanding it would be noise nobody reads. What is left
+     * is a genuine optional dependency: riverlea, and anything like it.
+     */
+    private function providingExtension(string $classFile): ?string
+    {
+        if (!preg_match('#/ext/(.+?)/(?:[^/]+/)*Civi/Api4/#', $classFile, $match)) {
+            return null;
+        }
+        $dir = substr($classFile, 0, strpos($classFile, '/Civi/Api4/') ?: 0);
+        while ($dir !== '' && !is_file($dir . '/info.xml')) {
+            $parent = dirname($dir);
+            if ($parent === $dir) {
+                return null;
+            }
+            $dir = $parent;
+        }
+        $info = @simplexml_load_file($dir . '/info.xml');
+        if ($info === false) {
+            return null;
+        }
+        foreach ($info->xpath('//tags/tag') ?: [] as $tag) {
+            if (in_array(trim((string) $tag), ['mgmt:required', 'component'], true)) {
+                return null;
+            }
+        }
+        $key = trim((string) ($info['key'] ?? ''));
+
+        return $key === '' ? null : $key;
+    }
+
+    /** @return list<string> */
+    private function declaredRequires(Context $context): array
+    {
+        $info = $context->infoXml();
+        if ($info === null) {
+            return [];
+        }
+        $keys = [];
+        foreach ($info->xpath('//requires/ext') ?: [] as $ext) {
+            $keys[] = trim((string) $ext);
+        }
+
+        return $keys;
     }
 }
