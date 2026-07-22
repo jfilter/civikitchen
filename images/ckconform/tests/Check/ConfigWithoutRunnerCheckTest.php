@@ -117,4 +117,29 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         ], git: true);
         $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpunit.xml.dist');
     }
+
+    /**
+     * Delegating to the shared CI runs phpcs, phpstan and phpunit, so their
+     * configs are not orphans — even though none of those tokens is in the repo.
+     */
+    public function testTheSharedCiSatisfiesPhpcsPhpstanAndPhpunit(): void
+    {
+        $context = $this->repo([
+            'phpcs.xml.dist' => '<ruleset/>',
+            'phpstan.neon.dist' => 'parameters:',
+            'phpunit.xml.dist' => '<phpunit/>',
+            '.github/workflows/ci.yml' => "jobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n",
+        ], git: true);
+        $this->assertPasses($this->run_(new ConfigWithoutRunnerCheck(), $context));
+    }
+
+    /** But it does not run playwright, so a playwright config is still an orphan. */
+    public function testTheSharedCiDoesNotCoverPlaywright(): void
+    {
+        $context = $this->repo([
+            'playwright.config.ts' => 'export default {}',
+            '.github/workflows/ci.yml' => "jobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n",
+        ], git: true);
+        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'playwright.config.ts');
+    }
 }

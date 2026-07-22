@@ -32,7 +32,8 @@ final class CiWorkflowCheck implements Check
 
         foreach ($workflows as $workflow) {
             $contents = $context->read($workflow) ?? '';
-            if (str_contains($contents, 'cklint') || str_contains($contents, 'phpcs')) {
+            if ($context->callsSharedCi()
+                || str_contains($contents, 'cklint') || str_contains($contents, 'phpcs')) {
                 return;
             }
         }

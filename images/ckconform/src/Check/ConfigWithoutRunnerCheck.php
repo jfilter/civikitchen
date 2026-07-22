@@ -101,6 +101,14 @@ final class ConfigWithoutRunnerCheck implements Check
             return '';
         }
 
+        // Delegating to the shared CI runs phpcs, phpstan and phpunit — but not
+        // playwright or vitest, which stay in the repo's own workflows. Add only
+        // the tokens the shared workflow actually invokes, so a playwright config
+        // it does not run is still correctly flagged.
+        if ($context->callsSharedCi()) {
+            $text .= ' cklint phpcs phpstan phpunit ckcoverage ';
+        }
+
         preg_match_all('/(?:npm|yarn|pnpm|bun)\s+run\s+([A-Za-z0-9:_-]+)/', $text, $matches);
         $wanted = array_unique($matches[1]);
         if ($wanted === []) {
