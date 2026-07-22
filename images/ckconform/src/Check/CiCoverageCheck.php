@@ -35,8 +35,12 @@ final class CiCoverageCheck implements Check
             return;
         }
 
-        $ran = '';
+        // The shared CI runs ckcoverage; a repo that calls it is measured.
+        $ran = $context->callsSharedCi() ? 'ckcoverage' : '';
         foreach ($workflows as $workflow) {
+            if ($ran === 'ckcoverage') {
+                break;
+            }
             $contents = $context->read($workflow) ?? '';
             if (preg_match('/(^|[^\w-])ckcoverage([^\w-]|$)/', $contents) === 1) {
                 $ran = 'ckcoverage';

@@ -81,6 +81,17 @@ final class CiCoverageCheckTest extends CheckTestCase
         $this->assertPasses($this->run_(new CiCoverageCheck(), $context));
     }
 
+    /** Delegating to the shared CI runs ckcoverage, though the token is not local. */
+    public function testCallingTheSharedCiCountsAsRunningCkcoverage(): void
+    {
+        $context = $this->repo([
+            '.ckconform' => "min_coverage=54\n",
+            'tests/phpunit/SomeTest.php' => '<?php',
+            '.github/workflows/ci.yml' => "jobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n    with:\n      key: x\n",
+        ]);
+        $this->assertPasses($this->run_(new CiCoverageCheck(), $context));
+    }
+
     /** No floor declared: reporting-only coverage is still acceptable. */
     public function testWithoutAFloorReportingCoverageIsEnough(): void
     {

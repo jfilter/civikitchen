@@ -26,6 +26,16 @@ final class CiWorkflowCheckTest extends CheckTestCase
         self::assertSame([], $reporter->messages('warn'));
     }
 
+    public function testCallingTheSharedCiCountsAsALintStep(): void
+    {
+        $context = $this->repo([
+            '.github/workflows/ci.yml' => "name: CI\njobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n",
+        ]);
+        $reporter = $this->run_(new CiWorkflowCheck(), $context);
+        $this->assertPasses($reporter);
+        self::assertSame([], $reporter->messages('warn'));
+    }
+
     public function testWarnsWhenNoLintStepIsPresent(): void
     {
         $context = $this->repo([

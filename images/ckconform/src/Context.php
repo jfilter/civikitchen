@@ -227,6 +227,30 @@ final class Context
         return $found;
     }
 
+    /**
+     * The shared reusable CI workflow, by the filename repos name in `uses:`.
+     * A repo whose workflow delegates to it is running everything that workflow
+     * runs — cklint, ckconform, phpstan, phpunit under ckcoverage — even though
+     * none of those tokens appears in the repo's own thin caller.
+     */
+    public const SHARED_CI = 'extension-ci.yml';
+
+    /**
+     * Does any workflow hand CI off to the shared reusable workflow? The
+     * workflow-scanning checks treat that as running the tools it runs, or every
+     * migrated repo reads as a CI that runs nothing.
+     */
+    public function callsSharedCi(): bool
+    {
+        foreach ($this->workflows() as $workflow) {
+            if (str_contains($this->read($workflow) ?? '', self::SHARED_CI)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function isTracked(string $relative): bool
     {
         return in_array(ltrim($relative, '/'), $this->trackedFiles(), true);
