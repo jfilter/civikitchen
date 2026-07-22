@@ -1,0 +1,55 @@
+# The one CI definition every civico extension calls, so the pipeline lives in
+# one place instead of drifting between eleven copy-pasted workflows. A calling
+# repo's own workflow is a few lines:
+#
+#   jobs:
+#     ci:
+#       uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main
+#       with:
+#         key: <extension-key>
+#
+# civikitchen is public, so any repo can call this without a cross-repo token.
+# Everything runs inside the extension's own CiviCRM stack: the standalone image
+# auto-installs, enables the mounted extension and seeds the civicrm_test scratch
+# DB, and cklint / ckconform / phpstan / ckcoverage all ship in that image. The
+# coverage floor comes from the repo's .ckconform, so it needs no input here.
+name: Extension CI
+
+on:
+  workflow_call:
+    inputs:
+      key:
+        description: 'Extension key — the directory it mounts to under /var/www/html/ext'
+        required: true
+        type: string
+      compose_file:
+        description: 'Compose file that brings up the CiviCRM stack'
+        type: string
+        default: '.docker/docker-compose.ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Start CiviCRM stack
+        run: docker compose -f "${{ inputs.compose_file }}" up -d --wait --quiet-pull
+
+      - name: Lint (cklint + ckconform)
+        run: |
+          docker compose -f "${{ inputs.compose_file }}" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/${{ inputs.key }} && cklint --all && ckconform"
+
+      - name: PHPUnit + coverage floor + PHPStan
+        run: |
+          docker compose -f "${{ inputs.compose_file }}" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/${{ inputs.key }} && ckcoverage tests/phpunit && phpstan analyse --no-progress"
+
+      # A failed stack is a stack trace of nothing without its logs.
+      - name: App logs on failure
+        if: failure()
+        run: docker compose -f "${{ inputs.compose_file }}" logs app | tail -200
