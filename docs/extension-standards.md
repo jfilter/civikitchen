@@ -4,6 +4,11 @@ The checklist the civikitchen tooling (cklint / CiviKitchen phpcs standard,
 ckmodernize, phpstan, the extension template) enforces or expects. Use it for
 audits and as the target state when modernizing an existing extension.
 
+For a new civix extension, run
+`/path/to/civikitchen/tools/ckinit.php <extension-directory>` to apply the
+versioned `template/extension/` tooling layer. Existing files remain untouched
+unless `--force` is explicitly supplied.
+
 ## UI: declarative before imperative
 
 - **Listings/reports** → SearchKit `SavedSearch` + `SearchDisplay` (managed),

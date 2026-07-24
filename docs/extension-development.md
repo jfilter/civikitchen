@@ -120,6 +120,18 @@ docker compose exec app civix upgrade                             # re-run perio
 
 Modern extensions configure features in `info.xml` via [standard mixins](https://docs.civicrm.org/dev/en/latest/framework/mixin/standard/) (`mgd-php`, `menu-xml`, `setting-php`, `entity-types-php@2.0.0`, `smarty-v2`, `ang-php`, …) instead of bespoke hooks — `civix upgrade` keeps the mixin block current.
 
+After generating a module, apply the versioned CiviKitchen tooling layer:
+
+```bash
+civix generate:module org.example.myext
+/path/to/civikitchen/tools/ckinit.php org.example.myext
+```
+
+`ckinit.php` reads the extension `<file>` value from `info.xml`, renders
+`template/extension/`, and refuses to overwrite existing files. Use `--force`
+only after reviewing conflicts. This makes the template an executable
+interface rather than a checklist to copy by hand.
+
 ## PHPStan
 
 PHPStan needs to know about CiviCRM's autoloader to resolve `CRM_*` and `Civi\*` symbols. Each extension typically ships its own `phpstanBootstrap.php` that boots civi enough for static analysis (`extensions/de.systopia.contract/phpstanBootstrap.php` is a working reference). Run:
