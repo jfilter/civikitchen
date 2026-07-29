@@ -30,7 +30,11 @@ final class SettingsMetadataCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        $files = $context->findFiles('settings', ['setting.php']);
+        // Tracked files only (repo principle) — an uncommitted local settings
+        // file must not sway the verdict. Outside git, fall back to the tree.
+        $files = $context->isGitRepo()
+            ? $context->trackedUnder('settings', ['setting.php'])
+            : $context->findFiles('settings', ['setting.php']);
         if ($files === []) {
             return;
         }
