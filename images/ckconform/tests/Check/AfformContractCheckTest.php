@@ -38,7 +38,7 @@ final class AfformContractCheckTest extends CheckTestCase
         ]);
         $this->assertWarns(
             $this->run_(new AfformContractCheck(), $context),
-            'no ang/myextForm.aff.json beside it',
+            'no ang/myextForm.aff.json (or .aff.php) beside it',
         );
     }
 

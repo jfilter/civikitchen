@@ -57,14 +57,33 @@ final class AfformContractCheck implements Check
                 continue;
             }
 
-            $metaFile = substr($relative, 0, -strlen('.aff.html')) . '.aff.json';
+            $base = substr($relative, 0, -strlen('.aff.html'));
+            $metaFile = $base . '.aff.json';
+            $phpMetaFile = $base . '.aff.php';
             $type = null;
-            $hasMeta = $context->isGitRepo()
-                ? $context->isTracked($metaFile)
-                : $context->exists($metaFile);
+            $ships = fn (string $file): bool => $context->isGitRepo()
+                ? $context->isTracked($file)
+                : $context->exists($file);
 
-            if (!$hasMeta) {
-                $reporter->warn("$relative: no $metaFile beside it — the form's metadata then comes from database defaults, which is usually a forgotten file");
+            if ($ships($phpMetaFile)) {
+                // The PHP metadata variant is just as valid as .aff.json.
+                // Evaluating it needs the ExtensionUtil stub for E::ts().
+                self::registerExtensionUtilStub();
+                try {
+                    $meta = require $context->path($phpMetaFile);
+                    if (is_array($meta)) {
+                        $type = is_string($meta['type'] ?? null) ? $meta['type'] : null;
+                        if (!array_key_exists('permission', $meta)) {
+                            $reporter->warn("$phpMetaFile: no permission key — check the intended audience explicitly");
+                        }
+                    } else {
+                        $reporter->fail("$phpMetaFile: does not return an array — the form cannot be installed");
+                    }
+                } catch (\Throwable $e) {
+                    $reporter->warn("$phpMetaFile: could not evaluate outside CiviCRM ({$e->getMessage()}) — metadata unchecked");
+                }
+            } elseif (!$ships($metaFile)) {
+                $reporter->warn("$relative: no $metaFile (or .aff.php) beside it — the form's metadata then comes from database defaults, which is usually a forgotten file");
             } else {
                 $raw = $context->read($metaFile) ?? '';
                 $meta = json_decode($raw, true);
@@ -210,5 +229,32 @@ final class AfformContractCheck implements Check
         }
 
         return $ranges;
+    }
+
+    private static function registerExtensionUtilStub(): void
+    {
+        static $registered = false;
+        if ($registered) {
+            return;
+        }
+        $registered = true;
+
+        if (!function_exists('ts')) {
+            // Bare ts() calls appear in .aff.php metadata too.
+            eval('function ts($text, $params = []) { return $text; }');
+        }
+
+        spl_autoload_register(static function (string $class): void {
+            if (preg_match('/^CRM_\\w+_ExtensionUtil$/', $class) !== 1) {
+                return;
+            }
+            eval(sprintf(
+                'class %s {
+                    public static function ts($text, $params = []) { return $text; }
+                    public static function __callStatic($name, $args) { return $args[0] ?? \'\'; }
+                }',
+                $class,
+            ));
+        });
     }
 }
