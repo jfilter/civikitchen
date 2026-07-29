@@ -51,6 +51,7 @@ final class Registry
         Check\CommittedArtifactCheck::class,
         Check\GitignoreCheck::class,
         Check\GitignoreCoverageCheck::class,
+        Check\SettingsMetadataCheck::class,
     ];
 
     /** @return list<Check> */
