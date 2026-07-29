@@ -1,0 +1,114 @@
+<?php
+
+declare(strict_types=1);
+
+namespace CiviKitchen\Ckconform\Tests\Check;
+
+use CiviKitchen\Ckconform\Check\TemplateReferenceCheck;
+use CiviKitchen\Ckconform\Tests\CheckTestCase;
+
+final class TemplateReferenceCheckTest extends CheckTestCase
+{
+    public function testSilentWithoutPagesOrForms(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'Civi/Greeter/Thing.php' => "<?php\nnamespace Civi\\Greeter;\nclass Thing {}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
+    }
+
+    public function testAPageWithItsTemplateIsSilent(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'CRM/Greeter/Page/Foo.php' => "<?php\nclass CRM_Greeter_Page_Foo extends CRM_Core_Page {}\n",
+            'templates/CRM/Greeter/Page/Foo.tpl' => "<div>hi</div>\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
+    }
+
+    public function testAPageWithoutItsTemplateFails(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'CRM/Greeter/Page/Foo.php' => "<?php\nclass CRM_Greeter_Page_Foo extends CRM_Core_Page {}\n",
+        ], git: true);
+        $this->assertFails(
+            $this->run_(new TemplateReferenceCheck(), $context),
+            'templates/CRM/Greeter/Page/Foo.tpl'
+        );
+    }
+
+    public function testAnAbstractClassNeedsNoTemplate(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'CRM/Greeter/Form/Base.php' => "<?php\nabstract class CRM_Greeter_Form_Base extends CRM_Core_Form {}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
+    }
+
+    public function testAnOverriddenTemplateNameNeedsNoTemplate(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'CRM/Greeter/Page/Foo.php' => "<?php\nclass CRM_Greeter_Page_Foo extends CRM_Core_Page {\n  public function getTemplateFileName() { return 'CRM/Greeter/Page/Other.tpl'; }\n}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
+    }
+
+    /** Extending a sibling Page inherits its template. */
+    public function testASubclassOfAnOwnPageIsSilent(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'CRM/Greeter/Page/Foo.php' => "<?php\nclass CRM_Greeter_Page_Foo extends CRM_Core_Page {}\n",
+            'CRM/Greeter/Page/Bar.php' => "<?php\nclass CRM_Greeter_Page_Bar extends CRM_Greeter_Page_Foo {}\n",
+            'templates/CRM/Greeter/Page/Foo.tpl' => "<div>hi</div>\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
+    }
+
+    public function testAMissingLiteralTemplateFails(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'Civi/Greeter/Mailer.php' => "<?php\nnamespace Civi\\Greeter;\nclass Mailer {\n  public function body() {\n    return \\CRM_Core_Smarty::singleton()->fetch('CRM/Greeter/Snippet/Body.tpl');\n  }\n}\n",
+        ], git: true);
+        $this->assertFails(
+            $this->run_(new TemplateReferenceCheck(), $context),
+            'templates/CRM/Greeter/Snippet/Body.tpl'
+        );
+    }
+
+    public function testAForeignLiteralTemplateIsSilent(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'Civi/Greeter/Mailer.php' => "<?php\nnamespace Civi\\Greeter;\nclass Mailer {\n  public function body() {\n    return \\CRM_Core_Smarty::singleton()->fetch('CRM/Contact/Page/View.tpl');\n  }\n}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
+    }
+
+    public function testAStringTemplateIsSilent(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'Civi/Greeter/Mailer.php' => "<?php\nnamespace Civi\\Greeter;\nclass Mailer {\n  public function body() {\n    return \\CRM_Core_Smarty::singleton()->fetch('string:CRM/Greeter/Gone.tpl');\n  }\n}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
+    }
+
+    public function testPhpBlockInATemplateWarns(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'CRM/Greeter/Page/Foo.php' => "<?php\nclass CRM_Greeter_Page_Foo extends CRM_Core_Page {}\n",
+            'templates/CRM/Greeter/Page/Foo.tpl' => "{php}echo 1;{/php}\n",
+        ], git: true);
+        $reporter = $this->run_(new TemplateReferenceCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, '{php}');
+    }
+}

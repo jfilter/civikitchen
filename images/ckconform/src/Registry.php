@@ -52,6 +52,18 @@ final class Registry
         Check\GitignoreCheck::class,
         Check\GitignoreCoverageCheck::class,
         Check\SettingsMetadataCheck::class,
+        Check\ManagedEntityMetadataCheck::class,
+        Check\ManagedJobCheck::class,
+        Check\ManagedReferenceGraphCheck::class,
+        Check\HookDispatchNameCheck::class,
+        Check\DeclaredCallbackCheck::class,
+        Check\ContainerServiceReferenceCheck::class,
+        Check\TemplateReferenceCheck::class,
+        Check\UpgraderIntegrityCheck::class,
+        Check\PortableConfigReferenceCheck::class,
+        Check\AfformContractCheck::class,
+        Check\PermissionClosureCheck::class,
+        Check\MessageTemplateTokenCheck::class,
     ];
 
     /** @return list<Check> */
