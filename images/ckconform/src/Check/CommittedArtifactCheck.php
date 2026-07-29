@@ -49,7 +49,19 @@ final class CommittedArtifactCheck implements Check
             }
         }
 
+        // CiviCRM extensions routinely SHIP vendor/ on purpose (they deploy
+        // without a composer install step). A repo declares that in its
+        // .ckconform policy: vendor=committed -- <reason>
+        $vendorPolicy = $context->policyValue('vendor');
+        $allowVendor = $vendorPolicy !== null && str_starts_with($vendorPolicy, 'committed');
+        if ($allowVendor) {
+            $reporter->ok("vendor committed — declared deliberate in .ckconform ({$vendorPolicy})");
+        }
+
         foreach (self::ARTIFACTS as $bad) {
+            if ($bad === 'vendor' && $allowVendor) {
+                continue;
+            }
             if ($this->isCommitted($context, $bad)) {
                 $reporter->fail("build/cache artifact committed: {$bad}");
             }

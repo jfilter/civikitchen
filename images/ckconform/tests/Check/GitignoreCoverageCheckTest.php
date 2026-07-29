@@ -140,4 +140,16 @@ final class GitignoreCoverageCheckTest extends CheckTestCase
         ], git: true);
         $this->assertPasses($this->run_(new GitignoreCoverageCheck(), $context));
     }
+
+    public function testVendorPolicySkipsVendorIgnoreDemand(): void
+    {
+        $context = $this->repo([
+            '.ckconform' => "vendor=committed -- extensions deploy without composer install\n",
+            '.gitignore' => "node_modules/\n",
+            'composer.json' => '{}',
+            'vendor/autoload.php' => "<?php\n",
+        ], git: true);
+        $reporter = $this->run_(new GitignoreCoverageCheck(), $context);
+        self::assertSame(0, $reporter->failures());
+    }
 }

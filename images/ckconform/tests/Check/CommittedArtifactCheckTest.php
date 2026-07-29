@@ -76,4 +76,14 @@ final class CommittedArtifactCheckTest extends CheckTestCase
             'build/cache artifact committed: frontend/tsconfig.tsbuildinfo'
         );
     }
+
+    public function testVendorPolicyAllowsCommittedVendor(): void
+    {
+        $context = $this->repo([
+            '.ckconform' => "vendor=committed -- extensions deploy without composer install\n",
+            'vendor/autoload.php' => "<?php\n",
+        ], git: true);
+        $reporter = $this->run_(new CommittedArtifactCheck(), $context);
+        self::assertSame(0, $reporter->failures());
+    }
 }

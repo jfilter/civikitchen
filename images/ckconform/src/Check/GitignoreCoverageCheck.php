@@ -43,8 +43,16 @@ final class GitignoreCoverageCheck implements Check
             return;
         }
 
+        // vendor=committed -- <reason> in .ckconform: the repo ships vendor/
+        // deliberately, so demanding an ignore pattern for it is nonsense.
+        $vendorPolicy = $context->policyValue('vendor');
+        $allowVendor = $vendorPolicy !== null && str_starts_with($vendorPolicy, 'committed');
+
         $missing = [];
         foreach (self::ARTIFACTS as $pattern) {
+            if ($pattern === 'vendor/' && $allowVendor) {
+                continue;
+            }
             $samples = $this->samplesFor($context, $pattern);
             if ($samples === []) {
                 continue;
