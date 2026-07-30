@@ -134,7 +134,7 @@ interface rather than a checklist to copy by hand.
 
 ## PHPStan
 
-PHPStan needs to know about CiviCRM's autoloader to resolve `CRM_*` and `Civi\*` symbols. Each extension typically ships its own `phpstanBootstrap.php` that boots civi enough for static analysis (`extensions/de.systopia.contract/phpstanBootstrap.php` is a working reference). Run:
+PHPStan needs to know about CiviCRM's autoloader to resolve `CRM_*` and `Civi\*` symbols. Each extension typically ships its own `phpstanBootstrap.php` that boots civi enough for static analysis ([`template/extension/phpstanBootstrap.php`](../template/extension/phpstanBootstrap.php) is a working reference). Run:
 
 ```bash
 docker compose exec app bash -c \
@@ -160,7 +160,7 @@ docker compose exec app bash -c "cd /var/www/html/ext/myextension && cklint"
 docker compose exec app bash -c "cd /var/www/html/ext/myextension && cklint --all"
 ```
 
-Most extensions ship a `phpcs.xml.dist` that scopes the run to the right files and excludes generated DAOs — see `extensions/de.systopia.contract/phpcs.xml.dist` for a working reference.
+Most extensions ship a `phpcs.xml.dist` that scopes the run to the right files and excludes generated DAOs — see [`template/extension/phpcs.xml.dist`](../template/extension/phpcs.xml.dist) for a working reference.
 
 `ckconform` checks the repo STRUCTURE against the extension template — the
 gaps that show up in every audit: missing `phpcs.xml.dist`/`phpstan.neon.dist`

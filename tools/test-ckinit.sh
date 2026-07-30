@@ -8,16 +8,21 @@ trap 'rm -rf "$work"' EXIT
 make_extension() {
   local target="$1"
   mkdir -p "$target"
-  printf '%s\n' '<extension><file>example_ext</file></extension>' > "$target/info.xml"
+  printf '%s\n' '<extension key="org.acme.example_ext" type="module"><file>example_ext</file></extension>' > "$target/info.xml"
 }
 
 make_extension "$work/clean"
 "$root/tools/ckinit.php" "$work/clean" >/dev/null
-grep -R -q 'example_ext' "$work/clean/composer.json"
-if grep -R -q '__EXTKEY__' "$work/clean"; then
+grep -q 'acme/example_ext' "$work/clean/composer.json"
+if grep -R -q '__EXTKEY__\|__VENDOR__' "$work/clean"; then
   echo "placeholder remained after rendering" >&2
   exit 1
 fi
+
+mkdir -p "$work/nokey"
+printf '%s\n' '<extension><file>example_ext</file></extension>' > "$work/nokey/info.xml"
+"$root/tools/ckinit.php" "$work/nokey" >/dev/null
+grep -q 'example/example_ext' "$work/nokey/composer.json"
 
 if "$root/tools/ckinit.php" "$work/clean" >/dev/null 2>&1; then
   echo "existing files were overwritten without --force" >&2

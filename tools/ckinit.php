@@ -13,7 +13,8 @@ Usage:
   tools/ckinit.php [--force] <extension-directory>
 
 The target must contain info.xml. Files from template/extension are copied
-recursively and __EXTKEY__ is replaced with info.xml's <file> value. Existing
+recursively; __EXTKEY__ is replaced with info.xml's <file> value and
+__VENDOR__ with the vendor segment of the extension key. Existing
 files are preserved unless --force is given.
 
 Typical flow:
@@ -71,6 +72,13 @@ if ($extensionFile === '' || preg_match('/^[a-zA-Z][a-zA-Z0-9_]*$/', $extensionF
   exit(2);
 }
 
+// Composer vendor from the reverse-domain key: `org.example.myext` -> `example`.
+$keySegments = explode('.', trim((string) $xml['key']));
+$vendor = count($keySegments) >= 3 ? $keySegments[count($keySegments) - 2] : '';
+if (preg_match('/^[a-z0-9]([a-z0-9_.-]*[a-z0-9])?$/', $vendor) !== 1) {
+  $vendor = 'example';
+}
+
 $iterator = new RecursiveIteratorIterator(
   new RecursiveDirectoryIterator($templateDir, FilesystemIterator::SKIP_DOTS),
   RecursiveIteratorIterator::SELF_FIRST,
@@ -93,7 +101,7 @@ foreach ($iterator as $item) {
     $destination,
     $relative,
     $item->getPerms() & 0777,
-    str_replace('__EXTKEY__', $extensionFile, $content),
+    str_replace(['__EXTKEY__', '__VENDOR__'], [$extensionFile, $vendor], $content),
   ];
   if ((file_exists($destination) || is_link($destination)) && !$force) {
     $conflicts[] = $relative;
