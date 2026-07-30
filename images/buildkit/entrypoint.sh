@@ -92,8 +92,9 @@ user=root
 password=${CIVICRM_DB_ROOT_PASSWORD}
 MYCNF
     chown buildkit:buildkit /home/buildkit/.my.cnf
+    chmod 600 /home/buildkit/.my.cnf
 
-    ${BK} "export PATH='${PATH}' && amp config:set --mysql_type=mycnf --httpd_type=none --perm_type=none"
+    ${BK} "export PATH=$(printf '%q' "${PATH}") && amp config:set --mysql_type=mycnf --httpd_type=none --perm_type=none"
 
     # The site was baked against a throwaway MariaDB on 127.0.0.1 (see bake.sh),
     # so the civibuild build config + amp instance registry still point there.
@@ -101,14 +102,16 @@ MYCNF
     # `amp create -f` (run by reinstall via amp_install) then re-creates the
     # per-site DBs + users on ${CIVICRM_DB_HOST}. Without this, drush/cv dial
     # 127.0.0.1 inside the container and get "[2002] Connection refused".
-    ${BK} "sed -i 's/127\.0\.0\.1/${CIVICRM_DB_HOST}/g' \
+    # Escape sed-replacement metacharacters in the host (/, &, \).
+    DB_HOST_SED=$(printf '%s' "${CIVICRM_DB_HOST}" | sed 's/[\/&\\]/\\&/g')
+    ${BK} "sed -i 's/127\.0\.0\.1/${DB_HOST_SED}/g' \
         /home/buildkit/buildkit/build/*.sh \
         /home/buildkit/.amp/instances.yml \
         /home/buildkit/.amp/my.cnf.d/* 2>/dev/null || true"
 
     # reinstall (not create): reuse the baked codebase, recreate the DBs on the
     # external host, regenerate settings for ${CIVIKITCHEN_SITE_URL}.
-    ${BK} "export PATH='${PATH}' && civibuild reinstall site --url '${CIVIKITCHEN_SITE_URL}'"
+    ${BK} "export PATH=$(printf '%q' "${PATH}") && civibuild reinstall site --url $(printf '%q' "${CIVIKITCHEN_SITE_URL}")"
 
     # joomla-demo's civibuild install is deliberately incomplete (component
     # registration left as a #fixme, only civi_contribute enabled). The demo
@@ -120,7 +123,7 @@ MYCNF
     # script self-guards); runs as buildkit, before the profile apply in
     # entrypoint-common.sh below.
     if [[ "${CIVICRM_SITE_TYPE}" == joomla* ]]; then
-        ${BK} "export PATH='${PATH}' && bash /usr/local/share/civikitchen/joomla-finish.sh"
+        ${BK} "export PATH=$(printf '%q' "${PATH}") && bash /usr/local/share/civikitchen/joomla-finish.sh"
     fi
 
     touch "${MARKER_FILE}"

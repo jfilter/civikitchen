@@ -12,8 +12,9 @@
 #   2. CODE — rector: off-the-shelf PHP-version + quality sets PLUS CiviKitchen's
 #        CiviCRM footgun rules (the deprecations cklint flags).
 #
-# api3 -> apiv4 and other semantic deprecations are NOT auto-rewritten by anyone
-# (APIv4 is a deliberate breaking change) — cklint flags those for a human.
+# api3 -> apiv4 is NOT rewritten by default (APIv4 is a deliberate breaking
+# change) — the opt-in --api / --api=array flags migrate a safe subset;
+# everything else cklint flags for a human.
 #
 # Pairs with cklint:   cklint flags  ->  ckmodernize fixes what's mechanical.
 # A project's own rector.php wins for the code step when present.

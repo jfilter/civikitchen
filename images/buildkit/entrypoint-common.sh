@@ -50,6 +50,9 @@ export CK_PROVISIONED_MARKER=/home/buildkit/.civikitchen-provisioned
 export CK_SETTINGS_D=/home/buildkit/buildkit/app/civicrm.settings.d
 # Discover the extension dir from cv (CMS-agnostic; Joomla uses CIVICRM_SETTINGS above).
 CK_EXT_DIR="$(ck_as_web cv ev 'echo rtrim(CRM_Core_Config::singleton()->extensionsDir, "/");' 2>/dev/null || true)"
+if [[ -z "${CK_EXT_DIR}" ]]; then
+    echo "[civikitchen] WARN: could not discover the extension dir from cv — auto-composer and extension enabling may silently no-op" >&2
+fi
 export CK_EXT_DIR
 
 . /usr/local/share/civikitchen/provision.sh

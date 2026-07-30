@@ -688,7 +688,7 @@ jobs:
 
     # The profile legs exercise the runtime profile path on every flavor:
     # first boot installs the profile extensions, seeds demo data, and
-    # creates API users (drush / wp-cli / standaloneusers APIs, per CMS).
+    # creates API users (via each CMS's native PHP APIs — no drush/wp-cli).
     strategy:
       matrix:
         variant:

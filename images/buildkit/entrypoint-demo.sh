@@ -74,10 +74,14 @@ ck_demo_apply_site_url() {
         src/civicrm/admin/civicrm.settings.php; do
         [[ -f "${SITE_ROOT}/${f}" ]] && sed -i "s@${old}@${new}@g" "${SITE_ROOT}/${f}"
     done
-    # WordPress additionally stores the base URL in the database.
+    # WordPress additionally stores the base URL in the database. If that
+    # update fails, do NOT record the new URL — the marker would claim success
+    # and every later boot would no-op while WordPress 301s to the stale base.
     if [[ -f "${SITE_ROOT}/web/wp-load.php" ]]; then
-        su -s /bin/bash buildkit -c "cd '${SITE_ROOT}/web' && /home/buildkit/buildkit/bin/cv ev \"update_option('siteurl', '${new}'); update_option('home', '${new}');\"" \
-            || echo "WARNING: could not update WordPress siteurl/home" >&2
+        if ! su -s /bin/bash buildkit -c "cd '${SITE_ROOT}/web' && /home/buildkit/buildkit/bin/cv ev \"update_option('siteurl', '${new}'); update_option('home', '${new}');\""; then
+            echo "WARNING: could not update WordPress siteurl/home — will retry on next boot" >&2
+            return 0
+        fi
     fi
     # Drop caches that may hold URLs composed from the old base.
     su -s /bin/bash buildkit -c "cd '${SITE_ROOT}/web' && /home/buildkit/buildkit/bin/cv flush" \

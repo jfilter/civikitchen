@@ -25,6 +25,10 @@ if (!is_file($stub)) {
 }
 
 $src = file_get_contents($stub);
+if ($src === FALSE) {
+  fwrite(STDERR, "[civikitchen] WARN: cannot read {$stub} — test-DB boot patch skipped\n");
+  exit(1);
+}
 
 if (strpos($src, 'civikitchen-test-db') !== FALSE) {
   // Already patched.

@@ -162,11 +162,18 @@ ck_setup_test_db() {
         # boot dies on a schema-less database. civibuild does the same
         # main→test copy for its sites.
         echo "[civikitchen] Seeding ${test_db_name} from ${CIVICRM_DB_NAME}..."
-        if ! mysqldump -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" \
-                --single-transaction --routines --triggers "${CIVICRM_DB_NAME}" 2>/dev/null \
-            | mysql -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" "${test_db_name}" 2>/dev/null; then
+        # pipefail in a subshell: without it a failing mysqldump (missing
+        # grants, dropped connection) feeds mysql empty input, the pipeline
+        # exits 0, and the marker gets written over a schema-less test DB.
+        local seed_err
+        seed_err=$(mktemp)
+        if ! (set -o pipefail; mysqldump -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" \
+                --single-transaction --routines --triggers "${CIVICRM_DB_NAME}" 2>>"${seed_err}" \
+            | mysql -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" "${test_db_name}" 2>>"${seed_err}"); then
+            grep -v "Using a password" "${seed_err}" >&2 || true
             echo "[civikitchen] WARN: could not seed ${test_db_name}; grant the DB user rights on it (GRANT ALL ON \`${test_db_name//_/\\_}\`.* ...) and re-provision" >&2
         fi
+        rm -f "${seed_err}"
     else
         echo "[civikitchen] WARN: could not pre-create ${test_db_name}; grant the DB user rights on it (GRANT ALL ON \`${test_db_name//_/\\_}\`.* ...) — headless tests need a seeded test DB" >&2
     fi
@@ -174,10 +181,22 @@ ck_setup_test_db() {
     # path; civicrm.settings.php reads _CV['TEST_DB_DSN'] under
     # CIVICRM_UF=UnitTests. Write it for root (docker exec default) and the web
     # user. Don't clobber an existing ~/.cv.json (a project may have set its own).
+    # JSON-escape the DSN (the DB password may contain \ or ") and write both
+    # files as root — interpolating the payload into a `bash -c` string would
+    # let a password containing quotes execute as shell.
+    local dsn_json="${test_db_dsn//\\/\\\\}"
+    dsn_json="${dsn_json//\"/\\\"}"
     local cv_json
-    cv_json=$(printf '{\n  "sites": {\n    "%s": {\n      "TEST_DB_DSN": "%s"\n    }\n  }\n}' "${CK_TEST_DB_CV_KEY}" "${test_db_dsn}")
-    [[ -f /root/.cv.json ]] || printf '%s\n' "${cv_json}" > /root/.cv.json
-    [[ -f "${CK_WEB_USER_HOME}/.cv.json" ]] || ck_as_web bash -c "printf '%s\n' '${cv_json}' > ${CK_WEB_USER_HOME}/.cv.json"
+    cv_json=$(printf '{\n  "sites": {\n    "%s": {\n      "TEST_DB_DSN": "%s"\n    }\n  }\n}' "${CK_TEST_DB_CV_KEY}" "${dsn_json}")
+    if [[ ! -f /root/.cv.json ]]; then
+        printf '%s\n' "${cv_json}" > /root/.cv.json
+        chmod 600 /root/.cv.json
+    fi
+    if [[ ! -f "${CK_WEB_USER_HOME}/.cv.json" ]]; then
+        printf '%s\n' "${cv_json}" > "${CK_WEB_USER_HOME}/.cv.json"
+        chown "${CK_WEB_USER}:${CK_WEB_GROUP}" "${CK_WEB_USER_HOME}/.cv.json"
+        chmod 600 "${CK_WEB_USER_HOME}/.cv.json"
+    fi
 
     # TEST_DB_DSN in ~/.cv.json alone is NOT enough: core's SettingsManager
     # composes CIVICRM_DSN from the CIVICRM_DB_* env vars before the settings
