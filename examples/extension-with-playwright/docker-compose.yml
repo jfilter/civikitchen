@@ -73,7 +73,7 @@ services:
       retries: 10
 
   phpmyadmin:
-    image: phpmyadmin/phpmyadmin:latest
+    image: phpmyadmin/phpmyadmin:5.2.2
     depends_on:
       - db
     ports:
@@ -82,7 +82,7 @@ services:
       PMA_HOST: db
 
   maildev:
-    image: maildev/maildev:latest
+    image: maildev/maildev:2.1.0
     ports:
       - "1080:1080"
       - "1025:1025"

@@ -28,7 +28,7 @@ npm run test:debug     # step through with Playwright Inspector
 
 ## Use it in your own extension
 
-Copy these four files into your extension repo:
+Copy these files into your extension repo:
 
 - `playwright.config.ts`
 - `tests/auth.setup.ts`

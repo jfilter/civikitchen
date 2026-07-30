@@ -102,7 +102,7 @@ npm install && npx playwright install chromium
 npm test
 ```
 
-See the [example's README](../examples/extension-with-playwright/README.md) for how to drop the four config files into your own extension repo.
+See the [example's README](../examples/extension-with-playwright/README.md) for how to drop the config files into your own extension repo.
 
 ## Civix workflow
 
@@ -175,9 +175,14 @@ docker compose exec app bash -c "cd /var/www/html/ext/myextension && ckconform"
 
 ## Modernizing
 
-`ckmodernize` runs the bundled Rector setup from an extension root. By default
-it previews changes; pass `--fix` to apply them. If the extension ships its own
-`rector.php`, that config wins.
+`ckmodernize` modernizes an extension in two layers: **structure** via civix
+(`civix upgrade` + `civix convert-entity`, civix extensions only) and **code**
+via the bundled Rector setup. By default it previews the code changes and
+lists the civix steps; `--fix` applies both (civix has no preview mode). If
+the extension ships its own `rector.php`, that config wins. Scope with
+`--no-civix` / `--no-rector`, explicit paths, or `--all`; the opt-in `--api`
+(OO style) / `--api=array` flags additionally migrate a safe subset of APIv3
+calls to APIv4 — preview and review those.
 
 ```bash
 docker compose exec app bash -c "cd /var/www/html/ext/myextension && ckmodernize"

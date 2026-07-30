@@ -18,6 +18,9 @@ Official `civicrm/civicrm` image with dev tools added:
 - **phpcs + civicrm/coder** — the de-facto CiviCRM style guide (relaxed Drupal CS)
 - **cklint + the `CiviKitchen` phpcs standard** — opinionated extension linting. The standard is the Drupal base minus the doc-comment sniffs that fight PHPStan array-shape PHPDocs, plus CiviCRM footgun sniffs: bans APIv3 calls and removed/deprecated core helpers (`CRM_Utils_Array::value`, `CRM_Core_Error::fatal|debug_*`); flags bare `ts()` — extensions must use `E::ts()` for their own translation domain; flags legacy managed/menu/settings/entity/angular hook implementations where standard mixins should be used; guards `@required` on externally reachable APIv4 actions; and caps per-file length (`MaxFileLength`, default 1000 lines, configurable) so a runaway class gets split. `cklint` lints your uncommitted changes by default (`--all`, `--fix`, explicit paths supported) and always defers to a project's own `phpcs.xml(.dist)`.
 - **ckmodernize + rector** — opt-in code modernization for extension repos: previews by default, applies with `--fix`, and includes CiviKitchen rules for the same CiviCRM footguns `cklint` flags.
+- **ckconform** — repo-structure conformance checks against the extension template (see [extension-standards.md](extension-standards.md))
+- **ckcoverage** — runs phpunit with line coverage and enforces the `min_coverage` floor from `.ckconform`
+- **cktestreset** — drops + reseeds the isolated `<db>_test` scratch DB and clears stale cached containers (standalone only; civibuild manages the buildkit test DBs)
 
 CiviCRM is auto-installed on first container start when `CIVICRM_AUTO_INSTALL=1`. See [Extension development](extension-development.md) for the full setup.
 
@@ -88,8 +91,9 @@ CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10. The
 same Dockerfile (`images/buildkit/`) — only the default civibuild site type
 differs (`wp-demo`, `drupal10-demo`, `drupal11-demo`, or `joomla-demo`). All
 buildkit dev images carry the same dev tools as the standalone image (composer,
-node/npm, phpunit, phpstan, phpcs+coder, cklint, ckmodernize, civix, pcov,
-xdebug).
+node/npm, phpunit, phpstan, phpcs+coder, cklint, ckconform, ckcoverage,
+ckmodernize, civix, pcov, xdebug) — except `cktestreset`, which is
+standalone-only (civibuild manages the buildkit flavors' `sitetest_*` DBs).
 
 Ready-to-run: [`examples/wordpress/`](../examples/wordpress/)
 
@@ -175,7 +179,7 @@ writes enforce those permissions. They live in
 |---|---|---|---|
 | `verein` | CiviBanking, CiviSEPA, Contract, Twingle, GDPRX, XCM, IdentityTracker, ContactLayout | Musterverein e.V.: membership types (Voll-/Förder-/Ehrenmitglied), 24 members with addresses + fee history, SEPA creditor + 21 direct-debit mandates | readonly, fundraiser, eventmanager, caseworker, bankimporter |
 | `fundraising` | CiviRules, DonRec | 2 campaigns, 18 donors with varied giving history, 6 recurring donors, 4 pledges with installment schedules | readonly, fundraiser |
-| `events` | RemoteEvent, EventMessages | 6 past + upcoming events, 18 contacts with participant records in varied statuses | readonly, eventmanager |
+| `events` | RemoteEvent, EventMessages, RemoteTools, XCM, IdentityTracker | 6 past + upcoming events, 18 contacts with participant records in varied statuses | readonly, eventmanager |
 | `mailing` | Mosaico (+ core FlexMailer) | 3 segmented mailing lists, 30 subscribers, a draft newsletter | readonly, mailer |
 
 ```bash
@@ -226,6 +230,7 @@ until the breakage is fixed.
 | `:standalone-latest` | Same as `:standalone`. |
 | `:standalone-<minor>` | Latest patch of the **current** stable minor (e.g. `:standalone-6.15` while 6.15.x is current). When upstream moves to the next minor, a new tag appears and the old one freezes at its last patch — handy as a known-good fallback right after a minor bump. |
 | `:drupal10`, `:drupal11`, `:wordpress`, `:joomla`, `:*-demo` | Bake the current stable at image-build time. Check what a pulled image contains without booting it: `docker inspect <image> --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`. |
+| `:<flavor>-php<version>` | The buildkit dev flavors also publish a PHP-suffixed tag (e.g. `:drupal10-php8.3`) — same image, explicit about the PHP it carries. |
 
 Need a minor pinned longer than that — or a version the published images don't
 offer at all? Build your own: see
