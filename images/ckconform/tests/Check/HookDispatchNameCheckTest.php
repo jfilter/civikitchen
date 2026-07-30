@@ -165,4 +165,23 @@ final class HookDispatchNameCheckTest extends CheckTestCase
         ]);
         $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
     }
+
+    /** A prefix with underscores must be parsed, not silently skipped. */
+    public function testAnUnderscorePrefixIsStillChecked(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'mail_health'),
+            'mail_health.php' => "<?php\nfunction otherext_civicrm_post(\$op) {\n}\n",
+        ]);
+        $this->assertFails($this->run_(new HookDispatchNameCheck(), $context), 'otherext');
+    }
+
+    public function testAnUnderscorePrefixOwnHookPasses(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'mail_health'),
+            'mail_health.php' => "<?php\nfunction mail_health_civicrm_post(\$op) {\n}\n",
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
 }

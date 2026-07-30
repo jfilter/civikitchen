@@ -41,7 +41,15 @@ final class TestSuiteRequiredCheck implements Check
 
         $optout = $context->policyValue('tests');
         if ($optout !== null) {
-            $reporter->ok("no test suite — declared optional in .ckconform ({$optout})");
+            // Only the documented form opts out — 'tests=required' or a typo
+            // must not silently disable the check, and the reason is not
+            // optional.
+            if (preg_match('/^optional\s+--\s+\S/', $optout) === 1) {
+                $reporter->ok("no test suite — declared optional in .ckconform ({$optout})");
+
+                return;
+            }
+            $reporter->fail("unrecognised tests= policy '{$optout}' — only 'tests=optional -- <reason>' opts out");
 
             return;
         }
@@ -57,11 +65,20 @@ final class TestSuiteRequiredCheck implements Check
     /** @return list<string> */
     private function sourceFiles(Context $context): array
     {
-        $candidates = array_merge(
-            $context->trackedUnder('Civi', ['.php']),
-            $context->trackedUnder('CRM', ['.php']),
-            $this->rootFiles($context),
-        );
+        // Outside a git checkout (tarball, exported build) trackedUnder()
+        // returns nothing and a source-heavy repo would silently pass —
+        // fall back to the filesystem there.
+        $candidates = $context->isGitRepo()
+            ? array_merge(
+                $context->trackedUnder('Civi', ['.php']),
+                $context->trackedUnder('CRM', ['.php']),
+                $this->rootFiles($context),
+            )
+            : array_merge(
+                $context->findFiles('Civi', ['.php']),
+                $context->findFiles('CRM', ['.php']),
+                glob($context->path('*.php')) ?: [],
+            );
 
         return array_values(array_filter(
             $candidates,

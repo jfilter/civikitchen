@@ -115,11 +115,11 @@ final class AutoloadPathCheck implements Check
     {
         $paths = [];
         foreach ($this->stringList($block['files'] ?? null) as $path) {
-            $paths[] = ltrim($path, './');
+            $paths[] = $this->stripDotSlash($path);
         }
         foreach ($this->stringList($block['classmap'] ?? null) as $path) {
             if (!$this->isDirectoryPath($path)) {
-                $paths[] = ltrim($path, './');
+                $paths[] = $this->stripDotSlash($path);
             }
         }
 
@@ -156,6 +156,16 @@ final class AutoloadPathCheck implements Check
         $path = rtrim($path, '/');
 
         return $path === '.' ? '' : $path;
+    }
+
+    /**
+     * Strip leading './' segments only. A character-set ltrim('./') would eat
+     * into the filename ('./.civix.php' -> 'civix.php') and silently re-root
+     * an escaping '../x' — which must stay as-is so it matches nothing.
+     */
+    private function stripDotSlash(string $path): string
+    {
+        return preg_replace('#^(\./)+#', '', $path) ?? $path;
     }
 
     /**

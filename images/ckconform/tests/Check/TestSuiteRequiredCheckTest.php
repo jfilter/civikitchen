@@ -82,4 +82,33 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
             $reporter->messages('ok'),
         );
     }
+
+    /** 'tests=required' or a typo must not silently disable the check. */
+    public function testAnUnrecognisedPolicyValueFails(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Thing.php' => '<?php class Thing {}',
+            '.ckconform' => "tests=required\n",
+        ], git: true);
+        $this->assertFails($this->run_(new TestSuiteRequiredCheck(), $context), "unrecognised tests= policy");
+    }
+
+    /** The reason is not optional. */
+    public function testAnOptOutWithoutAReasonFails(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Thing.php' => '<?php class Thing {}',
+            '.ckconform' => "tests=optional\n",
+        ], git: true);
+        $this->assertFails($this->run_(new TestSuiteRequiredCheck(), $context), "unrecognised tests= policy");
+    }
+
+    /** Outside git (tarball export) the filesystem fallback still counts source. */
+    public function testSourceIsCountedOutsideAGitCheckout(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Thing.php' => '<?php class Thing {}',
+        ]);
+        $this->assertFails($this->run_(new TestSuiteRequiredCheck(), $context), 'no test suite');
+    }
 }

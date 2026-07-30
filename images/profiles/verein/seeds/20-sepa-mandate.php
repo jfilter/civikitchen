@@ -22,8 +22,9 @@ if (!$installed) {
   return;
 }
 
-$mandates = civicrm_api3('SepaMandate', 'getcount', ['check_permissions' => 0]);
-if (!empty($mandates['result'])) {
+// API3 getcount returns a plain int, not a result array.
+$mandates = (int) civicrm_api3('SepaMandate', 'getcount', ['check_permissions' => 0]);
+if ($mandates > 0) {
   echo "SEPA mandates already seeded, skipping\n";
   return;
 }

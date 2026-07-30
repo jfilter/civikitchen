@@ -74,4 +74,17 @@ final class Api4LiteralEntityCheckTest extends CheckTestCase
         ]);
         $this->assertPasses($this->run_(new Api4LiteralEntityCheck(), $context));
     }
+
+    /**
+     * A local CiviRulesRule-style entity puts 'Civi' in the family — which
+     * would flag every core CiviCase/CiviMail call. That family is skipped.
+     */
+    public function testALocalCiviPrefixedEntityDoesNotFlagCoreCiviCalls(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/CiviRulesRule.php' => "<?php\n",
+            'Civi/Ext/Runner.php' => "<?php\ncivicrm_api4('CiviCase', 'get', []);\n",
+        ], git: true);
+        $this->assertPasses($this->run_(new Api4LiteralEntityCheck(), $context));
+    }
 }

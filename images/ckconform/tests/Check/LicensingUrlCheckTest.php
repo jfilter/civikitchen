@@ -96,4 +96,16 @@ final class LicensingUrlCheckTest extends CheckTestCase
             extra: "  <urls>\n    <url desc=\"Licensing\">{$url}</url>\n  </urls>",
         );
     }
+
+    /**
+     * The reverse direction of the agpl/gpl containment: AGPL declared with a
+     * stale plain-GPL link must fail ('agpl-3.0' contains 'gpl').
+     */
+    public function testAPlainGplUrlIsNotAcceptedForAnAgplDeclaration(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->urlInfoXml('AGPL-3.0-or-later', 'https://www.gnu.org/licenses/gpl-3.0.html'),
+        ]);
+        $this->assertFails($this->run_(new LicensingUrlCheck(), $context), 'points at the gpl text');
+    }
 }

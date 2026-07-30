@@ -77,7 +77,7 @@ final class HookDispatchNameCheck implements Check
             }
 
             foreach ($this->globalFunctions($contents) as $function) {
-                if (preg_match('/^([A-Za-z0-9]+)_civicrm_([a-zA-Z]+)$/', $function, $m) !== 1) {
+                if (preg_match('/^([A-Za-z0-9_]+)_civicrm_([a-zA-Z]+)$/', $function, $m) !== 1) {
                     continue;
                 }
                 [, $prefix, $suffix] = $m;

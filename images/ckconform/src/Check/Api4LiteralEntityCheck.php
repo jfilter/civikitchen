@@ -48,7 +48,14 @@ final class Api4LiteralEntityCheck implements Check
         }
         $family = [];
         foreach ($local as $entity) {
-            $family[$this->leadingWord($entity)] = true;
+            $word = $this->leadingWord($entity);
+            // A local CiviRulesRule-style entity would put core's whole
+            // Civi* family (CiviCase, CiviMail, ...) under suspicion —
+            // too broad to tell a typo from a legitimate core call.
+            if ($word === 'Civi') {
+                continue;
+            }
+            $family[$word] = true;
         }
 
         $dangling = [];

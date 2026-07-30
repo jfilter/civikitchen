@@ -34,8 +34,14 @@ final class LicensingUrlCheck implements Check
 
         $declared = strtolower($this->infoLicense($context));
         $fromUrl = $this->classify(strtolower($url));
+        // Classify BOTH sides where possible: plain substring containment lets
+        // "agpl-3.0" swallow a stale plain-GPL link ('agpl' contains 'gpl').
+        $fromDeclared = $this->classify($declared);
 
-        if ($fromUrl !== '' && !str_contains($declared, $fromUrl)) {
+        $mismatch = $fromDeclared !== ''
+            ? $fromDeclared !== $fromUrl
+            : !str_contains($declared, $fromUrl);
+        if ($fromUrl !== '' && $mismatch) {
             $reporter->fail(sprintf(
                 'info.xml declares <license>%s</license> but its Licensing url points at the %s text (%s)',
                 $this->infoLicense($context),

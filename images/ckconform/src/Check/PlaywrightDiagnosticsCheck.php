@@ -58,7 +58,10 @@ final class PlaywrightDiagnosticsCheck implements Check
         $problems = [];
         foreach ($configs as $config) {
             $body = $context->read($config) ?? '';
-            if (preg_match("/trace:\s*'retain-on-failure'/", $body) !== 1) {
+            // 'on' records strictly more than retain-on-failure; the *-retry
+            // modes leave the first failing run traceless and don't count.
+            $traceValue = "['\"](?:retain-on-failure|on)['\"]";
+            if (preg_match("/trace:\s*(?:{$traceValue}|\{[^}]*mode:\s*{$traceValue})/", $body) !== 1) {
                 $problems[] = $config . ': no retain-on-failure trace';
             }
             if (preg_match('/reporter:/', $body) !== 1) {

@@ -143,4 +143,24 @@ final class PlaywrightDiagnosticsCheckTest extends CheckTestCase
         ], git: true);
         $this->assertFails($this->run_(new PlaywrightDiagnosticsCheck(), $context), 'does not upload');
     }
+
+    public function testADoubleQuotedTracePasses(): void
+    {
+        $config = str_replace("trace: 'retain-on-failure'", 'trace: "retain-on-failure"', self::GOOD);
+        $context = $this->repo([
+            'playwright.config.ts' => $config,
+            '.github/workflows/ci.yml' => self::UPLOAD,
+        ], git: true);
+        $this->assertPasses($this->run_(new PlaywrightDiagnosticsCheck(), $context));
+    }
+
+    public function testTheObjectFormOfTracePasses(): void
+    {
+        $config = str_replace("trace: 'retain-on-failure'", "trace: { mode: 'retain-on-failure' }", self::GOOD);
+        $context = $this->repo([
+            'playwright.config.ts' => $config,
+            '.github/workflows/ci.yml' => self::UPLOAD,
+        ], git: true);
+        $this->assertPasses($this->run_(new PlaywrightDiagnosticsCheck(), $context));
+    }
 }

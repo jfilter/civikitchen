@@ -75,4 +75,24 @@ final class AutoloadPathCheckTest extends CheckTestCase
         ], git: true);
         $this->assertPasses($this->run_(new AutoloadPathCheck(), $context));
     }
+
+    /** ltrim('./') is a character-set trim: './.hidden.php' must not become 'hidden.php'. */
+    public function testADotSlashPrefixedDotfilePasses(): void
+    {
+        $context = $this->repo([
+            'composer.json' => $this->composer('{ "files": [ "./.hidden.php" ] }'),
+            '.hidden.php' => "<?php\n",
+        ], git: true);
+        $this->assertPasses($this->run_(new AutoloadPathCheck(), $context));
+    }
+
+    /** A files entry that escapes the repo must fail, not be re-rooted. */
+    public function testAnEscapingFilesEntryFails(): void
+    {
+        $context = $this->repo([
+            'composer.json' => $this->composer('{ "files": [ "../shared/boot.php" ] }'),
+            'shared/boot.php' => "<?php\n",
+        ], git: true);
+        $this->assertFails($this->run_(new AutoloadPathCheck(), $context), '../shared/boot.php');
+    }
 }
