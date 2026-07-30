@@ -117,4 +117,13 @@ final class PhpstanConfigCheckTest extends CheckTestCase
         ]);
         $this->assertPasses($this->run_(new PhpstanConfigCheck(), $context));
     }
+
+    /** A `- ../` under excludePaths is harmless — only scan blocks count. */
+    public function testAnEscapingExcludePathIsNotAScanPath(): void
+    {
+        $context = $this->repo([
+            'phpstan.neon.dist' => "parameters:\n  level: 10\n  excludePaths:\n    - ../other\n  paths:\n    - Civi\n",
+        ]);
+        $this->assertPasses($this->run_(new PhpstanConfigCheck(), $context));
+    }
 }

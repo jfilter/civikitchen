@@ -35,9 +35,15 @@ cd "${SITE_WEB}"
 
 # Joomla guard: only finish a Joomla site. cv boots here (the DB is up), so ask
 # CiviCRM directly — CMS-agnostic, and a clean no-op on drupal*/wp/standalone.
-UF="$(cv ev 'echo CIVICRM_UF;' 2>/dev/null || true)"
+# A cv failure must NOT read as "not Joomla": on a real Joomla site that would
+# silently ship a dev image with a dead option=com_civicrm route.
+if ! UF="$(cv ev 'echo CIVICRM_UF;' 2>&1)"; then
+    echo "joomla-finish: ERROR: cv cannot boot the site — cannot tell whether this is Joomla:" >&2
+    echo "${UF}" >&2
+    exit 1
+fi
 if [ "${UF}" != "Joomla" ]; then
-    echo "joomla-finish: site UF is '${UF:-unknown}', not Joomla — nothing to do."
+    echo "joomla-finish: site UF is '${UF}', not Joomla — nothing to do."
     exit 0
 fi
 

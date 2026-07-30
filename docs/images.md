@@ -68,6 +68,13 @@ services:
 
 > **`CIVIKITCHEN_SITE_URL` matters.** CiviCRM uses it for all asset paths (JS, CSS, fonts). If the port mapping differs from the URL the user opens, assets 404. Default is `http://localhost` (port 80).
 
+> **Recreated containers don't eat your data.** The site build lives in the app
+> container, the databases on the DB volume. When a *fresh* app container (image
+> update, `docker rm`) finds an existing civikitchen site in the external DB, it
+> refuses to rebuild — `civibuild reinstall` would drop the site databases.
+> Opt in explicitly with `CIVIKITCHEN_REINSTALL=1`, or start clean with
+> `docker compose down -v`.
+
 Ready-to-run: [`examples/drupal10/`](../examples/drupal10/)
 
 ## Drupal 11 (dev)

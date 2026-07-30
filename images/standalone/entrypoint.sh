@@ -139,7 +139,15 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
     # Run as www-data: /var/www/html/private/ is owned by www-data, and the
     # install creates settings files + cache dirs there. Running as root
     # leaves them root-owned and apache can't later write to the cache dir.
-    runuser -u www-data -- cv core:install -n -K --url="${CIVIKITCHEN_SITE_URL}" --db="${DB_URL}" "${INSTALL_OPTS[@]}"
+    # A half-finished install writes the settings file before it dies; the
+    # next boot would then skip the install (settings exist) and every later
+    # step would fail against the half-installed DB with nothing self-healing.
+    # Remove the settings file on failure so the next start retries cleanly.
+    if ! runuser -u www-data -- cv core:install -n -K --url="${CIVIKITCHEN_SITE_URL}" --db="${DB_URL}" "${INSTALL_OPTS[@]}"; then
+        echo "[civikitchen] ERROR: cv core:install failed — removing the partial settings file so the next start retries" >&2
+        rm -f "${SETTINGS_FILE}"
+        exit 1
+    fi
     echo "[civikitchen] CiviCRM installed."
 fi
 

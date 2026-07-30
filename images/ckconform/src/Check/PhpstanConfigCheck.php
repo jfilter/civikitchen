@@ -84,14 +84,30 @@ final class PhpstanConfigCheck implements Check
      */
     private function escapingScanPaths(string $config): array
     {
+        // Only list items INSIDE a scanFiles:/scanDirectories: block count —
+        // a `- ../` under e.g. excludePaths: is harmless (phpstan ignores
+        // nonexistent excludes) and must not fail with a scan-path message.
+        // NEON quotes are optional; strip them if present.
         $escaping = [];
-        // A YAML list item under scanFiles:/scanDirectories: whose value starts
-        // with `..`. NEON quotes are optional; strip them if present.
-        if (preg_match_all('/^\s*-\s*[\'"]?(\.\.\/[^\'"\s]+)/m', $config, $matches) === false) {
-            return [];
-        }
-        foreach ($matches[1] as $path) {
-            $escaping[] = $path;
+        $scanIndent = null;
+        foreach (preg_split('/\R/', $config) ?: [] as $line) {
+            if (preg_match('/^(\s*)(scanFiles|scanDirectories):\s*$/', $line, $m) === 1) {
+                $scanIndent = strlen($m[1]);
+                continue;
+            }
+            if ($scanIndent === null || trim($line) === '') {
+                continue;
+            }
+            if (preg_match('/^(\s*)-\s*[\'"]?(\.\.\/[^\'"\s]+)/', $line, $m) === 1
+                && strlen($m[1]) > $scanIndent
+            ) {
+                $escaping[] = $m[2];
+                continue;
+            }
+            // Any construct back at (or above) the key's indent ends the block.
+            if (preg_match('/^(\s*)\S/', $line, $m) === 1 && strlen($m[1]) <= $scanIndent) {
+                $scanIndent = null;
+            }
         }
 
         return array_values(array_unique($escaping));

@@ -129,4 +129,13 @@ final class LockfileCheckTest extends CheckTestCase
         $context = $this->repo(['package.json' => '{}']);
         $this->assertSilent($this->run_(new LockfileCheck(), $context));
     }
+
+    /** 'sub-package.json' is not an npm manifest and needs no lockfile. */
+    public function testASuffixedJsonFileIsNotAManifest(): void
+    {
+        $context = $this->repo([
+            'tests/fixtures/sub-package.json' => '{}',
+        ], git: true);
+        $this->assertSilent($this->run_(new LockfileCheck(), $context));
+    }
 }

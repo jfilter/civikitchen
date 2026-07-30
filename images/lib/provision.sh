@@ -360,7 +360,10 @@ ck_heal_perms() {
 # and calls ck_smtp directly, so it must NOT call this bundle (its entrypoint
 # doesn't).
 ck_post_install_config() {
-    [[ -f "${CK_CONFIGURED_MARKER}" ]] && return 0
+    if [[ -f "${CK_CONFIGURED_MARKER}" ]]; then
+        echo "[civikitchen] Already configured (${CK_CONFIGURED_MARKER}) — first-boot config knobs (SMTP, test DB, demo user) are not re-applied; remove the marker to re-run."
+        return 0
+    fi
     ck_dev_settings
     ck_smtp
     ck_setup_test_db
@@ -375,7 +378,10 @@ ck_post_install_config() {
 # The profile goes first: it sets up the base stack that the user's extension
 # knobs and init hooks layer on top of.
 ck_post_install_provision() {
-    [[ -f "${CK_PROVISIONED_MARKER}" ]] && return 0
+    if [[ -f "${CK_PROVISIONED_MARKER}" ]]; then
+        echo "[civikitchen] Already provisioned (${CK_PROVISIONED_MARKER}) — CIVIKITCHEN_PROFILE / *_EXTENSIONS / init.d changes are not re-applied; remove the marker to re-run."
+        return 0
+    fi
     ck_apply_profile
     ck_extra_extensions
     ck_enable_extensions

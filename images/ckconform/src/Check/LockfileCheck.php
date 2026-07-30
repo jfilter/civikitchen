@@ -57,7 +57,7 @@ final class LockfileCheck implements Check
     private function manifests(Context $context): array
     {
         return $context->tracked(
-            '*package.json',
+            'package.json',
             static fn (string $file): bool => !str_contains($file, 'node_modules'),
         );
     }

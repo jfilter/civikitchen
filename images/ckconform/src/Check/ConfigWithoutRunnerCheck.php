@@ -115,7 +115,7 @@ final class ConfigWithoutRunnerCheck implements Check
             return $text;
         }
 
-        foreach ($context->tracked('*package.json', static fn (string $f): bool
+        foreach ($context->tracked('package.json', static fn (string $f): bool
             => !str_contains($f, 'node_modules')) as $manifest) {
             $scripts = $context->json($manifest)['scripts'] ?? null;
             if (!is_array($scripts)) {

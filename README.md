@@ -21,19 +21,18 @@ Testing a CiviCRM extension properly means running it against a real CiviCRM —
 - **One `docker run` to a working CiviCRM** — the demo images embed MariaDB and demo data.
 - **A fast dev loop** — mount your extension, `docker compose up`, edit, reload, `phpunit`.
 - **Shared workflow across CMS flavors** — profiles, dev tools, SMTP capture, extension provisioning, and init hooks work consistently on Standalone, Drupal 10/11, WordPress, and Joomla; CMS-specific install knobs are documented per image.
-- **Batteries included** — composer, node, civix, phpunit 9, phpstan, phpcs + civicrm/coder, xdebug, pcov, `cklint` (opinionated extension linting), and `ckmodernize` (Rector-based CiviCRM modernization, including opt-in assisted API3→API4 rewrites for safe cases).
+- **Batteries included** — composer, node, civix, phpunit 9, phpstan, phpcs + civicrm/coder, xdebug, pcov, plus the `ck*` tool belt: `cklint` (opinionated extension linting), `ckconform` (repo-structure conformance), `ckcoverage` (coverage with an enforced floor), `ckmodernize` (civix + Rector modernization, incl. opt-in assisted API3→API4 rewrites), and `cktestreset` (reset the headless-test scratch DB).
 - **Realistic demo data via profiles** — one env var installs a curated extension stack, seed data, and API users (e.g. a German Verein with SEPA mandates and membership history).
 
 ## Pick an image
 
-| Image | Use case | DB | First start |
-|-------|----------|-----|-------------|
-| [`:standalone`](docs/images.md#standalone-dev) | Extension dev — fastest loop, headless tests | external (compose) | `cv core:install` (seconds) |
-| [`:drupal10`](docs/images.md#drupal-10-dev) | Test against the Drupal 10 stack | external (compose) | `civibuild` (~60 s) |
-| [`:drupal11`](docs/images.md#drupal-11-dev) | Test against the Drupal 11 stack | external (compose) | `civibuild` (~60 s) |
-| [`:wordpress`](docs/images.md#wordpress-dev) | Test against the WordPress stack | external (compose) | `civibuild` (~60 s) |
-| [`:joomla`](docs/images.md#joomla-dev) | Test against the Joomla stack | external (compose) | `civibuild` (~60 s) |
-| [`:{standalone,drupal10,drupal11,wordpress,joomla}-demo`](docs/images.md#demo-images) | Single-container demos — `docker run` and go | embedded (baked) | boots from baked data (seconds) |
+| Image | For | Database | First boot |
+|-------|-----|----------|------------|
+| [`:standalone`](docs/images.md#standalone-dev) | Extension development — fastest loop, isolated headless-test DB | external (compose stack) | automatic `cv core:install` — seconds |
+| [`:drupal10`](docs/images.md#drupal-10-dev) / [`:drupal11`](docs/images.md#drupal-11-dev) | Testing against the Drupal 10 / 11 stack | external (compose stack) | `civibuild` site build — ~60 s |
+| [`:wordpress`](docs/images.md#wordpress-dev) | Testing against the WordPress stack | external (compose stack) | `civibuild` site build — ~60 s |
+| [`:joomla`](docs/images.md#joomla-dev) | Testing against the Joomla stack | external (compose stack) | `civibuild` site build — ~60 s |
+| [`:standalone-demo` … `:joomla-demo`](docs/images.md#demo-images) | Demos, evaluation, screenshots — one container, `docker run` and go | embedded, demo data baked in | seconds |
 
 **Most users want `:standalone`** — it's the fastest dev loop and works for any extension that doesn't depend on a specific CMS. Reach for the buildkit images (`drupal10`, `drupal11`, `wordpress`, `joomla`) when you need to test CMS-specific behavior.
 

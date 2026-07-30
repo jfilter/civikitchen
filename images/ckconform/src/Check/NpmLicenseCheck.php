@@ -32,7 +32,7 @@ final class NpmLicenseCheck implements Check
         }
 
         $manifests = $context->tracked(
-            '*package.json',
+            'package.json',
             static fn (string $file): bool => !str_contains($file, 'node_modules'),
         );
 

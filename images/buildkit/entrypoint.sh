@@ -78,6 +78,27 @@ echo "Database is ready."
 # reinstall` (~60s) — it recreates the DBs on the external host and regenerates
 # the settings + isolated test DB for it, without re-downloading anything.
 if [[ ! -f "${MARKER_FILE}" ]]; then
+    # The marker lives in the container filesystem; the DB may live on a
+    # persistent volume. A recreated container (image update + pull_policy:
+    # always, docker rm) loses the marker — and `civibuild reinstall` DROPS
+    # the site databases. Refuse to wipe data that survived us: a sentinel
+    # row written after every successful install marks the external DB as
+    # carrying a civikitchen site.
+    if [[ "${CIVIKITCHEN_REINSTALL:-0}" != "1" ]] && php -r '
+        mysqli_report(MYSQLI_REPORT_OFF);
+        $m = @new mysqli(getenv("CIVICRM_DB_HOST"), "root",
+            getenv("CIVICRM_DB_ROOT_PASSWORD"), "", (int) getenv("CIVICRM_DB_PORT"));
+        if ($m->connect_errno) { exit(1); }
+        $r = @$m->query("SELECT 1 FROM civikitchen_state.site_installed LIMIT 1");
+        exit(($r && $r->num_rows > 0) ? 0 : 1);
+    ' 2>/dev/null; then
+        echo "ERROR: this container is fresh, but the database at ${CIVICRM_DB_HOST} already holds a civikitchen site." >&2
+        echo "       Rebuilding the site would DROP those databases (your dev data)." >&2
+        echo "       Either set CIVIKITCHEN_REINSTALL=1 to rebuild anyway (drops the site DBs)," >&2
+        echo "       or remove the DB volume for a clean start (docker compose down -v)." >&2
+        exit 1
+    fi
+
     echo "First run: installing ${CIVICRM_SITE_TYPE} site against ${CIVICRM_DB_HOST}..."
 
     BK="su -s /bin/bash buildkit -c"
@@ -125,6 +146,19 @@ MYCNF
     if [[ "${CIVICRM_SITE_TYPE}" == joomla* ]]; then
         ${BK} "export PATH=$(printf '%q' "${PATH}") && bash /usr/local/share/civikitchen/joomla-finish.sh"
     fi
+
+    # Sentinel for the fresh-container guard above: mark the external DB as
+    # holding an installed site (survives container recreation).
+    php -r '
+        mysqli_report(MYSQLI_REPORT_OFF);
+        $m = @new mysqli(getenv("CIVICRM_DB_HOST"), "root",
+            getenv("CIVICRM_DB_ROOT_PASSWORD"), "", (int) getenv("CIVICRM_DB_PORT"));
+        if ($m->connect_errno) { exit(1); }
+        $m->query("CREATE DATABASE IF NOT EXISTS civikitchen_state");
+        $m->query("CREATE TABLE IF NOT EXISTS civikitchen_state.site_installed (
+            id TINYINT UNSIGNED PRIMARY KEY, installed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+        $m->query("REPLACE INTO civikitchen_state.site_installed (id) VALUES (1)");
+    ' || echo "WARNING: could not record the install sentinel in civikitchen_state" >&2
 
     touch "${MARKER_FILE}"
     echo "Site installed."
