@@ -678,7 +678,7 @@ jobs:
 
   # --- Core upgrade persistence (opt-in via core_upgrade_from) --------------
   #
-  # The job above one axis over: that one moves the EXTENSION across a fixed
+  # The job above, one axis over: that one moves the EXTENSION across a fixed
   # core, the compat matrix below moves the CORE but installs from scratch every
   # time. What neither reaches is the state every existing site is in — records
   # and configuration created on core N, and then the core underneath them
@@ -816,7 +816,8 @@ jobs:
                cd /var/www/html/ext/$CK_EXT_KEY
                cv scr tests/upgrade/seed.php"
           else
-            echo "no tests/upgrade/seed.php: this run tests that the site boots on the new core and upgrades cleanly with $CK_EXT_KEY enabled, and nothing about the extension's own records. Add one to test what your data does."
+            echo "no tests/upgrade/seed.php: this run tests that the site boots on the new core and upgrades cleanly with $CK_EXT_KEY enabled — and nothing about the extension's own records."
+            echo "Add tests/upgrade/seed.php + tests/upgrade/assert.php to test what your data does across the upgrade."
           fi
 
       # `down` without -v: the containers go, the two named volumes stay. That is
