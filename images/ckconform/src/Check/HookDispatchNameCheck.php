@@ -47,7 +47,7 @@ final class HookDispatchNameCheck implements Check
         'fieldOptions', 'findDuplicates', 'install', 'links', 'mailingGroups',
         'mailSetupActions', 'managed', 'membershipTypeValues', 'merge', 'navigationMenu',
         'notePrivacy', 'pageRun', 'permission', 'post', 'postCommit', 'postInstall', 'postProcess',
-        'pre', 'preProcess', 'queryObjects', 'searchColumns', 'searchKitTasks', 'searchTasks',
+        'pre', 'preProcess', 'queryObjects', 'queueTaskError', 'searchColumns', 'searchKitTasks', 'searchTasks',
         'selectWhereClause', 'setDefaults', 'summaryActions', 'tabset', 'themes', 'tokens',
         'tokenValues', 'triggerInfo', 'uninstall', 'unsubscribeGroups', 'upgrade',
         'validateForm', 'xmlMenu',
