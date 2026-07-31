@@ -66,6 +66,7 @@ final class Registry
         Check\AfformContractCheck::class,
         Check\PermissionClosureCheck::class,
         Check\MessageTemplateTokenCheck::class,
+        Check\CrmScopeCheck::class,
     ];
 
     /** @return list<Check> */
