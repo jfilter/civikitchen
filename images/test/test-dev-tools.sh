@@ -16,6 +16,7 @@
 #   3. phpcs actually lints a sample file (intentionally non-conforming)
 #   3b. The CiviKitchen footgun sniffs fire, and cklint applies them
 #   3c. ckmodernize boots rector and previews a CiviCRM footgun rewrite
+#   3d. ckrelease builds a dist zip and rejects a mismatched tag
 #   4. phpstan actually analyses a sample file (intentionally with type errors)
 #   5. phpunit actually runs a passing assertion
 #   6. composer can install a real package from packagist
@@ -152,6 +153,52 @@ if echo "${CKMOD_OUT}" | grep -q '\?\?'; then
     ok "ckmodernize previews CRM_Utils_Array::value rewrite"
 else
     fail "ckmodernize did not preview the array-value rewrite (output: ${CKMOD_OUT:0:300})"
+fi
+
+# ---------------------------------------------------------------------------
+# 3d. ckrelease builds a dist archive from a throwaway extension repo
+echo "== ckrelease =="
+RELDIR="${WORKDIR}/rel"
+mkdir -p "${RELDIR}/tests/phpunit"
+cat > "${RELDIR}/info.xml" <<'XML'
+<?xml version="1.0"?>
+<extension key="org.example.greeter" type="module">
+  <file>greeter</file>
+  <version>1.3.0</version>
+</extension>
+XML
+echo '<?php' > "${RELDIR}/greeter.php"
+echo '<?php' > "${RELDIR}/tests/phpunit/GreeterTest.php"
+echo 'x' > "${RELDIR}/phpunit.xml.dist"
+(
+    cd "${RELDIR}"
+    git init -q .
+    git add -A
+    git -c user.email=test@example.org -c user.name=test commit -qm init
+) >/dev/null 2>&1
+
+CKREL_OUT="$( (cd "${RELDIR}" && ckrelease dist --version v1.3.0) 2>&1 || true)"
+if [ -f "${RELDIR}/dist/org.example.greeter-1.3.0.zip" ] \
+    && [ -f "${RELDIR}/dist/org.example.greeter-1.3.0.zip.sha256" ]; then
+    ok "ckrelease builds the dist zip + checksum"
+else
+    fail "ckrelease did not build the dist zip (output: ${CKREL_OUT:0:300})"
+fi
+
+# The whole point of the archive: dev/CI files stay out of what a site installs.
+CKREL_LIST="$(unzip -Z1 "${RELDIR}/dist/org.example.greeter-1.3.0.zip" 2>/dev/null || true)"
+if echo "${CKREL_LIST}" | grep -q 'org.example.greeter/greeter.php' \
+    && ! echo "${CKREL_LIST}" | grep -qE 'tests/|phpunit.xml.dist'; then
+    ok "ckrelease excludes dev/CI files from the archive"
+else
+    fail "ckrelease archive contents wrong (${CKREL_LIST:0:300})"
+fi
+
+# A tag that disagrees with info.xml is the failure this exists to catch.
+if (cd "${RELDIR}" && ckrelease check --version v9.9.9) >/dev/null 2>&1; then
+    fail "ckrelease accepted a tag that disagrees with info.xml"
+else
+    ok "ckrelease rejects a tag that disagrees with info.xml"
 fi
 
 # ---------------------------------------------------------------------------
