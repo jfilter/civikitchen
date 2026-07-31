@@ -86,7 +86,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve and verify the live image digests
-        id: resolve
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ github.repository_owner }}

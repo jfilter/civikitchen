@@ -83,6 +83,14 @@ it from the Actions tab with **allow_image_drift** when the difference is
 genuinely irrelevant to the built image, e.g. a comment-only change under
 `images/`.
 
+The flip side: `:v1` does **not** follow the weekly rebuild. Between releases
+the fleet keeps running the CiviCRM the last release blessed, while
+`:standalone` moves on. That is the point — one mechanism, and image content
+changes when someone decides it does — but it means a CiviCRM refresh reaches
+the fleet only via a patch release. That release costs one tag push and builds
+nothing, so cut them liberally; if `:v1` and `:standalone` drift apart for
+months, the contract has stopped being maintained, not stopped being safe.
+
 Already-published `vX.Y.Z` image tags are never moved onto a different digest:
 re-running a release is idempotent, but a *changed* one has to be a new patch
 version.
