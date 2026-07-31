@@ -13,6 +13,13 @@
 # with every push here. The canary repo is the exception — see
 # docs/releases.md.
 #
+# Beyond that default run the workflow has three opt-in extras — a
+# compatibility matrix over further CiviCRM images, a lifecycle smoke test and
+# an upgrade-from-the-last-release test. They are off unless asked for, and
+# they belong in a second, scheduled caller rather than in the push run:
+# docs/extension-standards.md ("Compatibility: test the range you claim") has
+# the reasoning and a ready-made compat.yml.
+#
 # civikitchen is public, so any repo can call this without a cross-repo token.
 # Everything runs inside the extension's own CiviCRM stack: the standalone image
 # auto-installs, enables the mounted extension and seeds the civicrm_test scratch

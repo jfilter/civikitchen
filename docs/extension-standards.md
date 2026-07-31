@@ -146,6 +146,74 @@ is what makes `npm publish` refuse.
 The tooling section is machine-checked by `ckconform` (run from the extension
 root) — CI should run it alongside cklint.
 
+## Compatibility: test the range you claim
+
+`info.xml` `<compatibility><ver>` is a promise; the default CI run checks one
+CiviCRM version, on one day, installed from scratch. Three opt-in inputs on the
+shared `extension-ci.yml` close that gap. All three default to off — a caller
+that sets none of them gets exactly the run it has today.
+
+| Input | What it adds |
+|---|---|
+| `matrix_images` | One extra job per CiviKitchen image tag (comma-separated): boots the stack and runs the suite against that CiviCRM. |
+| `lifecycle` | After the suite, in the running stack: `disable` → `enable` → `uninstall` → `install`, then asserts the extension is installed again. |
+| `upgrade_from_last_release` | Installs the newest reachable git tag, swaps the working tree to the tested commit, runs `cv upgrade:db --mode=ext` and asserts no upgrade stayed pending. |
+
+Pick the ends of your claimed range, not everything in between: the oldest
+minor you support and current stable. The image tags are `:standalone-<minor>`
+(e.g. `:standalone-6.12`) and the moving `:standalone`; see
+[images.md](images.md#tags--versions). A `<minor>` tag freezes when upstream
+moves on, and it freezes with the `ck*` tooling it was last built with — if you
+keep an old minor in a matrix for long, have *Build Dev Images* rebuild it
+(`workflow_dispatch` → `extra_standalone_minors`) so it carries current tooling.
+
+The matrix jobs run the **suite**, not the full `ci` pass: `cklint`,
+`ckconform`, `phpstan` and the coverage floor are enforced by the tools inside
+the image, so re-running them on a pinned older image grades that image's
+tooling rather than your extension. What the extra boot answers is the version
+question — does it install here, do the tests pass here.
+
+Each entry costs a full stack boot, so **do not put the matrix in the push
+run**. Keep `ci.yml` fast (it is what a PR waits on and what automerge gates
+on) and add a second, thin caller for the slow checks — one file, one schedule:
+
+```yaml
+# .github/workflows/compat.yml
+name: Compatibility
+on:
+  schedule:
+    - cron: '0 5 * * 1'   # Mondays, after the weekly image rebuild
+  workflow_dispatch:      # and on demand, before a release
+
+permissions:
+  contents: read
+
+jobs:
+  compat:
+    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    with:
+      key: myextension
+      # This caller gets the default `ci` job too — there is one reusable
+      # workflow, not two. Point it at the moving edge instead of repeating
+      # the pinned :v1 run every push already does: together with the oldest
+      # minor below, the weekly run then covers both ends of the range.
+      image: ghcr.io/jfilter/civikitchen:standalone
+      # Oldest minor from info.xml <compatibility>.
+      matrix_images: ghcr.io/jfilter/civikitchen:standalone-6.12
+      lifecycle: true
+      upgrade_from_last_release: true
+      # The drift job already runs on every push in ci.yml.
+      check_template: false
+```
+
+A scheduled workflow only runs from the default branch, so a red weekly run
+means the released state is broken — worth an issue, not a rerun.
+`workflow_dispatch` is there for the moment that matters most: before cutting a
+release.
+
+`compat.yml` is **not** template-managed: which versions you claim is your
+policy, so `ckinit` neither stamps nor checks this file.
+
 ## Workflow
 
 `cklint` → `phpstan` → `CIVICRM_UF=UnitTests phpunit` locally and in CI;
