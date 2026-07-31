@@ -89,9 +89,24 @@ if "$root/tools/ckinit.php" --check "$work/drift" >/dev/null 2>&1; then
   echo "template_custom without a reason was accepted" >&2
   exit 1
 fi
-printf '%s\n' 'template_custom=composer.json -- edited anyway' > "$work/drift/.ckconform"
+# A typo'd file name must fail loudly, not silently disable nothing.
+printf '%s\n' 'template_custom=composer.jsn -- edited anyway' > "$work/drift/.ckconform"
 if "$root/tools/ckinit.php" --check "$work/drift" >/dev/null 2>&1; then
-  echo "template_custom on a seeded file was accepted" >&2
+  echo "template_custom with a typo'd file name was accepted" >&2
+  exit 1
+fi
+
+# A SEEDED file declared custom may be absent: the repo owns its existence.
+# --check accepts the absence and --update must not reseed it.
+/bin/rm "$work/drift/.ckconform"
+"$root/tools/ckinit.php" --update "$work/drift" >/dev/null
+printf '%s\n' 'template_custom=phpunit.xml.dist -- no PHP suite in this repo' > "$work/drift/.ckconform"
+/bin/rm "$work/drift/phpunit.xml.dist"
+out=$("$root/tools/ckinit.php" --check "$work/drift")
+echo "$out" | grep -q 'custom    phpunit.xml.dist'
+"$root/tools/ckinit.php" --update "$work/drift" >/dev/null
+if [ -e "$work/drift/phpunit.xml.dist" ]; then
+  echo "--update reseeded a custom-declared seeded file" >&2
   exit 1
 fi
 

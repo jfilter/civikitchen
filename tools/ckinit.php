@@ -146,11 +146,15 @@ if (preg_match('/^[a-z0-9]([a-z0-9_.-]*[a-z0-9])?$/', $vendor) !== 1) {
   $vendor = 'example';
 }
 
-// Managed files the repo has declared custom, from .ckconform (same KEY=VALUE
+// Template files the repo has declared custom, from .ckconform (same KEY=VALUE
 // format ckconform reads; first occurrence wins). The reason after ' -- ' is
-// mandatory — an unexplained exception is indistinguishable from a stale one —
-// and only MANAGED files may be listed: exempting a seeded file would exempt
-// its very existence, and a typo would otherwise disable nothing, silently.
+// mandatory — an unexplained exception is indistinguishable from a stale one.
+// For a MANAGED file, custom means "the content is this repo's own"; for a
+// SEEDED file it means the repo owns the file's whole existence — including
+// not having it (a repo with no PHP test suite and a declared tests policy
+// has no business carrying a phpunit.xml.dist, and --update must not keep
+// reseeding one). Names are validated against the full template inventory, so
+// a typo still fails loudly instead of disabling nothing.
 $custom = [];
 $policyRaw = is_file($target . '/.ckconform') ? file_get_contents($target . '/.ckconform') : FALSE;
 if (is_string($policyRaw)) {
@@ -174,9 +178,9 @@ if (is_string($policyRaw)) {
       if ($item === '') {
         continue;
       }
-      if (!in_array($item, MANAGED_FILES, TRUE)) {
-        fwrite(STDERR, "ckinit: template_custom lists '{$item}', which is not a template-managed file.\n");
-        fwrite(STDERR, "Managed files:\n  " . implode("\n  ", MANAGED_FILES) . "\n");
+      if (!in_array($item, MANAGED_FILES, TRUE) && !in_array($item, SEEDED_FILES, TRUE)) {
+        fwrite(STDERR, "ckinit: template_custom lists '{$item}', which is not a template file.\n");
+        fwrite(STDERR, "Template files:\n  " . implode("\n  ", array_merge(MANAGED_FILES, SEEDED_FILES)) . "\n");
         exit(2);
       }
       $custom[$item] = TRUE;
