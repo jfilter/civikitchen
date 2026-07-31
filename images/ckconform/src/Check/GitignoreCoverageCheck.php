@@ -138,7 +138,11 @@ final class GitignoreCoverageCheck implements Check
      */
     private function isIgnored(Context $context, string $path): bool
     {
-        $command = 'git -C ' . escapeshellarg($context->root)
+        // Same safe.directory as Context::git(): under CI's uid mismatch a
+        // bare git call fails with "dubious ownership" (exit 128), which read
+        // as "not ignored" here — the one direct git call outside Context.
+        $command = 'git -c ' . escapeshellarg('safe.directory=' . rtrim($context->root, '/'))
+            . ' -C ' . escapeshellarg($context->root)
             . ' check-ignore -q ' . escapeshellarg($path) . ' 2>/dev/null';
         exec($command, $output, $status);
 
