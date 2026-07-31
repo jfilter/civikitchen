@@ -152,26 +152,27 @@ is what makes `npm publish` refuse.
 The tooling section is machine-checked by `ckconform` (run from the extension
 root) — CI should run it alongside cklint.
 
-## Frontend: npm dependencies, JS tests and browser tests
+## Frontend: JS dependencies, JS tests and browser tests
 
 An extension with a `package.json` has three things the default CI run does
 not do: install the tree (nothing is committed — see the lockfile rule above),
-run the JS unit suite, and drive the UI in a browser. Four more opt-in inputs
+run the JS unit suite, and drive the UI in a browser. Five more opt-in inputs
 on `extension-ci.yml`, all off by default:
 
 | Input | What it adds |
 |---|---|
 | `npm_ci` | `npm ci --ignore-scripts` on the runner, before the stack boots. The stack bind-mounts the checkout, so `node_modules/` is there for PHP code that reads an asset bundle. |
 | `js_tests` | Runs `npm test`. Implies `npm_ci`. Fails when `package.json` has no `test` script. |
+| `bun` | Uses Bun for all of the above instead of npm: `bun install --frozen-lockfile`, `bun run test`, `bun run test:e2e`. Implies the install, the way `js_tests` implies `npm_ci`. Needs a committed `bun.lock`. |
 | `playwright` | Own job: boots the stack with port 8080 published and an `admin` / `admin` demo user, then runs `npm run test:e2e` from the runner. Report and traces are uploaded on failure. |
-| `node_version` | Node for all of the above. Default `'20'`. |
+| `node_version` | Node for all of the above. Default `'20'`. Still applies under `bun` — see below. |
 
 Two scripts, two suites, and the names are the contract:
 
 - **`test`** — the JS unit suite, in whatever runner the repo picked (vitest,
-  bun, `node --test`). The workflow only knows npm's standard slot; what it
-  starts is your business. For a pure-function suite this is the bulk of the
-  frontend's coverage, so it is the one to have first.
+  bun, `node --test`). The workflow only knows the standard script slot; what
+  it starts is your business. For a pure-function suite this is the bulk of
+  the frontend's coverage, so it is the one to have first.
 - **`test:e2e`** — the Playwright suite. Not `test`, precisely so that
   enabling `js_tests` never accidentally starts a browser run, and so both
   suites stay separately reachable from CI.
@@ -188,11 +189,39 @@ tests should do it from its own `test` script, where it is visible in the log.
     with:
       key: myextension
       js_tests: true      # implies npm_ci
+      # bun: true         # same steps, run with Bun instead of npm
 ```
 
-The browser job does not: it boots a stack, installs browsers and is the
-slowest thing in the pipeline. Put it in the scheduled `compat.yml` caller
-below, next to the matrix — `playwright: true`.
+### Bun instead of npm
+
+`bun: true` switches the package manager for every frontend step at once —
+the install, `js_tests`, and the Playwright job. It is deliberately not
+per-step: a repo that resolves its dependencies with npm in one job and with
+Bun in another is testing two different trees.
+
+- **`bun.lock` must be committed.** The install is
+  `bun install --frozen-lockfile`, which refuses without one — the same rule
+  the lockfile section already states, and the reason the npm dependency
+  cache is switched off on this path (it keys on `package-lock.json`, and
+  `setup-node` fails the step when it cannot find one).
+- **Node is still installed**, at `node_version`. Bun replaces npm, not the
+  runtime: `bun run` starts your scripts, and what those scripts call —
+  `tsc`, `vitest`, `playwright` from `node_modules/.bin` — is a
+  `#!/usr/bin/env node` shebang. So the two inputs do not compete; there is
+  no Bun equivalent of `node_version`, the workflow installs the Bun the
+  setup action ships.
+- **`--ignore-scripts` has no counterpart.** Bun runs no dependency lifecycle
+  script at all unless it is listed as a `trustedDependency`, which is what
+  the flag buys on the npm path. It *does* run your own package's install
+  scripts, which `npm ci --ignore-scripts` here does not — keep the build in
+  the `test` script either way, and the two paths behave the same.
+- **`npx playwright install` stays `npx`** in the browser job. That is not a
+  package-manager call but the local binary either manager has just placed in
+  `node_modules/.bin`.
+
+The browser job does not belong in the push run: it boots a stack, installs
+browsers and is the slowest thing in the pipeline. Put it in the scheduled
+`compat.yml` caller below, next to the matrix — `playwright: true`.
 
 What that job assumes, because the shared workflow cannot ask:
 

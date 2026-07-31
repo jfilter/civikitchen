@@ -19,9 +19,10 @@
 # unless asked for, and they belong in a second, scheduled caller rather than
 # in the push run: docs/extension-standards.md ("Compatibility: test the range
 # you claim") has the reasoning and a ready-made compat.yml. The cheap ones are
-# the frontend steps (npm_ci, js_tests): seconds on the runner, and they belong
-# in the push run — docs/extension-standards.md ("Frontend: npm dependencies,
-# JS tests and browser tests").
+# the frontend steps (npm_ci, js_tests, and `bun` to run them with Bun instead
+# of npm): seconds on the runner, and they belong in the push run —
+# docs/extension-standards.md ("Frontend: JS dependencies, JS tests and browser
+# tests").
 #
 # civikitchen is public, so any repo can call this without a cross-repo token.
 # Everything runs inside the extension's own CiviCRM stack: the standalone image
@@ -106,6 +107,27 @@ on:
           and an opt-in that silently tests nothing is worse than no input.
         type: boolean
         default: false
+      bun:
+        description: >-
+          Drive every frontend step with Bun instead of npm: the tree is
+          installed with `bun install --frozen-lockfile`, js_tests runs `bun
+          run test`, and the Playwright job runs `bun run test:e2e` — the whole
+          pipeline or none of it, because a repo half on each package manager
+          resolves its dependencies twice. Implies the install the way js_tests
+          implies npm_ci, so a caller that only needs node_modules/ present
+          sets this input alone. Needs the committed bun.lock the standards ask
+          for; `--frozen-lockfile` refuses without one, and no
+          package-lock.json is expected, so the npm dependency cache is off on
+          this path. node_version is NOT overridden and does not conflict:
+          Node is still installed at that version, because `bun run` only
+          starts the repo's own scripts while the binaries they call (tsc,
+          vitest, playwright) run on the Node shebang in node_modules/.bin.
+          The Bun version itself is whatever the setup action installs — it is
+          not pinned here. One asymmetry worth knowing: the npm path passes
+          `--ignore-scripts`, and Bun never runs a *dependency's* lifecycle
+          scripts at all, but it does run the repo's own ones.
+        type: boolean
+        default: false
       playwright:
         description: >-
           Browser tests, in their own job: boot the stack with its HTTP port
@@ -119,8 +141,10 @@ on:
         default: false
       node_version:
         description: >-
-          Node version for every npm step above and for the Playwright job.
-          Only read when one of them is switched on.
+          Node version for every frontend step above and for the Playwright
+          job. Only read when one of them is switched on, and still read under
+          `bun`: Bun replaces the package manager, not the Node toolchain the
+          installed binaries run on.
         type: string
         default: '20'
 
@@ -170,40 +194,73 @@ jobs:
           [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
             || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
 
-      # --- Frontend steps (opt-in via npm_ci / js_tests) --------------------
+      # --- Frontend steps (opt-in via npm_ci / js_tests / bun) --------------
       #
-      # js_tests implies npm_ci: `npm test` without an install is a red run
-      # about nothing, so both switch these two steps on. They sit BEFORE the
-      # stack boot on purpose:
+      # js_tests implies npm_ci, and bun implies the install too: `npm test`
+      # without an install is a red run about nothing, and a package manager
+      # that installs nothing is not a choice worth making. Any of the three
+      # switches these steps on. They sit BEFORE the stack boot on purpose:
       #   * the container reads node_modules/ through the bind mount, and the
       #     entrypoint enables the extension while booting — an asset bundle
       #     read during install has to find its files already there;
       #   * unit tests need no CiviCRM, so a red JS suite should cost a
-      #     30-second npm install, not a stack boot first.
+      #     30-second install, not a stack boot first.
+      #
+      # Node is set up on BOTH paths. Bun replaces npm, not node: `bun run`
+      # starts the repo's scripts, and what those scripts call — tsc, vitest,
+      # playwright out of node_modules/.bin — is a `#!/usr/bin/env node`
+      # shebang away from needing a Node on PATH.
       - name: Set up Node
-        if: ${{ inputs.npm_ci || inputs.js_tests }}
+        if: ${{ inputs.npm_ci || inputs.js_tests || inputs.bun }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node_version }}
-          # Safe to ask for: these steps only run with npm_ci on, and npm ci
-          # already requires the lockfile this cache keys on.
-          cache: 'npm'
+          # The npm cache keys on package-lock.json and setup-node FAILS the
+          # step when it finds none — which is exactly the Bun repo, where the
+          # committed lockfile is bun.lock. Written `!x && 'npm' || ''` and not
+          # the usual way round because a ternary whose first branch is the
+          # empty string collapses into its second.
+          cache: ${{ !inputs.bun && 'npm' || '' }}
+
+      - name: Set up Bun
+        if: ${{ inputs.bun }}
+        uses: oven-sh/setup-bun@v2
 
       # --ignore-scripts is deliberate and not configurable — see the input
       # description. A package that genuinely needs a build step should run it
-      # as an explicit npm script from its `test`/`test:e2e` script, where it
-      # is visible, rather than through an install hook.
-      - name: Materialize npm dependencies (npm ci --ignore-scripts)
-        if: ${{ inputs.npm_ci || inputs.js_tests }}
-        run: npm ci --ignore-scripts
+      # as an explicit script from its `test`/`test:e2e` script, where it is
+      # visible, rather than through an install hook.
+      #
+      # One step for both managers: what decides whether the tree is installed
+      # at all is the same either way, and a second step is a second place for
+      # that condition to drift.
+      - name: Materialize JS dependencies (npm ci / bun install)
+        if: ${{ inputs.npm_ci || inputs.js_tests || inputs.bun }}
+        env:
+          CK_USE_BUN: ${{ inputs.bun }}
+        run: |
+          set -euo pipefail
+          if [ "$CK_USE_BUN" = true ]; then
+            # No --ignore-scripts counterpart to add: Bun runs no dependency
+            # lifecycle script at all unless it is a trustedDependency.
+            bun install --frozen-lockfile
+          else
+            npm ci --ignore-scripts
+          fi
 
-      - name: JS unit tests (npm test)
+      - name: JS unit tests (npm test / bun run test)
         if: ${{ inputs.js_tests }}
+        env:
+          CK_USE_BUN: ${{ inputs.bun }}
         run: |
           set -euo pipefail
           jq -e '.scripts.test // empty' package.json > /dev/null \
             || { echo "js_tests is on but package.json declares no \"test\" script — add one or turn the input off" >&2; exit 1; }
-          npm test
+          if [ "$CK_USE_BUN" = true ]; then
+            bun run test
+          else
+            npm test
+          fi
 
       - name: Start CiviCRM stack
         id: stack
@@ -501,23 +558,43 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
+          # Same cache reasoning as the ci job: no package-lock.json to key on
+          # when the repo is on Bun, and setup-node fails the step over it.
           node-version: ${{ inputs.node_version }}
-          cache: 'npm'
+          cache: ${{ !inputs.bun && 'npm' || '' }}
+
+      - name: Set up Bun
+        if: ${{ inputs.bun }}
+        uses: oven-sh/setup-bun@v2
 
       # Same --ignore-scripts rule as the ci job: this job installs the
       # extension's own tree, and a browser test repo is exactly where an
-      # install hook would go unnoticed.
-      - name: Materialize npm dependencies (npm ci --ignore-scripts)
-        run: npm ci --ignore-scripts
+      # install hook would go unnoticed. `bun` covers this job too — a repo
+      # that resolves its dependencies one way in `ci` and the other way here
+      # is testing two trees.
+      - name: Materialize JS dependencies (npm ci / bun install)
+        env:
+          CK_USE_BUN: ${{ inputs.bun }}
+        run: |
+          set -euo pipefail
+          if [ "$CK_USE_BUN" = true ]; then
+            bun install --frozen-lockfile
+          else
+            npm ci --ignore-scripts
+          fi
 
       # Browsers come from `playwright install`, never from the install hook
       # --ignore-scripts just skipped. No browser argument: which projects the
       # repo's playwright.config.ts declares is the repo's business, and a
       # missing webkit surfaces as a failing suite minutes into the run.
+      #
+      # Stays `npx` on the Bun path: this is not a package-manager operation
+      # but the local node_modules/.bin/playwright binary, which either
+      # manager has just put there.
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: Playwright (npm run test:e2e)
+      - name: Playwright (npm run test:e2e / bun run test:e2e)
         env:
           # Read by the example config's `baseURL` and auth.setup.ts. Matches
           # CIVIKITCHEN_SITE_URL in the stack, which is what CiviCRM believes
@@ -525,11 +602,16 @@ jobs:
           CIVICRM_BASE_URL: http://localhost:8080
           DEMO_USER: admin
           DEMO_PASS: admin
+          CK_USE_BUN: ${{ inputs.bun }}
         run: |
           set -euo pipefail
           jq -e '.scripts["test:e2e"] // empty' package.json > /dev/null \
             || { echo "playwright is on but package.json declares no \"test:e2e\" script — that is the script this job runs" >&2; exit 1; }
-          npm run test:e2e
+          if [ "$CK_USE_BUN" = true ]; then
+            bun run test:e2e
+          else
+            npm run test:e2e
+          fi
 
       # A browser failure without its trace is a screenshot of nothing. Both
       # directories are Playwright defaults; `ignore` keeps a config that

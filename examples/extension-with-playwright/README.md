@@ -48,8 +48,9 @@ published and the `admin` / `admin` demo user created, then runs
 `DEMO_PASS` set — the same variables `playwright.config.ts` and
 `tests/auth.setup.ts` already read here. Report and traces are uploaded when
 it fails. It is a slow check: put it in the scheduled caller, not in
-`ci.yml`. See
-[extension-standards.md](../../docs/extension-standards.md#frontend-npm-dependencies-js-tests-and-browser-tests).
+`ci.yml`. Add `bun: true` alongside and the job installs and runs the suite
+with Bun instead; nothing in these files changes. See
+[extension-standards.md](../../docs/extension-standards.md#frontend-js-dependencies-js-tests-and-browser-tests).
 
 ## Use it in your own extension
 
