@@ -290,6 +290,11 @@ The sibling is mounted **as is**, read-only: no `composer install` runs in it.
 A sibling that keeps its own `vendor/` out of git is not supported yet — say
 so on the issue rather than working around it.
 
+The checkout lands *inside* your checkout (`actions/checkout` cannot write
+outside the workspace) but is not treated as your code: `cklint` ignores
+`.civikitchen-siblings/`, and `ckconform` reads tracked files only. Nothing to
+add to your `.gitignore` — the directory only ever exists on a runner.
+
 Caller, with both:
 
 ```yaml
