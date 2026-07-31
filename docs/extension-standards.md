@@ -152,6 +152,71 @@ is what makes `npm publish` refuse.
 The tooling section is machine-checked by `ckconform` (run from the extension
 root) — CI should run it alongside cklint.
 
+## Frontend: npm dependencies, JS tests and browser tests
+
+An extension with a `package.json` has three things the default CI run does
+not do: install the tree (nothing is committed — see the lockfile rule above),
+run the JS unit suite, and drive the UI in a browser. Four more opt-in inputs
+on `extension-ci.yml`, all off by default:
+
+| Input | What it adds |
+|---|---|
+| `npm_ci` | `npm ci --ignore-scripts` on the runner, before the stack boots. The stack bind-mounts the checkout, so `node_modules/` is there for PHP code that reads an asset bundle. |
+| `js_tests` | Runs `npm test`. Implies `npm_ci`. Fails when `package.json` has no `test` script. |
+| `playwright` | Own job: boots the stack with port 8080 published and an `admin` / `admin` demo user, then runs `npm run test:e2e` from the runner. Report and traces are uploaded on failure. |
+| `node_version` | Node for all of the above. Default `'20'`. |
+
+Two scripts, two suites, and the names are the contract:
+
+- **`test`** — the JS unit suite, in whatever runner the repo picked (vitest,
+  bun, `node --test`). The workflow only knows npm's standard slot; what it
+  starts is your business. For a pure-function suite this is the bulk of the
+  frontend's coverage, so it is the one to have first.
+- **`test:e2e`** — the Playwright suite. Not `test`, precisely so that
+  enabling `js_tests` never accidentally starts a browser run, and so both
+  suites stay separately reachable from CI.
+
+`--ignore-scripts` is fixed, not an input. An `install`/`postinstall` hook is
+arbitrary code from anywhere in the dependency tree, running against a
+writable checkout with a token in the environment, and nothing in an extension
+build needs one at that moment. A package that really must build before its
+tests should do it from its own `test` script, where it is visible in the log.
+
+`npm_ci` and `js_tests` cost seconds and belong in the push run:
+
+```yaml
+    with:
+      key: myextension
+      js_tests: true      # implies npm_ci
+```
+
+The browser job does not: it boots a stack, installs browsers and is the
+slowest thing in the pipeline. Put it in the scheduled `compat.yml` caller
+below, next to the matrix — `playwright: true`.
+
+What that job assumes, because the shared workflow cannot ask:
+
+- the stack is the standalone CI stack from the template
+  (`CIVIKITCHEN_SITE_URL=http://localhost:8080`). The port is fixed to 8080 to
+  match it: CiviCRM bakes that URL into every asset and redirect, so a site
+  published elsewhere serves links to a port that isn't listening. A CMS
+  compose file boots fine, but its login is the CMS's, so the suite has to
+  handle that itself — the demo user the job creates is a Standalone one.
+- the suite reads `CIVICRM_BASE_URL`, `DEMO_USER` and `DEMO_PASS` from the
+  environment (the starter's `playwright.config.ts` and `tests/auth.setup.ts`
+  already do). The job sets all three; a hardcoded `localhost:8080` works too.
+- browsers are installed with `playwright install --with-deps`, all of them,
+  so a config with `webkit` or `firefox` projects works without another input.
+
+Copy-pasteable starter, including the config files and the `test:e2e` script:
+[`examples/extension-with-playwright/`](../examples/extension-with-playwright/).
+
+The job runs once, on `image` — it is not multiplied by `matrix_images`.
+UI behaviour that breaks per CiviCRM version is real but rare, and a browser
+run per image is the most expensive thing this pipeline could do by default.
+If you need it, say so on the issue rather than working around it in a
+repo-local job.
+
 ## Compatibility: test the range you claim
 
 `info.xml` `<compatibility><ver>` is a promise; the default CI run checks one
@@ -208,6 +273,9 @@ jobs:
       matrix_images: ghcr.io/jfilter/civikitchen:standalone-6.12
       lifecycle: true
       upgrade_from_last_release: true
+      # Browser tests, for a repo that has a test:e2e script — another stack
+      # boot, which is exactly why it lives here and not in ci.yml.
+      # playwright: true
       # The drift job already runs on every push in ci.yml.
       check_template: false
 ```
