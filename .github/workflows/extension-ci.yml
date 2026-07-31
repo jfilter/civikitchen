@@ -206,17 +206,31 @@ jobs:
           npm test
 
       - name: Start CiviCRM stack
+        id: stack
         run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
 
+      # The three gates below report INDEPENDENTLY (each runs as long as the
+      # stack booted, red predecessors or not). Chained gates mask each other:
+      # one fleet repo accumulated 53 phpstan errors across 48 commits because
+      # phpstan sat behind a red lint gate and never executed — every gate you
+      # skip on failure is a gate someone meets all at once later.
       - name: Lint (cklint + ckconform)
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && cklint --all && ckconform"
 
-      - name: PHPUnit + coverage floor + PHPStan
+      - name: PHPUnit + coverage floor
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && ckcoverage tests/phpunit && phpstan analyse --no-progress"
+            "cd /var/www/html/ext/$CK_EXT_KEY && ckcoverage tests/phpunit"
+
+      - name: PHPStan
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && phpstan analyse --no-progress"
 
       # Same lifecycle block as the compat job below — deliberately duplicated
       # rather than factored out: a reusable workflow cannot share steps
