@@ -30,6 +30,21 @@ final class TranslationCatalogCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new TranslationCatalogCheck(), $context));
     }
 
+    /** CRM_Core_I18n only ever looks under l10n/<locale>/LC_MESSAGES/. */
+    public function testACatalogOutsideLcMessagesFails(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'Civi/Greeter/Thing.php' => $this->php("E::ts('Hello')"),
+            'l10n/de_DE/greeter.po' => $this->po([['Hello', 'Hallo']]),
+            'l10n/de_DE/greeter.mo' => $this->mo(['Hello' => 'Hallo']),
+        ], git: true);
+        $this->assertFails(
+            $this->run_(new TranslationCatalogCheck(), $context),
+            'LC_MESSAGES'
+        );
+    }
+
     public function testAPoWithoutAMoFails(): void
     {
         $context = $this->repo([

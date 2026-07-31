@@ -67,6 +67,18 @@ final class TranslationCatalogCheck implements Check
                 // no target language and nothing to compile.
                 continue;
             }
+            // CRM_Core_I18n builds the lookup path as
+            // l10n/<locale>/LC_MESSAGES/<domain>.mo — a catalog anywhere else
+            // under l10n/ compiles fine and is never loaded, the same silent
+            // inertness as a missing .mo (found in the wild on the first
+            // fleet scan).
+            if (preg_match('#^l10n/[^/]+/LC_MESSAGES/[^/]+\.po$#', $catalog) !== 1) {
+                $reporter->fail(
+                    "$catalog: not under l10n/<locale>/LC_MESSAGES/ — CiviCRM builds the runtime "
+                    . 'path with LC_MESSAGES, so a catalog placed elsewhere is never loaded'
+                );
+                continue;
+            }
             $this->judgeCompiledCatalog($context, $reporter, $catalog, $entries);
         }
 
