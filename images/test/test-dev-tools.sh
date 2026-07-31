@@ -178,15 +178,15 @@ echo 'x' > "${RELDIR}/phpunit.xml.dist"
 ) >/dev/null 2>&1
 
 CKREL_OUT="$( (cd "${RELDIR}" && ckrelease dist --version v1.3.0) 2>&1 || true)"
-if [ -f "${RELDIR}/dist/org.example.greeter-1.3.0.zip" ] \
-    && [ -f "${RELDIR}/dist/org.example.greeter-1.3.0.zip.sha256" ]; then
+if [ -f "${RELDIR}/.ckrelease/org.example.greeter-1.3.0.zip" ] \
+    && [ -f "${RELDIR}/.ckrelease/org.example.greeter-1.3.0.zip.sha256" ]; then
     ok "ckrelease builds the dist zip + checksum"
 else
     fail "ckrelease did not build the dist zip (output: ${CKREL_OUT:0:300})"
 fi
 
 # The whole point of the archive: dev/CI files stay out of what a site installs.
-CKREL_LIST="$(unzip -Z1 "${RELDIR}/dist/org.example.greeter-1.3.0.zip" 2>/dev/null || true)"
+CKREL_LIST="$(unzip -Z1 "${RELDIR}/.ckrelease/org.example.greeter-1.3.0.zip" 2>/dev/null || true)"
 if echo "${CKREL_LIST}" | grep -q 'org.example.greeter/greeter.php' \
     && ! echo "${CKREL_LIST}" | grep -qE 'tests/|phpunit.xml.dist'; then
     ok "ckrelease excludes dev/CI files from the archive"

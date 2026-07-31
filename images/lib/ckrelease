@@ -54,7 +54,8 @@ check    info.xml <version> is the one truth; a --version (the git tag, with or
          without the leading v) must equal it, and a composer.json that carries
          a "version" must too. A CHANGELOG.md, if the repo has one, must mention
          the version; --require-changelog also makes a missing one an error.
-dist     runs check, then builds <output>/<key>-<version>.zip from <ref> via
+dist     runs check, then builds <output>/<key>-<version>.zip (default output
+         .ckrelease/ — dist/ is a frontend build's own, and often tracked) from <ref> via
          git archive (tracked files only, dev/CI files excluded), writes a
          .sha256 next to it and verifies the result.
 verify   re-checks an existing archive: one top-level directory named after the
@@ -338,7 +339,7 @@ esac
 
 version_arg=''
 ref='HEAD'
-outdir='dist'
+outdir='.ckrelease'
 require_changelog=0
 positionals=()
 while [ "$#" -gt 0 ]; do
