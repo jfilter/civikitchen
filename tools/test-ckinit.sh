@@ -99,17 +99,22 @@ fi
 # tracks); content-identical but chmod +x must read as drift.
 /bin/rm "$work/drift/.ckconform"
 "$root/tools/ckinit.php" --update "$work/drift" >/dev/null
-chmod +x "$work/drift/phpcs.xml.dist"
+chmod +x "$work/drift/phpstanBootstrap.php"
 if out=$("$root/tools/ckinit.php" --check "$work/drift" 2>&1); then
   echo "executable-bit drift was not detected" >&2
   exit 1
 fi
-echo "$out" | grep -q 'drifted   phpcs.xml.dist'
+echo "$out" | grep -q 'drifted   phpstanBootstrap.php'
 "$root/tools/ckinit.php" --update "$work/drift" >/dev/null
-if [ -x "$work/drift/phpcs.xml.dist" ]; then
+if [ -x "$work/drift/phpstanBootstrap.php" ]; then
   echo "--update did not restore the file mode" >&2
   exit 1
 fi
+
+# phpcs.xml.dist is SEEDED (a repo's project layer): edits must not be drift.
+printf '%s\n' '<!-- local layer -->' >> "$work/drift/phpcs.xml.dist"
+out=$("$root/tools/ckinit.php" --check "$work/drift")
+echo "$out" | grep -q 'up to date'
 
 # --force is a seeding flag; refuse the ambiguous combinations.
 if "$root/tools/ckinit.php" --force --update "$work/drift" >/dev/null 2>&1; then

@@ -13,6 +13,11 @@
 # pinned to (@v1). Set CIVIKITCHEN_IMAGE to override, either in the environment
 # or via the shared workflow's `image` input.
 
+# Explicit project name: compose otherwise derives it from the directory, and
+# every extension keeps its stacks in .docker/ — unnamed, they all become one
+# project called "docker" and share volumes across checkouts.
+name: __EXTKEY__-ci
+
 services:
   app:
     image: ${CIVIKITCHEN_IMAGE:-ghcr.io/jfilter/civikitchen:v1}

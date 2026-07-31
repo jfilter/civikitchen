@@ -13,4 +13,6 @@
   <exclude-pattern>*/dist/*</exclude-pattern>
   <exclude-pattern>*.civix.php</exclude-pattern>
   <exclude-pattern>*/CRM/*/DAO/*</exclude-pattern>
+  <!-- Afform exports use bare ts() by framework convention. -->
+  <exclude-pattern>*/ang/*.aff.php</exclude-pattern>
 </ruleset>

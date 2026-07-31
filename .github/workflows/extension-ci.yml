@@ -50,7 +50,7 @@ permissions:
 
 jobs:
   # Template drift: the tooling files civikitchen owns (CI caller, test
-  # bootstraps, CI compose stack, phpcs layer) must match the template, or
+  # bootstraps, CI compose stack) must match the template, or
   # eleven repos quietly diverge again — the exact state the shared workflow
   # exists to end. Deliberate deviations are declared in the repo's .ckconform
   # (template_custom=<file> -- <reason>); the fix for everything else is one

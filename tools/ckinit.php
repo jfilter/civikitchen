@@ -21,7 +21,6 @@ const MANAGED_FILES = [
   '.docker/docker-compose.ci.yml',
   '.docker/db-init/01-grants.sql',
   '.docker/init.d/README.md',
-  'phpcs.xml.dist',
   'phpstanBootstrap.php',
   'tests/phpunit/bootstrap.php',
   'tests/e2e/lib.sh',
@@ -37,6 +36,11 @@ const SEEDED_FILES = [
   '.gitignore',
   '.docker/docker-compose.yml',
   'composer.json',
+  // The file calls itself a "project layer" and it means it: repos scope out
+  // generated code and tune severities there. Managing it byte-identically
+  // turned five green repos red on the first fleet rollout. The CiviKitchen
+  // STANDARD stays central (it ships in the image); the layer is the repo's.
+  'phpcs.xml.dist',
   'phpstan.neon.dist',
   'phpunit.xml.dist',
 ];
@@ -56,10 +60,11 @@ recursively; __EXTKEY__ is replaced with info.xml's <file> value and
 __VENDOR__ with the vendor segment of the extension key.
 
 Seeding preserves existing files unless --force is given. --update rewrites
-only the MANAGED files (CI caller, test bootstraps, CI compose stack, phpcs
-layer — the ones meant to be identical everywhere) and creates whatever is
-missing; seeded files the repo has edited (composer.json, phpstan.neon.dist,
-dev compose, .gitignore) are never touched. --check is the dry twin for CI.
+only the MANAGED files (CI caller, test bootstraps, CI compose stack — the
+ones meant to be identical everywhere) and creates whatever is missing;
+seeded files the repo has edited (composer.json, phpcs.xml.dist,
+phpstan.neon.dist, dev compose, .gitignore) are never touched. --check is
+the dry twin for CI.
 
 A repo that must deviate on a managed file lists it in .ckconform:
   template_custom=<file>[,<file>...] -- <reason>

@@ -134,9 +134,10 @@ interface rather than a checklist to copy by hand.
 
 The template stays an interface after day one. Its files split into two
 classes: **managed** files that are meant to be byte-identical in every repo
-(the thin CI caller, the test bootstraps, the CI compose stack, the phpcs
-layer) and **seeded** files the repo takes ownership of after the first copy
-(`composer.json`, `phpstan.neon.dist`, the dev compose file, `.gitignore`).
+(the thin CI caller, the test bootstraps, the CI compose stack) and **seeded**
+files the repo takes ownership of after the first copy (`composer.json`,
+`phpcs.xml.dist` — the project layer over the central CiviKitchen standard —
+`phpstan.neon.dist`, the dev compose file, `.gitignore`).
 Two more modes work with that split:
 
 ```bash
