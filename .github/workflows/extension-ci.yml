@@ -13,12 +13,15 @@
 # with every push here. The canary repo is the exception — see
 # docs/releases.md.
 #
-# Beyond that default run the workflow has three opt-in extras — a
-# compatibility matrix over further CiviCRM images, a lifecycle smoke test and
-# an upgrade-from-the-last-release test. They are off unless asked for, and
-# they belong in a second, scheduled caller rather than in the push run:
-# docs/extension-standards.md ("Compatibility: test the range you claim") has
-# the reasoning and a ready-made compat.yml.
+# Beyond that default run the workflow has opt-in extras. The slow ones — a
+# compatibility matrix over further CiviCRM images, a lifecycle smoke test, an
+# upgrade-from-the-last-release test and a Playwright browser job — are off
+# unless asked for, and they belong in a second, scheduled caller rather than
+# in the push run: docs/extension-standards.md ("Compatibility: test the range
+# you claim") has the reasoning and a ready-made compat.yml. The cheap ones are
+# the frontend steps (npm_ci, js_tests): seconds on the runner, and they belong
+# in the push run — docs/extension-standards.md ("Frontend: npm dependencies,
+# JS tests and browser tests").
 #
 # civikitchen is public, so any repo can call this without a cross-repo token.
 # Everything runs inside the extension's own CiviCRM stack: the standalone image
@@ -80,6 +83,46 @@ on:
           existed at that tag; both are checked and reported, not skipped.
         type: boolean
         default: false
+      npm_ci:
+        description: >-
+          Materialize the extension's npm dependencies on the runner before
+          the stack boots: `npm ci --ignore-scripts`. The stack bind-mounts
+          the checkout, so node_modules/ is visible inside the container —
+          which is what PHP code reading from an asset bundle needs, and what
+          the stock pipeline never provides (nothing is committed, per the
+          vendored-bundle policy). `--ignore-scripts` is not an option: an
+          install script is arbitrary code from anywhere in the dependency
+          tree, running with the checkout writable, and no CiviCRM extension
+          build needs one at this point. Needs the committed
+          package-lock.json the standards ask for — `npm ci` refuses without.
+        type: boolean
+        default: false
+      js_tests:
+        description: >-
+          Run the extension's `npm test` script — whichever runner it wires up
+          (vitest, bun, node --test); the workflow only knows npm's standard
+          slot. Implies npm_ci, so a caller with JS tests sets this one input.
+          Fails when package.json declares no `test` script: this is opt-in,
+          and an opt-in that silently tests nothing is worse than no input.
+        type: boolean
+        default: false
+      playwright:
+        description: >-
+          Browser tests, in their own job: boot the stack with its HTTP port
+          published and a demo login user, then run the extension's
+          `npm run test:e2e` (Playwright) from the runner — the
+          examples/extension-with-playwright pattern, as a job. Off by
+          default, and off means skipped, which costs no runner minutes. Like
+          the compat matrix it is a slow check: put it in the scheduled
+          caller, not in the push run.
+        type: boolean
+        default: false
+      node_version:
+        description: >-
+          Node version for every npm step above and for the Playwright job.
+          Only read when one of them is switched on.
+        type: string
+        default: '20'
 
 permissions:
   contents: read
@@ -126,6 +169,41 @@ jobs:
         run: |
           [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
             || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
+
+      # --- Frontend steps (opt-in via npm_ci / js_tests) --------------------
+      #
+      # js_tests implies npm_ci: `npm test` without an install is a red run
+      # about nothing, so both switch these two steps on. They sit BEFORE the
+      # stack boot on purpose:
+      #   * the container reads node_modules/ through the bind mount, and the
+      #     entrypoint enables the extension while booting — an asset bundle
+      #     read during install has to find its files already there;
+      #   * unit tests need no CiviCRM, so a red JS suite should cost a
+      #     30-second npm install, not a stack boot first.
+      - name: Set up Node
+        if: ${{ inputs.npm_ci || inputs.js_tests }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          # Safe to ask for: these steps only run with npm_ci on, and npm ci
+          # already requires the lockfile this cache keys on.
+          cache: 'npm'
+
+      # --ignore-scripts is deliberate and not configurable — see the input
+      # description. A package that genuinely needs a build step should run it
+      # as an explicit npm script from its `test`/`test:e2e` script, where it
+      # is visible, rather than through an install hook.
+      - name: Materialize npm dependencies (npm ci --ignore-scripts)
+        if: ${{ inputs.npm_ci || inputs.js_tests }}
+        run: npm ci --ignore-scripts
+
+      - name: JS unit tests (npm test)
+        if: ${{ inputs.js_tests }}
+        run: |
+          set -euo pipefail
+          jq -e '.scripts.test // empty' package.json > /dev/null \
+            || { echo "js_tests is on but package.json declares no \"test\" script — add one or turn the input off" >&2; exit 1; }
+          npm test
 
       - name: Start CiviCRM stack
         run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
