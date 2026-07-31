@@ -372,6 +372,12 @@ jobs:
             # key can pass on one runner and fail on another.
             printf 'Host github.com\n  IdentityFile ~/.ssh/civikitchen_composer\n  IdentitiesOnly yes\n' >> ~/.ssh/config
           fi
+          # No `composer update` and no --ignore-platform-reqs: the committed
+          # lock is installed as it stands. It runs on the RUNNER's PHP though,
+          # which is not the image's — a repo whose floor is above the runner's
+          # PHP should pin `config.platform.php` in composer.json to the
+          # version the extension actually runs on, which is the honest fix for
+          # resolving against one PHP and executing on another anyway.
           composer install --no-dev --no-interaction --no-progress
 
       # Two steps rather than an expression: GitHub's expression language has

@@ -335,6 +335,10 @@ Two limits worth knowing before you switch something else on as well:
   that message rather than booting an extension that cannot load.
 - `composer.lock` still has to be committed — see the lockfile rule above. An
   install that is not reproducible is not a dependency, it is a moving target.
+  The install runs on the **runner's** PHP, not the image's, and installs the
+  lock as it stands (no `update`, no `--ignore-platform-reqs`). Pin
+  `config.platform.php` in `composer.json` to the PHP the extension really
+  runs on, so resolution and execution agree.
 
 ## Compatibility: test the range you claim
 
