@@ -49,6 +49,7 @@ final class Registry
         Check\LockfileCheck::class,
         Check\NpmInstallCheck::class,
         Check\CommittedArtifactCheck::class,
+        Check\VendoredBundleCheck::class,
         Check\DeployHygieneCheck::class,
         Check\GitignoreCheck::class,
         Check\GitignoreCoverageCheck::class,
