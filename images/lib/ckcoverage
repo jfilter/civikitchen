@@ -19,7 +19,19 @@
 set -uo pipefail
 
 [ -f info.xml ] || { echo "ckcoverage: no info.xml here — run from the extension root." >&2; exit 2; }
-[ -f phpunit.xml.dist ] || [ -f phpunit.xml ] || { echo "ckcoverage: no phpunit config." >&2; exit 2; }
+if [ ! -f phpunit.xml.dist ] && [ ! -f phpunit.xml ]; then
+  # A repo may have no PHP suite BY POLICY (tests=optional in .ckconform, the
+  # file where every other policy lives) — a generator-driven theme whose
+  # behaviour is covered by another harness, say. For those the shared CI's
+  # unconditional ckcoverage step must be a documented no-op, not exit 2:
+  # otherwise the policy exists but no pipeline can honour it.
+  if [ -f .ckconform ] && sed -n 's/^tests=//p' .ckconform | head -1 | grep -q '^optional'; then
+    echo "ckcoverage: no phpunit config, and .ckconform declares tests=optional — nothing to measure, by policy."
+    exit 0
+  fi
+  echo "ckcoverage: no phpunit config." >&2
+  exit 2
+fi
 grep -q '<coverage' phpunit.xml.dist phpunit.xml 2>/dev/null || {
   echo "ckcoverage: phpunit config declares no <coverage> section — nothing to measure." >&2
   exit 2
