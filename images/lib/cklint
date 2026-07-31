@@ -60,7 +60,16 @@ fi
 
 # Build the phpcs/phpcbf argument list. A project phpcs.xml(.dist) wins; else
 # the bundled CiviKitchen standard.
-args=(-q)
+#
+# .civikitchen-siblings/ is never this project's code: it is where the shared
+# CI workflow checks out a sibling extension this one is built against, and it
+# lands inside the checkout only because actions/checkout cannot write outside
+# the workspace. A project phpcs.xml.dist scoped to <file>.</file> would
+# otherwise style-check that foreign tree against THIS repo's ruleset — a
+# codebase its own CI already lints. A CLI --ignore rather than one more
+# <exclude-pattern> in the bundled standard: the pattern then holds no matter
+# which ruleset the project supplies.
+args=(-q --ignore='*/.civikitchen-siblings/*')
 if [ ! -f phpcs.xml ] && [ ! -f phpcs.xml.dist ]; then
   args+=(--standard=CiviKitchen --extensions=php)
 fi

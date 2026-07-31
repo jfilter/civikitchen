@@ -73,6 +73,12 @@ The same loop runs unattended in CI: boot the stack, enable the extension,
 run phpunit headless. A copy-pasteable GitHub Actions setup (workflow +
 minimal compose stack + DB grants) lives at [`examples/ci/`](../examples/ci/).
 
+Boots that need something the runner has to fetch first — an uncommitted
+`vendor/` behind a private composer package, or a private sibling extension
+mounted beside this one, the CI equivalent of the sibling mount in the dev
+compose file below — are two opt-in inputs and a `secrets:` block on the
+shared workflow: [extension-standards.md](extension-standards.md#private-dependencies).
+
 ## Provisioning hooks
 
 Anything a test setup needs beyond `cv ext:enable` — renderer config, seed

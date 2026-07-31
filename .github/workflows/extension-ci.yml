@@ -25,6 +25,10 @@
 # tests").
 #
 # civikitchen is public, so any repo can call this without a cross-repo token.
+# A repo whose dependencies are NOT public is the one case that needs more than
+# `with:` — a repo that keeps vendor/ out of git, or that needs a private
+# sibling extension mounted beside itself, passes read-only deploy keys through
+# the `secrets:` block: docs/extension-standards.md ("Private dependencies").
 # Everything runs inside the extension's own CiviCRM stack: the standalone image
 # auto-installs, enables the mounted extension and seeds the civicrm_test scratch
 # DB, and cklint / ckconform / phpstan / ckcoverage all ship in that image. The
@@ -147,6 +151,68 @@ on:
           installed binaries run on.
         type: string
         default: '20'
+      composer_install:
+        description: >-
+          Materialize the extension's PHP dependencies on the runner before the
+          stack boots: `composer install --no-dev --no-interaction
+          --no-progress` in the checkout. For a repo that does NOT commit
+          vendor/ this is not a nicety but the precondition for the whole
+          pipeline: the main .php file requires the autoloader at the top, so
+          without vendor/ the entrypoint cannot even enable the mounted
+          extension and the stack boot fails before a single test runs.
+          On the RUNNER, deliberately, not through the image's own
+          CIVIKITCHEN_AUTO_COMPOSER: a private package is fetched over SSH, and
+          the deploy key that unlocks it stays outside the container (see the
+          composer_deploy_key secret). The container-side auto-composer then
+          finds vendor/ already present through the bind mount and skips the
+          directory, so the two never race.
+          `--no-dev` is enough: phpunit, phpstan and phpcs ship in the image,
+          never in the extension's require-dev.
+        type: boolean
+        default: false
+      sibling_repo:
+        description: >-
+          A second extension repo (`owner/repo`) to check out and mount beside
+          this one, for an extension that implements a sibling's interfaces:
+          the classes have to exist at boot (`cv ext:enable` resolves the
+          declared requirement), and phpstan and the test bootstrap resolve
+          them from the sibling's ext directory. Empty (the default) checks out
+          and mounts nothing, so an existing caller keeps exactly the run it
+          has today.
+          The checkout lands in `.civikitchen-siblings/<repo>` in the
+          workspace and is bind-mounted read-only into the stack at
+          `/var/www/html/ext/<sibling-extension-key>` — the key read from the
+          sibling's own info.xml, not the repo name, because that is the name
+          CiviCRM registers the extension under and the one a phpstan
+          `scanDirectories` entry has to point at. Private repo: see the
+          sibling_deploy_key secret.
+          The sibling is mounted AS IS: no composer install runs in it, so a
+          sibling that ships its dependencies uncommitted is out of scope for
+          now (it needs its own key, and one deploy key per repo is the point
+          of deploy keys). Not wired into the opt-in extra jobs either — see
+          the guard step in `upgrade`, `compat` and `playwright`.
+        type: string
+        default: ''
+
+    secrets:
+      composer_deploy_key:
+        description: >-
+          Private SSH key (a read-only deploy key on the repo hosting the
+          private composer package) used for github.com during
+          `composer install`. Optional: without it the install still runs, and
+          resolves whatever is public. Configured as an IdentityFile with
+          IdentitiesOnly, so it is the only key offered and an unrelated
+          agent key cannot mask a missing grant. Never enters a container and
+          is never echoed — it is written to the runner's ~/.ssh and read by
+          ssh(1) alone.
+        required: false
+      sibling_deploy_key:
+        description: >-
+          Private SSH key (read-only deploy key on sibling_repo) for the
+          sibling checkout. Optional: without it the checkout uses the calling
+          workflow's token, which is scoped to the calling repo — enough for a
+          public sibling, a 404 for a private one.
+        required: false
 
 permissions:
   contents: read
@@ -190,9 +256,15 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Validate inputs
+        env:
+          CK_SIBLING_REPO: ${{ inputs.sibling_repo }}
         run: |
           [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
             || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
+          # Empty is the default and means "no sibling"; anything else has to
+          # be owner/repo, because it becomes a checkout target and a path.
+          [[ -z "$CK_SIBLING_REPO" || "$CK_SIBLING_REPO" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
+            || { echo "invalid sibling_repo (expected owner/repo): $CK_SIBLING_REPO" >&2; exit 1; }
 
       # --- Frontend steps (opt-in via npm_ci / js_tests / bun) --------------
       #
@@ -262,9 +334,166 @@ jobs:
             npm test
           fi
 
+      # --- Private dependencies (opt-in via composer_install / sibling_repo) --
+      #
+      # Both live BEFORE the stack boot for the same reason the frontend steps
+      # do: the container sees the checkout through the bind mount, and the
+      # entrypoint enables the extension *while booting*. Whatever enabling the
+      # extension needs — its autoloader, a sibling it declares a requirement
+      # on — has to be in the tree by then, not a step later.
+      #
+      # Deploy keys stay on the runner. Nothing here is mounted, copied or
+      # passed into a container, and nothing echoes the key: the container gets
+      # the *result* (a vendor/ directory, a checked-out sibling), never the
+      # credential that produced it. A leaked build secret is otherwise the one
+      # mistake in this pipeline that outlives the job.
+      #
+      # The sibling checkout goes FIRST, before any ~/.ssh/config exists. Two
+      # deploy keys for github.com are ambiguous by nature: the server accepts
+      # whichever valid key ssh offers first and only then decides the
+      # repository is off limits, which surfaces as "repository not found" for
+      # a repo the run has perfectly good access to. actions/checkout passes
+      # its own key with `-i … -o IdentitiesOnly=yes`, so ordering the steps
+      # this way keeps the question from arising at all.
+
+      # Two steps rather than an expression: GitHub's expression language has
+      # no split(), and what the checkout needs is the repo name — the part
+      # after the slash — as a path.
+      - name: Resolve the sibling checkout path
+        id: sibling
+        if: ${{ inputs.sibling_repo != '' }}
+        env:
+          CK_SIBLING_REPO: ${{ inputs.sibling_repo }}
+        run: |
+          set -euo pipefail
+          echo "path=.civikitchen-siblings/${CK_SIBLING_REPO##*/}" >> "$GITHUB_OUTPUT"
+
+      # Inside the workspace, because actions/checkout refuses to write
+      # anywhere else — and the LEADING DOT is load-bearing, twice over:
+      #   * CiviCRM's extension scanner (CRM_Utils_File::findFiles, via
+      #     CRM_Extension_Container_Basic) skips any directory whose name
+      #     starts with a dot. Without that, the sibling would be discovered a
+      #     second time *through the extension's own mount* and the same key
+      #     would resolve to two paths.
+      #   * cklint ignores `.civikitchen-siblings/` explicitly — phpcs has no
+      #     such rule of its own, and a project phpcs.xml.dist scoped to
+      #     `<file>.</file>` would otherwise lint the sibling's code.
+      #
+      # ssh-key is passed unconditionally: actions/checkout treats the empty
+      # string as "not set" and falls back to the calling workflow's token,
+      # which is the right behaviour for a public sibling.
+      - name: Check out the sibling extension
+        if: ${{ inputs.sibling_repo != '' }}
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ inputs.sibling_repo }}
+          ssh-key: ${{ secrets.sibling_deploy_key }}
+          path: ${{ steps.sibling.outputs.path }}
+
+      # The CI compose file is template-managed (ckinit checks it), so the
+      # sibling cannot be written into it — the same bind this job's Playwright
+      # counterpart is in, and the same way out: a compose override written
+      # here, in $RUNNER_TEMP, layered on top for `up` only.
+      #
+      # Two merge rules decide what this file has to contain:
+      #   * `volumes` is a LIST and merges by container path, so naming a new
+      #     target appends to the stack's mounts. The extension's own mount is
+      #     untouched.
+      #   * `environment` is a MAPPING and merges per key — the override's
+      #     value REPLACES the base file's for that key, it does not append to
+      #     it. So CIVIKITCHEN_ENABLE_EXTENSIONS has to be written out in full,
+      #     including the extension the template file already lists.
+      # The sibling comes FIRST in that list: provision.sh enables the keys
+      # left to right, and the extension that declares the requirement should
+      # meet it already satisfied.
+      #
+      # Absolute host paths, because compose resolves relative ones against the
+      # project directory — the directory of the FIRST -f file, i.e. .docker/,
+      # not the workspace this override was written from.
+      #
+      # Mounted read-only and as is: no composer install runs in the sibling
+      # (out of scope — that needs a key of its own), and read-only is what a
+      # dependency you are not testing should be. The image's own
+      # CIVIKITCHEN_AUTO_COMPOSER may log a warning if the sibling ships no
+      # vendor/; it is a warning, not a failed boot.
+      - name: Compose override — mount and enable the sibling
+        if: ${{ inputs.sibling_repo != '' }}
+        env:
+          CK_SIBLING_DIR: ${{ steps.sibling.outputs.path }}
+        run: |
+          set -euo pipefail
+          info="$GITHUB_WORKSPACE/$CK_SIBLING_DIR/info.xml"
+          [ -f "$info" ] \
+            || { echo "sibling_repo: no info.xml in $CK_SIBLING_DIR — that repo is not a CiviCRM extension" >&2; exit 1; }
+          # The extension KEY, read from the sibling's own info.xml rather than
+          # taken from the repo name or asked for as a second input: it is the
+          # name CiviCRM registers the extension under, the name `cv ext:enable`
+          # expects, and the directory a consuming phpstan.neon points its
+          # scanDirectories at. A repo name is none of those and is free to
+          # differ. Reading it costs one step and cannot go stale.
+          sibling_key=$(tr '\n' ' ' < "$info" \
+            | grep -o '<extension[^>]*key="[^"]*"' | head -1 \
+            | sed 's/.*key="//; s/"$//')
+          [[ "$sibling_key" =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]] \
+            || { echo "sibling_repo: could not read a usable extension key from $CK_SIBLING_DIR/info.xml (got: '$sibling_key')" >&2; exit 1; }
+          echo "sibling extension: $sibling_key (from $CK_SIBLING_DIR)"
+          override="$RUNNER_TEMP/civikitchen-sibling-override.yml"
+          cat > "$override" <<YAML
+          services:
+            app:
+              volumes:
+                - $GITHUB_WORKSPACE/$CK_SIBLING_DIR:/var/www/html/ext/$sibling_key:ro
+              environment:
+                CIVIKITCHEN_ENABLE_EXTENSIONS: "$sibling_key,$CK_EXT_KEY"
+          YAML
+          echo "CK_SIBLING_OVERRIDE=$override" >> "$GITHUB_ENV"
+
+      - name: Composer install (private packages over SSH)
+        if: ${{ inputs.composer_install }}
+        env:
+          CK_COMPOSER_DEPLOY_KEY: ${{ secrets.composer_deploy_key }}
+        run: |
+          set -euo pipefail
+          # Branching on the secret in bash, not in the step's `if:` — the
+          # `secrets` context is not available there. And an absent key is a
+          # legitimate configuration: a repo can keep vendor/ out of git while
+          # every package it requires is public.
+          if [ -n "${CK_COMPOSER_DEPLOY_KEY:-}" ]; then
+            mkdir -p ~/.ssh && chmod 700 ~/.ssh
+            # printf, not echo: the key is multi-line and OpenSSH rejects it
+            # without the trailing newline that a secret often loses.
+            printf '%s\n' "$CK_COMPOSER_DEPLOY_KEY" > ~/.ssh/civikitchen_composer
+            chmod 600 ~/.ssh/civikitchen_composer
+            # Pin github.com's host key instead of turning host checking off:
+            # this is a fresh runner with an empty known_hosts, and "accept
+            # whatever answers" is how a credential ends up somewhere else.
+            ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+            # IdentitiesOnly: offer this key and nothing else. Without it ssh
+            # walks the agent's keys first, so a *missing* grant on the deploy
+            # key can pass on one runner and fail on another.
+            printf 'Host github.com\n  IdentityFile ~/.ssh/civikitchen_composer\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          fi
+          # No `composer update` and no --ignore-platform-reqs: the committed
+          # lock is installed as it stands. It runs on the RUNNER's PHP though,
+          # which is not the image's — a repo whose floor is above the runner's
+          # PHP should pin `config.platform.php` in composer.json to the
+          # version the extension actually runs on, which is the honest fix for
+          # resolving against one PHP and executing on another anyway.
+          composer install --no-dev --no-interaction --no-progress
+
       - name: Start CiviCRM stack
         id: stack
-        run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
+        run: |
+          set -euo pipefail
+          # Unchanged command when no sibling was checked out — CK_SIBLING_OVERRIDE
+          # only exists once the step above wrote it. It is needed for `up`
+          # alone: every later `docker compose exec` finds the stack through
+          # the project name in the base file, same as in the Playwright job.
+          compose=(-f "$CK_COMPOSE_FILE")
+          if [ -n "${CK_SIBLING_OVERRIDE:-}" ]; then
+            compose+=(-f "$CK_SIBLING_OVERRIDE")
+          fi
+          docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       # The three gates below report INDEPENDENTLY (each runs as long as the
       # stack booted, red predecessors or not). Chained gates mask each other:
@@ -332,6 +561,16 @@ jobs:
       CK_EXT_KEY: ${{ inputs.key }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
     steps:
+      # See the note on the same step in `compat`. Extra reason here: this job
+      # moves the working tree between two commits, and a vendor/ tree built on
+      # the runner would silently stay the one built for HEAD while the stack
+      # installs the previous release.
+      - name: Reject the unsupported private-dependency combination
+        if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
+        run: |
+          echo "composer_install / sibling_repo are wired into the ci job only — this job would boot the extension without them. Turn this job off, or open an issue to have it wired up too." >&2
+          exit 1
+
       # Full history: the previous release tag has to be checkoutable.
       - uses: actions/checkout@v5
         with:
@@ -455,6 +694,19 @@ jobs:
       CK_EXT_KEY: ${{ inputs.key }}
       CIVIKITCHEN_IMAGE: ${{ matrix.image }}
     steps:
+      # The private-dependency inputs are wired into the `ci` job only, and
+      # this job boots the same stack from a plain checkout: without vendor/ or
+      # the sibling it fails during the boot, in a way that reads like a broken
+      # extension rather than a missing prerequisite. Say so instead — and say
+      # it rather than skipping the job, because an opt-in check that quietly
+      # tests nothing is the failure mode this file argues against everywhere
+      # else. Wiring the extras up is a later step, not a reason to wait.
+      - name: Reject the unsupported private-dependency combination
+        if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
+        run: |
+          echo "composer_install / sibling_repo are wired into the ci job only — this job would boot the extension without them. Turn this job off, or open an issue to have it wired up too." >&2
+          exit 1
+
       - uses: actions/checkout@v5
 
       - name: Validate inputs
@@ -515,6 +767,15 @@ jobs:
       CK_EXT_KEY: ${{ inputs.key }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
     steps:
+      # See the note on the same step in `compat`: this job boots its own stack
+      # from a plain checkout too, and its override slot is already taken by
+      # the port and the demo user.
+      - name: Reject the unsupported private-dependency combination
+        if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
+        run: |
+          echo "composer_install / sibling_repo are wired into the ci job only — this job would boot the extension without them. Turn this job off, or open an issue to have it wired up too." >&2
+          exit 1
+
       - uses: actions/checkout@v5
 
       - name: Validate inputs

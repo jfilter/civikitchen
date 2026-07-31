@@ -246,6 +246,100 @@ run per image is the most expensive thing this pipeline could do by default.
 If you need it, say so on the issue rather than working around it in a
 repo-local job.
 
+## Private dependencies
+
+civikitchen is public and the shared workflow needs no token to be called —
+but not every extension's *dependencies* are public. Two cases, two opt-in
+inputs plus one optional secret each. Both default to off; a caller that sets
+neither gets exactly the run it has today.
+
+| Input / secret | What it adds |
+|---|---|
+| `composer_install` | `composer install --no-dev --no-interaction --no-progress` on the runner, before the stack boots. |
+| `composer_deploy_key` (secret) | Private SSH key used for `github.com` during that install, so a private VCS package resolves. |
+| `sibling_repo` | `owner/repo` of a second extension: checked out to `.civikitchen-siblings/<repo>` and bind-mounted read-only into the stack, which also enables it. |
+| `sibling_deploy_key` (secret) | Private SSH key for that checkout. |
+
+**`composer_install` is not an optimization — for a repo without a committed
+`vendor/` it is the precondition for everything else.** The extension's main
+`.php` file requires the autoloader at the top, so the entrypoint cannot even
+enable the mounted extension: the stack boot fails before a test runs. Commit
+`vendor/` or set this input; there is no third option.
+
+It runs on the **runner**, not through the image's own
+`CIVIKITCHEN_AUTO_COMPOSER`, and that is the whole point: the deploy key never
+enters a container. The container-side auto-composer then sees `vendor/`
+through the bind mount and skips the directory, so the two do not collide.
+`--no-dev` is deliberate — `phpunit`, `phpstan` and `phpcs` come from the
+image and have no business in your `require-dev`.
+
+**`sibling_repo`** is for the extension that implements another extension's
+interfaces: the classes must exist at boot (`cv ext:enable` wants the declared
+requirement present), and `phpstan` and the test bootstrap resolve them from
+the sibling's ext directory. The mount target is the sibling's **extension
+key**, read from its `info.xml` — not its repo name, which is free to differ
+and is not what CiviCRM registers it under. That is the directory a
+`scanDirectories` entry has to point at:
+
+```neon
+	scanDirectories:
+		- /var/www/html/ext/othersibling/Civi
+```
+
+The sibling is mounted **as is**, read-only: no `composer install` runs in it.
+A sibling that keeps its own `vendor/` out of git is not supported yet — say
+so on the issue rather than working around it.
+
+The checkout lands *inside* your checkout (`actions/checkout` cannot write
+outside the workspace) but is not treated as your code: `cklint` ignores
+`.civikitchen-siblings/`, and `ckconform` reads tracked files only. Nothing to
+add to your `.gitignore` — the directory only ever exists on a runner.
+
+Caller, with both:
+
+```yaml
+jobs:
+  ci:
+    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    with:
+      key: myextension
+      composer_install: true
+      sibling_repo: myorg/othersibling
+    secrets:
+      composer_deploy_key: ${{ secrets.PACKAGE_DEPLOY_KEY }}
+      sibling_deploy_key: ${{ secrets.SIBLING_DEPLOY_KEY }}
+```
+
+Name the two secrets you pass; do **not** write `secrets: inherit`. Inherit
+hands the reusable workflow every secret the repo has, for the sake of two —
+and the workflow it hands them to is one you move by retagging. Least
+privilege costs one line here.
+
+What goes in those secrets, and why deploy keys rather than a PAT:
+
+- A **read-only deploy key** is scoped to exactly one repository and belongs
+  to no person, so it survives someone leaving and cannot reach a second repo
+  if it leaks. A PAT is the opposite on both counts. One key per dependency
+  repo — that scoping is the entire feature.
+- The private half goes into the calling repo's secrets, the public half into
+  the dependency repo's *Deploy keys*, with write access **off**.
+- The key is configured with `IdentitiesOnly`, so it is the only identity
+  offered: a missing grant fails here rather than passing on one runner and
+  failing on another because an agent key happened to cover it.
+
+Two limits worth knowing before you switch something else on as well:
+
+- The opt-in extra jobs (`matrix_images`, `upgrade_from_last_release`,
+  `playwright`) boot the stack from a plain checkout and are **not** wired up
+  for private dependencies. Combining them with these inputs fails fast with
+  that message rather than booting an extension that cannot load.
+- `composer.lock` still has to be committed — see the lockfile rule above. An
+  install that is not reproducible is not a dependency, it is a moving target.
+  The install runs on the **runner's** PHP, not the image's, and installs the
+  lock as it stands (no `update`, no `--ignore-platform-reqs`). Pin
+  `config.platform.php` in `composer.json` to the PHP the extension really
+  runs on, so resolution and execution agree.
+
 ## Compatibility: test the range you claim
 
 `info.xml` `<compatibility><ver>` is a promise; the default CI run checks one
