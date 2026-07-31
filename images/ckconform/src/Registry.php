@@ -67,6 +67,7 @@ final class Registry
         Check\PermissionClosureCheck::class,
         Check\MessageTemplateTokenCheck::class,
         Check\CrmScopeCheck::class,
+        Check\TranslationCatalogCheck::class,
     ];
 
     /** @return list<Check> */
