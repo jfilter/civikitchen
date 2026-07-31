@@ -173,16 +173,17 @@ jobs:
             unzip -q -o /ck-dist/*.zip -d "${CK_EXT_DIR:-/var/www/html/ext}"
             chown -R www-data:www-data "${CK_EXT_DIR:-/var/www/html/ext}"'
 
-          # ext:refresh so the scan sees the new directory, then a real install —
-          # this is where a missing <requires>, a broken upgrader or a PHP file
-          # that was excluded from the archive by mistake actually shows up.
+          # Rescan the container so the new directory is known, then install for
+          # real — this is where a missing <requires>, a broken upgrader or a PHP
+          # file the exclude list swallowed by mistake actually shows up.
           docker compose -f smoke-compose.yml exec -T -u www-data \
             -e "CK_EXT_KEY=$CK_EXT_KEY" app bash -c '
             set -eu
-            cv ext:refresh
-            cv en "$CK_EXT_KEY"
-            cv api4 Extension.get +w "key=$CK_EXT_KEY" +s key,status --out=json' | tee smoke.json
-          grep -q '"status": *"installed"' smoke.json \
+            cv ev "CRM_Extension_System::singleton()->getFullContainer()->refresh();"
+            cv ext:enable "$CK_EXT_KEY"
+            cv api4 Extension.get +w "key=$CK_EXT_KEY" +s key,status --out=json' > smoke.json
+          cat smoke.json
+          jq -e 'map(select(.status == "installed")) | length == 1' smoke.json > /dev/null \
             || { echo "extension did not reach status=installed" >&2; exit 1; }
 
       # A failed stack is a stack trace of nothing without its logs.

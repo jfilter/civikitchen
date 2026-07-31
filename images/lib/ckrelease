@@ -9,8 +9,8 @@
 # .github/ to every site that installs it.
 #
 #     ckrelease check --version v1.3.0     # tag vs info.xml vs composer.json
-#     ckrelease dist   --version v1.3.0    # -> dist/<key>-1.3.0.zip (+ .sha256)
-#     ckrelease verify dist/<key>-1.3.0.zip
+#     ckrelease dist   --version v1.3.0    # -> .ckrelease/<key>-1.3.0.zip + .sha256
+#     ckrelease verify .ckrelease/<key>-1.3.0.zip
 #     ckrelease info key                   # key | file | version | dist-name
 #
 # Run from the extension root. Needs git and php; `verify` also needs unzip.
@@ -54,10 +54,10 @@ check    info.xml <version> is the one truth; a --version (the git tag, with or
          without the leading v) must equal it, and a composer.json that carries
          a "version" must too. A CHANGELOG.md, if the repo has one, must mention
          the version; --require-changelog also makes a missing one an error.
-dist     runs check, then builds <output>/<key>-<version>.zip (default output
-         .ckrelease/ — dist/ is a frontend build's own, and often tracked) from <ref> via
+dist     runs check, then builds <output>/<key>-<version>.zip from <ref> via
          git archive (tracked files only, dev/CI files excluded), writes a
-         .sha256 next to it and verifies the result.
+         .sha256 next to it and verifies the result. Output defaults to
+         .ckrelease/ — dist/ belongs to a frontend build and is often tracked.
 verify   re-checks an existing archive: one top-level directory named after the
          extension key, an info.xml at the expected version, no dev/CI files.
 info     print one field, for scripts (dist-name is the archive basename).
