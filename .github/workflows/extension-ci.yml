@@ -149,12 +149,14 @@ jobs:
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "set -e
+             cd /var/www/html/ext/$CK_EXT_KEY
              cv ext:disable $CK_EXT_KEY
              cv ext:enable $CK_EXT_KEY
              cv ext:uninstall $CK_EXT_KEY
              cv ext:enable $CK_EXT_KEY"
-          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app \
-            cv ev "echo CRM_Extension_System::singleton()->getManager()->getStatus('$CK_EXT_KEY');" | tr -d '[:space:]')
+          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
+            | tr -d '[:space:]')
           [ "$status" = installed ] \
             || { echo "lifecycle: extension ended up '$status', expected 'installed'" >&2; exit 1; }
 
@@ -236,14 +238,17 @@ jobs:
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "set -e
+             cd /var/www/html/ext/$CK_EXT_KEY
              cv flush
              cv upgrade:db --mode=ext"
-          pending=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app \
-            cv ev 'echo CRM_Extension_Upgrades::hasPending() ? "pending" : "clean";' | tr -d '[:space:]')
+          pending=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_Upgrades::hasPending() ? \"pending\" : \"clean\";'" \
+            | tr -d '[:space:]')
           [ "$pending" = clean ] \
             || { echo "upgrade: extension upgrades still pending after cv upgrade:db" >&2; exit 1; }
-          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app \
-            cv ev "echo CRM_Extension_System::singleton()->getManager()->getStatus('$CK_EXT_KEY');" | tr -d '[:space:]')
+          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
+            | tr -d '[:space:]')
           [ "$status" = installed ] \
             || { echo "upgrade: extension ended up '$status', expected 'installed'" >&2; exit 1; }
 
@@ -296,7 +301,6 @@ jobs:
       fail-fast: false
       matrix:
         image: ${{ fromJSON(needs.compat-images.outputs.images) }}
-    name: compat (${{ matrix.image }})
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ inputs.key }}
@@ -325,12 +329,14 @@ jobs:
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "set -e
+             cd /var/www/html/ext/$CK_EXT_KEY
              cv ext:disable $CK_EXT_KEY
              cv ext:enable $CK_EXT_KEY
              cv ext:uninstall $CK_EXT_KEY
              cv ext:enable $CK_EXT_KEY"
-          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app \
-            cv ev "echo CRM_Extension_System::singleton()->getManager()->getStatus('$CK_EXT_KEY');" | tr -d '[:space:]')
+          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
+            | tr -d '[:space:]')
           [ "$status" = installed ] \
             || { echo "lifecycle: extension ended up '$status', expected 'installed'" >&2; exit 1; }
 
