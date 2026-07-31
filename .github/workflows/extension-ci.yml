@@ -392,10 +392,16 @@ jobs:
           set -euo pipefail
           echo "path=.civikitchen-siblings/${CK_SIBLING_REPO##*/}" >> "$GITHUB_OUTPUT"
 
-      # A dot-directory inside the workspace, not a sibling of it: the stack
-      # bind-mounts the checkout, so anything outside it is invisible to the
-      # container, and anything tracked-looking inside it would show up in
-      # `git status` and in cklint's scope.
+      # Inside the workspace, because actions/checkout refuses to write
+      # anywhere else — and the LEADING DOT is load-bearing, twice over:
+      #   * CiviCRM's extension scanner (CRM_Utils_File::findFiles, via
+      #     CRM_Extension_Container_Basic) skips any directory whose name
+      #     starts with a dot. Without that, the sibling would be discovered a
+      #     second time *through the extension's own mount* and the same key
+      #     would resolve to two paths.
+      #   * cklint ignores `.civikitchen-siblings/` explicitly — phpcs has no
+      #     such rule of its own, and a project phpcs.xml.dist scoped to
+      #     `<file>.</file>` would otherwise lint the sibling's code.
       #
       # ssh-key is passed unconditionally: actions/checkout treats the empty
       # string as "not set" and falls back to the calling workflow's token,
