@@ -18,7 +18,14 @@ jobs:
 
       - name: shellcheck (style level, fails on any finding)
         run: |
-          find images examples tools -name '*.sh' -print0 | xargs -0 shellcheck -S style
+          # The ck* tools in images/lib carry no .sh suffix (they are commands on
+          # PATH, not scripts you source), so a *.sh-only sweep silently skipped
+          # every one of them — the shell in this repo that runs in the most
+          # places. They are all clean; keep them that way.
+          find images examples tools -name '*.sh' -print0 \
+            | xargs -0 shellcheck -S style
+          find images/lib -maxdepth 1 -type f -name 'ck*' -print0 \
+            | xargs -0 shellcheck -S style
           echo "shellcheck clean"
 
       - name: actionlint
