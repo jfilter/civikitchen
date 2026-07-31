@@ -3,7 +3,7 @@
   "private": true,
   "description": "Playwright UI test starter for CiviCRM extensions. Copy into your own extension.",
   "scripts": {
-    "test": "playwright test",
+    "test:e2e": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug"

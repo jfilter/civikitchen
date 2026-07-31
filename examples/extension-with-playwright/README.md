@@ -11,8 +11,13 @@ cd examples/extension-with-playwright
 docker compose up -d                     # CiviCRM on http://localhost:8080
 npm install
 npx playwright install chromium
-npm test                                 # runs the example tests
+npm run test:e2e                         # runs the example tests
 ```
+
+The script is called `test:e2e`, not `test`, because that is the name the
+shared `extension-ci.yml` runs when you switch its `playwright` input on —
+and it leaves npm's `test` slot free for the JS unit suite that CI's
+`js_tests` input runs. Two suites, two scripts, both reachable from CI.
 
 The example mounts `extensions/de.systopia.contract` so you can see green
 tests immediately. Replace the volume in `docker-compose.yml` with your own
@@ -25,6 +30,26 @@ npm run test:ui        # Playwright UI mode — best DX for writing tests
 npm run test:headed    # watch the browser do its thing
 npm run test:debug     # step through with Playwright Inspector
 ```
+
+## Run it in CI
+
+Once the files below are in your extension repo, the shared workflow runs
+this suite for you — no repo-local browser job:
+
+```yaml
+    with:
+      key: myextension
+      playwright: true
+```
+
+The job boots your `.docker/docker-compose.ci.yml` stack with port 8080
+published and the `admin` / `admin` demo user created, then runs
+`npm run test:e2e` on the runner with `CIVICRM_BASE_URL`, `DEMO_USER` and
+`DEMO_PASS` set — the same variables `playwright.config.ts` and
+`tests/auth.setup.ts` already read here. Report and traces are uploaded when
+it fails. It is a slow check: put it in the scheduled caller, not in
+`ci.yml`. See
+[extension-standards.md](../../docs/extension-standards.md#frontend-npm-dependencies-js-tests-and-browser-tests).
 
 ## Use it in your own extension
 
@@ -58,7 +83,7 @@ the demo user the standalone image creates on first start (controlled by
 If you change the demo user, override at test time:
 
 ```bash
-DEMO_USER=alice DEMO_PASS=secret npm test
+DEMO_USER=alice DEMO_PASS=secret npm run test:e2e
 ```
 
 ## When to use Playwright vs. PHPUnit
