@@ -95,6 +95,7 @@ Details in [Custom or older CiviCRM versions](docs/images.md#custom-or-older-civ
 - [Extension development](docs/extension-development.md) — mount, test (phpunit/headless/Playwright), civix, PHPStan, linting, IDE step debugging, provisioning hooks
 - [Configuration](docs/configuration.md) — every env var the images understand
 - [Building locally](docs/building.md) — build args, `KEEP_GIT=1`, running the test suite locally
+- [Releases](docs/releases.md) — the versioned contract extension repos pin (`@v1` / `:v1`), how a release is cut
 
 ## Reliability
 
