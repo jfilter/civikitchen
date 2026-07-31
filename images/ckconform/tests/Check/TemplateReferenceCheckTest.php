@@ -58,6 +58,29 @@ final class TemplateReferenceCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
     }
 
+    /** A run() override that never calls parent::run() never renders. */
+    public function testANonRenderingRunOverrideNeedsNoTemplate(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'CRM/Greeter/Page/Hook.php' => "<?php\nclass CRM_Greeter_Page_Hook extends CRM_Core_Page {\n  public function run() {\n    echo json_encode(['ok' => TRUE]);\n    CRM_Utils_System::civiExit();\n  }\n}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
+    }
+
+    /** ... but delegating to parent::run() still renders the template. */
+    public function testARunOverrideDelegatingToParentStillNeedsIt(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'CRM/Greeter/Page/Foo.php' => "<?php\nclass CRM_Greeter_Page_Foo extends CRM_Core_Page {\n  public function run() {\n    \$this->assign('x', 1);\n    parent::run();\n  }\n}\n",
+        ], git: true);
+        $this->assertFails(
+            $this->run_(new TemplateReferenceCheck(), $context),
+            'templates/CRM/Greeter/Page/Foo.tpl'
+        );
+    }
+
     /** Extending a sibling Page inherits its template. */
     public function testASubclassOfAnOwnPageIsSilent(): void
     {

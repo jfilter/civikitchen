@@ -20,7 +20,10 @@ use CiviKitchen\Ckconform\Reporter;
  *
  * A class that overrides getTemplateFileName()/getTemplate(), or that extends
  * another of the extension's own Page/Form classes (and so inherits a template
- * that is checked at its own definition), is exempt.
+ * that is checked at its own definition), is exempt. So is a class that
+ * overrides run() without ever calling parent::run(): the parent's run() is
+ * the only path that feeds the derived template to Smarty, so a redirect or
+ * JSON endpoint never renders and needs no .tpl.
  */
 final class TemplateReferenceCheck implements Check
 {
@@ -85,6 +88,13 @@ final class TemplateReferenceCheck implements Check
             return;
         }
         if (preg_match('/\bfunction\s+(?:getTemplateFileName|getTemplate)\s*\(/', $source) === 1) {
+            return;
+        }
+        if (preg_match('/\bfunction\s+run\s*\(/', $source) === 1
+            && preg_match('/\bparent::run\s*\(/', $source) !== 1
+        ) {
+            // run() is overridden and never delegates to the parent, so the
+            // derived template is never handed to Smarty.
             return;
         }
         if (preg_match('/\bclass\s+[A-Za-z0-9_]+\s+extends\s+([A-Za-z0-9_\\\\]+)/', $source, $match) === 1
