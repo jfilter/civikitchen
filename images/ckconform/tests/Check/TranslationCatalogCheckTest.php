@@ -108,6 +108,21 @@ final class TranslationCatalogCheckTest extends CheckTestCase
         );
     }
 
+    /** A half-written catalog is a diagnosis, not a PHP warning. */
+    public function testATruncatedMoFails(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'Civi/Greeter/Thing.php' => $this->php("E::ts('Hello')"),
+            'l10n/de_DE/LC_MESSAGES/greeter.po' => $this->po([['Hello', 'Hallo']]),
+            'l10n/de_DE/LC_MESSAGES/greeter.mo' => substr($this->mo(['Hello' => 'Hallo']), 0, 30),
+        ], git: true);
+        $this->assertFails(
+            $this->run_(new TranslationCatalogCheck(), $context),
+            'not a readable gettext catalog'
+        );
+    }
+
     public function testABigEndianMoIsReadToo(): void
     {
         $context = $this->repo([

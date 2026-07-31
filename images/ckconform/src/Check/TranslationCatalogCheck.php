@@ -376,6 +376,12 @@ final class TranslationCatalogCheck implements Check
         }
         $count = $header[1];
         $table = $header[2];
+        // A truncated catalog must be rejected before it is indexed, not while:
+        // unpack() on a short read raises a warning, and a warning from a check
+        // is a stack trace where a diagnosis belongs.
+        if ($count < 0 || strlen($binary) < $table + $count * 8) {
+            return null;
+        }
 
         $originals = [];
         for ($i = 0; $i < $count; ++$i) {
