@@ -410,6 +410,10 @@ final class TranslationCatalogCheck implements Check
     }
 
     /**
+     * A few of the offending strings, shortened. Cut on a character boundary,
+     * not a byte one: translatable copy is exactly the kind of string that ends
+     * in a multibyte character, and half of one renders as a replacement glyph.
+     *
      * @param list<string> $strings
      */
     private function examples(array $strings): string
@@ -418,8 +422,13 @@ final class TranslationCatalogCheck implements Check
         $shown = array_slice($strings, 0, self::EXAMPLES);
         $quoted = array_map(static function (string $s): string {
             $s = str_replace("\n", ' ', $s);
+            if (preg_match('/^.{0,40}/us', $s, $match) === 1) {
+                $s = $match[0] === $s ? $s : $match[0] . '…';
+            } elseif (strlen($s) > 40) {
+                $s = substr($s, 0, 40) . '…';
+            }
 
-            return "'" . (strlen($s) > 40 ? substr($s, 0, 40) . '…' : $s) . "'";
+            return "'$s'";
         }, $shown);
         $rest = count($strings) - count($shown);
 

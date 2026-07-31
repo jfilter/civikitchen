@@ -182,6 +182,11 @@ final class CrmScopeCheck implements Check
      */
     private function scopeKey(string $attributes): array
     {
+        // Inside a .mgd.php the wrapper lives in a PHP string literal, so its
+        // quotes arrive escaped: extensionKey=\'greeter\'. PHP unescapes them
+        // long before Smarty ever sees the tag.
+        $attributes = str_replace(['\\\'', '\\"'], ["'", '"'], $attributes);
+
         if (preg_match('/extensionKey\s*=\s*(?:\'([^\']*)\'|"([^"]*)"|(\S+))/i', $attributes, $match) !== 1) {
             return [null, false];
         }

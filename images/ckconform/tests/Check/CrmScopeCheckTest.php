@@ -210,6 +210,18 @@ final class CrmScopeCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new CrmScopeCheck(), $context));
     }
 
+    /** In a PHP string literal the wrapper's own quotes arrive escaped. */
+    public function testAnEscapedQuotedExtensionKeyInMgdPhpIsAccepted(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'managed/Welcome.mgd.php' => "<?php\nreturn [['values' => ["
+                . "'msg_text' => '{crmScope extensionKey=\\'de.example.greeter\\'}{ts}Welcome{/ts}{/crmScope}'"
+                . "]]];\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new CrmScopeCheck(), $context));
+    }
+
     public function testTemplatesUnderTestsAreIgnored(): void
     {
         $context = $this->repo([
