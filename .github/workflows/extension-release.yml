@@ -180,11 +180,17 @@ jobs:
             -e "CK_EXT_KEY=$CK_EXT_KEY" app bash -c '
             set -eu
             cv ev "CRM_Extension_System::singleton()->getFullContainer()->refresh();"
-            cv ext:enable "$CK_EXT_KEY"
-            cv api4 Extension.get +w "key=$CK_EXT_KEY" +s key,status --out=json' > smoke.json
-          cat smoke.json
-          jq -e 'map(select(.status == "installed")) | length == 1' smoke.json > /dev/null \
-            || { echo "extension did not reach status=installed" >&2; exit 1; }
+            cv ext:enable "$CK_EXT_KEY"'
+
+          # Same status assertion the lifecycle smoke in extension-ci.yml uses:
+          # `cv ext:enable` can succeed on a site where the extension still ends
+          # up something other than installed.
+          status=$(docker compose -f smoke-compose.yml exec -T -u www-data \
+            -e "CK_EXT_KEY=$CK_EXT_KEY" app bash -c \
+            'cv ev "echo CRM_Extension_System::singleton()->getManager()->getStatus(getenv(\"CK_EXT_KEY\"));"' \
+            | tr -d '[:space:]')
+          [ "$status" = installed ] \
+            || { echo "smoke: extension ended up [$status], expected [installed]" >&2; exit 1; }
 
       # A failed stack is a stack trace of nothing without its logs.
       - name: App logs on failure
