@@ -421,3 +421,119 @@ jobs:
       - name: App logs on failure
         if: failure()
         run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
+
+  # --- Browser tests (opt-in via playwright) --------------------------------
+  #
+  # examples/extension-with-playwright, promoted from a copy-paste starter to a
+  # job: CiviCRM in Docker, the browser on the runner, the suite talking to
+  # http://localhost:8080. Skipped entirely when the input is off, so callers
+  # that never set it keep exactly the run they have — same deal as the compat
+  # matrix.
+  #
+  # Its own job rather than more steps in `ci`: browsers, an npm tree and a
+  # published port on every push run is the opposite of what the standards ask
+  # of ci.yml, and a browser failure that also hides the PHPUnit result is a
+  # bad trade. The suite is version-independent enough that this job runs once
+  # on `image`, not per matrix entry — see the notes in
+  # docs/extension-standards.md.
+  playwright:
+    if: ${{ inputs.playwright }}
+    runs-on: ubuntu-latest
+    env:
+      CK_COMPOSE_FILE: ${{ inputs.compose_file }}
+      CK_EXT_KEY: ${{ inputs.key }}
+      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate inputs
+        run: |
+          [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
+            || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
+
+      # Two things the CI stack deliberately lacks, added here instead of in
+      # the template compose file — that one is template-managed, and no repo
+      # should take drift (or a port, or a login user) for a job it may never
+      # switch on:
+      #   * a published port. The CI stack is only ever spoken to through
+      #     `docker compose exec`, so nothing on it is reachable from the
+      #     runner, where the browser lives.
+      #   * a login user. CIVIKITCHEN_DEMO_USER is opt-in in the image; without
+      #     it the site has an auth provider and no account to use it with.
+      # Port 8080 is fixed, not an input: the template CI compose sets
+      # CIVIKITCHEN_SITE_URL=http://localhost:8080 and CiviCRM bakes that into
+      # every asset and redirect URL, so a site published on another port
+      # serves pages pointing at one that isn't there.
+      - name: Compose override — publish the port, create the demo user
+        run: |
+          set -euo pipefail
+          override="$RUNNER_TEMP/civikitchen-playwright-override.yml"
+          cat > "$override" <<'YAML'
+          services:
+            app:
+              ports:
+                - "8080:80"
+              environment:
+                CIVIKITCHEN_DEMO_USER: admin
+                CIVIKITCHEN_DEMO_PASS: admin
+          YAML
+          echo "CK_PW_OVERRIDE=$override" >> "$GITHUB_ENV"
+
+      - name: Start CiviCRM stack
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" -f "$CK_PW_OVERRIDE" \
+            up -d --wait --quiet-pull
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: 'npm'
+
+      # Same --ignore-scripts rule as the ci job: this job installs the
+      # extension's own tree, and a browser test repo is exactly where an
+      # install hook would go unnoticed.
+      - name: Materialize npm dependencies (npm ci --ignore-scripts)
+        run: npm ci --ignore-scripts
+
+      # Browsers come from `playwright install`, never from the install hook
+      # --ignore-scripts just skipped. No browser argument: which projects the
+      # repo's playwright.config.ts declares is the repo's business, and a
+      # missing webkit surfaces as a failing suite minutes into the run.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Playwright (npm run test:e2e)
+        env:
+          # Read by the example config's `baseURL` and auth.setup.ts. Matches
+          # CIVIKITCHEN_SITE_URL in the stack, which is what CiviCRM believes
+          # it is served as.
+          CIVICRM_BASE_URL: http://localhost:8080
+          DEMO_USER: admin
+          DEMO_PASS: admin
+        run: |
+          set -euo pipefail
+          jq -e '.scripts["test:e2e"] // empty' package.json > /dev/null \
+            || { echo "playwright is on but package.json declares no \"test:e2e\" script — that is the script this job runs" >&2; exit 1; }
+          npm run test:e2e
+
+      # A browser failure without its trace is a screenshot of nothing. Both
+      # directories are Playwright defaults; `ignore` keeps a config that
+      # writes elsewhere from turning a red suite into a red upload too.
+      - name: Playwright report + traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ inputs.key }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # No override needed to find the stack: the project name comes from the
+      # compose file, and this way the step still works when the failure was
+      # the override step itself.
+      - name: App logs on failure
+        if: failure()
+        run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
