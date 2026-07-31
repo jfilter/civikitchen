@@ -347,38 +347,14 @@ jobs:
       # the *result* (a vendor/ directory, a checked-out sibling), never the
       # credential that produced it. A leaked build secret is otherwise the one
       # mistake in this pipeline that outlives the job.
-      - name: Composer install (private packages over SSH)
-        if: ${{ inputs.composer_install }}
-        env:
-          CK_COMPOSER_DEPLOY_KEY: ${{ secrets.composer_deploy_key }}
-        run: |
-          set -euo pipefail
-          # Branching on the secret in bash, not in the step's `if:` — the
-          # `secrets` context is not available there. And an absent key is a
-          # legitimate configuration: a repo can keep vendor/ out of git while
-          # every package it requires is public.
-          if [ -n "${CK_COMPOSER_DEPLOY_KEY:-}" ]; then
-            mkdir -p ~/.ssh && chmod 700 ~/.ssh
-            # printf, not echo: the key is multi-line and OpenSSH rejects it
-            # without the trailing newline that a secret often loses.
-            printf '%s\n' "$CK_COMPOSER_DEPLOY_KEY" > ~/.ssh/civikitchen_composer
-            chmod 600 ~/.ssh/civikitchen_composer
-            # Pin github.com's host key instead of turning host checking off:
-            # this is a fresh runner with an empty known_hosts, and "accept
-            # whatever answers" is how a credential ends up somewhere else.
-            ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-            # IdentitiesOnly: offer this key and nothing else. Without it ssh
-            # walks the agent's keys first, so a *missing* grant on the deploy
-            # key can pass on one runner and fail on another.
-            printf 'Host github.com\n  IdentityFile ~/.ssh/civikitchen_composer\n  IdentitiesOnly yes\n' >> ~/.ssh/config
-          fi
-          # No `composer update` and no --ignore-platform-reqs: the committed
-          # lock is installed as it stands. It runs on the RUNNER's PHP though,
-          # which is not the image's — a repo whose floor is above the runner's
-          # PHP should pin `config.platform.php` in composer.json to the
-          # version the extension actually runs on, which is the honest fix for
-          # resolving against one PHP and executing on another anyway.
-          composer install --no-dev --no-interaction --no-progress
+      #
+      # The sibling checkout goes FIRST, before any ~/.ssh/config exists. Two
+      # deploy keys for github.com are ambiguous by nature: the server accepts
+      # whichever valid key ssh offers first and only then decides the
+      # repository is off limits, which surfaces as "repository not found" for
+      # a repo the run has perfectly good access to. actions/checkout passes
+      # its own key with `-i … -o IdentitiesOnly=yes`, so ordering the steps
+      # this way keeps the question from arising at all.
 
       # Two steps rather than an expression: GitHub's expression language has
       # no split(), and what the checkout needs is the repo name — the part
@@ -471,6 +447,39 @@ jobs:
                 CIVIKITCHEN_ENABLE_EXTENSIONS: "$sibling_key,$CK_EXT_KEY"
           YAML
           echo "CK_SIBLING_OVERRIDE=$override" >> "$GITHUB_ENV"
+
+      - name: Composer install (private packages over SSH)
+        if: ${{ inputs.composer_install }}
+        env:
+          CK_COMPOSER_DEPLOY_KEY: ${{ secrets.composer_deploy_key }}
+        run: |
+          set -euo pipefail
+          # Branching on the secret in bash, not in the step's `if:` — the
+          # `secrets` context is not available there. And an absent key is a
+          # legitimate configuration: a repo can keep vendor/ out of git while
+          # every package it requires is public.
+          if [ -n "${CK_COMPOSER_DEPLOY_KEY:-}" ]; then
+            mkdir -p ~/.ssh && chmod 700 ~/.ssh
+            # printf, not echo: the key is multi-line and OpenSSH rejects it
+            # without the trailing newline that a secret often loses.
+            printf '%s\n' "$CK_COMPOSER_DEPLOY_KEY" > ~/.ssh/civikitchen_composer
+            chmod 600 ~/.ssh/civikitchen_composer
+            # Pin github.com's host key instead of turning host checking off:
+            # this is a fresh runner with an empty known_hosts, and "accept
+            # whatever answers" is how a credential ends up somewhere else.
+            ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+            # IdentitiesOnly: offer this key and nothing else. Without it ssh
+            # walks the agent's keys first, so a *missing* grant on the deploy
+            # key can pass on one runner and fail on another.
+            printf 'Host github.com\n  IdentityFile ~/.ssh/civikitchen_composer\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          fi
+          # No `composer update` and no --ignore-platform-reqs: the committed
+          # lock is installed as it stands. It runs on the RUNNER's PHP though,
+          # which is not the image's — a repo whose floor is above the runner's
+          # PHP should pin `config.platform.php` in composer.json to the
+          # version the extension actually runs on, which is the honest fix for
+          # resolving against one PHP and executing on another anyway.
+          composer install --no-dev --no-interaction --no-progress
 
       - name: Start CiviCRM stack
         id: stack
