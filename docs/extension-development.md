@@ -99,7 +99,7 @@ For browser-level tests of your extension's UI (forms, Angular/React widgets, JS
 cd examples/extension-with-playwright
 docker compose up -d
 npm install && npx playwright install chromium
-npm test
+npm run test:e2e
 ```
 
 See the [example's README](../examples/extension-with-playwright/README.md) for how to drop the config files into your own extension repo.
