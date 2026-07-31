@@ -30,6 +30,19 @@ final class HookDispatchNameCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
     }
 
+    /**
+     * The shared CI checks a sibling extension out into .civikitchen-siblings/;
+     * its hooks carry ITS prefix and must never be judged as this repo's —
+     * also in fallback (non-git) mode, where files come from a disk walk.
+     */
+    public function testASiblingCheckoutIsNotThisReposCode(): void
+    {
+        $context = $this->repo([
+            '.civikitchen-siblings/other/other.php' => "<?php\nfunction other_civicrm_config(&\$config) {\n}\n",
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
+
     public function testFailsOnForeignPrefix(): void
     {
         $context = $this->repo(['fixture.php' => <<<'PHP'

@@ -269,8 +269,18 @@ final class Context
             return [];
         }
         $found = [];
+        // Pruned even in fallback mode: .git is never repo content, and
+        // .civikitchen-siblings/ is where the shared CI checks out a sibling
+        // extension — foreign code with its own CI, whose hooks and files must
+        // not be judged as this repo's (CiviCRM's own scanner skips
+        // dot-directories for the same reason).
+        $directoryIterator = new \RecursiveDirectoryIterator($base, \FilesystemIterator::SKIP_DOTS);
         $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($base, \FilesystemIterator::SKIP_DOTS)
+            new \RecursiveCallbackFilterIterator(
+                $directoryIterator,
+                static fn (\SplFileInfo $file): bool => !($file->isDir()
+                    && in_array($file->getFilename(), ['.git', '.civikitchen-siblings'], true)),
+            )
         );
         foreach ($iterator as $file) {
             if (!$file instanceof \SplFileInfo || !$file->isFile()) {
@@ -311,7 +321,13 @@ final class Context
 
     private function git(array $args): ?string
     {
-        $command = 'git -C ' . escapeshellarg($this->root);
+        // safe.directory: in CI the checkout is owned by the runner user while
+        // the tools run as www-data, and git then refuses the repo ("dubious
+        // ownership") — which silently degraded every tracked-files check to
+        // the disk-walk fallback. This tool only ever READS the repo, so
+        // trusting the one directory it was pointed at is sound.
+        $command = 'git -c ' . escapeshellarg('safe.directory=' . rtrim($this->root, '/'))
+            . ' -C ' . escapeshellarg($this->root);
         foreach ($args as $arg) {
             $command .= ' ' . escapeshellarg($arg);
         }
