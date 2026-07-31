@@ -175,6 +175,19 @@ on:
           caller, not in the push run.
         type: boolean
         default: false
+      runs_on:
+        description: >-
+          Runner label for every job in this workflow. The default is GitHub's
+          hosted runner; an org with self-hosted runners passes its label
+          (e.g. 'civico') to run the same pipeline on its own hardware —
+          self-hosted minutes are not billed, and a local Docker layer cache
+          makes the stack boots faster. One input for all jobs on purpose: a
+          pipeline split across runner pools would make a red run's
+          environment ambiguous. Self-hosted runners belong to PRIVATE repos
+          only — never attach them to a public repo (fork PRs execute
+          arbitrary code on the runner).
+        type: string
+        default: 'ubuntu-latest'
       node_version:
         description: >-
           Node version for every frontend step above and for the Playwright
@@ -258,7 +271,7 @@ jobs:
   # `tools/ckinit.php --update` away.
   template:
     if: ${{ inputs.check_template }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on }}
     steps:
       - uses: actions/checkout@v5
       # Pinned to the SHA this very workflow was resolved from, so the template
@@ -275,7 +288,7 @@ jobs:
         run: php .civikitchen-ci/tools/ckinit.php --check .
 
   ci:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on }}
     # Inputs enter shell commands through the environment, never by expression
     # interpolation inside `run:` — an interpolated input IS the script text.
     env:
@@ -587,7 +600,7 @@ jobs:
   # no image build, no artifact shuffling.
   upgrade:
     if: ${{ inputs.upgrade_from_last_release }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on }}
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ inputs.key }}
@@ -694,7 +707,7 @@ jobs:
   # that never sets it pays nothing.
   core-upgrade:
     if: ${{ inputs.core_upgrade_from != '' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on }}
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ inputs.key }}
@@ -920,7 +933,7 @@ jobs:
   # build-dev-images.yml's resolve-civicrm job.
   compat-images:
     if: ${{ inputs.matrix_images != '' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on }}
     outputs:
       images: ${{ steps.parse.outputs.images }}
     env:
@@ -949,7 +962,7 @@ jobs:
   # whether its tests pass there.
   compat:
     needs: compat-images
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on }}
     strategy:
       # One old CiviCRM failing must not hide the result for the new one.
       fail-fast: false
@@ -1027,7 +1040,7 @@ jobs:
   # docs/extension-standards.md.
   playwright:
     if: ${{ inputs.playwright }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on }}
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ inputs.key }}
