@@ -73,6 +73,12 @@ unless `--force` is explicitly supplied. For an existing extension,
   workflow, template, tools and images are one versioned contract, so they move
   together and deliberately ([releases.md](releases.md)). One canary repo
   tracks `@main` and declares that in its `.ckconform`.
+- Releases through the shared `extension-release.yml` — a tag push builds the
+  installable zip (dev/CI files excluded), installs it into a fresh CiviCRM and
+  publishes the GitHub release. The version lives in `info.xml` and
+  `composer.json` and they are bumped together; `ckrelease check` is what says
+  so out loud. See [Releasing an extension](extension-releases.md). Not a
+  template-managed file yet, so adoption is per repo and one line.
 - `composer.json` with the extension metadata; no `node_modules`/`vendor`/build
   artifacts committed (frontend builds commit only `dist/`).
 - `.gitignore` covers every artifact the repo can regenerate — the phpunit

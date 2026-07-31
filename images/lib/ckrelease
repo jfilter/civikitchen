@@ -1,0 +1,389 @@
+#!/bin/bash
+#
+# ckrelease — cut a release of a CiviCRM extension: check the version is
+# consistent, build the installable zip, verify what came out.
+#
+# The counterpart to cklint (style), phpstan (types), ckconform (structure) and
+# ckcoverage (tests): those all pass happily on a repo whose info.xml still says
+# 1.2.0 while the tag says v1.3.0, or whose "release" zip ships tests/ and
+# .github/ to every site that installs it.
+#
+#     ckrelease check --version v1.3.0     # tag vs info.xml vs composer.json
+#     ckrelease dist   --version v1.3.0    # -> .ckrelease/<key>-1.3.0.zip + .sha256
+#     ckrelease verify .ckrelease/<key>-1.3.0.zip
+#     ckrelease info key                   # key | file | version | dist-name
+#
+# Run from the extension root. Needs git and php; `verify` also needs unzip.
+# Ships in the civikitchen images and runs standalone from a checkout, so the
+# same code path builds the artifact locally and in the shared
+# extension-release.yml workflow.
+#
+# WHY NOT release-please: an extension release is not a version bump plus notes.
+# It is a version bump in info.xml (which no generic updater knows how to read
+# as the source of truth), an archive whose contents are a compatibility
+# statement towards every site that installs it, and an install that has to
+# actually work against a real CiviCRM. Notes and tags are the easy half, and
+# `gh release --generate-notes` already does them — see docs/extension-releases.md.
+#
+# WHAT IS EXCLUDED, AND WHERE THAT LIVES. The exclude list below is central, not
+# per-repo .gitattributes `export-ignore`: .gitattributes is a template-MANAGED
+# file, so editing it turns every conforming repo's drift job red until someone
+# runs `ckinit --update` there — a fleet round to ship packaging. It would also
+# put the list in as many copies as there are repos, which is the state the
+# shared tooling exists to end. A repo that needs more (or less) declares it
+# where every other per-repo policy is declared, in .ckconform:
+#
+#     dist_exclude=build,docs/internal   # additionally kept out of the zip
+#     dist_include=tests                 # kept IN despite the central list
+#
+# `git archive` still honours a repo's own export-ignore attributes on top of
+# this; nothing here forbids them, they are just not where the standard lives.
+#
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+ckrelease — release helper for CiviCRM extensions (version check, dist zip).
+
+  ckrelease check  [--version <v>] [--require-changelog]
+  ckrelease dist   [--version <v>] [--ref <ref>] [--output <dir>] [--require-changelog]
+  ckrelease verify <zip> [--version <v>]
+  ckrelease info   key|file|version|dist-name
+
+check    info.xml <version> is the one truth; a --version (the git tag, with or
+         without the leading v) must equal it, and a composer.json that carries
+         a "version" must too. A CHANGELOG.md, if the repo has one, must mention
+         the version; --require-changelog also makes a missing one an error.
+dist     runs check, then builds <output>/<key>-<version>.zip from <ref> via
+         git archive (tracked files only, dev/CI files excluded), writes a
+         .sha256 next to it and verifies the result. Output defaults to
+         .ckrelease/ — dist/ belongs to a frontend build and is often tracked.
+verify   re-checks an existing archive: one top-level directory named after the
+         extension key, an info.xml at the expected version, no dev/CI files.
+info     print one field, for scripts (dist-name is the archive basename).
+
+Run from the extension root (the directory holding info.xml).
+EOF
+}
+
+die() {
+  echo "ckrelease: $*" >&2
+  exit 1
+}
+
+# --- what a release archive must not contain --------------------------------
+# Directory-shaped entries are matched as a whole path segment by `verify`, so
+# a nested copy is caught too; the build only excludes them at the root, which
+# is where the template puts them. Deliberately NOT here: vendor/ (a repo that
+# commits it does so because the site needs it at runtime) and dist/ (a frontend
+# build IS the shipped artifact).
+DIST_EXCLUDE_DIRS=(
+  .github
+  .docker
+  .claude
+  tests
+  node_modules
+)
+DIST_EXCLUDE_FILES=(
+  .gitattributes
+  .gitignore
+  .editorconfig
+  .ckconform
+  .phpunit.result.cache
+  phpcs.xml
+  phpcs.xml.dist
+  phpstan.neon
+  phpstan.neon.dist
+  phpstanBootstrap.php
+  phpunit.xml
+  phpunit.xml.dist
+  playwright.config.ts
+  package-lock.json
+  bun.lock
+  bun.lockb
+  tsconfig.json
+)
+
+# --- small readers ----------------------------------------------------------
+# XML and JSON are parsed as XML and JSON. The same line-oriented shortcuts that
+# ckconform was rewritten in PHP to get rid of would misread a <version> split
+# over two lines just as happily here.
+xml_field() {
+  php -r '
+    libxml_use_internal_errors(TRUE);
+    $xml = simplexml_load_file($argv[1]);
+    if ($xml === FALSE) { fwrite(STDERR, "cannot parse {$argv[1]}\n"); exit(2); }
+    echo trim($argv[2] === "key" ? (string) $xml["key"] : (string) $xml->{$argv[2]});
+  ' "$1" "$2"
+}
+
+json_field() {
+  php -r '
+    $raw = file_get_contents($argv[1]);
+    if ($raw === FALSE) { exit(0); }
+    $data = json_decode($raw, TRUE);
+    if (!is_array($data)) { fwrite(STDERR, "invalid JSON: {$argv[1]}\n"); exit(2); }
+    $value = $data[$argv[2]] ?? NULL;
+    echo is_string($value) ? $value : "";
+  ' "$1" "$2"
+}
+
+# First occurrence of a KEY=VALUE from .ckconform, with an optional ' -- reason'
+# stripped — the format ckconform and ckinit already read.
+policy() {
+  local value
+  [ -f .ckconform ] || return 0
+  value=$(sed -n "s/^$1=//p" .ckconform | head -1)
+  value=${value%%$'\r'}
+  case "$value" in
+    *' -- '*) value=${value%% -- *} ;;
+  esac
+  printf '%s' "$value"
+}
+
+# Central list ± the repo's .ckconform, as two global arrays.
+resolve_excludes() {
+  local item keep
+  local -a extra=() included=()
+  IFS=',' read -ra extra <<< "$(policy dist_exclude)"
+  IFS=',' read -ra included <<< "$(policy dist_include)"
+
+  for item in ${extra[@]+"${extra[@]}"}; do
+    item=$(printf '%s' "$item" | tr -d '[:space:]')
+    case "$item" in
+      '') continue ;;
+      /*|*..*) die "dist_exclude must be a repo-relative path: $item" ;;
+      */) DIST_EXCLUDE_DIRS+=("${item%/}") ;;
+      *) DIST_EXCLUDE_FILES+=("$item") ;;
+    esac
+  done
+
+  for keep in ${included[@]+"${included[@]}"}; do
+    keep=$(printf '%s' "$keep" | tr -d '[:space:]')
+    [ -n "$keep" ] || continue
+    keep=${keep%/}
+    local -a kept_dirs=() kept_files=()
+    for item in ${DIST_EXCLUDE_DIRS[@]+"${DIST_EXCLUDE_DIRS[@]}"}; do
+      [ "$item" = "$keep" ] || kept_dirs+=("$item")
+    done
+    for item in ${DIST_EXCLUDE_FILES[@]+"${DIST_EXCLUDE_FILES[@]}"}; do
+      [ "$item" = "$keep" ] || kept_files+=("$item")
+    done
+    DIST_EXCLUDE_DIRS=(${kept_dirs[@]+"${kept_dirs[@]}"})
+    DIST_EXCLUDE_FILES=(${kept_files[@]+"${kept_files[@]}"})
+  done
+}
+
+# --- context ----------------------------------------------------------------
+require_extension_root() {
+  [ -f info.xml ] || die "no info.xml here — run from the extension root."
+  EXT_KEY=$(xml_field info.xml key)
+  EXT_FILE=$(xml_field info.xml file)
+  EXT_VERSION=$(xml_field info.xml version)
+  [ -n "$EXT_KEY" ] || die "info.xml has no key attribute."
+  [ -n "$EXT_FILE" ] || die "info.xml has no <file>."
+  [ -n "$EXT_VERSION" ] || die "info.xml has no <version>."
+  case "$EXT_KEY" in
+    */*|*' '*) die "info.xml key is not a usable directory name: $EXT_KEY" ;;
+  esac
+}
+
+# A tag is v1.2.3, a version is 1.2.3. Everything downstream compares versions.
+strip_v() {
+  printf '%s' "${1#v}"
+}
+
+# --- check ------------------------------------------------------------------
+run_check() {
+  local want="$1" require_changelog="$2" composer_version
+  local ok=0
+
+  if [ -n "$want" ] && [ "$want" != "$EXT_VERSION" ]; then
+    echo "ckrelease: FAIL — releasing $want, but info.xml <version> is $EXT_VERSION." >&2
+    echo "  Bump info.xml (and composer.json) in the release commit, then tag it." >&2
+    ok=1
+  fi
+
+  if [ -f composer.json ]; then
+    composer_version=$(json_field composer.json version)
+    if [ -n "$composer_version" ] && [ "$composer_version" != "$EXT_VERSION" ]; then
+      echo "ckrelease: FAIL — composer.json says $composer_version, info.xml says $EXT_VERSION." >&2
+      ok=1
+    fi
+  fi
+
+  # Notes themselves are `gh release --generate-notes`' job. A CHANGELOG.md that
+  # exists and does not mention the release is worse than none: it is a file
+  # people trust that has quietly stopped being maintained.
+  if [ -f CHANGELOG.md ]; then
+    if grep -qF "$EXT_VERSION" CHANGELOG.md; then
+      echo "ckrelease: CHANGELOG.md mentions $EXT_VERSION."
+    else
+      echo "ckrelease: FAIL — CHANGELOG.md has no entry for $EXT_VERSION." >&2
+      ok=1
+    fi
+  elif [ "$require_changelog" = 1 ]; then
+    echo "ckrelease: FAIL — no CHANGELOG.md (required by --require-changelog)." >&2
+    ok=1
+  else
+    echo "ckrelease: no CHANGELOG.md — release notes come from --generate-notes."
+  fi
+
+  [ "$ok" -eq 0 ] || exit 1
+  echo "ckrelease: $EXT_KEY $EXT_VERSION — version metadata is consistent."
+}
+
+# --- dist -------------------------------------------------------------------
+run_dist() {
+  local ref="$1" outdir="$2" item zip
+  local -a pathspec=()
+
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+    || die "not a git repository — the archive is built from tracked files."
+  git rev-parse -q --verify "${ref}^{tree}" >/dev/null \
+    || die "cannot resolve ref: $ref"
+
+  for item in ${DIST_EXCLUDE_DIRS[@]+"${DIST_EXCLUDE_DIRS[@]}"} \
+              ${DIST_EXCLUDE_FILES[@]+"${DIST_EXCLUDE_FILES[@]}"}; do
+    pathspec+=(":(exclude)$item")
+  done
+
+  mkdir -p "$outdir"
+  zip="$outdir/${EXT_KEY}-${EXT_VERSION}.zip"
+  rm -f "$zip" "$zip.sha256"
+
+  # Tracked files only, at <ref>: an archive built from the working tree is an
+  # archive nobody can rebuild from the tag. --prefix is the extension key, the
+  # single top-level directory CiviCRM's installer expects.
+  git archive --format=zip -9 \
+    --prefix="${EXT_KEY}/" \
+    -o "$zip" \
+    "$ref" -- . ${pathspec[@]+"${pathspec[@]}"}
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    (cd "$outdir" && sha256sum "$(basename "$zip")" > "$(basename "$zip").sha256")
+  elif command -v shasum >/dev/null 2>&1; then
+    (cd "$outdir" && shasum -a 256 "$(basename "$zip")" > "$(basename "$zip").sha256")
+  else
+    die "no sha256sum/shasum available for the checksum."
+  fi
+
+  run_verify "$zip"
+  echo "ckrelease: built $zip"
+  echo "ckrelease: $(cat "$zip.sha256")"
+}
+
+# --- verify -----------------------------------------------------------------
+run_verify() {
+  local zip="$1" entries tops info offenders names files ok=0
+  [ -f "$zip" ] || die "no such archive: $zip"
+  command -v unzip >/dev/null 2>&1 || die "verify needs unzip."
+
+  entries=$(unzip -Z1 "$zip")
+  [ -n "$entries" ] || die "archive is empty: $zip"
+
+  tops=$(printf '%s\n' "$entries" | cut -d/ -f1 | sort -u)
+  if [ "$tops" != "$EXT_KEY" ]; then
+    echo "ckrelease: FAIL — the archive must hold exactly one top-level directory named $EXT_KEY, found:" >&2
+    printf '%s\n' "$tops" | while IFS= read -r top; do echo "  $top" >&2; done
+    ok=1
+  fi
+
+  if ! printf '%s\n' "$entries" | grep -qx "${EXT_KEY}/info.xml"; then
+    echo "ckrelease: FAIL — the archive has no ${EXT_KEY}/info.xml." >&2
+    ok=1
+  else
+    info=$(mktemp)
+    unzip -p "$zip" "${EXT_KEY}/info.xml" > "$info"
+    if [ "$(xml_field "$info" version)" != "$EXT_VERSION" ]; then
+      echo "ckrelease: FAIL — the info.xml inside the archive is not version $EXT_VERSION." >&2
+      ok=1
+    fi
+    rm -f "$info"
+  fi
+
+  # Dev/CI names at any depth: the build excludes them at the root, which is
+  # where the template puts them, so this is the half that catches a second
+  # tests/ under a sub-package.
+  # Every entry starts with the (validated) key segment, so a match anywhere
+  # after a slash is by definition a segment other than the first.
+  names=$(printf '%s\n' ${DIST_EXCLUDE_DIRS[@]+"${DIST_EXCLUDE_DIRS[@]}"} \
+                        ${DIST_EXCLUDE_FILES[@]+"${DIST_EXCLUDE_FILES[@]}"} \
+            | grep -v '^$' | sed -e 's/[].[^$*\\+?(){}|]/\\&/g' | paste -sd'|' -)
+  offenders=''
+  [ -z "$names" ] || offenders=$(printf '%s\n' "$entries" | grep -E "/(${names})(/|\$)" || true)
+  if [ -n "$offenders" ]; then
+    echo "ckrelease: FAIL — dev/CI paths in the archive:" >&2
+    printf '%s\n' "$offenders" | while IFS= read -r entry; do echo "  $entry" >&2; done
+    echo "  Keep them out with .ckconform dist_exclude=, or in on purpose with dist_include=." >&2
+    ok=1
+  fi
+
+  [ "$ok" -eq 0 ] || exit 1
+  files=$(printf '%s\n' "$entries" | grep -cv '/$' || true)
+  echo "ckrelease: ${files} files, no dev/CI paths, info.xml $EXT_VERSION."
+}
+
+# --- argument handling ------------------------------------------------------
+if [ "$#" -eq 0 ]; then
+  usage >&2
+  exit 2
+fi
+command=$1
+shift
+case "$command" in
+  -h|--help|help) usage; exit 0 ;;
+  check|dist|verify|info) ;;
+  *) echo "ckrelease: unknown command: $command" >&2; usage >&2; exit 2 ;;
+esac
+
+version_arg=''
+ref='HEAD'
+outdir='.ckrelease'
+require_changelog=0
+positionals=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --version) shift; version_arg=${1:-} ;;
+    --ref) shift; ref=${1:-} ;;
+    --output) shift; outdir=${1:-} ;;
+    --require-changelog) require_changelog=1 ;;
+    -h|--help) usage; exit 0 ;;
+    --) shift; break ;;
+    -*) echo "ckrelease: unknown option: $1" >&2; usage >&2; exit 2 ;;
+    *) positionals+=("$1") ;;
+  esac
+  shift
+done
+while [ "$#" -gt 0 ]; do positionals+=("$1"); shift; done
+
+# A tag name is what CI has, so accept it verbatim and compare versions.
+version_arg=$(strip_v "$version_arg")
+
+require_extension_root
+resolve_excludes
+
+case "$command" in
+  info)
+    [ "${#positionals[@]}" -eq 1 ] || die "info needs exactly one field."
+    case "${positionals[0]}" in
+      key) echo "$EXT_KEY" ;;
+      file) echo "$EXT_FILE" ;;
+      version) echo "$EXT_VERSION" ;;
+      dist-name) echo "${EXT_KEY}-${EXT_VERSION}.zip" ;;
+      *) die "unknown field: ${positionals[0]} (key|file|version|dist-name)" ;;
+    esac
+    ;;
+  check)
+    run_check "$version_arg" "$require_changelog"
+    ;;
+  dist)
+    run_check "$version_arg" "$require_changelog"
+    run_dist "$ref" "$outdir"
+    ;;
+  verify)
+    [ "${#positionals[@]}" -eq 1 ] || die "verify needs exactly one archive path."
+    [ -z "$version_arg" ] || run_check "$version_arg" "$require_changelog"
+    run_verify "${positionals[0]}"
+    ;;
+esac

@@ -1,5 +1,9 @@
 # Releases: one versioned contract
 
+How **this** repo is versioned. For how a consuming extension repo cuts its own
+release — `ckrelease`, the dist archive, the shared `extension-release.yml` —
+see [Releasing an extension](extension-releases.md).
+
 Extension repos depend on four things from this repo, and they only work as a
 set:
 

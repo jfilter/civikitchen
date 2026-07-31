@@ -1,0 +1,243 @@
+# The one release definition every conforming extension repo calls, so a
+# release is the same act everywhere: check the version, build the installable
+# zip, install it into a real CiviCRM, publish. A calling repo's own workflow is
+# a few lines:
+#
+#   name: Release
+#   on:
+#     push:
+#       tags: ['v[0-9]+.[0-9]+.[0-9]+']
+#   permissions:
+#     contents: read
+#   jobs:
+#     release:
+#       permissions:
+#         contents: write        # the called workflow can only narrow this
+#       uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+#
+# Pin the major (@v1), not @main — same versioned contract as extension-ci.yml
+# (docs/releases.md). civikitchen is public, so no cross-repo token is needed.
+#
+# What this is NOT: a version bumper. The bump is a commit an author writes and
+# reviews (info.xml, composer.json, CHANGELOG.md); the tag is the statement that
+# it is ready. This workflow is the part that has to be identical everywhere —
+# the checks nobody remembers at 18:00 and the archive contents, which are a
+# compatibility promise to every site that installs the extension.
+#
+# Why no release-please: it automates the half that is already cheap (notes,
+# tags — `gh release --generate-notes` does both) and knows nothing about the
+# half that is expensive here (info.xml as the version source of truth, an
+# archive without dev files, an install that actually works). See
+# docs/extension-releases.md.
+name: Extension Release
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: >-
+          CiviKitchen image the install smoke test runs in. Defaults to the
+          released contract image, the same one the CI compose stack pins.
+        type: string
+        default: 'ghcr.io/jfilter/civikitchen:v1'
+      smoke_test:
+        description: >-
+          Install the built archive into a fresh CiviCRM before publishing.
+          Turn off only for an extension whose install cannot be reached this
+          way (and say so in the caller).
+        type: boolean
+        default: true
+      extra_extensions:
+        description: >-
+          Comma-separated registry extension keys to install into the smoke-test
+          site first — for an extension whose info.xml <requires> something that
+          is not bundled with core.
+        type: string
+        default: ''
+      require_changelog:
+        description: 'Fail when the repo has no CHANGELOG.md at all'
+        type: boolean
+        default: false
+      draft:
+        description: 'Publish the GitHub release as a draft'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  dist:
+    runs-on: ubuntu-latest
+    env:
+      # Inputs reach the shell through the environment, never through expression
+      # interpolation inside `run:` — an interpolated input IS the script text.
+      # Read by the smoke stack's ${CIVIKITCHEN_IMAGE} on every compose call,
+      # not just `up` — an unset variable there resolves to an empty image.
+      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      CK_EXTRA_EXTENSIONS: ${{ inputs.extra_extensions }}
+      CK_REQUIRE_CHANGELOG: ${{ inputs.require_changelog }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # The archive is built from the tag, so there has to be one. A branch push
+      # that reached this workflow would otherwise publish a release named after
+      # the branch.
+      - name: Require a tag
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/*) echo "releasing $GITHUB_REF_NAME" ;;
+            *) echo "extension-release only runs on a tag push (got $GITHUB_REF)" >&2; exit 1 ;;
+          esac
+
+      # Pinned to the SHA this workflow was resolved from, so the ckrelease that
+      # builds the artifact is the one belonging to the pinned contract — same
+      # mechanism the drift job in extension-ci.yml uses.
+      - uses: actions/checkout@v5
+        with:
+          repository: jfilter/civikitchen
+          ref: ${{ job.workflow_sha }}
+          path: .civikitchen-ci
+
+      - name: Build the distribution archive
+        id: build
+        env:
+          # Outside the checkout on purpose: an extension repo may well track its
+          # own dist/ (a committed frontend build), and the release artifact must
+          # not land in the tree the archive is built from.
+          CK_DIST: ${{ runner.temp }}/ckrelease
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$CK_REQUIRE_CHANGELOG" = 'true' ]; then
+            args+=(--require-changelog)
+          fi
+          # dist runs the consistency check itself and refuses to build without
+          # it, so there is no way to publish an archive that skipped it.
+          bash .civikitchen-ci/images/lib/ckrelease dist \
+            --version "$GITHUB_REF_NAME" --ref HEAD --output "$CK_DIST" "${args[@]}"
+          {
+            echo "key=$(bash .civikitchen-ci/images/lib/ckrelease info key)"
+            echo "zip=$CK_DIST/$(bash .civikitchen-ci/images/lib/ckrelease info dist-name)"
+          } >> "$GITHUB_OUTPUT"
+
+      # A release archive that has never been installed is a guess. This is the
+      # same stack extension-ci.yml runs in, minus the source mount: the site
+      # only ever sees the zip, which is what a user gets.
+      - name: Install smoke test
+        if: ${{ inputs.smoke_test }}
+        env:
+          CK_EXT_KEY: ${{ steps.build.outputs.key }}
+          CK_DIST: ${{ runner.temp }}/ckrelease
+        run: |
+          set -euo pipefail
+          cat > smoke-compose.yml <<'YAML'
+          name: ckrelease-smoke
+          services:
+            app:
+              image: ${CIVIKITCHEN_IMAGE}
+              pull_policy: always
+              depends_on:
+                db:
+                  condition: service_healthy
+              environment:
+                CIVICRM_AUTO_INSTALL: "1"
+                CIVICRM_DB_HOST: db
+                CIVICRM_DB_NAME: civicrm
+                CIVICRM_DB_USER: civicrm
+                CIVICRM_DB_PASSWORD: civicrm
+                CIVIKITCHEN_SITE_URL: "http://localhost:8080"
+                CIVIKITCHEN_EXTRA_EXTENSIONS: "${CK_EXTRA_EXTENSIONS}"
+              volumes:
+                - ${CK_DIST}:/ck-dist:ro
+            db:
+              image: mariadb:10.11
+              environment:
+                MYSQL_ROOT_PASSWORD: root
+                MYSQL_DATABASE: civicrm
+                MYSQL_USER: civicrm
+                MYSQL_PASSWORD: civicrm
+              healthcheck:
+                test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+                interval: 5s
+                timeout: 5s
+                retries: 10
+          YAML
+          docker compose -f smoke-compose.yml up -d --wait --quiet-pull
+
+          # Unzip as root: the extension directory is the image's, not ours.
+          # CK_EXT_DIR is where the image puts extensions (images/lib/provision.sh).
+          docker compose -f smoke-compose.yml exec -T app bash -c '
+            set -eu
+            mkdir -p "${CK_EXT_DIR:-/var/www/html/ext}"
+            unzip -q -o /ck-dist/*.zip -d "${CK_EXT_DIR:-/var/www/html/ext}"
+            chown -R www-data:www-data "${CK_EXT_DIR:-/var/www/html/ext}"'
+
+          # Rescan the container so the new directory is known, then install for
+          # real — this is where a missing <requires>, a broken upgrader or a PHP
+          # file the exclude list swallowed by mistake actually shows up.
+          docker compose -f smoke-compose.yml exec -T -u www-data \
+            -e "CK_EXT_KEY=$CK_EXT_KEY" app bash -c '
+            set -eu
+            cv ev "CRM_Extension_System::singleton()->getFullContainer()->refresh();"
+            cv ext:enable "$CK_EXT_KEY"'
+
+          # Same status assertion the lifecycle smoke in extension-ci.yml uses:
+          # `cv ext:enable` can succeed on a site where the extension still ends
+          # up something other than installed.
+          status=$(docker compose -f smoke-compose.yml exec -T -u www-data \
+            -e "CK_EXT_KEY=$CK_EXT_KEY" app bash -c \
+            'cv ev "echo CRM_Extension_System::singleton()->getManager()->getStatus(getenv(\"CK_EXT_KEY\"));"' \
+            | tr -d '[:space:]')
+          [ "$status" = installed ] \
+            || { echo "smoke: extension ended up [$status], expected [installed]" >&2; exit 1; }
+
+      # A failed stack is a stack trace of nothing without its logs.
+      - name: App logs on failure
+        if: ${{ failure() && inputs.smoke_test }}
+        run: |
+          [ -f smoke-compose.yml ] || exit 0
+          docker compose -f smoke-compose.yml logs app | tail -200
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ckrelease-dist
+          path: ${{ runner.temp }}/ckrelease/
+          if-no-files-found: error
+
+  publish:
+    needs: dist
+    runs-on: ubuntu-latest
+    # The only job that writes anything, and the only one with a token that can.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ckrelease-dist
+          path: ckrelease-dist
+
+      # --generate-notes is the delegation the issue asked for: GitHub already
+      # writes decent notes from merged PRs, and a release that exists is
+      # re-runnable (upload --clobber) instead of erroring on the second try.
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CK_DRAFT: ${{ inputs.draft }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$CK_DRAFT" = 'true' ]; then
+            args+=(--draft)
+          fi
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME exists — replacing its assets"
+            gh release upload "$GITHUB_REF_NAME" ckrelease-dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --verify-tag --title "$GITHUB_REF_NAME" --generate-notes \
+              "${args[@]}" ckrelease-dist/*
+          fi
