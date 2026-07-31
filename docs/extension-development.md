@@ -147,7 +147,14 @@ Two more modes work with that split:
 `--update` never touches an existing seeded file; review its output with
 `git diff` like any other change. The shared `extension-ci.yml` workflow runs
 `--check` on every push, so a template improvement shows up in each repo as a
-red CI that one `--update` fixes. A repo that must deviate on a managed file
+red CI that one `--update` fixes.
+
+Which template it checks against follows the ref the repo pins. The seeded
+caller says `extension-ci.yml@v1` and the CI stack says
+`ghcr.io/jfilter/civikitchen:v1`, because workflow, template, `ck*` tools and
+images are released as one version — the drift job checks the template out at
+the caller's own resolved commit, so there is nothing else to keep in sync.
+See [Releases](releases.md) for what a version covers and how one is cut. A repo that must deviate on a managed file
 declares it in its `.ckconform` — the reason is mandatory, and only managed
 files may be listed:
 

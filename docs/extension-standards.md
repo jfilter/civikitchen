@@ -11,7 +11,9 @@ unless `--force` is explicitly supplied. For an existing extension,
 `ckinit.php --check` reports where template-managed files have drifted and
 `ckinit.php --update` refreshes them (seeded files like `composer.json` and
 `phpstan.neon.dist` stay the repo's own after the first copy) — see
-[extension-development.md](extension-development.md#civix-workflow).
+[extension-development.md](extension-development.md#civix-workflow). Use the
+`ckinit.php` from the civikitchen checkout at the version the repo pins;
+[releases.md](releases.md) explains what a version covers.
 
 ## UI: declarative before imperative
 
@@ -66,7 +68,11 @@ unless `--force` is explicitly supplied. For an existing extension,
 - CI per `template/extension/.github/workflows/ci.yml` — a thin caller of the
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
   ckconform → phpunit under ckcoverage → phpstan → template-drift check), so
-  the pipeline is defined once instead of copy-pasted per repo.
+  the pipeline is defined once instead of copy-pasted per repo. The caller pins
+  the released major (`@v1`) and the CI stack the matching `:v1` image —
+  workflow, template, tools and images are one versioned contract, so they move
+  together and deliberately ([releases.md](releases.md)). One canary repo
+  tracks `@main` and declares that in its `.ckconform`.
 - `composer.json` with the extension metadata; no `node_modules`/`vendor`/build
   artifacts committed (frontend builds commit only `dist/`).
 - `.gitignore` covers every artifact the repo can regenerate — the phpunit

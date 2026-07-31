@@ -231,6 +231,13 @@ pipeline is test-then-promote: a release that breaks the build or the boot
 tests never reaches the stable tags — they keep serving the last good image
 until the breakage is fixed.
 
+Two axes cross here. The **moving** tags below track current CiviCRM and move
+whenever a build passes its gate — the right choice for local development and
+for the canary repo. The **release** tags (`:v1`, `:v1.2.3`, and their
+per-flavor spellings) mark a deliberate release of the whole CiviKitchen
+contract — workflow, template, `ck*` tools and images together — and are what
+extension repos pin. See [Releases](releases.md).
+
 | Tag | What it points at |
 |-----|-------------------|
 | `:standalone` | The most recent CiviCRM `latest` build. |
@@ -238,6 +245,9 @@ until the breakage is fixed.
 | `:standalone-<minor>` | Latest patch of the **current** stable minor (e.g. `:standalone-6.15` while 6.15.x is current). When upstream moves to the next minor, a new tag appears and the old one freezes at its last patch — handy as a known-good fallback right after a minor bump. |
 | `:drupal10`, `:drupal11`, `:wordpress`, `:joomla`, `:*-demo` | Bake the current stable at image-build time. Check what a pulled image contains without booting it: `docker inspect <image> --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`. |
 | `:<flavor>-php<version>` | The buildkit dev flavors also publish a PHP-suffixed tag (e.g. `:drupal10-php8.3`) — same image, explicit about the PHP it carries. |
+| `:v1` | **Release tag.** The standalone image of the newest `v1.x.y` release — the contract image the extension template's compose stacks use. Moves only when a release is cut. |
+| `:v1.2.3` | The same, frozen: a released patch tag never moves to another digest. |
+| `:standalone-v1`, `:drupal10-v1`, `:joomla-demo-v1`, … | Every published flavor carries the release tags too, with the flavor spelled out (`:standalone-v1` is the same digest as `:v1`), each also with the full `-v1.2.3` version. |
 
 Need a minor pinned longer than that — or a version the published images don't
 offer at all? Build your own: see

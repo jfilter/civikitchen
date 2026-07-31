@@ -8,10 +8,14 @@
 #     'cd /var/www/html/ext/__EXTKEY__ && CIVICRM_UF=UnitTests phpunit --coverage-text tests/phpunit && phpstan analyse'
 #
 # Keep image tag and db version in sync with docker-compose.yml.
+#
+# :v1 is the released contract image — the same version the CI workflow is
+# pinned to (@v1). Set CIVIKITCHEN_IMAGE to override, either in the environment
+# or via the shared workflow's `image` input.
 
 services:
   app:
-    image: ${CIVIKITCHEN_IMAGE:-ghcr.io/jfilter/civikitchen:standalone}
+    image: ${CIVIKITCHEN_IMAGE:-ghcr.io/jfilter/civikitchen:v1}
     pull_policy: always
     depends_on:
       db:

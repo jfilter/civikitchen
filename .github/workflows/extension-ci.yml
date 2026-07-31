@@ -4,9 +4,14 @@
 #
 #   jobs:
 #     ci:
-#       uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main
+#       uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
 #       with:
 #         key: <extension-key>
+#
+# Pin the major (@v1), not @main: workflow, template, ck* tools and images are
+# released as one versioned contract, so a caller moves deliberately instead of
+# with every push here. The canary repo is the exception — see
+# docs/releases.md.
 #
 # civikitchen is public, so any repo can call this without a cross-repo token.
 # Everything runs inside the extension's own CiviCRM stack: the standalone image
@@ -30,6 +35,15 @@ on:
         description: 'Fail when template-managed files drift from civikitchen (ckinit --check)'
         type: boolean
         default: true
+      image:
+        description: >-
+          Override the compose stack's CiviKitchen image. Empty (the default)
+          leaves the compose file's own ${CIVIKITCHEN_IMAGE:-...} default in
+          place. Lets a caller pin or float the image without editing the
+          template-managed CI compose file — how the canary repo tracks
+          :standalone while the fleet is on :v1.
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -66,6 +80,9 @@ jobs:
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ inputs.key }}
+      # Read by the compose file's ${CIVIKITCHEN_IMAGE:-<default>}; `:-` treats
+      # the empty default as unset, so not passing `image` changes nothing.
+      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
     steps:
       - uses: actions/checkout@v5
 
