@@ -21,7 +21,7 @@ Testing a CiviCRM extension properly means running it against a real CiviCRM —
 - **One `docker run` to a working CiviCRM** — the demo images embed MariaDB and demo data.
 - **A fast dev loop** — mount your extension, `docker compose up`, edit, reload, `phpunit`.
 - **Shared workflow across CMS flavors** — profiles, dev tools, SMTP capture, extension provisioning, and init hooks work consistently on Standalone, Drupal 10/11, WordPress, and Joomla; CMS-specific install knobs are documented per image.
-- **Batteries included** — composer, node, civix, phpunit 9, phpstan, phpcs + civicrm/coder, xdebug, pcov, plus the `ck*` tool belt: `cklint` (opinionated extension linting), `ckconform` (repo-structure conformance), `ckcoverage` (coverage with an enforced floor), `ckmodernize` (civix + Rector modernization, incl. opt-in assisted API3→API4 rewrites), and `cktestreset` (reset the headless-test scratch DB).
+- **Batteries included** — composer, node, civix, phpunit 9, phpstan, phpcs + civicrm/coder, xdebug, pcov, plus the `ck*` tool belt: `cklint` (opinionated extension linting), `ckconform` (repo-structure conformance), `ckcoverage` (coverage with an enforced floor), `ckrelease` (version check + the installable dist zip), `ckmodernize` (civix + Rector modernization, incl. opt-in assisted API3→API4 rewrites), and `cktestreset` (reset the headless-test scratch DB).
 - **Realistic demo data via profiles** — one env var installs a curated extension stack, seed data, and API users (e.g. a German Verein with SEPA mandates and membership history).
 
 ## Pick an image
@@ -96,6 +96,7 @@ Details in [Custom or older CiviCRM versions](docs/images.md#custom-or-older-civ
 - [Configuration](docs/configuration.md) — every env var the images understand
 - [Building locally](docs/building.md) — build args, `KEEP_GIT=1`, running the test suite locally
 - [Releases](docs/releases.md) — the versioned contract extension repos pin (`@v1` / `:v1`), how a release is cut
+- [Releasing an extension](docs/extension-releases.md) — the other direction: how a consuming extension repo cuts *its* release (`ckrelease`, the shared `extension-release.yml`)
 
 ## Reliability
 
