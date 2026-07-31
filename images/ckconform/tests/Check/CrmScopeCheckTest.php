@@ -23,6 +23,51 @@ final class CrmScopeCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new CrmScopeCheck(), $context));
     }
 
+    /**
+     * smarty_block_ts fills the domain from {crmScope} only when the tag has
+     * none of its own — an explicit domain attribute is self-scoping.
+     */
+    public function testTsWithItsOwnDomainAttributeNeedsNoWrapper(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'templates/CRM/Greeter/Page/Foo.tpl' => <<<'TPL'
+                <h1>{ts domain="de.example.greeter"}Hello{/ts}</h1>
+                <p>{ts domain='de.example.greeter'}Goodbye{/ts}</p>
+                TPL,
+        ], git: true);
+        $this->assertSilent($this->run_(new CrmScopeCheck(), $context));
+    }
+
+    /**
+     * ... and because the explicit attribute WINS over the wrapper, a foreign
+     * domain is a finding even inside a correct {crmScope}.
+     */
+    public function testAForeignDomainAttributeFailsEvenInsideTheWrapper(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'templates/CRM/Greeter/Page/Foo.tpl' => <<<'TPL'
+                {crmScope extensionKey='de.example.greeter'}
+                  <h1>{ts domain="de.example.other"}Hello{/ts}</h1>
+                {/crmScope}
+                TPL,
+        ], git: true);
+        $this->assertFails(
+            $this->run_(new CrmScopeCheck(), $context),
+            'de.example.other'
+        );
+    }
+
+    public function testAVariableDomainAttributeIsAccepted(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'templates/CRM/Greeter/Page/Foo.tpl' => "<h1>{ts domain=\$domain}Hello{/ts}</h1>\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new CrmScopeCheck(), $context));
+    }
+
     public function testAnUnwrappedTsFails(): void
     {
         $context = $this->repo([

@@ -34,6 +34,12 @@ use CiviKitchen\Ckconform\Reporter;
  * wrong. A wrapper that names a *different* extension's key, on the other hand,
  * is exactly the mistake this rule exists for — the fleet's original sighting
  * was an extension that hand-passed a neighbouring key and never noticed.
+ *
+ * A `{ts domain="<key>"}` needs no wrapper at all: core's smarty_block_ts
+ * fills the domain from {crmScope}'s extensionKey only when the tag carries
+ * none of its own, so an explicit domain attribute is equivalent — and it WINS
+ * over any enclosing {crmScope}, which also means a foreign domain attribute
+ * is a finding even inside a correct wrapper.
  */
 final class CrmScopeCheck implements Check
 {
@@ -126,8 +132,15 @@ final class CrmScopeCheck implements Check
         foreach ($this->matches('#\{/crmScope\}#i', $source) as [$offset]) {
             $events[] = ['offset' => $offset, 'kind' => 'close', 'key' => null, 'dynamic' => false];
         }
-        foreach ($this->matches('/\{ts(?=[\s}])[^}]*\}/', $source) as [$offset]) {
-            $events[] = ['offset' => $offset, 'kind' => 'ts', 'key' => null, 'dynamic' => false];
+        foreach ($this->matches('/\{ts(?=[\s}])([^}]*)\}/', $source) as [$offset, $groups]) {
+            [$domain, $dynamic] = $this->attributeValue($groups[1] ?? '', 'domain');
+            $events[] = [
+                'offset' => $offset,
+                'kind' => 'ts',
+                'key' => $domain,
+                'dynamic' => $dynamic,
+                'hasDomain' => $domain !== null || $dynamic,
+            ];
         }
         usort($events, static fn (array $a, array $b): int => $a['offset'] <=> $b['offset']);
 
@@ -144,7 +157,19 @@ final class CrmScopeCheck implements Check
                 continue;
             }
 
-            $reason = $this->reason($stack === [] ? null : $stack[count($stack) - 1], $key);
+            if (($event['hasDomain'] ?? false) === true) {
+                // An explicit domain attribute wins over any {crmScope}
+                // (smarty_block_ts only fills an ABSENT domain from the
+                // wrapper), so it is judged on its own, wrapper or not.
+                if ($event['dynamic'] || $event['key'] === $key) {
+                    continue;
+                }
+                $reason = "its domain=\"{$event['key']}\" is not this extension's key '$key', "
+                    . 'and an explicit domain wins over any {crmScope}';
+            }
+            else {
+                $reason = $this->reason($stack === [] ? null : $stack[count($stack) - 1], $key);
+            }
             if ($reason === null) {
                 continue;
             }
@@ -182,12 +207,21 @@ final class CrmScopeCheck implements Check
      */
     private function scopeKey(string $attributes): array
     {
-        // Inside a .mgd.php the wrapper lives in a PHP string literal, so its
+        return $this->attributeValue($attributes, 'extensionKey');
+    }
+
+    /**
+     * @return array{0: string|null, 1: bool} literal value (or null), and
+     *                                        whether it is a Smarty expression
+     */
+    private function attributeValue(string $attributes, string $name): array
+    {
+        // Inside a .mgd.php the tag lives in a PHP string literal, so its
         // quotes arrive escaped: extensionKey=\'greeter\'. PHP unescapes them
         // long before Smarty ever sees the tag.
         $attributes = str_replace(['\\\'', '\\"'], ["'", '"'], $attributes);
 
-        if (preg_match('/extensionKey\s*=\s*(?:\'([^\']*)\'|"([^"]*)"|(\S+))/i', $attributes, $match) !== 1) {
+        if (preg_match('/\b' . preg_quote($name, '/') . '\s*=\s*(?:\'([^\']*)\'|"([^"]*)"|(\S+))/i', $attributes, $match) !== 1) {
             return [null, false];
         }
         if (($match[3] ?? '') !== '') {
