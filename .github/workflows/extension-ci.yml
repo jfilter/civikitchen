@@ -44,6 +44,26 @@ on:
           :standalone while the fleet is on :v1.
         type: string
         default: ''
+      matrix_images:
+        description: >-
+          Compatibility matrix: comma-separated CiviKitchen image tags that
+          each get their own job booting the same stack and running the same
+          test suite. Empty (the default) adds no jobs at all, so an existing
+          caller keeps exactly the run it has today. Typical value: the oldest
+          CiviCRM minor the extension claims in info.xml <compatibility> plus
+          the newest one, e.g.
+          "ghcr.io/jfilter/civikitchen:standalone-6.12,ghcr.io/jfilter/civikitchen:standalone".
+          Costs one stack boot per entry — see docs/extension-standards.md for
+          why this belongs in a weekly caller, not in the push run.
+        type: string
+        default: ''
+      lifecycle:
+        description: >-
+          After the suite, exercise the extension lifecycle in the running
+          stack: disable → re-enable → uninstall → install. Catches the half
+          of the upgrader that inspection and green tests never reach.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -104,7 +124,112 @@ jobs:
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && ckcoverage tests/phpunit && phpstan analyse --no-progress"
 
+      # Same lifecycle block as the compat job below — deliberately duplicated
+      # rather than factored out: a reusable workflow cannot share steps
+      # between its own jobs, and pulling this into a script would mean
+      # checking civikitchen out into every caller's CI run just to get it.
+      - name: Lifecycle smoke (disable → enable → uninstall → install)
+        if: ${{ inputs.lifecycle }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "set -e
+             cv ext:disable $CK_EXT_KEY
+             cv ext:enable $CK_EXT_KEY
+             cv ext:uninstall $CK_EXT_KEY
+             cv ext:enable $CK_EXT_KEY"
+          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app \
+            cv ev "echo CRM_Extension_System::singleton()->getManager()->getStatus('$CK_EXT_KEY');" | tr -d '[:space:]')
+          [ "$status" = installed ] \
+            || { echo "lifecycle: extension ended up '$status', expected 'installed'" >&2; exit 1; }
+
       # A failed stack is a stack trace of nothing without its logs.
+      - name: App logs on failure
+        if: failure()
+        run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
+
+  # --- Compatibility matrix (opt-in via matrix_images) ----------------------
+  #
+  # Skipped entirely when matrix_images is empty: a skipped job costs no
+  # runner minutes, so callers that never set the input keep today's run.
+  #
+  # A matrix needs a JSON array, and workflow expressions have no split(), so
+  # the CSV is parsed here and handed on as `images`. Same shape as
+  # build-dev-images.yml's resolve-civicrm job.
+  compat-images:
+    if: ${{ inputs.matrix_images != '' }}
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.parse.outputs.images }}
+    env:
+      CK_MATRIX_IMAGES: ${{ inputs.matrix_images }}
+    steps:
+      - name: Parse matrix_images
+        id: parse
+        run: |
+          set -euo pipefail
+          images=$(jq -Rc 'split(",") | map(sub("^ +";"") | sub(" +$";"")) | map(select(length > 0))' \
+            <<< "$CK_MATRIX_IMAGES")
+          # Image refs go into `docker compose` through the environment, but a
+          # value that is not an image reference at all is a caller mistake
+          # worth naming here instead of ten minutes later in a pull error.
+          jq -e 'all(test("^[A-Za-z0-9][A-Za-z0-9._/-]*(:[A-Za-z0-9._-]+)?(@sha256:[a-f0-9]{64})?$"))' \
+            <<< "$images" > /dev/null \
+            || { echo "matrix_images contains something that is not an image reference: $images" >&2; exit 1; }
+          echo "images=$images" >> "$GITHUB_OUTPUT"
+          echo "compat matrix: $images"
+
+  # One boot + suite per extra image. Deliberately NOT the full `ci` pass:
+  # cklint, ckconform, phpstan and the coverage floor are enforced by the ck*
+  # tools that ship *in the image*, so re-running them on a pinned older image
+  # grades that image's tooling, not the extension. What is genuinely
+  # version-dependent is whether the extension installs into that CiviCRM and
+  # whether its tests pass there.
+  compat:
+    needs: compat-images
+    runs-on: ubuntu-latest
+    strategy:
+      # One old CiviCRM failing must not hide the result for the new one.
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.compat-images.outputs.images) }}
+    name: compat (${{ matrix.image }})
+    env:
+      CK_COMPOSE_FILE: ${{ inputs.compose_file }}
+      CK_EXT_KEY: ${{ inputs.key }}
+      CIVIKITCHEN_IMAGE: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate inputs
+        run: |
+          [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
+            || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
+
+      # Booting is itself the fresh-install test: the entrypoint installs
+      # CiviCRM and enables the mounted extension, so an installer that fails
+      # on this version never gets to the suite.
+      - name: Start CiviCRM stack
+        run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
+
+      - name: PHPUnit
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && CIVICRM_UF=UnitTests phpunit tests/phpunit"
+
+      - name: Lifecycle smoke (disable → enable → uninstall → install)
+        if: ${{ inputs.lifecycle }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "set -e
+             cv ext:disable $CK_EXT_KEY
+             cv ext:enable $CK_EXT_KEY
+             cv ext:uninstall $CK_EXT_KEY
+             cv ext:enable $CK_EXT_KEY"
+          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app \
+            cv ev "echo CRM_Extension_System::singleton()->getManager()->getStatus('$CK_EXT_KEY');" | tr -d '[:space:]')
+          [ "$status" = installed ] \
+            || { echo "lifecycle: extension ended up '$status', expected 'installed'" >&2; exit 1; }
+
       - name: App logs on failure
         if: failure()
         run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
