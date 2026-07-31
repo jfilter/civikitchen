@@ -13,6 +13,13 @@
 # with every push here. The canary repo is the exception — see
 # docs/releases.md.
 #
+# Beyond that default run the workflow has three opt-in extras — a
+# compatibility matrix over further CiviCRM images, a lifecycle smoke test and
+# an upgrade-from-the-last-release test. They are off unless asked for, and
+# they belong in a second, scheduled caller rather than in the push run:
+# docs/extension-standards.md ("Compatibility: test the range you claim") has
+# the reasoning and a ready-made compat.yml.
+#
 # civikitchen is public, so any repo can call this without a cross-repo token.
 # Everything runs inside the extension's own CiviCRM stack: the standalone image
 # auto-installs, enables the mounted extension and seeds the civicrm_test scratch
@@ -44,6 +51,35 @@ on:
           :standalone while the fleet is on :v1.
         type: string
         default: ''
+      matrix_images:
+        description: >-
+          Compatibility matrix: comma-separated CiviKitchen image tags that
+          each get their own job booting the same stack and running the same
+          test suite. Empty (the default) adds no jobs at all, so an existing
+          caller keeps exactly the run it has today. Typical value: the oldest
+          CiviCRM minor the extension claims in info.xml <compatibility> plus
+          the newest one, e.g.
+          "ghcr.io/jfilter/civikitchen:standalone-6.12,ghcr.io/jfilter/civikitchen:standalone".
+          Costs one stack boot per entry — see docs/extension-standards.md for
+          why this belongs in a weekly caller, not in the push run.
+        type: string
+        default: ''
+      lifecycle:
+        description: >-
+          After the suite, exercise the extension lifecycle in the running
+          stack: disable → re-enable → uninstall → install. Catches the half
+          of the upgrader that inspection and green tests never reach.
+        type: boolean
+        default: false
+      upgrade_from_last_release:
+        description: >-
+          Install the newest reachable git tag first, then swap the working
+          tree to this commit and run the extension DB upgrade — the path
+          every existing site takes, which a fresh install never exercises.
+          Needs at least one reachable tag and a compose file that already
+          existed at that tag; both are checked and reported, not skipped.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -104,7 +140,206 @@ jobs:
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && ckcoverage tests/phpunit && phpstan analyse --no-progress"
 
+      # Same lifecycle block as the compat job below — deliberately duplicated
+      # rather than factored out: a reusable workflow cannot share steps
+      # between its own jobs, and pulling this into a script would mean
+      # checking civikitchen out into every caller's CI run just to get it.
+      - name: Lifecycle smoke (disable → enable → uninstall → install)
+        if: ${{ inputs.lifecycle }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "set -e
+             cd /var/www/html/ext/$CK_EXT_KEY
+             cv ext:disable $CK_EXT_KEY
+             cv ext:enable $CK_EXT_KEY
+             cv ext:uninstall $CK_EXT_KEY
+             cv ext:enable $CK_EXT_KEY"
+          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
+            | tr -d '[:space:]')
+          [ "$status" = installed ] \
+            || { echo "lifecycle: extension ended up '$status', expected 'installed'" >&2; exit 1; }
+
       # A failed stack is a stack trace of nothing without its logs.
+      - name: App logs on failure
+        if: failure()
+        run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
+
+  # --- Upgrade from the last release (opt-in via upgrade_from_last_release) --
+  #
+  # A fresh install runs install(); an existing site runs upgrade_NNNN(). CI
+  # has always tested the first and never the second, so an upgrader step that
+  # references a column its own install() already creates looks fine forever.
+  #
+  # The trick that keeps this cheap: the stack bind-mounts the checkout, so
+  # "install the old version" is a `git checkout` before `docker compose up`,
+  # and "move to HEAD" is a second `git checkout` afterwards. No second stack,
+  # no image build, no artifact shuffling.
+  upgrade:
+    if: ${{ inputs.upgrade_from_last_release }}
+    runs-on: ubuntu-latest
+    env:
+      CK_COMPOSE_FILE: ${{ inputs.compose_file }}
+      CK_EXT_KEY: ${{ inputs.key }}
+      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+    steps:
+      # Full history: the previous release tag has to be checkoutable.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate inputs
+        run: |
+          [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
+            || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
+
+      # Newest tag reachable from this commit — on a PR that is the merge
+      # commit, so it is the release the change would be shipped on top of.
+      # Both failure modes get named instead of quietly skipping the job: a
+      # repo with nothing to upgrade from should turn this input off, not
+      # collect green runs that tested nothing.
+      - name: Resolve the previous release
+        id: prev
+        run: |
+          set -euo pipefail
+          prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          [ -n "$prev" ] \
+            || { echo "no reachable tag: nothing has been released yet, so there is no upgrade path to test" >&2; exit 1; }
+          git cat-file -e "$prev:$CK_COMPOSE_FILE" 2>/dev/null \
+            || { echo "$prev predates $CK_COMPOSE_FILE — the release cannot boot its own stack; test the upgrade from the next release on" >&2; exit 1; }
+          echo "previous release: $prev"
+          {
+            echo "prev=$prev"
+            # What actions/checkout actually put in the tree (on a PR: the
+            # merge commit) — the thing to come back to, resolved before
+            # anything moves HEAD.
+            echo "head=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check the previous release into the mount
+        run: git checkout --force --detach "$PREV"
+        env:
+          PREV: ${{ steps.prev.outputs.prev }}
+
+      # Boots and installs the OLD version — including its own CI compose file
+      # and therefore the image that release was tested with, unless the
+      # caller pins `image`.
+      - name: Start CiviCRM stack on the previous release
+        run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
+
+      # The container sees the checkout through the bind mount, so this alone
+      # puts the new code in front of the installed old schema.
+      - name: Move the mount to this commit
+        run: git checkout --force --detach "$HEAD_REF"
+        env:
+          HEAD_REF: ${{ steps.prev.outputs.head }}
+
+      - name: Upgrade the extension schema
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "set -e
+             cd /var/www/html/ext/$CK_EXT_KEY
+             cv flush
+             cv upgrade:db --mode=ext"
+          pending=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_Upgrades::hasPending() ? \"pending\" : \"clean\";'" \
+            | tr -d '[:space:]')
+          [ "$pending" = clean ] \
+            || { echo "upgrade: extension upgrades still pending after cv upgrade:db" >&2; exit 1; }
+          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
+            | tr -d '[:space:]')
+          [ "$status" = installed ] \
+            || { echo "upgrade: extension ended up '$status', expected 'installed'" >&2; exit 1; }
+
+      - name: App logs on failure
+        if: failure()
+        run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
+
+  # --- Compatibility matrix (opt-in via matrix_images) ----------------------
+  #
+  # Skipped entirely when matrix_images is empty: a skipped job costs no
+  # runner minutes, so callers that never set the input keep today's run.
+  #
+  # A matrix needs a JSON array, and workflow expressions have no split(), so
+  # the CSV is parsed here and handed on as `images`. Same shape as
+  # build-dev-images.yml's resolve-civicrm job.
+  compat-images:
+    if: ${{ inputs.matrix_images != '' }}
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.parse.outputs.images }}
+    env:
+      CK_MATRIX_IMAGES: ${{ inputs.matrix_images }}
+    steps:
+      - name: Parse matrix_images
+        id: parse
+        run: |
+          set -euo pipefail
+          images=$(jq -Rc 'split(",") | map(sub("^ +";"") | sub(" +$";"")) | map(select(length > 0))' \
+            <<< "$CK_MATRIX_IMAGES")
+          # Image refs go into `docker compose` through the environment, but a
+          # value that is not an image reference at all is a caller mistake
+          # worth naming here instead of ten minutes later in a pull error.
+          jq -e 'all(test("^[A-Za-z0-9][A-Za-z0-9._/-]*(:[A-Za-z0-9._-]+)?(@sha256:[a-f0-9]{64})?$"))' \
+            <<< "$images" > /dev/null \
+            || { echo "matrix_images contains something that is not an image reference: $images" >&2; exit 1; }
+          echo "images=$images" >> "$GITHUB_OUTPUT"
+          echo "compat matrix: $images"
+
+  # One boot + suite per extra image. Deliberately NOT the full `ci` pass:
+  # cklint, ckconform, phpstan and the coverage floor are enforced by the ck*
+  # tools that ship *in the image*, so re-running them on a pinned older image
+  # grades that image's tooling, not the extension. What is genuinely
+  # version-dependent is whether the extension installs into that CiviCRM and
+  # whether its tests pass there.
+  compat:
+    needs: compat-images
+    runs-on: ubuntu-latest
+    strategy:
+      # One old CiviCRM failing must not hide the result for the new one.
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.compat-images.outputs.images) }}
+    env:
+      CK_COMPOSE_FILE: ${{ inputs.compose_file }}
+      CK_EXT_KEY: ${{ inputs.key }}
+      CIVIKITCHEN_IMAGE: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate inputs
+        run: |
+          [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
+            || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
+
+      # Booting is itself the fresh-install test: the entrypoint installs
+      # CiviCRM and enables the mounted extension, so an installer that fails
+      # on this version never gets to the suite.
+      - name: Start CiviCRM stack
+        run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
+
+      - name: PHPUnit
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && CIVICRM_UF=UnitTests phpunit tests/phpunit"
+
+      - name: Lifecycle smoke (disable → enable → uninstall → install)
+        if: ${{ inputs.lifecycle }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "set -e
+             cd /var/www/html/ext/$CK_EXT_KEY
+             cv ext:disable $CK_EXT_KEY
+             cv ext:enable $CK_EXT_KEY
+             cv ext:uninstall $CK_EXT_KEY
+             cv ext:enable $CK_EXT_KEY"
+          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
+            | tr -d '[:space:]')
+          [ "$status" = installed ] \
+            || { echo "lifecycle: extension ended up '$status', expected 'installed'" >&2; exit 1; }
+
       - name: App logs on failure
         if: failure()
         run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
