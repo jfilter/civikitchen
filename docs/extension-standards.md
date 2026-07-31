@@ -330,8 +330,8 @@ What goes in those secrets, and why deploy keys rather than a PAT:
 Two limits worth knowing before you switch something else on as well:
 
 - The opt-in extra jobs (`matrix_images`, `upgrade_from_last_release`,
-  `playwright`) boot the stack from a plain checkout and are **not** wired up
-  for private dependencies. Combining them with these inputs fails fast with
+  `core_upgrade_from`, `playwright`) boot the stack from a plain checkout and
+  are **not** wired up for private dependencies. Combining them with these inputs fails fast with
   that message rather than booting an extension that cannot load.
 - `composer.lock` still has to be committed — see the lockfile rule above. An
   install that is not reproducible is not a dependency, it is a moving target.
@@ -343,8 +343,8 @@ Two limits worth knowing before you switch something else on as well:
 ## Compatibility: test the range you claim
 
 `info.xml` `<compatibility><ver>` is a promise; the default CI run checks one
-CiviCRM version, on one day, installed from scratch. Three opt-in inputs on the
-shared `extension-ci.yml` close that gap. All three default to off — a caller
+CiviCRM version, on one day, installed from scratch. Four opt-in inputs on the
+shared `extension-ci.yml` close that gap. All four default to off — a caller
 that sets none of them gets exactly the run it has today.
 
 | Input | What it adds |
@@ -352,6 +352,7 @@ that sets none of them gets exactly the run it has today.
 | `matrix_images` | One extra job per CiviKitchen image tag (comma-separated): boots the stack and runs the suite against that CiviCRM. |
 | `lifecycle` | After the suite, in the running stack: `disable` → `enable` → `uninstall` → `install`, then asserts the extension is installed again. |
 | `upgrade_from_last_release` | Installs the newest reachable git tag, swaps the working tree to the tested commit, runs `cv upgrade:db --mode=ext` and asserts no upgrade stayed pending. |
+| `core_upgrade_from` | Own job: installs the site on an older CiviKitchen image, then moves that same database to the run's image and upgrades it with `cv upgrade:db`. See [below](#core-upgrade-what-an-existing-site-goes-through). |
 
 Pick the ends of your claimed range, not everything in between: the oldest
 minor you support and current stable. The image tags are `:standalone-<minor>`
@@ -366,6 +367,85 @@ The matrix jobs run the **suite**, not the full `ci` pass: `cklint`,
 the image, so re-running them on a pinned older image grades that image's
 tooling rather than your extension. What the extra boot answers is the version
 question — does it install here, do the tests pass here.
+
+### Core upgrade: what an existing site goes through
+
+`matrix_images` moves the core but installs from scratch every time;
+`upgrade_from_last_release` moves the extension across a core that stays put.
+The combination neither of them reaches is the one every real site is in:
+records and configuration created on core N, and then the core underneath them
+moves to N+1. That is where a managed entity reconciles differently after a
+schema change, where a saved search's stored API params stop being valid, where
+a custom field's column survives a migration in name only.
+
+```yaml
+      core_upgrade_from: ghcr.io/jfilter/civikitchen:standalone-6.12
+```
+
+One image tag, and it is the version to upgrade **from** — the oldest minor you
+claim. The **target** is the run's own `image` (or the compose file's default),
+which reads the way you think about it: *upgrade from the oldest minor I claim
+to the one I test on*. So the two must not be the same version; the job says so
+and fails rather than passing green over an upgrade that never happened.
+
+What the job does, in one stack:
+
+1. boots the stack on `core_upgrade_from` — which installs CiviCRM and enables
+   your extension, on the old version;
+2. runs `tests/upgrade/seed.php` (optional, see below);
+3. recreates the containers on the target image, keeping the database **and**
+   the site directory;
+4. runs `cv upgrade:db`, then asserts the database reached the code's version,
+   that the version actually moved, that no extension upgrade stayed pending,
+   and that your extension is still installed;
+5. runs `tests/upgrade/assert.php` (optional).
+
+**The fixtures are yours, and both are optional.** Which records prove
+persistence is the extension's business, so the workflow defines two slots and
+no schema — the same deal as the `test:e2e` script name:
+
+- **`tests/upgrade/seed.php`** — run with `cv scr` on the old core, right after
+  the install. Create the records and configuration whose survival matters.
+- **`tests/upgrade/assert.php`** — run with `cv scr` after the upgrade. Any
+  exception or non-zero exit fails the job, so an assertion is a `throw` and
+  there is nothing to register.
+
+```php
+// tests/upgrade/seed.php — on the old core
+\Civi\Api4\Contact::create(FALSE)
+  ->addValue('contact_type', 'Individual')
+  ->addValue('last_name', 'UpgradeFixture')
+  ->addValue('my_group.my_field', 'teal')
+  ->execute();
+
+// tests/upgrade/assert.php — after the upgrade
+$rows = \Civi\Api4\Contact::get(FALSE)
+  ->addSelect('my_group.my_field')
+  ->addWhere('last_name', '=', 'UpgradeFixture')
+  ->execute();
+if (($rows->single()['my_group.my_field'] ?? NULL) !== 'teal') {
+  throw new RuntimeException('the custom field value did not survive the upgrade');
+}
+```
+
+Scripts rather than a PHPUnit class, deliberately: these assertions have to run
+against the **live site database**, and the headless harness points
+`CIVICRM_DSN` at the isolated `civicrm_test` scratch DB. A phpunit-based
+fixture would pass while testing a database the upgrade never touched.
+
+Without the two files the job still boots the old core, upgrades it and runs
+the four asserts above — worth having, and the honest limit is that it says
+nothing about your own data. The log says as much when it finds no fixtures.
+
+Two things to know before you rely on it:
+
+- It is the **slowest single check** in the pipeline: two boots plus a full core
+  schema upgrade. Scheduled caller only.
+- A `:standalone-<minor>` tag freezes with the tooling it was last built with,
+  so a from→to pair is only meaningful while both tags exist — the same caveat
+  the matrix carries. And like the browser job, this one runs once, on `image`;
+  it is not multiplied by `matrix_images`. A multi-hop upgrade matrix is a
+  separate feature, not a flag.
 
 Each entry costs a full stack boot, so **do not put the matrix in the push
 run**. Keep `ci.yml` fast (it is what a PR waits on and what automerge gates
@@ -396,6 +476,10 @@ jobs:
       matrix_images: ghcr.io/jfilter/civikitchen:standalone-6.12
       lifecycle: true
       upgrade_from_last_release: true
+      # The site an existing user has: installed on that oldest minor, then
+      # upgraded to the image above. Two boots and a core schema upgrade —
+      # the slowest check here, and the one nothing else covers.
+      core_upgrade_from: ghcr.io/jfilter/civikitchen:standalone-6.12
       # Browser tests, for a repo that has a test:e2e script — another stack
       # boot, which is exactly why it lives here and not in ci.yml.
       # playwright: true
