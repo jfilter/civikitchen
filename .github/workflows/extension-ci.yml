@@ -64,6 +64,15 @@ on:
           of the upgrader that inspection and green tests never reach.
         type: boolean
         default: false
+      upgrade_from_last_release:
+        description: >-
+          Install the newest reachable git tag first, then swap the working
+          tree to this commit and run the extension DB upgrade — the path
+          every existing site takes, which a fresh install never exercises.
+          Needs at least one reachable tag and a compose file that already
+          existed at that tag; both are checked and reported, not skipped.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -143,6 +152,94 @@ jobs:
             || { echo "lifecycle: extension ended up '$status', expected 'installed'" >&2; exit 1; }
 
       # A failed stack is a stack trace of nothing without its logs.
+      - name: App logs on failure
+        if: failure()
+        run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
+
+  # --- Upgrade from the last release (opt-in via upgrade_from_last_release) --
+  #
+  # A fresh install runs install(); an existing site runs upgrade_NNNN(). CI
+  # has always tested the first and never the second, so an upgrader step that
+  # references a column its own install() already creates looks fine forever.
+  #
+  # The trick that keeps this cheap: the stack bind-mounts the checkout, so
+  # "install the old version" is a `git checkout` before `docker compose up`,
+  # and "move to HEAD" is a second `git checkout` afterwards. No second stack,
+  # no image build, no artifact shuffling.
+  upgrade:
+    if: ${{ inputs.upgrade_from_last_release }}
+    runs-on: ubuntu-latest
+    env:
+      CK_COMPOSE_FILE: ${{ inputs.compose_file }}
+      CK_EXT_KEY: ${{ inputs.key }}
+      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+    steps:
+      # Full history: the previous release tag has to be checkoutable.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate inputs
+        run: |
+          [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
+            || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
+
+      # Newest tag reachable from this commit — on a PR that is the merge
+      # commit, so it is the release the change would be shipped on top of.
+      # Both failure modes get named instead of quietly skipping the job: a
+      # repo with nothing to upgrade from should turn this input off, not
+      # collect green runs that tested nothing.
+      - name: Resolve the previous release
+        id: prev
+        run: |
+          set -euo pipefail
+          prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          [ -n "$prev" ] \
+            || { echo "no reachable tag: nothing has been released yet, so there is no upgrade path to test" >&2; exit 1; }
+          git cat-file -e "$prev:$CK_COMPOSE_FILE" 2>/dev/null \
+            || { echo "$prev predates $CK_COMPOSE_FILE — the release cannot boot its own stack; test the upgrade from the next release on" >&2; exit 1; }
+          echo "previous release: $prev"
+          {
+            echo "prev=$prev"
+            # What actions/checkout actually put in the tree (on a PR: the
+            # merge commit) — the thing to come back to, resolved before
+            # anything moves HEAD.
+            echo "head=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check the previous release into the mount
+        run: git checkout --force --detach "$PREV"
+        env:
+          PREV: ${{ steps.prev.outputs.prev }}
+
+      # Boots and installs the OLD version — including its own CI compose file
+      # and therefore the image that release was tested with, unless the
+      # caller pins `image`.
+      - name: Start CiviCRM stack on the previous release
+        run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
+
+      # The container sees the checkout through the bind mount, so this alone
+      # puts the new code in front of the installed old schema.
+      - name: Move the mount to this commit
+        run: git checkout --force --detach "$HEAD_REF"
+        env:
+          HEAD_REF: ${{ steps.prev.outputs.head }}
+
+      - name: Upgrade the extension schema
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "set -e
+             cv flush
+             cv upgrade:db --mode=ext"
+          pending=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app \
+            cv ev 'echo CRM_Extension_Upgrades::hasPending() ? "pending" : "clean";' | tr -d '[:space:]')
+          [ "$pending" = clean ] \
+            || { echo "upgrade: extension upgrades still pending after cv upgrade:db" >&2; exit 1; }
+          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app \
+            cv ev "echo CRM_Extension_System::singleton()->getManager()->getStatus('$CK_EXT_KEY');" | tr -d '[:space:]')
+          [ "$status" = installed ] \
+            || { echo "upgrade: extension ended up '$status', expected 'installed'" >&2; exit 1; }
+
       - name: App logs on failure
         if: failure()
         run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
