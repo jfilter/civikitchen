@@ -30,6 +30,20 @@ final class TranslationCatalogCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new TranslationCatalogCheck(), $context));
     }
 
+    /** Message-template bodies in .mgd.php are Smarty — their {ts} counts. */
+    public function testAMgdMessageTemplateStringIsWarnedWhenMissing(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'managed/MessageTemplate.mgd.php' => "<?php\nreturn [['params' => ['values' => ['msg_html' => '{crmScope extensionKey=\'de.example.greeter\'}{ts}Donation received{/ts}{/crmScope}']]]];\n",
+            'l10n/de_DE/LC_MESSAGES/greeter.po' => $this->po([['Hello', 'Hallo']]),
+            'l10n/de_DE/LC_MESSAGES/greeter.mo' => $this->mo(['Hello' => 'Hallo']),
+        ], git: true);
+        $reporter = $this->run_(new TranslationCatalogCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'Donation received');
+    }
+
     /** CRM_Core_I18n only ever looks under l10n/<locale>/LC_MESSAGES/. */
     public function testACatalogOutsideLcMessagesFails(): void
     {

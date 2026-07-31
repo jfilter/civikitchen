@@ -248,6 +248,14 @@ final class TranslationCatalogCheck implements Check
             ++$dynamic;
         }
 
+        // A .mgd.php can carry Smarty message-template bodies as PHP string
+        // literals — their {ts} blocks are user-facing source strings like any
+        // template's, and skipping them here silently marked 34 real strings
+        // as absent on the first fleet catalog refresh.
+        if (str_ends_with($file, '.mgd.php')) {
+            $literals = array_merge($literals, $this->smartyStrings($source));
+        }
+
         $literals = array_filter($literals, static fn (string $l): bool => $l !== '');
 
         return [array_values(array_unique($literals)), $dynamic];
