@@ -7,7 +7,11 @@ audits and as the target state when modernizing an existing extension.
 For a new civix extension, run
 `/path/to/civikitchen/tools/ckinit.php <extension-directory>` to apply the
 versioned `template/extension/` tooling layer. Existing files remain untouched
-unless `--force` is explicitly supplied.
+unless `--force` is explicitly supplied. For an existing extension,
+`ckinit.php --check` reports where template-managed files have drifted and
+`ckinit.php --update` refreshes them (seeded files like `composer.json` and
+`phpstan.neon.dist` stay the repo's own after the first copy) — see
+[extension-development.md](extension-development.md#civix-workflow).
 
 ## UI: declarative before imperative
 
@@ -59,8 +63,10 @@ unless `--force` is explicitly supplied.
 - `phpunit.xml.dist` + headless tests per the template
   (`template/extension/`), incl. the `TEST_DB_DSN` bootstrap guard.
 - `phpstan.neon.dist` (level 10, no baseline).
-- CI per `template/extension/.github/workflows/ci.yml` (compose stack →
-  phpunit → phpstan; add cklint).
+- CI per `template/extension/.github/workflows/ci.yml` — a thin caller of the
+  reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
+  ckconform → phpunit under ckcoverage → phpstan → template-drift check), so
+  the pipeline is defined once instead of copy-pasted per repo.
 - `composer.json` with the extension metadata; no `node_modules`/`vendor`/build
   artifacts committed (frontend builds commit only `dist/`).
 - `.gitignore` covers every artifact the repo can regenerate — the phpunit
@@ -117,6 +123,7 @@ policy never has to be published here:
 license=Proprietary          # info.xml <license> + composer.json
 npm_license=UNLICENSED       # every tracked package.json
 copyright=Example Ltd        # must appear in LICENSE.txt
+template_custom=phpcs.xml.dist -- <reason>   # deliberate template deviation (ckinit --check/--update)
 ```
 
 SPDX disjunctive licensing (`"license": ["MIT", "GPL-2.0"]`) is allowed in both

@@ -66,4 +66,9 @@ npm_license=UNLICENSED       # every tracked package.json
 copyright=Example Ltd        # must appear in LICENSE.txt
 tests=optional -- <reason>   # the reason is not optional
 min_coverage=70              # enforced by ckcoverage
+template_custom=<file>,...  -- <reason>   # read by ckinit --check/--update, not by ckconform
 ```
+
+`.ckconform` is the one policy file for the whole ck* family — ckconform,
+ckcoverage and ckinit all read it, so a repo's deviations from the standard
+live in one place with their reasons attached.

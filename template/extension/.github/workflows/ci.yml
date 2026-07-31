@@ -1,3 +1,11 @@
+# Thin caller: the actual pipeline lives in civikitchen's reusable
+# extension-ci.yml (compose stack → cklint + ckconform → phpunit under
+# ckcoverage → phpstan → template-drift check), so it is defined once instead
+# of drifting between copy-pasted workflows. civikitchen is public — no
+# cross-repo token needed.
+#
+# Repo-specific needs (a different compose file, skipping the drift check) go
+# through the workflow's inputs, not a fork of its steps.
 name: CI
 
 on:
@@ -10,28 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      # civikitchen auto-installs CiviCRM, enables the mounted extension,
-      # seeds the civicrm_test scratch DB and runs the init.d hooks. --wait
-      # blocks until the app healthcheck passes (the entrypoint finishes
-      # install + hooks before httpd starts).
-      - name: Start CiviCRM stack
-        run: docker compose -f .docker/docker-compose.ci.yml up -d --wait --quiet-pull
-
-      - name: Lint (cklint + ckconform)
-        run: |
-          docker compose -f .docker/docker-compose.ci.yml exec -T -u www-data app bash -c \
-            'cd /var/www/html/ext/__EXTKEY__ && cklint --all && ckconform'
-
-      - name: PHPUnit (with coverage) + PHPStan
-        run: |
-          docker compose -f .docker/docker-compose.ci.yml exec -T -u www-data app bash -c \
-            'cd /var/www/html/ext/__EXTKEY__ && CIVICRM_UF=UnitTests phpunit --coverage-text tests/phpunit && phpstan analyse'
-
-      - name: App logs on failure
-        if: failure()
-        run: docker compose -f .docker/docker-compose.ci.yml logs app | tail -200
+  ci:
+    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main
+    with:
+      key: __EXTKEY__

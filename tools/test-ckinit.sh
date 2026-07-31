@@ -46,5 +46,80 @@ if "$root/tools/ckinit.php" "$work/invalid" >/dev/null 2>&1; then
   exit 1
 fi
 
+# --check on a freshly seeded extension: no drift.
+make_extension "$work/drift"
+"$root/tools/ckinit.php" "$work/drift" >/dev/null
+out=$("$root/tools/ckinit.php" --check "$work/drift")
+echo "$out" | grep -q 'up to date'
+
+# A drifted MANAGED file fails --check; an edited SEEDED file does not.
+printf '%s\n' '# local edit' >> "$work/drift/.github/workflows/ci.yml"
+printf '%s\n' '{"name": "acme/example_ext", "edited": true}' > "$work/drift/composer.json"
+if out=$("$root/tools/ckinit.php" --check "$work/drift" 2>&1); then
+  echo "managed drift was not detected" >&2
+  exit 1
+fi
+echo "$out" | grep -q 'drifted   .github/workflows/ci.yml'
+if echo "$out" | grep -q 'composer.json'; then
+  echo "seeded file was reported as drift" >&2
+  exit 1
+fi
+
+# --update restores the managed file (re-stamped) and leaves the seeded edit.
+/bin/rm "$work/drift/phpcs.xml.dist"
+out=$("$root/tools/ckinit.php" --update "$work/drift")
+echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
+echo "$out" | grep -q 'created   phpcs.xml.dist'
+grep -q 'key: example_ext' "$work/drift/.github/workflows/ci.yml"
+grep -q '"edited": true' "$work/drift/composer.json"
+out=$("$root/tools/ckinit.php" --check "$work/drift")
+echo "$out" | grep -q 'up to date'
+
+# A deviation declared in .ckconform (with its mandatory reason) is respected.
+printf '%s\n' 'template_custom=.github/workflows/ci.yml -- bespoke pipeline' > "$work/drift/.ckconform"
+printf '%s\n' '# local edit' >> "$work/drift/.github/workflows/ci.yml"
+out=$("$root/tools/ckinit.php" --check "$work/drift")
+echo "$out" | grep -q 'custom    .github/workflows/ci.yml'
+"$root/tools/ckinit.php" --update "$work/drift" >/dev/null
+grep -q '# local edit' "$work/drift/.github/workflows/ci.yml"
+
+# ... but the reason is not optional, and only managed files may be listed.
+printf '%s\n' 'template_custom=.github/workflows/ci.yml' > "$work/drift/.ckconform"
+if "$root/tools/ckinit.php" --check "$work/drift" >/dev/null 2>&1; then
+  echo "template_custom without a reason was accepted" >&2
+  exit 1
+fi
+printf '%s\n' 'template_custom=composer.json -- edited anyway' > "$work/drift/.ckconform"
+if "$root/tools/ckinit.php" --check "$work/drift" >/dev/null 2>&1; then
+  echo "template_custom on a seeded file was accepted" >&2
+  exit 1
+fi
+
+# The executable bit is part of the managed contract (the one mode bit git
+# tracks); content-identical but chmod +x must read as drift.
+/bin/rm "$work/drift/.ckconform"
+"$root/tools/ckinit.php" --update "$work/drift" >/dev/null
+chmod +x "$work/drift/phpcs.xml.dist"
+if out=$("$root/tools/ckinit.php" --check "$work/drift" 2>&1); then
+  echo "executable-bit drift was not detected" >&2
+  exit 1
+fi
+echo "$out" | grep -q 'drifted   phpcs.xml.dist'
+"$root/tools/ckinit.php" --update "$work/drift" >/dev/null
+if [ -x "$work/drift/phpcs.xml.dist" ]; then
+  echo "--update did not restore the file mode" >&2
+  exit 1
+fi
+
+# --force is a seeding flag; refuse the ambiguous combinations.
+if "$root/tools/ckinit.php" --force --update "$work/drift" >/dev/null 2>&1; then
+  echo "--force --update was accepted" >&2
+  exit 1
+fi
+if "$root/tools/ckinit.php" --update --check "$work/drift" >/dev/null 2>&1; then
+  echo "--update --check was accepted" >&2
+  exit 1
+fi
+
 "$root/tools/ckinit.php" --help >/dev/null
 echo "ckinit integration checks passed"

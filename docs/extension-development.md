@@ -132,6 +132,33 @@ civix generate:module org.example.myext
 only after reviewing conflicts. This makes the template an executable
 interface rather than a checklist to copy by hand.
 
+The template stays an interface after day one. Its files split into two
+classes: **managed** files that are meant to be byte-identical in every repo
+(the thin CI caller, the test bootstraps, the CI compose stack, the phpcs
+layer) and **seeded** files the repo takes ownership of after the first copy
+(`composer.json`, `phpstan.neon.dist`, the dev compose file, `.gitignore`).
+Two more modes work with that split:
+
+```bash
+/path/to/civikitchen/tools/ckinit.php --check  org.example.myext   # report drift, exit 1 on any
+/path/to/civikitchen/tools/ckinit.php --update org.example.myext   # rewrite managed files, create missing ones
+```
+
+`--update` never touches an existing seeded file; review its output with
+`git diff` like any other change. The shared `extension-ci.yml` workflow runs
+`--check` on every push, so a template improvement shows up in each repo as a
+red CI that one `--update` fixes. A repo that must deviate on a managed file
+declares it in its `.ckconform` — the reason is mandatory, and only managed
+files may be listed:
+
+```
+template_custom=.docker/docker-compose.ci.yml -- sibling mounts for e2e
+```
+
+Repo-specific test setup belongs in `tests/phpunit/bootstrap.local.php` (the
+managed bootstrap requires it when present), not in edits to the managed
+`tests/phpunit/bootstrap.php`.
+
 ## PHPStan
 
 PHPStan needs to know about CiviCRM's autoloader to resolve `CRM_*` and `Civi\*` symbols. Each extension typically ships its own `phpstanBootstrap.php` that boots civi enough for static analysis ([`template/extension/phpstanBootstrap.php`](../template/extension/phpstanBootstrap.php) is a working reference). Run:

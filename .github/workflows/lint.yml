@@ -18,21 +18,27 @@ jobs:
 
       - name: shellcheck (style level, fails on any finding)
         run: |
-          find images examples -name '*.sh' -print0 | xargs -0 shellcheck -S style
+          find images examples tools -name '*.sh' -print0 | xargs -0 shellcheck -S style
           echo "shellcheck clean"
 
       - name: actionlint
         run: |
-          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 .
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12 .
           ./actionlint -color
 
-      - name: php -l (seeds + profile scripts)
+      - name: php -l (seeds + profile scripts + tools)
         run: |
           rc=0
           while IFS= read -r -d '' f; do
             php -l "$f" >/dev/null || rc=1
-          done < <(find images -name '*.php' -print0)
+          done < <(find images tools -name '*.php' -print0)
           [ "$rc" = 0 ] && echo "php syntax clean"
+
+      # ckinit is what stamps the template into every extension repo, and its
+      # --check mode gates those repos' CI — a silent regression here would
+      # either rewrite files it must not touch or wave drift through.
+      - name: ckinit integration checks
+        run: bash tools/test-ckinit.sh
 
       # ckconform is the tool that tells eleven repos what is wrong with them,
       # and its 213 fixture tests ran nowhere but on a laptop. Most of its

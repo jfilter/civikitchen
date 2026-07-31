@@ -114,3 +114,10 @@ function cv(string $cmd, string $decode = 'json') {
       throw new RuntimeException("Bad decoder format ($decode)");
   }
 }
+
+// Repo-specific test setup (extra constants, fixture loaders) goes in
+// bootstrap.local.php — THIS file is template-managed and rewritten wholesale
+// by ckinit --update.
+if (file_exists(__DIR__ . '/bootstrap.local.php')) {
+  require __DIR__ . '/bootstrap.local.php';
+}

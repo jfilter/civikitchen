@@ -26,30 +26,68 @@ on:
         description: 'Compose file that brings up the CiviCRM stack'
         type: string
         default: '.docker/docker-compose.ci.yml'
+      check_template:
+        description: 'Fail when template-managed files drift from civikitchen (ckinit --check)'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
 jobs:
-  ci:
+  # Template drift: the tooling files civikitchen owns (CI caller, test
+  # bootstraps, CI compose stack, phpcs layer) must match the template, or
+  # eleven repos quietly diverge again — the exact state the shared workflow
+  # exists to end. Deliberate deviations are declared in the repo's .ckconform
+  # (template_custom=<file> -- <reason>); the fix for everything else is one
+  # `tools/ckinit.php --update` away.
+  template:
+    if: ${{ inputs.check_template }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # Pinned to the SHA this very workflow was resolved from, so the template
+      # under comparison is the one belonging to the pipeline that is running —
+      # an unpinned second checkout could race a push to main in between.
+      # job.workflow_sha (not github.workflow_sha, which is the CALLER's file)
+      # is the official way for a reusable workflow to reach its own repo.
+      - uses: actions/checkout@v5
+        with:
+          repository: jfilter/civikitchen
+          ref: ${{ job.workflow_sha }}
+          path: .civikitchen-ci
+      - name: Check template drift (ckinit --check)
+        run: php .civikitchen-ci/tools/ckinit.php --check .
+
+  ci:
+    runs-on: ubuntu-latest
+    # Inputs enter shell commands through the environment, never by expression
+    # interpolation inside `run:` — an interpolated input IS the script text.
+    env:
+      CK_COMPOSE_FILE: ${{ inputs.compose_file }}
+      CK_EXT_KEY: ${{ inputs.key }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate inputs
+        run: |
+          [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
+            || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
 
       - name: Start CiviCRM stack
-        run: docker compose -f "${{ inputs.compose_file }}" up -d --wait --quiet-pull
+        run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
 
       - name: Lint (cklint + ckconform)
         run: |
-          docker compose -f "${{ inputs.compose_file }}" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/${{ inputs.key }} && cklint --all && ckconform"
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && cklint --all && ckconform"
 
       - name: PHPUnit + coverage floor + PHPStan
         run: |
-          docker compose -f "${{ inputs.compose_file }}" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/${{ inputs.key }} && ckcoverage tests/phpunit && phpstan analyse --no-progress"
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && ckcoverage tests/phpunit && phpstan analyse --no-progress"
 
       # A failed stack is a stack trace of nothing without its logs.
       - name: App logs on failure
         if: failure()
-        run: docker compose -f "${{ inputs.compose_file }}" logs app | tail -200
+        run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200

@@ -1,0 +1,8 @@
+# actionlint's context types don't yet know the job.workflow_* properties
+# GitHub shipped 2026-04 (rhysd/actionlint#707 unreleased). extension-ci.yml
+# uses job.workflow_sha to pin its template checkout; drop this ignore once an
+# actionlint release accepts it.
+paths:
+  .github/workflows/extension-ci.yml:
+    ignore:
+      - 'property "workflow_sha" is not defined in object type'
