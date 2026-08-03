@@ -75,7 +75,10 @@ if [ "${#paths[@]}" -eq 0 ]; then
   # `|| true` on the grep chain, not decoration: grep exits 1 when it filters
   # everything away, and under `pipefail` that would abort the script on the
   # exact case this block exists to detect — a repo with no JS at all.
-  count=$({ git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' 2>/dev/null \
+  # safe.directory per call, same as ckconform: under CI's uid mismatch
+  # (runner-owned checkout, www-data process) git calls the tree dubious and
+  # ls-files reports NOTHING — which this check would misread as "no JS".
+  count=$({ git -c safe.directory="$PWD" ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' 2>/dev/null \
     | grep -Ev '(^|/)(node_modules|vendor|dist|build|bower_components|packages|\.civikitchen-siblings)/' \
     | grep -Ev '\.(min|bundle)\.(js|ts)$' || true; } | wc -l | tr -d ' ')
   if [ "$count" = 0 ]; then
