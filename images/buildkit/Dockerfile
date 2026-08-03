@@ -61,13 +61,16 @@ ARG DEBIAN_FRONTEND=noninteractive
 # - rsync/patch/acl/bzip2/jq: civibuild and its site templates use these
 # - default-mysql-client: civibuild + entrypoint DB probe
 # - lib*-dev: headers needed by docker-php-ext-install for gd/intl/zip/soap
-# - nodejs: extensions with Angular/JS assets
+# - nodejs: extensions with Angular/JS assets, and civicrm-buildkit's own
+#   civi-download-tools. 24.x is the current LTS line (Node 20 went
+#   end-of-life 2026-04-30); npm is upgraded past what the distro package
+#   ships in install-dev-tools.sh (NPM_VERSION).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl git unzip zip rsync patch acl bzip2 jq \
         default-mysql-client \
         libpng-dev libjpeg-dev libfreetype6-dev \
         libicu-dev libxml2-dev libzip-dev libonig-dev \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && docker-php-ext-configure gd --with-jpeg --with-freetype \
     && docker-php-ext-install -j"$(nproc)" \
@@ -103,6 +106,7 @@ ARG PHPUNIT_SHA256
 ARG MAGO_VERSION
 ARG MAGO_SHA256_X86_64
 ARG MAGO_SHA256_AARCH64
+ARG NPM_VERSION
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
 # install-dev-tools.sh) and the cklint linter that runs it.

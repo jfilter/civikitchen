@@ -149,9 +149,11 @@ on:
           Node version for every frontend step above and for the Playwright
           job. Only read when one of them is switched on, and still read under
           `bun`: Bun replaces the package manager, not the Node toolchain the
-          installed binaries run on.
+          installed binaries run on. Tracks the Node the dev images ship
+          (images/*/Dockerfile) — a browser job testing on a different major
+          than the image serves is a gap, not a safety margin.
         type: string
-        default: '20'
+        default: '24'
       composer_install:
         description: >-
           `composer install --no-dev` on the runner before the stack boots —

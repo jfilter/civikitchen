@@ -264,10 +264,12 @@ jobs:
               || { echo "FAIL: ${key} not installed" >&2; exit 1; }
           done
 
+      # Same major the images ship (images/*/Dockerfile). A browser job on a
+      # different Node than the image serves tests something nobody runs.
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install Playwright + Chromium
@@ -534,10 +536,12 @@ jobs:
             app \
             bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv api4 Domain.get +s version'
 
+      # Same major the images ship (images/*/Dockerfile). A browser job on a
+      # different Node than the image serves tests something nobody runs.
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install Playwright + Chromium

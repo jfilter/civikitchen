@@ -89,6 +89,12 @@ PHPUNIT_VERSION="${PHPUNIT_VERSION:-9.6.35}"
 # after an unrelated rebuild would turn every repo's format gate red, so the
 # same drift rule as everything else applies.
 MAGO_VERSION="${MAGO_VERSION:-1.45.0}"
+# npm bundles its own dependency tree (tar, glob, minimatch, sigstore, ...) and
+# that tree lands in the image scan; nothing in this repo's lockfiles can move
+# it, so npm gets installed over the distro package's own — and pinned, like
+# every other tool here, because an unpinned `npm@latest` would drift the
+# resolver under two committed lockfiles on every monthly rebuild.
+NPM_VERSION="${NPM_VERSION:-12.0.2}"
 
 # ---------------------------------------------------------------------------
 # Phars: civix, phpunit. (phpstan is NOT a phar: it is composer-installed
@@ -291,6 +297,21 @@ else
     composer require --working-dir=/opt/civikitchen-psalm --no-interaction --no-progress \
         "vimeo/psalm:${PSALM_VERSION}"
 fi
+
+# ---------------------------------------------------------------------------
+# npm itself, before the two `npm ci` runs below.
+npm install -g "npm@${NPM_VERSION}" --no-audit --no-fund --loglevel=error
+
+# TRANSITIONAL: npm 12 skips a dependency's install scripts unless the project
+# approved them (measured — under npm 10/11 a postinstall runs, under 12.0.2 it
+# does not). CiviCRM core's package.json runs tools/scripts/npm/postinstall.sh,
+# buildkit's civi-download-tools installs a set old enough to carry install
+# scripts, and extension frontends lean on esbuild/playwright postinstalls —
+# none of those trees has an `allowScripts` block yet, so the default leaves
+# every one of them half-installed behind a warning.
+# Deliberate opt-out of a real protection, with a real exit: delete this line
+# once those trees approve their own scripts.
+npm config set dangerously-allow-all-scripts true --location=global
 
 # ---------------------------------------------------------------------------
 # ESLint toolchain (powers `ckeslint`) — installed into the directory the

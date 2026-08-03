@@ -9,7 +9,7 @@ understands, see the
 
 Official `civicrm/civicrm` image with dev tools added:
 - **composer** — most modern extensions ship vendor deps
-- **node + npm** — for extensions with Angular/JS assets
+- **node + npm** — for extensions with Angular/JS assets. Node 24 (current LTS) with a pinned npm 12 installed over the distro package's. npm 12 does not run a dependency's install scripts unless the project approved them; the images turn that back on globally, because CiviCRM core, civicrm-buildkit and most frontend toolchains still depend on postinstall doing real work. See the reasoning at `NPM_VERSION` in `images/lib/install-dev-tools.sh`.
 - **pcov** — fast code coverage (always on)
 - **xdebug** — step debugging, opt-in via `XDEBUG_MODE` (see [IDE step debugging](extension-development.md#ide-step-debugging))
 - **civix** — scaffolding/build tool for extensions

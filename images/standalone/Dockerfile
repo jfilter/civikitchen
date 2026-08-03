@@ -18,11 +18,14 @@ FROM civicrm/civicrm:${CIVICRM_VERSION}
 # OS-level deps:
 # - unzip/git: composer needs them for dist/source installs
 # - default-mysql-client: for poking the DB from inside the container
-# - nodejs/npm: required by extensions with Angular/JS assets
+# - nodejs/npm: required by extensions with Angular/JS assets. 24.x is the
+#   current LTS line (Node 20 went end-of-life 2026-04-30); npm is upgraded
+#   past what the distro package ships in install-dev-tools.sh (NPM_VERSION),
+#   which is what keeps npm's own bundled dependency tree out of the image scan.
 # - jq: the profile driver (CIVIKITCHEN_PROFILE) parses profile.json with it
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl git unzip zip default-mysql-client jq \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -57,6 +60,7 @@ ARG PHPUNIT_SHA256
 ARG MAGO_VERSION
 ARG MAGO_SHA256_X86_64
 ARG MAGO_SHA256_AARCH64
+ARG NPM_VERSION
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
 # install-dev-tools.sh) and the cklint linter that runs it.
