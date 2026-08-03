@@ -67,12 +67,15 @@ unless `--force` is explicitly supplied. For an existing extension,
   `ck.api4.unknownEntity` (only when the name is a near-miss of a real
   entity — another extension's entities are not in the catalog and must not
   be flagged), `ck.api4.unknownAction`, `ck.api4.unknownField` in `select`,
-  `where`, `orderBy` and `values`. Everything the source tree cannot settle is
-  skipped in silence: non-literal names, dotted names (joins, `custom.*`),
-  SQL expressions and their aliases, camelCase BAO pass-through params in a
-  write, and every entity whose field list is not table-backed (Setting,
-  Afform, ECK, `SK_*`, `Custom_*`). A finding is therefore worth reading
-  rather than baselining.
+  `where`, `orderBy`, `groupBy` and `values`. Actions arrive through class
+  inheritance *and* through traits (`Generic\Traits\ManagedEntity` gives
+  some twenty entities `export()`/`revert()`), and the catalog follows both.
+  Everything the source tree cannot settle is skipped in silence: non-literal
+  names, dotted names (joins, `custom.*`, price-set fields), SQL expressions
+  and their aliases, `segment_*` from SearchKit, camelCase BAO pass-through
+  params in a write, and every entity whose field list is not table-backed
+  (Setting, Afform, ECK, `SK_*`, `Custom_*`). A finding is therefore worth
+  reading rather than baselining.
 - `E::ts()`, never bare `ts()` (`CiviKitchen.I18n.UseExtensionTs`).
 - Standard mixins for managed entities / menu / settings / Angular — no
   bespoke hooks (`CiviKitchen.Extension.UseMixinsForStandardHooks`).

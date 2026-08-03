@@ -240,7 +240,10 @@ PHP;
 
 // The drift test regenerates into a temp file rather than over the committed one.
 $target = $argv[2] ?? dirname(__DIR__) . '/src/HookCatalog.php';
-file_put_contents($target, $out);
+if (file_put_contents($target, $out) === false) {
+    fwrite(STDERR, "could not write $target\n");
+    exit(73);
+}
 
 fwrite(STDOUT, sprintf(
     "%s: %d live, %d deprecated (CiviCRM %s)\n",

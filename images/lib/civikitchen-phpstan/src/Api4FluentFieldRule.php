@@ -79,9 +79,17 @@ final class Api4FluentFieldRule implements Rule
             }
         } else {
             $type = $scope->getType($args[0]->value);
-            $fields = $method === 'setwhere'
-                ? $this->contract->fieldsFromWhere($type)
-                : ($method === 'setselect' ? $this->contract->listOfStrings($type) : $this->contract->keys($type));
+            if ($method === 'setwhere') {
+                // [['field', '=', 1], ['OR', [...]]]
+                $fields = $this->contract->fieldsFromWhere($type);
+            } elseif (in_array($method, ['setselect', 'setgroupby'], true)) {
+                // A plain list of names — reading the keys would only ever
+                // see 0, 1, 2 and check nothing.
+                $fields = $this->contract->listOfStrings($type);
+            } else {
+                // setValues / setOrderBy are keyed by field name.
+                $fields = $this->contract->keys($type);
+            }
         }
 
         $aliases = Api4Fluent::aliasesOfChain($node, $scope);
