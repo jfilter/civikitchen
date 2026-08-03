@@ -52,6 +52,8 @@ COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # install-dev-tools.sh) and the cklint linter that runs it.
 COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
+# cross-version compatibility against the declared PHP floor (PHPCompatibility).
+COPY lib/ckcompat /usr/local/bin/ckcompat
 # repo-conformance check against the extension template (structure, not style).
 # This image is what the extension repos run their CI in, so it needs the same
 # tools the buildkit image has — ckconform and ckcoverage were added there only,

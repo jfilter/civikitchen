@@ -98,6 +98,8 @@ COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # install-dev-tools.sh) and the cklint linter that runs it.
 COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
+# cross-version compatibility against the declared PHP floor (PHPCompatibility).
+COPY lib/ckcompat /usr/local/bin/ckcompat
 # repo-conformance check against the extension template (structure, not style).
 # A PHP application, not a script: it parses info.xml as XML and the manifests as
 # JSON, which is what the shell version kept getting wrong. `ckconform` in PATH

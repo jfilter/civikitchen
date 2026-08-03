@@ -37,6 +37,8 @@ CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
 # rector powers `ckmodernize`; pin it too so a rebuild can't silently change
 # what gets rewritten.
 RECTOR_VERSION="${RECTOR_VERSION:-2.4.6}"
+# PHPCompatibility powers `ckcompat`. See the require below for why an alpha.
+PHPCOMPATIBILITY_VERSION="${PHPCOMPATIBILITY_VERSION:-10.0.0-alpha2}"
 # civix is intentionally NOT pinned: it ships only as a floating phar on
 # download.civicrm.org (no versioned URLs), and as a scaffolding tool it
 # generates code on demand rather than running in CI, so its drift doesn't turn
@@ -70,9 +72,14 @@ export COMPOSER_HOME=/opt/composer
 export COMPOSER_ALLOW_SUPERUSER=1
 
 composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+# PHPCompatibility powers `ckcompat` (does this code RUN on the declared PHP
+# floor — the question phpstan's phpVersion does not answer). Pinned to an
+# alpha deliberately: the last stable is 9.3.5 from 2019, which predates every
+# PHP version these extensions target. 10.x is the line that knows PHP 8.
 composer global require --no-interaction --no-progress \
     "squizlabs/php_codesniffer:^3" \
-    "dealerdirect/phpcodesniffer-composer-installer:^1"
+    "dealerdirect/phpcodesniffer-composer-installer:^1" \
+    "phpcompatibility/php-compatibility:${PHPCOMPATIBILITY_VERSION}"
 
 # Clone the civicrm fork of drupal/coder (relaxed Drupal CS rules; ruleset
 # still registers as "Drupal" / "DrupalPractice" via phpcs). Pinned to
@@ -90,8 +97,13 @@ rm -rf "${CODER_DIR}/.git"
 # AND the bundled CiviKitchen standard (CiviCRM-tuned Drupal + footgun sniffs,
 # what `cklint` runs). The Dockerfile COPYs the CiviKitchen dir to
 # ${CIVIKITCHEN_CODER_DIR} before this script runs.
+#
+# This SETS the list, so the paths the composer installer plugin registered for
+# PHPCompatibility (and the PHPCSUtils it is built on) have to be repeated here
+# or `ckcompat` loses its standard on the next build.
 CIVIKITCHEN_CODER_DIR=/opt/civikitchen-coder
-phpcs --config-set installed_paths "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR}"
+phpcs --config-set installed_paths \
+    "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR},${COMPOSER_HOME}/vendor/phpcompatibility/php-compatibility,${COMPOSER_HOME}/vendor/phpcsstandards/phpcsutils"
 
 # ---------------------------------------------------------------------------
 # rector (isolated install in its own dir) — powers `ckmodernize`. Its config +
