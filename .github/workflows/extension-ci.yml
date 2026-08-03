@@ -573,6 +573,16 @@ jobs:
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && cklint --all && ckconform"
 
+      # Formatting gate (mago for PHP, oxfmt for JS/TS). Hard by design: the
+      # bundled mago baseline is tuned so its output is clean under the phpcs
+      # standard cklint enforces, so the two gates agree by construction — a
+      # red here means "run ckfmt and commit", never a style debate.
+      - name: Format check (ckfmt)
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && ckfmt --check"
+
       - name: PHPUnit + coverage floor
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |

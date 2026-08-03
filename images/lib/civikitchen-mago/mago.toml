@@ -1,0 +1,22 @@
+# The CiviKitchen PHP formatter baseline (mago fmt), shipped in the image —
+# the same deal as the bundled phpcs standard and the ESLint baseline. A repo
+# that commits its own mago.toml wins outright; ckfmt then drops this file.
+#
+# The whole point of this config is one property, verified empirically before
+# it shipped: code formatted with it produces ZERO findings under the bundled
+# CiviKitchen phpcs standard (Drupal-based). Formatter and lint gate must never
+# disagree, or --fix and --check chase each other forever. If a mago upgrade
+# ever breaks that property, the fix belongs here (one more setting), not in
+# the phpcs ruleset.
+#
+# No [source] section on purpose: mago's own file discovery finds nothing
+# without configured paths, so ckfmt always passes an explicit file list —
+# which is also where vendored and generated code gets filtered out.
+
+[formatter]
+# Drupal preset: 2-space indent, same-line braces, uppercase TRUE/FALSE/NULL —
+# the shape the phpcs standard checks.
+preset = "drupal"
+# The one thing the preset gets wrong for our gate: phpcs wants
+# `declare(strict_types = 1)`, the preset emits `strict_types=1`.
+space-around-assignment-in-declare = true

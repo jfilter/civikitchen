@@ -23,6 +23,7 @@ Official `civicrm/civicrm` image with dev tools added:
 - **ckcoverage** — runs phpunit with line coverage and enforces the `min_coverage` floor from `.ckconform`
 - **cksmarty** — compiles every `.tpl` the extension ships, plus the bodies of the managed MessageTemplates it installed, with the real `CRM_Core_Smarty` in the booted site. Compiles, never renders: whether a template compiles depends on the Smarty major core ships, on the prefilters `CRM_Core_Smarty` installs and on which `{crm*}` plugins are registered — none of which a file-based check can know. Message-template bodies are the blind spot it exists for: they are Smarty strings in the database, first compiled when the workflow fires.
 - **ckeslint + the CiviKitchen ESLint baseline** — JS/TS linting with a toolchain pinned in the image, so no extension needs an eslint devDependency block of its own. The baseline is `@eslint/js` recommended (real mistakes, no style rules), Mozilla's `eslint-plugin-no-unsanitized` (`innerHTML` and friends — an XSS in an extension is an XSS on every site that installs it), and `typescript-eslint` recommended-type-checked *when the repo has a `tsconfig.json`*, which is what brings `no-floating-promises` / `no-misused-promises`. CiviCRM's globals (`CRM`, `cj`, `ts`, `_`, `angular`) are declared; `dist/`, `vendor/`, `node_modules/`, vendored asset dirs and `*.min.js` are ignored. A repo's own `eslint.config.*` wins outright (and then supplies its own plugins). No JS in the repo is a pass with a log line.
+- **ckfmt + mago + oxfmt** — code formatting: [mago](https://mago.carthage.software/) for PHP with a bundled baseline (`preset = "drupal"` + declare spacing) whose output is verified clean under the bundled phpcs standard, [oxfmt](https://oxc.rs/) at its defaults for JS/TS. `ckfmt` formats in place, `ckfmt --check` is the hard CI gate. Vendored, minified and civix/DAO-generated files are excluded; a committed `mago.toml` / `.oxfmtrc.*` wins over the baseline for its half. No files of a kind is a pass with a log line.
 - **ckschemadiff** — `install()`-vs-upgrader schema parity over the extension's own tables (`ckschemadiff tables|dump|diff`). Used by the shared CI's `schema_parity` job; see [extension-standards.md](extension-standards.md#compatibility-test-the-range-you-claim).
 - **cktestreset** — drops + reseeds the isolated `<db>_test` scratch DB and clears stale cached containers (standalone only; civibuild manages the buildkit test DBs)
 
@@ -103,7 +104,7 @@ same Dockerfile (`images/buildkit/`) — only the default civibuild site type
 differs (`wp-demo`, `drupal10-demo`, `drupal11-demo`, or `joomla-demo`). All
 buildkit dev images carry the same dev tools as the standalone image (composer,
 node/npm, phpunit, phpstan, phpcs+coder, cklint, ckconform, ckcoverage,
-ckmodernize, cktaint, cksmarty, ckeslint, ckschemadiff, civix, pcov, xdebug) —
+ckmodernize, cktaint, cksmarty, ckeslint, ckfmt, ckschemadiff, civix, pcov, xdebug) —
 except `cktestreset`, which is
 standalone-only (civibuild manages the buildkit flavors' `sitetest_*` DBs).
 

@@ -265,6 +265,62 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 3e2. ckfmt: both formatter halves fire, converge, and the mago output agrees
+#      with the phpcs standard cklint enforces — the property the whole gate
+#      rests on, so it is asserted here, not assumed.
+echo "== ckfmt =="
+FMTDIR="${WORKDIR}/fmtext"
+mkdir -p "${FMTDIR}/js"
+cat > "${FMTDIR}/info.xml" <<'XML'
+<?xml version="1.0"?>
+<extension key="org.example.acme" type="module">
+  <file>acme</file>
+</extension>
+XML
+cat > "${FMTDIR}/acme.php" <<'PHP'
+<?php
+declare(strict_types = 1);
+
+function acme_greet( string $name ){
+    if($name==null){ return 'nobody'; }
+  return "hi " . $name;
+}
+PHP
+cat > "${FMTDIR}/js/acme.js" <<'JS'
+const acme = {a:1,   b:2};
+JS
+(cd "${FMTDIR}" && git init -q . && git add -A) >/dev/null 2>&1
+
+if (cd "${FMTDIR}" && ckfmt --check) >/dev/null 2>&1; then
+    fail "ckfmt --check passed on unformatted PHP + JS"
+else
+    ok "ckfmt --check fails on unformatted code"
+fi
+if FMT_OUT="$( (cd "${FMTDIR}" && ckfmt && ckfmt --check) 2>&1 )"; then
+    ok "ckfmt formats and then reports clean"
+else
+    fail "ckfmt did not converge (output: ${FMT_OUT:0:300})"
+fi
+# The agreement property: formatted output is clean under the phpcs standard.
+if CKLINT_FMT_OUT="$( (cd "${FMTDIR}" && cklint --all) 2>&1 )"; then
+    ok "ckfmt output is clean under the CiviKitchen phpcs standard"
+else
+    fail "cklint rejects ckfmt output (output: ${CKLINT_FMT_OUT:0:300})"
+fi
+
+# No formattable files at all must PASS, and say so.
+NOFMT="${WORKDIR}/nofmtext"
+mkdir -p "${NOFMT}"
+cp "${FMTDIR}/info.xml" "${NOFMT}/info.xml"
+(cd "${NOFMT}" && git init -q . && git add -A) >/dev/null 2>&1
+if NOFMT_OUT="$( (cd "${NOFMT}" && ckfmt --check) 2>&1 )" \
+    && echo "${NOFMT_OUT}" | grep -q "no PHP files"; then
+    ok "ckfmt passes with a log line when there is nothing to format"
+else
+    fail "ckfmt on an empty repo (output: ${NOFMT_OUT:0:200})"
+fi
+
+# ---------------------------------------------------------------------------
 # 3f. ckschemadiff: table discovery from both schema formats, and the
 #     normalisation that makes two dumps of the same schema compare equal.
 #     The database half is exercised by the shared CI's schema-parity job,

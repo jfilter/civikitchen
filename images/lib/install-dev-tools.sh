@@ -12,6 +12,9 @@
 #              sets plus CiviKitchen's CiviCRM footgun rules)
 #   - psalm    (isolated; powers `cktaint` — used ONLY as a taint engine, with
 #              CiviCRM source/sink/escape stubs)
+#   - mago     (Rust binary; PHP half of `ckfmt`, formats to the bundled
+#              phpcs standard's expectations)
+#   - oxfmt    (npm toolchain; JS/TS half of `ckfmt`)
 #
 # Prerequisites (handled per image):
 #   - composer, php, curl, git on PATH
@@ -69,6 +72,10 @@ PSALM_VERSION="${PSALM_VERSION:-6.16.1}"
 CIVIX_VERSION="${CIVIX_VERSION:-26.02.0}"
 # phpunit 9 is the last line CiviCRM's test base supports; pin the patch too.
 PHPUNIT_VERSION="${PHPUNIT_VERSION:-9.6.35}"
+# mago powers the PHP half of `ckfmt`. A formatter that changes its output
+# after an unrelated rebuild would turn every repo's format gate red, so the
+# same drift rule as everything else applies.
+MAGO_VERSION="${MAGO_VERSION:-1.45.0}"
 
 # ---------------------------------------------------------------------------
 # Phars: civix, phpunit. (phpstan is NOT a phar: it is composer-installed
@@ -87,6 +94,11 @@ PHPUNIT_VERSION="${PHPUNIT_VERSION:-9.6.35}"
 # therefore means overriding its *_SHA256 as well.
 CIVIX_SHA256="${CIVIX_SHA256:-1c480133bee248c1f09f19c724e2e44266297b63ff2e55a7cbf3ea17a910d906}"
 PHPUNIT_SHA256="${PHPUNIT_SHA256:-f39d634a5e5bcafd71565b33328ae4fb173703296c12ac94a24550cb8291e964}"
+# mago ships per-arch binaries and publishes no checksum file, so both hashes
+# are derived locally at pin time (curl -LsS <url> | shasum -a 256) — one per
+# platform the images build for.
+MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64:-c18bde21c4f2be586ccfcb070694cdde99e8522df9ff182d993c617d3907d5ef}"
+MAGO_SHA256_AARCH64="${MAGO_SHA256_AARCH64:-4b97298b31e294b0c17928a788392b6dfaaab59c5fb4df2a3504c4e4f847a62f}"
 
 # Compared in the shell rather than with `sha256sum -c`: that exits 0 on a
 # malformed checksum line, so an empty or truncated *_SHA256 would wave the
@@ -107,6 +119,27 @@ fetch_phar "https://download.civicrm.org/civix/civix-${CIVIX_VERSION}.phar" \
 
 fetch_phar "https://phar.phpunit.de/phpunit-${PHPUNIT_VERSION}.phar" \
     /usr/local/bin/phpunit "${PHPUNIT_SHA256}"
+
+# ---------------------------------------------------------------------------
+# mago (PHP half of `ckfmt`) — a prebuilt Rust binary per architecture, same
+# verify-then-trust treatment as the phars. gnu build, not musl: these are
+# Debian-based images.
+case "$(uname -m)" in
+    x86_64)  MAGO_ARCH=x86_64;  MAGO_SHA256="${MAGO_SHA256_X86_64}" ;;
+    aarch64) MAGO_ARCH=aarch64; MAGO_SHA256="${MAGO_SHA256_AARCH64}" ;;
+    *) echo "unsupported architecture for mago: $(uname -m)" >&2; exit 1 ;;
+esac
+curl -LsS -o /tmp/mago.tar.gz \
+    "https://github.com/carthage-software/mago/releases/download/${MAGO_VERSION}/mago-${MAGO_VERSION}-${MAGO_ARCH}-unknown-linux-gnu.tar.gz"
+got=$(sha256sum < /tmp/mago.tar.gz | cut -d' ' -f1)
+if [ "${got}" != "${MAGO_SHA256}" ]; then
+    echo "checksum mismatch for mago ${MAGO_VERSION} (${MAGO_ARCH}): expected ${MAGO_SHA256}, got ${got}" >&2
+    exit 1
+fi
+tar -xzf /tmp/mago.tar.gz -C /tmp "mago-${MAGO_VERSION}-${MAGO_ARCH}-unknown-linux-gnu/mago"
+mv "/tmp/mago-${MAGO_VERSION}-${MAGO_ARCH}-unknown-linux-gnu/mago" /usr/local/bin/mago
+chmod +x /usr/local/bin/mago
+rm -rf /tmp/mago.tar.gz "/tmp/mago-${MAGO_VERSION}-${MAGO_ARCH}-unknown-linux-gnu"
 
 # ---------------------------------------------------------------------------
 # phpcs (from packagist) + civicrm/coder fork (cloned directly).
@@ -266,7 +299,14 @@ fi
 ESLINT_DIR=/opt/civikitchen-eslint
 npm ci --prefix "${ESLINT_DIR}" --no-audit --no-fund --loglevel=error
 
+# oxfmt toolchain (JS half of `ckfmt`) — same shape as the ESLint install:
+# pinned in its package.json, resolved from its committed lockfile. The npm
+# package selects the platform binding itself via optionalDependencies.
+OXFMT_DIR=/opt/civikitchen-oxfmt
+npm ci --prefix "${OXFMT_DIR}" --no-audit --no-fund --loglevel=error
+
 rm -rf /opt/composer/cache ~/.npm
 chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" \
     /opt/civikitchen-rector "${PHPSTAN_DIR}" "${PHPSTAN_EXT_DIR}" \
-    /opt/civikitchen-phpstan-config /opt/civikitchen-psalm "${ESLINT_DIR}"
+    /opt/civikitchen-phpstan-config /opt/civikitchen-psalm "${ESLINT_DIR}" \
+    "${OXFMT_DIR}" /opt/civikitchen-mago /usr/local/bin/mago

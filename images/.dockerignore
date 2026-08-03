@@ -7,3 +7,4 @@
 # that `npm ci` deletes on its first line anyway, and that carry the host's
 # platform rather than the image's.
 lib/eslint/node_modules
+lib/oxfmt/node_modules

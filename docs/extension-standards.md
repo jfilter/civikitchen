@@ -153,6 +153,16 @@ unless `--force` is explicitly supplied. For an existing extension,
   [Frontend](#frontend-js-dependencies-js-tests-and-browser-tests). Also an
   unconditional step in `ci`, and also a pass-with-a-log-line for the many
   extensions that ship no JS.
+- `ckfmt` formats the repo — [mago](https://mago.carthage.software/) for PHP,
+  [oxfmt](https://oxc.rs/) for JS/TS — and `ckfmt --check` is a hard gate in
+  `ci`. The bundled mago baseline (`preset = "drupal"` plus one declare-spacing
+  setting) is tuned so its output is clean under the bundled phpcs standard:
+  formatter and lint gate agree by construction, so a red check means "run
+  `ckfmt` and commit", never a style debate. Vendored trees, minified bundles
+  and civix/DAO-generated PHP are excluded — civix regenerates those files
+  verbatim, and formatting them would put every `civix upgrade` at war with
+  the gate. A committed `mago.toml` or `.oxfmtrc.*` wins over the baseline for
+  its half.
 - **Rule packs come from the image, not from each repo's `composer.json`.**
   phpcs standards (civicrm/coder, PHPCompatibility, Slevomat) and phpstan
   extensions (deprecation rules, disallowed-calls, strict-rules) are installed
@@ -163,8 +173,8 @@ unless `--force` is explicitly supplied. For an existing extension,
   so a repo opts in with one `includes:` line when it is ready.
 - CI per `template/extension/.github/workflows/ci.yml` — a thin caller of the
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
-  ckconform → phpunit under ckcoverage → phpstan → ckcompat → ckdeps →
-  cktaint (advisory) → cksmarty → ckeslint → template-drift check →
+  ckconform → ckfmt --check → phpunit under ckcoverage → phpstan → ckcompat →
+  ckdeps → cktaint (advisory) → cksmarty → ckeslint → template-drift check →
   lockfile vulnerability scan, plus the opt-in schema-parity job), so
   the pipeline is defined once instead of copy-pasted per repo. The caller pins
   the released major (`@v1`) and the CI stack the matching `:v1` image —

@@ -100,6 +100,9 @@ ARG CIVIX_VERSION
 ARG CIVIX_SHA256
 ARG PHPUNIT_VERSION
 ARG PHPUNIT_SHA256
+ARG MAGO_VERSION
+ARG MAGO_SHA256_X86_64
+ARG MAGO_SHA256_AARCH64
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
 # install-dev-tools.sh) and the cklint linter that runs it.
@@ -141,16 +144,24 @@ COPY lib/civikitchen-smarty-compile.php /usr/local/share/civikitchen/cksmarty-co
 COPY lib/ckschemadiff /usr/local/bin/ckschemadiff
 COPY lib/eslint /opt/civikitchen-eslint
 COPY lib/ckeslint /usr/local/bin/ckeslint
+# Formatting (ckfmt): mago baseline + oxfmt toolchain + runner, same trio as
+# the standalone image.
+COPY lib/civikitchen-mago /opt/civikitchen-mago
+COPY lib/oxfmt /opt/civikitchen-oxfmt
+COPY lib/ckfmt /usr/local/bin/ckfmt
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         PSALM_VERSION="${PSALM_VERSION}" \
         PHPSTAN_DEPRECATION_RULES_VERSION="${PHPSTAN_DEPRECATION_RULES_VERSION}" \
         PHPSTAN_EXTENSION_INSTALLER_VERSION="${PHPSTAN_EXTENSION_INSTALLER_VERSION}" \
         CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
         PHPUNIT_VERSION="${PHPUNIT_VERSION}" PHPUNIT_SHA256="${PHPUNIT_SHA256}" \
+        MAGO_VERSION="${MAGO_VERSION}" MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64}" \
+        MAGO_SHA256_AARCH64="${MAGO_SHA256_AARCH64}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
         /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktaint \
-        /usr/local/bin/cksmarty /usr/local/bin/ckschemadiff /usr/local/bin/ckeslint
+        /usr/local/bin/cksmarty /usr/local/bin/ckschemadiff /usr/local/bin/ckeslint \
+        /usr/local/bin/ckfmt
 
 # PHP runtime tuning — matches what civibuild expects for site builds.
 RUN { \

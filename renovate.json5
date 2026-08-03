@@ -39,7 +39,8 @@
     },
   ],
 
-  // Renovate cannot see the phar hashes in images/lib/install-dev-tools.sh or
+  // Renovate cannot see the phar/binary hashes in
+  // images/lib/install-dev-tools.sh (civix, phpunit, mago) or
   // .github/workflows/lint.yml — those are bumped by hand, hash included, per
   // the instructions in those files.
 }
