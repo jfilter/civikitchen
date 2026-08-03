@@ -86,10 +86,11 @@ RUN pecl install pcov xdebug \
 # Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder,
 # rector/ckmodernize).
 # Lives in images/lib/ so the standalone image uses the same script.
-# PHPSTAN_VERSION / CODER_REF / RECTOR_VERSION are pinned in the script; pass
-# --build-arg to override.
+# Every tool version is pinned in the script; pass --build-arg to override.
 ENV PATH="/opt/composer/vendor/bin:${PATH}"
 ARG PHPSTAN_VERSION
+ARG PHPSTAN_DEPRECATION_RULES_VERSION
+ARG PHPSTAN_EXTENSION_INSTALLER_VERSION
 ARG CODER_REF
 ARG RECTOR_VERSION
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
@@ -97,6 +98,11 @@ COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # install-dev-tools.sh) and the cklint linter that runs it.
 COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
+# cross-version compatibility against the declared PHP floor (PHPCompatibility).
+COPY lib/ckcompat /usr/local/bin/ckcompat
+# composer.json vs the dependencies the code really uses.
+COPY lib/ckdeps /usr/local/bin/ckdeps
+COPY lib/civikitchen-composer-deps.php /opt/civikitchen-composer-deps.php
 # repo-conformance check against the extension template (structure, not style).
 # A PHP application, not a script: it parses info.xml as XML and the manifests as
 # JSON, which is what the shell version kept getting wrong. `ckconform` in PATH
@@ -110,6 +116,11 @@ COPY lib/ckrelease /usr/local/bin/ckrelease
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
 COPY lib/civikitchen-rector /opt/civikitchen-rector
 COPY lib/ckmodernize /usr/local/bin/ckmodernize
+# CiviKitchen's phpstan extension (@ck-legacy deprecated-scope resolver) —
+# install-dev-tools.sh pulls it in as a composer path repository from here.
+COPY lib/civikitchen-phpstan /opt/civikitchen-phpstan-ext
+# Ban lists as config (spaze/phpstan-disallowed-calls); inert until included.
+COPY lib/civikitchen-phpstan-config /opt/civikitchen-phpstan-config
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \

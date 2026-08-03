@@ -19,8 +19,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class SniffsTest extends TestCase {
 
-  private const SNIFFS = 'CiviKitchen.Legacy.NoLegacyCall,'
-    . 'CiviKitchen.Legacy.NoLegacyPageForm,'
+  private const SNIFFS = 'CiviKitchen.Legacy.NoLegacyPageForm,'
     . 'CiviKitchen.I18n.UseExtensionTs,'
     . 'CiviKitchen.Api.NoRequiredOnExternalAction,'
     . 'CiviKitchen.Api.NoGenericVarOnActionParam,'
@@ -29,6 +28,13 @@ final class SniffsTest extends TestCase {
     . 'CiviKitchen.Tests.NoTautologicalAssertion,'
     . 'CiviKitchen.Extension.UseMixinsForStandardHooks,'
     . 'CiviKitchen.Files.MaxFileLength';
+
+  /**
+   * Whole-file / call-site sniffs, exercised on their own fixtures. Includes
+   * the third-party sniff this standard configures: the wiring is ours to get
+   * wrong (registration, the no-spaces property), so it is ours to test.
+   */
+  private const PHP8_SNIFFS = 'SlevomatCodingStandard.TypeHints.DeclareStrictTypes,CiviKitchen.Modern.NameBooleanArguments';
 
   /**
    * Run phpcs over one fixture, restricted to the CiviKitchen sniffs, and
@@ -41,7 +47,7 @@ final class SniffsTest extends TestCase {
    *
    * @return array<int, list<string>>
    */
-  private function phpcs(string $fixture, ?string $standard = NULL): array {
+  private function phpcs(string $fixture, ?string $standard = NULL, ?string $sniffs = NULL): array {
     $fixturePath = __DIR__ . '/fixtures/' . $fixture;
     self::assertFileExists($fixturePath);
 
@@ -55,7 +61,7 @@ final class SniffsTest extends TestCase {
     $cmd = sprintf(
       'phpcs -q --standard=%s --sniffs=%s --report=json %s 2>/dev/null',
       escapeshellarg($standard),
-      escapeshellarg(self::SNIFFS),
+      escapeshellarg($sniffs ?? self::SNIFFS),
       escapeshellarg($fixturePath)
     );
     exec($cmd, $outputLines, $exitCode);
@@ -70,21 +76,6 @@ final class SniffsTest extends TestCase {
     }
     ksort($byLine);
     return $byLine;
-  }
-
-  public function testNoLegacyCallFlagsEveryDefaultBanOnTheExactLine(): void {
-    $findings = $this->phpcs('LegacyCalls.php');
-
-    $expected = [
-      7 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyFunction'],
-      8 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyFunction'],
-      9 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyStaticCall'],
-      10 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyStaticCall'],
-      11 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyStaticCall'],
-      12 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyStaticCall'],
-      13 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyStaticCall'],
-    ];
-    self::assertSame($expected, $findings);
   }
 
   public function testUseExtensionTsFlagsBareAndFullyQualifiedTs(): void {
@@ -119,6 +110,7 @@ final class SniffsTest extends TestCase {
       10 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
       12 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
       14 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
+      16 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
     ];
     self::assertSame($expected, $findings);
   }
@@ -168,6 +160,36 @@ final class SniffsTest extends TestCase {
 
   public function testModernCounterpartsProduceZeroFindings(): void {
     self::assertSame([], $this->phpcs('CleanModern.php'));
+    // The two PHP-8 sniffs run apart from the list above: they would report
+    // every fixture's opening tag, and shifting those files' lines to add a
+    // declare would move the line numbers the other tests assert.
+    self::assertSame([], $this->phpcs('CleanModern.php', NULL, self::PHP8_SNIFFS));
+  }
+
+  public function testDeclareStrictTypesIsWiredUpAndAcceptsTheFleetSpacing(): void {
+    $findings = $this->phpcs('MissingStrictTypes.php', NULL, self::PHP8_SNIFFS);
+
+    // Reported on line 1: a missing declare is a whole-file fact. The clean
+    // fixtures above carry `strict_types=1` — unspaced, which the sniff only
+    // tolerates because this standard configures it to.
+    self::assertSame(
+      [1 => ['SlevomatCodingStandard.TypeHints.DeclareStrictTypes.DeclareStrictTypesMissing']],
+      $findings
+    );
+  }
+
+  public function testNameBooleanArgumentsFlagsOnlyBarePositionalLiterals(): void {
+    $findings = $this->phpcs('BooleanArgs.php', NULL, self::PHP8_SNIFFS);
+
+    // Flagged: the two positional literals. Not flagged: in_array's strict
+    // flag (ignoreCalls), an already-named argument, a variable, a comparison
+    // that merely contains TRUE, an assignment, an array element, and the
+    // parameter default in the declaration.
+    $expected = [
+      9 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
+      10 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
+    ];
+    self::assertSame($expected, $findings);
   }
 
   public function testMaxFileLengthFlagsOnlyFilesOverTheConfiguredCap(): void {

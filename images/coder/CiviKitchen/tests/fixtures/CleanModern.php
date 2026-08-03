@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 // Fixture: the modern counterparts of everything the footgun sniffs ban.
 // The test asserts ZERO findings from the CiviKitchen sniffs here — every
 // line is a near-miss a sloppy token matcher would flag.

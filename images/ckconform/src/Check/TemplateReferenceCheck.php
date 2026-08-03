@@ -65,15 +65,6 @@ final class TemplateReferenceCheck implements Check
                 }
             }
         }
-
-        foreach ($this->sources($context, ['.tpl']) as $relative) {
-            if (!str_starts_with($relative, 'templates/')) {
-                continue;
-            }
-            if (str_contains($context->read($relative) ?? '', '{php}')) {
-                $reporter->warn("$relative: uses {php}, removed in Smarty 4/5 — the block is dead code or a fatal");
-            }
-        }
     }
 
     /** @param list<string> $namespaces */

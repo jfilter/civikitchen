@@ -3,7 +3,8 @@
 # and buildkit images:
 #   - civix    (CiviCRM extension scaffolding/build tool)
 #   - phpunit  (pinned to 9 for CiviCRM compatibility)
-#   - phpstan  (static analysis)
+#   - phpstan  (isolated; static analysis incl. the deprecation rules and
+#              CiviKitchen's `@ck-legacy` deprecated-scope resolver)
 #   - phpcs + the civicrm/coder fork of drupal/coder (the de-facto CiviCRM
 #              style guide — registers as the standard "Drupal" /
 #              "DrupalPractice" phpcs standards).
@@ -22,27 +23,51 @@ set -euo pipefail
 # major and turn a green `phpstan analyse` red with no code change. Override at
 # build time with --build-arg PHPSTAN_VERSION=... / CODER_REF=...
 PHPSTAN_VERSION="${PHPSTAN_VERSION:-2.2.2}"
+# Reports every call into code marked @deprecated (or #[\Deprecated]). Not a
+# phpstan default and not implied by any level, including 10 — it ships as a
+# separate package. This is how deprecated CiviCRM *symbols* get caught without
+# anyone maintaining a list; the hook catalog in ckconform covers the one thing
+# it structurally cannot see, since a hook implementation is a function
+# definition matching a naming convention, not a call to a deprecated symbol.
+PHPSTAN_DEPRECATION_RULES_VERSION="${PHPSTAN_DEPRECATION_RULES_VERSION:-2.0.5}"
+# Registers the rules with phpstan automatically, so no project has to add an
+# `includes:` line to its phpstan.neon.
+PHPSTAN_EXTENSION_INSTALLER_VERSION="${PHPSTAN_EXTENSION_INSTALLER_VERSION:-1.4.3}"
+# Bans as CONFIG instead of sniff code (civicrm-disallowed.neon). Inert until a
+# project includes a config, so installing it changes nothing by itself.
+PHPSTAN_DISALLOWED_CALLS_VERSION="${PHPSTAN_DISALLOWED_CALLS_VERSION:-v4.14.0}"
+# Opt-in per repo (see the ignore list below) — switching these on fleet-wide
+# at level 10 would turn every repo red in one build.
+PHPSTAN_STRICT_RULES_VERSION="${PHPSTAN_STRICT_RULES_VERSION:-2.0.12}"
+# Type narrowing for phpunit assertions (fewer level-10 false reports in tests)
+# and architecture rules AS phpstan rules. Both inert until a repo has tests
+# resp. writes an ArchitectureRule class, so both register automatically.
+PHPSTAN_PHPUNIT_VERSION="${PHPSTAN_PHPUNIT_VERSION:-2.0.18}"
+PHPAT_VERSION="${PHPAT_VERSION:-0.12.4}"
+# Powers `ckdeps`: composer.json against the dependencies the code really uses.
+COMPOSER_DEPENDENCY_ANALYSER_VERSION="${COMPOSER_DEPENDENCY_ANALYSER_VERSION:-1.8.4}"
+# Cherry-picked sniffs only (DeclareStrictTypes today); the full standard would
+# fight the Drupal base the CiviKitchen ruleset is built on.
+SLEVOMAT_VERSION="${SLEVOMAT_VERSION:-8.31.1}"
 # civicrm/coder has no usable release tags, so pin to a commit on 8.x-2.x-civi.
 CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
 # rector powers `ckmodernize`; pin it too so a rebuild can't silently change
 # what gets rewritten.
 RECTOR_VERSION="${RECTOR_VERSION:-2.4.6}"
+# PHPCompatibility powers `ckcompat`. See the require below for why an alpha.
+PHPCOMPATIBILITY_VERSION="${PHPCOMPATIBILITY_VERSION:-10.0.0-alpha2}"
 # civix is intentionally NOT pinned: it ships only as a floating phar on
 # download.civicrm.org (no versioned URLs), and as a scaffolding tool it
 # generates code on demand rather than running in CI, so its drift doesn't turn
 # existing extensions' pipelines red.
 
 # ---------------------------------------------------------------------------
-# Phars: civix, phpunit, phpstan
+# Phars: civix, phpunit
 curl -LsS https://download.civicrm.org/civix/civix.phar -o /usr/local/bin/civix
 chmod +x /usr/local/bin/civix
 
 curl -LsS https://phar.phpunit.de/phpunit-9.phar -o /usr/local/bin/phpunit
 chmod +x /usr/local/bin/phpunit
-
-curl -LsS "https://github.com/phpstan/phpstan/releases/download/${PHPSTAN_VERSION}/phpstan.phar" \
-    -o /usr/local/bin/phpstan
-chmod +x /usr/local/bin/phpstan
 
 # ---------------------------------------------------------------------------
 # phpcs (from packagist) + civicrm/coder fork (cloned directly).
@@ -64,9 +89,16 @@ export COMPOSER_HOME=/opt/composer
 export COMPOSER_ALLOW_SUPERUSER=1
 
 composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+# PHPCompatibility powers `ckcompat` (does this code RUN on the declared PHP
+# floor — the question phpstan's phpVersion does not answer). Pinned to an
+# alpha deliberately: the last stable is 9.3.5 from 2019, which predates every
+# PHP version these extensions target. 10.x is the line that knows PHP 8.
 composer global require --no-interaction --no-progress \
     "squizlabs/php_codesniffer:^3" \
-    "dealerdirect/phpcodesniffer-composer-installer:^1"
+    "dealerdirect/phpcodesniffer-composer-installer:^1" \
+    "phpcompatibility/php-compatibility:${PHPCOMPATIBILITY_VERSION}" \
+    "slevomat/coding-standard:${SLEVOMAT_VERSION}" \
+    "shipmonk/composer-dependency-analyser:${COMPOSER_DEPENDENCY_ANALYSER_VERSION}"
 
 # Clone the civicrm fork of drupal/coder (relaxed Drupal CS rules; ruleset
 # still registers as "Drupal" / "DrupalPractice" via phpcs). Pinned to
@@ -84,8 +116,13 @@ rm -rf "${CODER_DIR}/.git"
 # AND the bundled CiviKitchen standard (CiviCRM-tuned Drupal + footgun sniffs,
 # what `cklint` runs). The Dockerfile COPYs the CiviKitchen dir to
 # ${CIVIKITCHEN_CODER_DIR} before this script runs.
+#
+# This SETS the list, so the paths the composer installer plugin registered for
+# PHPCompatibility (and the PHPCSUtils it is built on) have to be repeated here
+# or `ckcompat` loses its standard on the next build.
 CIVIKITCHEN_CODER_DIR=/opt/civikitchen-coder
-phpcs --config-set installed_paths "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR}"
+phpcs --config-set installed_paths \
+    "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR},${COMPOSER_HOME}/vendor/phpcompatibility/php-compatibility,${COMPOSER_HOME}/vendor/phpcsstandards/phpcsutils,${COMPOSER_HOME}/vendor/slevomat/coding-standard"
 
 # ---------------------------------------------------------------------------
 # rector (isolated install in its own dir) — powers `ckmodernize`. Its config +
@@ -94,5 +131,59 @@ phpcs --config-set installed_paths "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_COD
 composer require --working-dir=/opt/civikitchen-rector --no-interaction --no-progress \
     "rector/rector:${RECTOR_VERSION}"
 
+# ---------------------------------------------------------------------------
+# phpstan (isolated install, same shape as rector above).
+#
+# Why not the standalone phar any more: phpstan extensions are composer
+# packages, and the phar cannot load one. The deprecation rules are worth that
+# switch — they are the only thing that catches calls into the ~640 symbols
+# CiviCRM core marks @deprecated, and they need no list anyone has to maintain.
+#
+# extension-installer is a composer plugin, so it needs allow-plugins like the
+# phpcs installer above; it writes a GeneratedConfig.php into its own vendor
+# tree, which means the rules are active for every project this phpstan
+# analyses without a single project neon mentioning them.
+PHPSTAN_DIR=/opt/civikitchen-phpstan
+# CiviKitchen's own phpstan extension (@ck-legacy deprecated-scope resolver).
+# The Dockerfile COPYs it here; it joins the install as a composer path
+# repository so extension-installer registers it exactly like the upstream
+# rules — see docs/extension-standards.md. Its composer.json carries an
+# explicit `version` because the COPYed directory has no git history for
+# composer to derive one from.
+PHPSTAN_EXT_DIR=/opt/civikitchen-phpstan-ext
+mkdir -p "${PHPSTAN_DIR}"
+[ -f "${PHPSTAN_DIR}/composer.json" ] || echo '{}' > "${PHPSTAN_DIR}/composer.json"
+composer config --working-dir="${PHPSTAN_DIR}" --no-plugins \
+    allow-plugins.phpstan/extension-installer true
+composer config --working-dir="${PHPSTAN_DIR}" --no-plugins \
+    repositories.civikitchen-phpstan path "${PHPSTAN_EXT_DIR}"
+# strict-rules is installed but NOT auto-registered: at level 10 it would turn
+# every repo red in the build that shipped it. Repos opt in with one `includes:`
+# line (see docs/extension-standards.md). disallowed-calls stays auto-registered
+# because it is inert until a project includes a ban list.
+composer config --working-dir="${PHPSTAN_DIR}" --no-plugins --json \
+    extra.phpstan/extension-installer.ignore '["phpstan/phpstan-strict-rules"]'
+composer require --working-dir="${PHPSTAN_DIR}" --no-interaction --no-progress \
+    "phpstan/phpstan:${PHPSTAN_VERSION}" \
+    "phpstan/phpstan-deprecation-rules:${PHPSTAN_DEPRECATION_RULES_VERSION}" \
+    "phpstan/extension-installer:${PHPSTAN_EXTENSION_INSTALLER_VERSION}" \
+    "spaze/phpstan-disallowed-calls:${PHPSTAN_DISALLOWED_CALLS_VERSION}" \
+    "phpstan/phpstan-phpunit:${PHPSTAN_PHPUNIT_VERSION}" \
+    "phpat/phpat:${PHPAT_VERSION}" \
+    "phpstan/phpstan-strict-rules:${PHPSTAN_STRICT_RULES_VERSION}" \
+    "civikitchen/phpstan-ck-legacy:*"
+
+# Goes through composer's bin proxy — the documented entry point for a composer
+# install, and the one that keeps working if a future extension does need the
+# autoloader. (The bundled phar happens to find the registered rules too, but
+# nothing promises that.)
+cat > /usr/local/bin/phpstan <<EOF
+#!/bin/sh
+exec php ${PHPSTAN_DIR}/vendor/bin/phpstan "\$@"
+EOF
+chmod +x /usr/local/bin/phpstan
+
 rm -rf /opt/composer/cache
-chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" /opt/civikitchen-rector
+chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" \
+    /opt/civikitchen-rector "${PHPSTAN_DIR}" "${PHPSTAN_EXT_DIR}" \
+    /opt/civikitchen-phpstan-config

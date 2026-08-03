@@ -115,7 +115,11 @@ final class ManagedEntityMetadataCheckTest extends CheckTestCase
             ];
             PHP,
         ]);
-        $this->assertSilent($this->run_(new ManagedEntityMetadataCheck(), $context));
+        $reporter = $this->run_(new ManagedEntityMetadataCheck(), $context);
+        // Structurally fine — v3 params carry the values inline — but the
+        // record still gets the prefer-v4 format advice.
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'uses APIv3');
     }
 
     public function testFailsOnBogusCleanupAndUpdate(): void
@@ -228,5 +232,35 @@ final class ManagedEntityMetadataCheckTest extends CheckTestCase
             $this->run_(new ManagedEntityMetadataCheck(), $context),
             'does not return a list of managed records',
         );
+    }
+
+    public function testWarnsOnAnApiV3Record(): void
+    {
+        // v3 records still work; v4 with 'values' is the target format.
+        $context = $this->repo(['managed/Legacy.mgd.php' => <<<'PHP'
+            <?php
+            return [
+              ['name' => 'a', 'entity' => 'OptionGroup', 'cleanup' => 'unused', 'params' => ['version' => 3, 'name' => 'x', 'title' => 'X']],
+            ];
+            PHP,
+        ]);
+        $reporter = $this->run_(new ManagedEntityMetadataCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'uses APIv3');
+    }
+
+    public function testAFileIgnoreSilencesTheApiV3Warning(): void
+    {
+        // require() strips comments before records exist, so the escape is the
+        // file-wide ignore, not a line-scoped one.
+        $context = $this->repo(['managed/Legacy.mgd.php' => <<<'PHP'
+            <?php
+            // ckconform-ignore-file managed-entity-metadata -- entity has no APIv4 create on our floor
+            return [
+              ['name' => 'a', 'entity' => 'OptionGroup', 'cleanup' => 'unused', 'params' => ['version' => 3, 'name' => 'x', 'title' => 'X']],
+            ];
+            PHP,
+        ]);
+        $this->assertSilent($this->run_(new ManagedEntityMetadataCheck(), $context));
     }
 }

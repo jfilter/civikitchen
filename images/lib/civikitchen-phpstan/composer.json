@@ -1,0 +1,24 @@
+{
+    "name": "civikitchen/phpstan-ck-legacy",
+    "type": "phpstan-extension",
+    "description": "PHPStan deprecated-scope resolver: @ck-legacy exempts code that deliberately exercises a deprecated API (tests, shims, fixtures).",
+    "license": "MIT",
+    "version": "1.0.0",
+    "require": {
+        "php": ">=7.4",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-deprecation-rules": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "CiviKitchen\\PHPStan\\": "src/"
+        }
+    },
+    "extra": {
+        "phpstan": {
+            "includes": [
+                "extension.neon"
+            ]
+        }
+    }
+}

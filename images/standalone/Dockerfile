@@ -39,11 +39,12 @@ RUN curl -sS https://getcomposer.org/installer \
 # Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder,
 # rector/ckmodernize).
 # Lives in images/lib/ so the buildkit image uses the same script.
-# PHPSTAN_VERSION / CODER_REF / RECTOR_VERSION are pinned in the script; pass
-# --build-arg to override (e.g. to test a newer phpstan before bumping the
-# default).
+# Every tool version is pinned in the script; pass --build-arg to override
+# (e.g. to test a newer phpstan before bumping the default).
 ENV PATH="/opt/composer/vendor/bin:${PATH}"
 ARG PHPSTAN_VERSION
+ARG PHPSTAN_DEPRECATION_RULES_VERSION
+ARG PHPSTAN_EXTENSION_INSTALLER_VERSION
 ARG CODER_REF
 ARG RECTOR_VERSION
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
@@ -51,6 +52,11 @@ COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # install-dev-tools.sh) and the cklint linter that runs it.
 COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
+# cross-version compatibility against the declared PHP floor (PHPCompatibility).
+COPY lib/ckcompat /usr/local/bin/ckcompat
+# composer.json vs the dependencies the code really uses.
+COPY lib/ckdeps /usr/local/bin/ckdeps
+COPY lib/civikitchen-composer-deps.php /opt/civikitchen-composer-deps.php
 # repo-conformance check against the extension template (structure, not style).
 # This image is what the extension repos run their CI in, so it needs the same
 # tools the buildkit image has — ckconform and ckcoverage were added there only,
@@ -65,6 +71,11 @@ COPY lib/ckrelease /usr/local/bin/ckrelease
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
 COPY lib/civikitchen-rector /opt/civikitchen-rector
 COPY lib/ckmodernize /usr/local/bin/ckmodernize
+# CiviKitchen's phpstan extension (@ck-legacy deprecated-scope resolver) —
+# install-dev-tools.sh pulls it in as a composer path repository from here.
+COPY lib/civikitchen-phpstan /opt/civikitchen-phpstan-ext
+# Ban lists as config (spaze/phpstan-disallowed-calls); inert until included.
+COPY lib/civikitchen-phpstan-config /opt/civikitchen-phpstan-config
 # Reset helper for the headless-test scratch DB (reseeds <db>_test, clears
 # the per-DSN boot caches — see the script header for the failure mode).
 COPY lib/cktestreset /usr/local/bin/cktestreset

@@ -39,10 +39,15 @@ unless `--force` is explicitly supplied. For an existing extension,
 
 ## Code
 
-- APIv4 only (`civicrm_api4()` / OO builders) — no `civicrm_api3()`
-  (`CiviKitchen.Legacy.NoLegacyCall`). The sniff reads PHP only, so `ckconform`
-  additionally rejects `CRM.api3` in JS/Smarty; annotate a genuine exception
-  with `ck-allow-api3 -- <reason>`.
+- APIv4 only (`civicrm_api4()` / OO builders) — no `civicrm_api3()`. Enforced
+  by phpstan, not phpcs: the bans live in
+  `/opt/civikitchen-phpstan-config/civicrm-disallowed.neon`
+  (spaze/phpstan-disallowed-calls) and the template's `phpstan.neon.dist`
+  includes it. Because phpstan resolves types, an indirect `$class::value()`
+  is caught too. An exception is an `allowIn`/`allowInMethods` entry in the
+  repo's own `phpstan.neon.dist`, with the reason next to it. phpstan reads PHP
+  only, so `ckconform` additionally rejects `CRM.api3` in JS/Smarty; annotate a
+  genuine exception there with `ck-allow-api3 -- <reason>`.
 - **An APIv4 entity has to exist in the core you claim to support.** Entities
   resolve at runtime, so `\Civi\Api4\Foo` compiles, passes phpstan and passes
   every test that never loads that page — then fatals in production. Check the
@@ -57,6 +62,37 @@ unless `--force` is explicitly supplied. For an existing extension,
   install-time imperative code.
 - phpstan level 10 clean (template `phpstan.neon.dist`), files ≤ 1000 lines
   (`CiviKitchen.Files.MaxFileLength`).
+- `declare(strict_types=1)` in every file
+  (`SlevomatCodingStandard.TypeHints.DeclareStrictTypes`, configured by the
+  CiviKitchen standard for the fleet's unspaced form; `cklint --fix` inserts
+  it). Without it the types phpstan verifies are enforced by nothing at
+  runtime.
+- **One PHP floor, stated once and checked from three sides.**
+  `composer.json` `require.php` is the source of truth; `info.xml`
+  `<php_compatibility>` and phpstan's `phpVersion` must agree with it
+  (`ckconform` `php-version-coherence`). Without `phpVersion`, phpstan analyses
+  with the image's PHP — 8.3-only syntax then passes CI and fatals on the 8.1
+  site the extension promised to install on. `ckcompat` adds what phpstan does
+  not know (`json_validate()` arrived in 8.3), and `ckmodernize` reads the same
+  floor, so rector never rewrites past it.
+- **`@ck-legacy`, not `@deprecated`, for code that must touch a deprecated
+  API.** phpstan's deprecation rules (bundled in the images) report every call
+  into an `@deprecated` symbol and exempt only scopes that are themselves
+  deprecated. That exemption is the wrong tool for the test of a deprecated
+  method or the fixture feeding a shim: they are living code, and
+  `@deprecated` on them would tell callers to stop using them. Mark the class,
+  trait or the single method with `@ck-legacy` instead — CiviKitchen ships a
+  `DeprecatedScopeResolver` (`images/lib/civikitchen-phpstan/`) that treats
+  such a scope as deprecated, so nothing inside it is reported. Exact tag; put
+  it as narrow as possible, and delete it together with the shim or test it
+  annotates. It is a scope marker, not a blanket suppression — production code
+  calling a deprecated API still has to migrate.
+- No positional padding: arguments that only repeat a parameter default are
+  dropped and what follows them is named — `ckmodernize` rewrites
+  `retrieve('delete', 'String', NULL, FALSE, NULL, 'POST')` to
+  `retrieve('delete', 'String', method: 'POST')`. Bare `TRUE`/`FALSE` at a call
+  site is a warning (`CiviKitchen.Modern.NameBooleanArguments`) — only a human
+  knows which parameter it is.
 
 ## Tooling every repo must have
 
@@ -64,7 +100,25 @@ unless `--force` is explicitly supplied. For an existing extension,
   top is yours) — `cklint` picks it up automatically.
 - `phpunit.xml.dist` + headless tests per the template
   (`template/extension/`), incl. the `TEST_DB_DSN` bootstrap guard.
-- `phpstan.neon.dist` (level 10, no baseline).
+- `phpstan.neon.dist` (level 10, no baseline, `phpVersion` at the declared
+  floor, and the `includes:` line for the CiviCRM ban list).
+- **Architecture rules belong in phpstan, not in review.** `phpat` is installed
+  and inert until a repo writes an `ArchitectureRule` class — the natural home
+  for the boundary that keeps costing us: no class reference across extension
+  repos, APIv4 only in both directions. It runs inside the normal
+  `phpstan analyse`, so it is not another gate to keep green.
+- `ckdeps` checks `composer.json` against what the code really uses (shadow /
+  unused / dev-in-prod dependencies). Extensions depending on core alone pass
+  silently — CiviCRM is not a composer dependency, and the bundled config
+  teaches the analyser exactly that.
+- **Rule packs come from the image, not from each repo's `composer.json`.**
+  phpcs standards (civicrm/coder, PHPCompatibility, Slevomat) and phpstan
+  extensions (deprecation rules, disallowed-calls, strict-rules) are installed
+  and pinned once in `images/lib/install-dev-tools.sh` — an extension carries
+  no dev dependencies at all. Third-party rules are cherry-picked, never a
+  whole foreign standard, and every pack that would turn the fleet red at once
+  (`phpstan-strict-rules`) is installed but left out of the auto-registration
+  so a repo opts in with one `includes:` line when it is ready.
 - CI per `template/extension/.github/workflows/ci.yml` — a thin caller of the
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
   ckconform → phpunit under ckcoverage → phpstan → template-drift check), so
@@ -117,6 +171,17 @@ unless `--force` is explicitly supplied. For an existing extension,
 - `phpunit.xml.dist` must declare a `<coverage>` section scoped to real
   extension code (exclude the civix shim and DAO/BAO boilerplate). Without it
   `--coverage-text` measures nothing while still looking like a passing gate.
+- **Runtime deprecations are test failures.** CiviCRM announces them at
+  runtime via `CRM_Core_Error::deprecatedWarning()` /
+  `deprecatedFunctionWarning()`, which end in
+  `trigger_error(..., E_USER_DEPRECATED)`. Two ingredients turn that into a red
+  build, and both live in the template: `convertDeprecationsToExceptions="true"`
+  in `phpunit.xml.dist`, and `error_reporting(E_ALL)` in
+  `tests/phpunit/bootstrap.php` — PHPUnit's error handler ignores anything
+  outside the mask, and the PHP CLI default hides `E_DEPRECATED`, which
+  `Civi\Test\CiviTestListener` only widens for its own tests. Without them a
+  call into a deprecated code path is green and the notice lands in a PHP log
+  nobody reads; `ckconform` (`deprecation-gate`) warns when a repo drops either.
 - CI runs the suite **with** coverage: `ckcoverage` (or at minimum
   `phpunit --coverage-text`).
 - `ckcoverage` reports line coverage and fails below the `min_coverage` floor

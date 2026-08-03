@@ -13,3 +13,5 @@ class Fixture_Search extends CRM_Core_Form_Search {
 }
 class Fixture_Report extends CRM_Report_Form {
 }
+class Fixture_ConcreteReport extends CRM_Report_Form_Contribute_Detail {
+}

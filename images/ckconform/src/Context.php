@@ -132,6 +132,31 @@ final class Context
         return $this->policy;
     }
 
+    /** @var list<string> */
+    private array $skippedChecks = [];
+
+    /**
+     * The checks this run never executed, because `ignore_checks=` in the
+     * policy skipped them. Set by the runner, since only it knows the outcome
+     * of that parse.
+     *
+     * SuppressionHygieneCheck needs it: an inline ignore for a skipped check
+     * cannot be called unused, because nothing ever looked for the finding it
+     * would have silenced.
+     *
+     * @param list<string> $names
+     */
+    public function skipChecks(array $names): void
+    {
+        $this->skippedChecks = array_values($names);
+    }
+
+    /** @return list<string> */
+    public function skippedChecks(): array
+    {
+        return $this->skippedChecks;
+    }
+
     public function policyValue(string $key): ?string
     {
         $value = $this->policy()[$key] ?? null;

@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Tests;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
+use CiviKitchen\Ckconform\Suppressions;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -22,8 +23,20 @@ abstract class CheckTestCase extends TestCase
 {
     private ?string $dir = null;
 
+    /**
+     * Suppressions share instances per contents across a run, so a fixture
+     * whose ignore was consumed in one test would still count as consumed in
+     * the next. One run per test.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Suppressions::reset();
+    }
+
     protected function tearDown(): void
     {
+        Suppressions::reset();
         if ($this->dir !== null && is_dir($this->dir)) {
             $this->deleteTree($this->dir);
         }
@@ -123,9 +136,21 @@ abstract class CheckTestCase extends TestCase
         return null;
     }
 
+    /**
+     * Git in the fixture repo, insulated from the developer's own config.
+     *
+     * A global gitignore listing `.env` (a common personal setting) makes
+     * `git add -A` skip a fixture that deliberately tracks one, so a check that
+     * works reports nothing and its test fails on that machine only. CI, with
+     * no global config, stays green — which is the worst version of a flaky
+     * test. Point both the global and system config at nowhere instead.
+     */
     protected function git(string $args): void
     {
-        exec('git -C ' . escapeshellarg((string) $this->dir) . ' ' . $args . ' 2>/dev/null');
+        exec(
+            'GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null git -C '
+            . escapeshellarg((string) $this->dir) . ' ' . $args . ' 2>/dev/null'
+        );
     }
 
     private function deleteTree(string $dir): void

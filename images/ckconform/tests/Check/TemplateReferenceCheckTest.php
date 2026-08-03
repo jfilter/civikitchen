@@ -123,15 +123,17 @@ final class TemplateReferenceCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
     }
 
-    public function testPhpBlockInATemplateWarns(): void
+    /**
+     * Smarty-5 tag compatibility moved to SmartyCompatCheck, which knows about
+     * {literal} and reports a line number; this check is about missing files.
+     */
+    public function testAPhpBlockIsNotThisChecksBusiness(): void
     {
         $context = $this->repo([
             'info.xml' => $this->infoXml(key: 'de.example.greeter'),
             'CRM/Greeter/Page/Foo.php' => "<?php\nclass CRM_Greeter_Page_Foo extends CRM_Core_Page {}\n",
             'templates/CRM/Greeter/Page/Foo.tpl' => "{php}echo 1;{/php}\n",
         ], git: true);
-        $reporter = $this->run_(new TemplateReferenceCheck(), $context);
-        $this->assertPasses($reporter);
-        $this->assertWarns($reporter, '{php}');
+        $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
     }
 }

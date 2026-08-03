@@ -20,6 +20,7 @@ final class Registry
         Check\PhpstanConfigCheck::class,
         Check\PhpunitConfigCheck::class,
         Check\TestBootstrapGuardCheck::class,
+        Check\DeprecationGateCheck::class,
         Check\CoverageSectionCheck::class,
         Check\CiCoverageCheck::class,
         Check\CoversNothingCheck::class,
@@ -32,6 +33,8 @@ final class Registry
         Check\ConfigWithoutRunnerCheck::class,
         Check\RequiredExtensionsCheck::class,
         Check\MixinDeclarationCheck::class,
+        Check\MixinVersionCheck::class,
+        Check\EntitySchemaFormatCheck::class,
         Check\LicenseSkeletonCheck::class,
         Check\LicenseCoherenceCheck::class,
         Check\CopyrightCheck::class,
@@ -43,6 +46,8 @@ final class Registry
         Check\PlaywrightDiagnosticsCheck::class,
         Check\WorkflowPermissionsCheck::class,
         Check\FrontEndApi3Check::class,
+        Check\Api3SurfaceCheck::class,
+        Check\RawSqlCheck::class,
         Check\Api4EntityCheck::class,
         Check\Api4SelfEntityCheck::class,
         Check\Api4LiteralEntityCheck::class,
@@ -58,6 +63,7 @@ final class Registry
         Check\ManagedJobCheck::class,
         Check\ManagedReferenceGraphCheck::class,
         Check\HookDispatchNameCheck::class,
+        Check\HookStyleCheck::class,
         Check\DeclaredCallbackCheck::class,
         Check\ContainerServiceReferenceCheck::class,
         Check\TemplateReferenceCheck::class,
@@ -67,7 +73,9 @@ final class Registry
         Check\PermissionClosureCheck::class,
         Check\MessageTemplateTokenCheck::class,
         Check\CrmScopeCheck::class,
+        Check\SmartyCompatCheck::class,
         Check\TranslationCatalogCheck::class,
+        Check\SuppressionHygieneCheck::class,
     ];
 
     /** @return list<Check> */

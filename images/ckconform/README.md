@@ -66,9 +66,35 @@ npm_license=UNLICENSED       # every tracked package.json
 copyright=Example Ltd        # must appear in LICENSE.txt
 tests=optional -- <reason>   # the reason is not optional
 min_coverage=70              # enforced by ckcoverage
+known_hooks=acmeConnectors   # third-party hook names HookDispatchNameCheck should trust
+hook_style=listener          # business hooks in scan classes; classic form only for pre-boot/lifecycle/return-value hooks
 template_custom=<file>,...  -- <reason>   # read by ckinit --check/--update, not by ckconform
 ```
 
 `.ckconform` is the one policy file for the whole ck* family — ckconform,
 ckcoverage and ckinit all read it, so a repo's deviations from the standard
 live in one place with their reasons attached.
+
+## Suppressing a finding
+
+Three escape levels, from narrow to broad — the reason is never optional:
+
+```php
+// ckconform-ignore <check-name> -- <reason>        line-scoped: this line + the next
+// ckconform-ignore-file <check-name> -- <reason>   the whole file
+```
+
+```
+ignore_checks=<check-name>,... -- <reason>          .ckconform: skips the checks repo-wide
+```
+
+Several checks may be listed comma-separated. A marker without a reason
+suppresses nothing and is itself reported, and one naming a check that does
+not exist is reported as a dead ignore — a typo'd check name would otherwise
+silently narrow nothing.
+
+An inline ignore that silenced nothing in the whole run is reported too
+(phpstan's `reportUnmatchedIgnoredErrors`): the finding it covered is gone, so
+the ignore now only waits to swallow the next one unnoticed — delete it. Each
+listed check name is judged on its own. Not reported: a name whose check
+`ignore_checks=` skipped repo-wide, since nothing ever looked for its finding.

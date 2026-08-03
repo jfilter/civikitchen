@@ -472,6 +472,23 @@ jobs:
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && phpstan analyse --no-progress"
 
+      # Runs on ONE PHP (the image's), which is exactly why this step exists: it
+      # is the only gate that asks whether the code also runs on the LOWER bound
+      # the extension promises in composer.json — a matrix of real interpreters
+      # would cost a full stack per version to answer the same question.
+      - name: PHP floor compatibility (ckcompat)
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && ckcompat"
+
+      # Passes silently for the many extensions that depend on core alone.
+      - name: Dependency manifest (ckdeps)
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && ckdeps"
+
       # Same lifecycle block as the compat job below — deliberately duplicated
       # rather than factored out: a reusable workflow cannot share steps
       # between its own jobs, and pulling this into a script would mean

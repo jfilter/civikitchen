@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
+use CiviKitchen\Ckconform\Suppressions;
 
 /**
  * A malformed `*.mgd.php` record does not fail at install time in a readable
@@ -117,6 +118,11 @@ final class ManagedEntityMetadataCheck implements Check
                         $reporter->fail("$label: APIv4 params without 'values' — nothing would be written");
                     } elseif ((int) $version === 4 && !is_array($params['values'])) {
                         $reporter->fail("$label: APIv4 params 'values' is not an array");
+                    } elseif ((int) $version === 3 && !$this->fileSuppressed($context, $relative)) {
+                        // Records are evaluated via require, so there is no line
+                        // to anchor an inline ignore to — the escape is the
+                        // file-wide `ckconform-ignore-file managed-entity-metadata`.
+                        $reporter->warn("$label: managed record uses APIv3 — prefer version 4 with 'values' when the entity supports APIv4 save/update on the minimum supported core; otherwise document the compatibility exception");
                     }
                 }
 
@@ -151,6 +157,16 @@ final class ManagedEntityMetadataCheck implements Check
                 }
             }
         }
+    }
+
+    /** @var array<string, bool> */
+    private array $fileSuppression = [];
+
+    private function fileSuppressed(Context $context, string $relative): bool
+    {
+        return $this->fileSuppression[$relative] ??= Suppressions::of(
+            (string) $context->read($relative)
+        )->suppressed($this->name(), 0);
     }
 
     private static function extensionKey(Context $context): ?string

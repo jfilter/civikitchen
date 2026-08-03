@@ -5,8 +5,7 @@
     civikitchen image. It is CiviCRM's Drupal base MINUS the doc-comment
     sniffs that fight modern PHPStan array-shape / generic PHPDocs (which
     PHPStan validates far more precisely), PLUS reusable footgun sniffs:
-    NoLegacyCall (no APIv3 entry points, no CRM_Utils_Array::value /
-    PEAR::raiseError / CRM_Core_Error::fatal|debug_*), NoLegacyPageForm
+    NoLegacyPageForm
     (warning on classes extending the QuickForm/Smarty UI bases — new UI
     belongs in SearchKit/Afform), UseExtensionTs (bare
     ts() resolves in core's translation domain — extensions must use E::ts()),
@@ -15,8 +14,17 @@
     literal APIv4 permission-bypass forms outside tests — often legitimate,
     never accidental), NoRequiredOnExternalAction (the
     @required trap — inert until an extension lists its externally reachable
-    actions) and MaxFileLength (a per-file line-count cap, default 1000, so a
-    runaway class gets split rather than sailing through every token check).
+    actions), MaxFileLength (a per-file line-count cap, default 1000, so a
+    runaway class gets split rather than sailing through every token check)
+    and NameBooleanArguments (a warning on positional TRUE/FALSE literals,
+    which since PHP 8 only need a parameter name to become readable).
+
+    Third-party rules are preferred over home-grown ones wherever they exist,
+    and are cherry-picked one by one — a whole foreign standard would fight
+    the Drupal base this is built on. The banned CiviCRM call sites that used
+    to be the NoLegacyCall sniff are now phpstan config
+    (/opt/civikitchen-phpstan-config/civicrm-disallowed.neon), which resolves
+    types and so catches the indirect calls a token matcher never saw.
 
     Use it directly (`phpcs --standard=CiviKitchen` / `cklint`) or reference
     it from a project phpcs.xml.dist (`<rule ref="CiviKitchen"/>`) and add
@@ -59,6 +67,15 @@
   <rule ref="./Sniffs/Security/PermissionBypassSniff.php">
     <exclude-pattern>*/tests/*</exclude-pattern>
     <exclude-pattern>*/Test/*</exclude-pattern>
+  </rule>
+
+  <!-- declare(strict_types=1) per file: without it the types phpstan verifies
+       are enforced by nothing at runtime. Slevomat's, not ours — the fleet
+       writes it without spaces, which is all this needs configuring. -->
+  <rule ref="SlevomatCodingStandard.TypeHints.DeclareStrictTypes">
+    <properties>
+      <property name="spacesCountAroundEqualsSign" value="0"/>
+    </properties>
   </rule>
 
   <!-- Sniffs in this standard's Sniffs/ dir are auto-discovered. -->

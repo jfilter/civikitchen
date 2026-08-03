@@ -1,0 +1,72 @@
+#!/bin/bash
+#
+# ckcompat — does this extension actually RUN on the PHP floor it declares?
+#
+# The floor is a promise made in composer.json (require.php) and repeated in
+# info.xml. Two other tools check the promise is CONSISTENT (ckconform) and
+# that types hold under it (phpstan's phpVersion). Neither knows that
+# json_validate() arrived in 8.3: that is what the PHPCompatibility standard is
+# for, and this runs it against the floor the repo itself declares.
+#
+# Pairs with cklint (style) and ckconform (repo structure).
+#
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+ckcompat — check PHP cross-version compatibility against the declared floor.
+
+  ckcompat                 check the project (composer.json require.php floor)
+  ckcompat path ...        check the given files/dirs
+  ckcompat --php 8.1       check against this floor instead of composer's
+  ckcompat --range 8.1-8.4 check a closed range (default is "<floor>-", open)
+
+Run from the extension root. The floor comes from composer.json require.php;
+ckconform keeps that value and info.xml's <php_compatibility> in step.
+EOF
+}
+
+test_version=""
+paths=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --php)     shift; test_version="${1:-}-" ;;
+    --php=*)   test_version="${1#--php=}-" ;;
+    --range)   shift; test_version="${1:-}" ;;
+    --range=*) test_version="${1#--range=}" ;;
+    -h|--help) usage; exit 0 ;;
+    --)        shift; break ;;
+    -*)        echo "ckcompat: unknown option: $1" >&2; usage >&2; exit 2 ;;
+    *)         paths+=("$1") ;;
+  esac
+  shift
+done
+while [ "$#" -gt 0 ]; do paths+=("$1"); shift; done
+
+# The floor composer promises to install on, as MAJOR.MINOR.
+if [ -z "${test_version}" ]; then
+  floor=$(php -r '$c = @file_get_contents("composer.json");
+    $v = $c === FALSE ? NULL : (json_decode($c, TRUE)["require"]["php"] ?? NULL);
+    echo is_string($v) && preg_match("/(\d+)\.(\d+)/", $v, $m) ? $m[0] : "";' 2>/dev/null || true)
+  if [ -z "${floor}" ]; then
+    echo "ckcompat: no PHP floor in composer.json require.php — declare one, or pass --php" >&2
+    exit 2
+  fi
+  test_version="${floor}-"
+fi
+
+# Default scope: the extension's own PHP, not generated or vendored code.
+if [ "${#paths[@]}" -eq 0 ]; then
+  for d in Civi CRM api managed; do [ -d "$d" ] && paths+=("$d"); done
+  while IFS= read -r f; do [ -n "$f" ] && paths+=("$f"); done \
+    < <(find . -maxdepth 1 -name '*.php' -type f 2>/dev/null)
+  [ "${#paths[@]}" -eq 0 ] && paths=(".")
+fi
+
+echo "ckcompat: PHP ${test_version} (from composer.json unless overridden)"
+exec phpcs -q \
+  --standard=PHPCompatibility \
+  --runtime-set testVersion "${test_version}" \
+  --extensions=php \
+  --ignore='*/vendor/*,*/node_modules/*,*.civix.php,*/CRM/*/DAO/*,*/.civikitchen-siblings/*' \
+  "${paths[@]}"
