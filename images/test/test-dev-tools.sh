@@ -269,12 +269,16 @@ mago_methods_class BigProd "${MAGODIR}/Civi/BigProd.php"
 mago_methods_class BigTest "${MAGODIR}/tests/phpunit/BigTest.php"
 (cd "${MAGODIR}" && git add -A) >/dev/null 2>&1
 MAGO_OUT3="$( (cd "${MAGODIR}" && cklint --all) 2>&1 || true)"
-if echo "${MAGO_OUT3}" | grep -q "Civi/BigProd.php.*too-many-methods"; then
+# mago prints the rule code and the file path on separate lines, and the phpcs
+# stage names both fixtures in the same output — so look only at the lines
+# belonging to the too-many-methods diagnostic itself.
+TMM_CTX="$(echo "${MAGO_OUT3}" | grep -A3 'too-many-methods' || true)"
+if echo "${TMM_CTX}" | grep -q "BigProd.php"; then
     ok "cklint mago stage flags too-many-methods in production code"
 else
     fail "too-many-methods didn't fire outside tests/ (output: ${MAGO_OUT3:0:300})"
 fi
-if echo "${MAGO_OUT3}" | grep -q "tests/phpunit/BigTest.php.*too-many-methods"; then
+if echo "${TMM_CTX}" | grep -q "BigTest.php"; then
     fail "too-many-methods fired under tests/ — the baseline excludes that path"
 else
     ok "cklint mago stage excludes tests/ from too-many-methods"
