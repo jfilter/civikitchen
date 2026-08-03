@@ -583,7 +583,6 @@ jobs:
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && phpstan analyse --no-progress"
 
-<<<<<<< HEAD
       # Runs on ONE PHP (the image's), which is exactly why this step exists: it
       # is the only gate that asks whether the code also runs on the LOWER bound
       # the extension promises in composer.json — a matrix of real interpreters
@@ -600,7 +599,7 @@ jobs:
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && ckdeps"
-=======
+
       # Taint analysis (psalm, CiviCRM stubs) — an ADVISORY pilot, and the only
       # step in this workflow that cannot fail the run. Psalm sees the
       # extension but not CiviCRM core, so it both over-reports (a
@@ -635,7 +634,6 @@ jobs:
               echo "See docs/extension-standards.md, section \"Taint analysis\"."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
->>>>>>> worktree-agent-abd4fa2d11c540acc
 
       # The runtime half of the Smarty story. ckconform's template checks are
       # static: they know a Page has no .tpl and that a `{ts}` is unscoped, and
