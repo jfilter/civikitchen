@@ -11,7 +11,9 @@
     belongs in SearchKit/Afform), UseExtensionTs (bare
     ts() resolves in core's translation domain — extensions must use E::ts()),
     UseMixinsForStandardHooks (no bespoke managed/menu/settings/entity/angular
-    hooks where standard mixins exist), NoRequiredOnExternalAction (the
+    hooks where standard mixins exist), PermissionBypass (a warning on the
+    literal APIv4 permission-bypass forms outside tests — often legitimate,
+    never accidental), NoRequiredOnExternalAction (the
     @required trap — inert until an extension lists its externally reachable
     actions) and MaxFileLength (a per-file line-count cap, default 1000, so a
     runaway class gets split rather than sailing through every token check).
@@ -50,6 +52,13 @@
     <properties>
       <property name="maxPercentage" value="60"/>
     </properties>
+  </rule>
+
+  <!-- Running APIv4 as nobody is how test fixtures are arranged, so the
+       permission-bypass warning would be pure noise under tests/. -->
+  <rule ref="./Sniffs/Security/PermissionBypassSniff.php">
+    <exclude-pattern>*/tests/*</exclude-pattern>
+    <exclude-pattern>*/Test/*</exclude-pattern>
   </rule>
 
   <!-- Sniffs in this standard's Sniffs/ dir are auto-discovered. -->

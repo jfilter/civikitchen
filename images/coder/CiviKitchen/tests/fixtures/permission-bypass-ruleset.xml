@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<ruleset name="CiviKitchenTestPermissionBypass">
+  <description>
+    Test ruleset: PermissionBypass without the standard's tests/ exclusion, so
+    the fixture (which lives under tests/) is actually inspected. References the
+    sniff by relative file path so it resolves without any installed_paths
+    registration.
+  </description>
+  <rule ref="../../Sniffs/Security/PermissionBypassSniff.php"/>
+</ruleset>
