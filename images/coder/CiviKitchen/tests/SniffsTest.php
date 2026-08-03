@@ -118,6 +118,7 @@ final class SniffsTest extends TestCase {
       10 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
       12 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
       14 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
+      16 => ['CiviKitchen.Legacy.NoLegacyPageForm.LegacyUiBase'],
     ];
     self::assertSame($expected, $findings);
   }

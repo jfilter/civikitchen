@@ -53,12 +53,15 @@ final class NoLegacyPageFormSniff implements Sniff {
       return;
     }
     $extended = ltrim($extended, '\\');
-    if (isset($this->legacyBaseClasses[$extended])) {
+    // Subclassing a concrete core report (CRM_Report_Form_Contribute_Detail)
+    // is the same finding as extending CRM_Report_Form itself.
+    $key = str_starts_with($extended, 'CRM_Report_Form_') ? 'CRM_Report_Form' : $extended;
+    if (isset($this->legacyBaseClasses[$key])) {
       $phpcsFile->addWarning(
         'Class extends legacy UI base %s — %s',
         $stackPtr,
         'LegacyUiBase',
-        [$extended, $this->legacyBaseClasses[$extended]]
+        [$extended, $this->legacyBaseClasses[$key]]
       );
     }
   }
