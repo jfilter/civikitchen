@@ -83,6 +83,16 @@ final class MixinDeclarationCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
     }
 
+    public function testAnIgnoredEntityFileIsNoEvidence(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->info("    <mixin>mgd-php@2.0.0</mixin>\n"),
+            'Civi/Api4/Widget.php' => "<?php\n// ckconform-ignore-file mixin-declaration -- loaded by a bespoke hook\n"
+                . "namespace Civi\\Api4;\nclass Widget {}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
+    }
+
     public function testEveryMissingMixinIsNamed(): void
     {
         $context = $this->repo([

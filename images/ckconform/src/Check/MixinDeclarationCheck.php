@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
+use CiviKitchen\Ckconform\Suppressions;
 
 /**
  * A conventional file that CiviCRM never loads because its mixin is not declared.
@@ -129,9 +130,17 @@ final class MixinDeclarationCheck implements Check
             if ($rest === null) {
                 continue;
             }
-            if (!$direct || !str_contains($rest, '/')) {
-                return true;
+            if ($direct && str_contains($rest, '/')) {
+                continue;
             }
+            // A file that opts out is no evidence: an Api4 class loaded some
+            // other way still lives at Civi/Api4/, and only its author knows.
+            if (str_ends_with($file, '.php')
+                && Suppressions::of((string) $context->read($file))->suppressed($this->name(), 0)) {
+                continue;
+            }
+
+            return true;
         }
 
         return false;
