@@ -39,6 +39,13 @@ PHPSTAN_DISALLOWED_CALLS_VERSION="${PHPSTAN_DISALLOWED_CALLS_VERSION:-v4.14.0}"
 # Opt-in per repo (see the ignore list below) — switching these on fleet-wide
 # at level 10 would turn every repo red in one build.
 PHPSTAN_STRICT_RULES_VERSION="${PHPSTAN_STRICT_RULES_VERSION:-2.0.12}"
+# Type narrowing for phpunit assertions (fewer level-10 false reports in tests)
+# and architecture rules AS phpstan rules. Both inert until a repo has tests
+# resp. writes an ArchitectureRule class, so both register automatically.
+PHPSTAN_PHPUNIT_VERSION="${PHPSTAN_PHPUNIT_VERSION:-2.0.18}"
+PHPAT_VERSION="${PHPAT_VERSION:-0.12.4}"
+# Powers `ckdeps`: composer.json against the dependencies the code really uses.
+COMPOSER_DEPENDENCY_ANALYSER_VERSION="${COMPOSER_DEPENDENCY_ANALYSER_VERSION:-1.8.4}"
 # Cherry-picked sniffs only (DeclareStrictTypes today); the full standard would
 # fight the Drupal base the CiviKitchen ruleset is built on.
 SLEVOMAT_VERSION="${SLEVOMAT_VERSION:-8.31.1}"
@@ -90,7 +97,8 @@ composer global require --no-interaction --no-progress \
     "squizlabs/php_codesniffer:^3" \
     "dealerdirect/phpcodesniffer-composer-installer:^1" \
     "phpcompatibility/php-compatibility:${PHPCOMPATIBILITY_VERSION}" \
-    "slevomat/coding-standard:${SLEVOMAT_VERSION}"
+    "slevomat/coding-standard:${SLEVOMAT_VERSION}" \
+    "shipmonk/composer-dependency-analyser:${COMPOSER_DEPENDENCY_ANALYSER_VERSION}"
 
 # Clone the civicrm fork of drupal/coder (relaxed Drupal CS rules; ruleset
 # still registers as "Drupal" / "DrupalPractice" via phpcs). Pinned to
@@ -160,6 +168,8 @@ composer require --working-dir="${PHPSTAN_DIR}" --no-interaction --no-progress \
     "phpstan/phpstan-deprecation-rules:${PHPSTAN_DEPRECATION_RULES_VERSION}" \
     "phpstan/extension-installer:${PHPSTAN_EXTENSION_INSTALLER_VERSION}" \
     "spaze/phpstan-disallowed-calls:${PHPSTAN_DISALLOWED_CALLS_VERSION}" \
+    "phpstan/phpstan-phpunit:${PHPSTAN_PHPUNIT_VERSION}" \
+    "phpat/phpat:${PHPAT_VERSION}" \
     "phpstan/phpstan-strict-rules:${PHPSTAN_STRICT_RULES_VERSION}" \
     "civikitchen/phpstan-ck-legacy:*"
 

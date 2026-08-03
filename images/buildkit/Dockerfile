@@ -100,6 +100,9 @@ COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
 # cross-version compatibility against the declared PHP floor (PHPCompatibility).
 COPY lib/ckcompat /usr/local/bin/ckcompat
+# composer.json vs the dependencies the code really uses.
+COPY lib/ckdeps /usr/local/bin/ckdeps
+COPY lib/civikitchen-composer-deps.php /opt/civikitchen-composer-deps.php
 # repo-conformance check against the extension template (structure, not style).
 # A PHP application, not a script: it parses info.xml as XML and the manifests as
 # JSON, which is what the shell version kept getting wrong. `ckconform` in PATH

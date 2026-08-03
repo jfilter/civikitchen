@@ -54,6 +54,9 @@ COPY coder/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY lib/cklint /usr/local/bin/cklint
 # cross-version compatibility against the declared PHP floor (PHPCompatibility).
 COPY lib/ckcompat /usr/local/bin/ckcompat
+# composer.json vs the dependencies the code really uses.
+COPY lib/ckdeps /usr/local/bin/ckdeps
+COPY lib/civikitchen-composer-deps.php /opt/civikitchen-composer-deps.php
 # repo-conformance check against the extension template (structure, not style).
 # This image is what the extension repos run their CI in, so it needs the same
 # tools the buildkit image has — ckconform and ckcoverage were added there only,

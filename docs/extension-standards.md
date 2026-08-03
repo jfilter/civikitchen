@@ -102,6 +102,15 @@ unless `--force` is explicitly supplied. For an existing extension,
   (`template/extension/`), incl. the `TEST_DB_DSN` bootstrap guard.
 - `phpstan.neon.dist` (level 10, no baseline, `phpVersion` at the declared
   floor, and the `includes:` line for the CiviCRM ban list).
+- **Architecture rules belong in phpstan, not in review.** `phpat` is installed
+  and inert until a repo writes an `ArchitectureRule` class — the natural home
+  for the boundary that keeps costing us: no class reference across extension
+  repos, APIv4 only in both directions. It runs inside the normal
+  `phpstan analyse`, so it is not another gate to keep green.
+- `ckdeps` checks `composer.json` against what the code really uses (shadow /
+  unused / dev-in-prod dependencies). Extensions depending on core alone pass
+  silently — CiviCRM is not a composer dependency, and the bundled config
+  teaches the analyser exactly that.
 - **Rule packs come from the image, not from each repo's `composer.json`.**
   phpcs standards (civicrm/coder, PHPCompatibility, Slevomat) and phpstan
   extensions (deprecation rules, disallowed-calls, strict-rules) are installed
