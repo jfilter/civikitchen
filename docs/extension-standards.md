@@ -58,6 +58,21 @@ unless `--force` is explicitly supplied. For an existing extension,
   entities from bundled extensions (`ext/civi_mail` …), which then belong in
   `<requires>`. `ckconform` verifies each referenced entity exists in the core
   it runs against.
+- **The strings inside an APIv4 call are a contract, and phpstan now reads
+  it.** Entity, action and field names are literals nothing checks until the
+  call runs — a typo in a select survives the whole pipeline and then returns
+  the wrong data on a customer's site. The rules in
+  `civikitchen/phpstan-ck-legacy` check `civicrm_api4()` and the fluent form
+  against `Api4Catalog`, generated from the pinned core:
+  `ck.api4.unknownEntity` (only when the name is a near-miss of a real
+  entity — another extension's entities are not in the catalog and must not
+  be flagged), `ck.api4.unknownAction`, `ck.api4.unknownField` in `select`,
+  `where`, `orderBy` and `values`. Everything the source tree cannot settle is
+  skipped in silence: non-literal names, dotted names (joins, `custom.*`),
+  SQL expressions and their aliases, camelCase BAO pass-through params in a
+  write, and every entity whose field list is not table-backed (Setting,
+  Afform, ECK, `SK_*`, `Custom_*`). A finding is therefore worth reading
+  rather than baselining.
 - `E::ts()`, never bare `ts()` (`CiviKitchen.I18n.UseExtensionTs`).
 - Standard mixins for managed entities / menu / settings / Angular — no
   bespoke hooks (`CiviKitchen.Extension.UseMixinsForStandardHooks`).
@@ -111,7 +126,8 @@ unless `--force` is explicitly supplied. For an existing extension,
   boundary — an extension may depend on core (per the generated
   `CoreNamespaceCatalog`) and on itself; every other `CRM_`/`Civi\` symbol is
   another extension's internals, and the supported way across is APIv4 —
-  plus the legacy-UI-base ban. Both derive the extension from its own
+  plus the legacy-UI-base ban and the APIv4 contract rules above. All derive
+  the extension from its own
   `info.xml`/classloader layout, so no repo configures anything. A repo can
   still add its own `phpat.test`-tagged classes for repo-specific boundaries.
 - `ckdeps` checks `composer.json` against what the code really uses (shadow /
