@@ -357,7 +357,14 @@ convention the file documents and reviewers enforce:
 CVE-0000-00000
 ```
 
-Nothing being excused is the state to keep.
+The file is not empty. What is excused there is upstream trees the images
+install and do not own — CiviCRM core's bundled frontend assets, the
+civicrm-buildkit clone's own `node_modules`, Joomla's vendor tree, and a Drupal
+test fixture that declares packages whose code is not in the image. What is
+deliberately *not* excused is anything this repo can move: the npm that
+NodeSource's nodejs package ships is upgraded in `install-dev-tools.sh`
+(`NPM_VERSION`) rather than ignored, and the `images/lib/eslint` and
+`images/lib/oxfmt` lockfiles are expected to stay clean on their own.
 
 **Recommended, not implemented: secrets.** Neither scanner looks for
 credentials in git history, and the private extension repos are exactly where a
@@ -522,7 +529,7 @@ on `extension-ci.yml`, all off by default:
 | `js_tests` | Runs `npm test`. Implies `npm_ci`. Fails when `package.json` has no `test` script. |
 | `bun` | Uses Bun for all of the above instead of npm: `bun install --frozen-lockfile`, `bun run test`, `bun run test:e2e`. Implies the install, the way `js_tests` implies `npm_ci`. Needs a committed `bun.lock`. |
 | `playwright` | Own job: boots the stack with port 8080 published and an `admin` / `admin` demo user, then runs `npm run test:e2e` from the runner. Report and traces are uploaded on failure. |
-| `node_version` | Node for all of the above. Default `'20'`. Still applies under `bun` — see below. |
+| `node_version` | Node for all of the above. Default `'24'` — the major the dev images ship, so a browser job tests the Node the image actually serves. Still applies under `bun` — see below. |
 
 **Linting the JS needs none of them.** `ckeslint` runs in the `ci` job on every
 push, from inside the container, with a toolchain pinned in the image — no Node
