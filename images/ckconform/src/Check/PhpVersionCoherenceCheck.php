@@ -49,6 +49,57 @@ final class PhpVersionCoherenceCheck implements Check
         } else {
             $reporter->ok('composer and info.xml agree on the PHP floor (' . $composerFloor . ')');
         }
+
+        $this->checkPhpstanFloor($context, $reporter, $composerFloor);
+    }
+
+    /**
+     * The floor is a promise about where the code RUNS, and nothing checks it
+     * against the code itself: phpstan analyses with the interpreter it happens
+     * to run under — 8.3 in the image — so an 8.3-only feature in an extension
+     * that installs on 8.1 passes every gate and fatals on a customer site.
+     * `phpVersion` is what makes phpstan analyse for the floor instead.
+     */
+    private function checkPhpstanFloor(Context $context, Reporter $reporter, string $floor): void
+    {
+        $config = $context->readAny('phpstan.neon.dist', 'phpstan.neon');
+        if ($config === null) {
+            return;
+        }
+        $config = preg_replace('/^\s*#.*$/m', '', $config) ?? $config;
+
+        // `phpVersion: 80100`, or PHPStan 2's range form `phpVersion: { min: 80100, max: … }`.
+        if (preg_match('/phpVersion:\s*(?:\{[^}]*?min:\s*)?(\d{5,6})/', $config, $match) !== 1) {
+            $reporter->warn(sprintf(
+                'phpstan does not set phpVersion — it analyses with the image PHP, not the declared floor (%s);'
+                . ' add `phpVersion: %s` so features newer than the floor are reported',
+                $floor,
+                $this->phpstanVersionId($floor)
+            ));
+
+            return;
+        }
+
+        $declared = (int) $match[1];
+        if ($declared !== $this->phpstanVersionId($floor)) {
+            $reporter->fail(sprintf(
+                'phpstan analyses for PHP %s but the extension installs from %s — the lower one is what has to be analysed',
+                sprintf('%d.%d', intdiv($declared, 10000), intdiv($declared % 10000, 100)),
+                $floor
+            ));
+        } else {
+            $reporter->ok('phpstan analyses for the declared floor (' . $floor . ')');
+        }
+    }
+
+    /**
+     * "8.1" -> 80100, phpstan's phpVersion id.
+     */
+    private function phpstanVersionId(string $floor): int
+    {
+        [$major, $minor] = array_map('intval', explode('.', $floor));
+
+        return $major * 10000 + $minor * 100;
     }
 
     /**

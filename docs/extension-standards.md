@@ -57,6 +57,17 @@ unless `--force` is explicitly supplied. For an existing extension,
   install-time imperative code.
 - phpstan level 10 clean (template `phpstan.neon.dist`), files ≤ 1000 lines
   (`CiviKitchen.Files.MaxFileLength`).
+- **One PHP floor, stated once and analysed against.** `composer.json`
+  `require.php` is the source of truth; `info.xml` `<php_compatibility>` and
+  phpstan's `phpVersion` must agree with it (`ckconform`
+  `php-version-coherence`). Without `phpVersion`, phpstan analyses with the
+  image's PHP — 8.3-only syntax then passes CI and fatals on the 8.1 site the
+  extension promised to install on. `ckmodernize` reads the same floor, so
+  rector never rewrites past it.
+- No positional padding: arguments that only repeat a parameter default are
+  dropped and what follows them is named — `ckmodernize` rewrites
+  `retrieve('delete', 'String', NULL, FALSE, NULL, 'POST')` to
+  `retrieve('delete', 'String', method: 'POST')`.
 
 ## Tooling every repo must have
 

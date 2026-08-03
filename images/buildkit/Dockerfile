@@ -86,10 +86,11 @@ RUN pecl install pcov xdebug \
 # Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder,
 # rector/ckmodernize).
 # Lives in images/lib/ so the standalone image uses the same script.
-# PHPSTAN_VERSION / CODER_REF / RECTOR_VERSION are pinned in the script; pass
-# --build-arg to override.
+# Every tool version is pinned in the script; pass --build-arg to override.
 ENV PATH="/opt/composer/vendor/bin:${PATH}"
 ARG PHPSTAN_VERSION
+ARG PHPSTAN_DEPRECATION_RULES_VERSION
+ARG PHPSTAN_EXTENSION_INSTALLER_VERSION
 ARG CODER_REF
 ARG RECTOR_VERSION
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh

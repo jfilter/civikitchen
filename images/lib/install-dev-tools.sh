@@ -22,6 +22,16 @@ set -euo pipefail
 # major and turn a green `phpstan analyse` red with no code change. Override at
 # build time with --build-arg PHPSTAN_VERSION=... / CODER_REF=...
 PHPSTAN_VERSION="${PHPSTAN_VERSION:-2.2.2}"
+# Reports every call into code marked @deprecated (or #[\Deprecated]). Not a
+# phpstan default and not implied by any level, including 10 — it ships as a
+# separate package. This is how deprecated CiviCRM *symbols* get caught without
+# anyone maintaining a list; the hook catalog in ckconform covers the one thing
+# it structurally cannot see, since a hook implementation is a function
+# definition matching a naming convention, not a call to a deprecated symbol.
+PHPSTAN_DEPRECATION_RULES_VERSION="${PHPSTAN_DEPRECATION_RULES_VERSION:-2.0.5}"
+# Registers the rules with phpstan automatically, so no project has to add an
+# `includes:` line to its phpstan.neon.
+PHPSTAN_EXTENSION_INSTALLER_VERSION="${PHPSTAN_EXTENSION_INSTALLER_VERSION:-1.4.3}"
 # civicrm/coder has no usable release tags, so pin to a commit on 8.x-2.x-civi.
 CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
 # rector powers `ckmodernize`; pin it too so a rebuild can't silently change
@@ -33,16 +43,12 @@ RECTOR_VERSION="${RECTOR_VERSION:-2.4.6}"
 # existing extensions' pipelines red.
 
 # ---------------------------------------------------------------------------
-# Phars: civix, phpunit, phpstan
+# Phars: civix, phpunit
 curl -LsS https://download.civicrm.org/civix/civix.phar -o /usr/local/bin/civix
 chmod +x /usr/local/bin/civix
 
 curl -LsS https://phar.phpunit.de/phpunit-9.phar -o /usr/local/bin/phpunit
 chmod +x /usr/local/bin/phpunit
-
-curl -LsS "https://github.com/phpstan/phpstan/releases/download/${PHPSTAN_VERSION}/phpstan.phar" \
-    -o /usr/local/bin/phpstan
-chmod +x /usr/local/bin/phpstan
 
 # ---------------------------------------------------------------------------
 # phpcs (from packagist) + civicrm/coder fork (cloned directly).
@@ -94,5 +100,38 @@ phpcs --config-set installed_paths "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_COD
 composer require --working-dir=/opt/civikitchen-rector --no-interaction --no-progress \
     "rector/rector:${RECTOR_VERSION}"
 
+# ---------------------------------------------------------------------------
+# phpstan (isolated install, same shape as rector above).
+#
+# Why not the standalone phar any more: phpstan extensions are composer
+# packages, and the phar cannot load one. The deprecation rules are worth that
+# switch — they are the only thing that catches calls into the ~640 symbols
+# CiviCRM core marks @deprecated, and they need no list anyone has to maintain.
+#
+# extension-installer is a composer plugin, so it needs allow-plugins like the
+# phpcs installer above; it writes a GeneratedConfig.php into its own vendor
+# tree, which means the rules are active for every project this phpstan
+# analyses without a single project neon mentioning them.
+PHPSTAN_DIR=/opt/civikitchen-phpstan
+mkdir -p "${PHPSTAN_DIR}"
+[ -f "${PHPSTAN_DIR}/composer.json" ] || echo '{}' > "${PHPSTAN_DIR}/composer.json"
+composer config --working-dir="${PHPSTAN_DIR}" --no-plugins \
+    allow-plugins.phpstan/extension-installer true
+composer require --working-dir="${PHPSTAN_DIR}" --no-interaction --no-progress \
+    "phpstan/phpstan:${PHPSTAN_VERSION}" \
+    "phpstan/phpstan-deprecation-rules:${PHPSTAN_DEPRECATION_RULES_VERSION}" \
+    "phpstan/extension-installer:${PHPSTAN_EXTENSION_INSTALLER_VERSION}"
+
+# Goes through composer's bin proxy — the documented entry point for a composer
+# install, and the one that keeps working if a future extension does need the
+# autoloader. (The bundled phar happens to find the registered rules too, but
+# nothing promises that.)
+cat > /usr/local/bin/phpstan <<EOF
+#!/bin/sh
+exec php ${PHPSTAN_DIR}/vendor/bin/phpstan "\$@"
+EOF
+chmod +x /usr/local/bin/phpstan
+
 rm -rf /opt/composer/cache
-chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" /opt/civikitchen-rector
+chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" \
+    /opt/civikitchen-rector "${PHPSTAN_DIR}"
