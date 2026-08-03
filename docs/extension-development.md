@@ -124,7 +124,7 @@ docker compose exec app civix upgrade                             # re-run perio
                                                                   # generated stubs to current civix
 ```
 
-Modern extensions configure features in `info.xml` via [standard mixins](https://docs.civicrm.org/dev/en/latest/framework/mixin/standard/) (`mgd-php`, `menu-xml`, `setting-php`, `entity-types-php@2.0.0`, `smarty-v2`, `ang-php`, …) instead of bespoke hooks — `civix upgrade` keeps the mixin block current.
+Modern extensions configure features in `info.xml` via [standard mixins](https://docs.civicrm.org/dev/en/latest/framework/mixin/standard/) (`mgd-php@2`, `menu-xml`, `setting-php`, `entity-types-php@2.0.0`, `smarty@1`, `ang-php`, …) instead of bespoke hooks — `civix upgrade` keeps the mixin block current. (`smarty-v2` is a deprecated alias of the version-independent `smarty@1` — same behaviour, misleading name.)
 
 After generating a module, apply the versioned CiviKitchen tooling layer:
 
