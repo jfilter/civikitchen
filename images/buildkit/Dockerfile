@@ -113,6 +113,9 @@ COPY lib/ckrelease /usr/local/bin/ckrelease
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
 COPY lib/civikitchen-rector /opt/civikitchen-rector
 COPY lib/ckmodernize /usr/local/bin/ckmodernize
+# CiviKitchen's phpstan extension (@ck-legacy deprecated-scope resolver) —
+# install-dev-tools.sh pulls it in as a composer path repository from here.
+COPY lib/civikitchen-phpstan /opt/civikitchen-phpstan-ext
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \

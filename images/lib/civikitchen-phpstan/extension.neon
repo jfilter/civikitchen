@@ -1,0 +1,5 @@
+services:
+	-
+		class: CiviKitchen\PHPStan\CkLegacyScopeResolver
+		tags:
+			- phpstan.deprecations.deprecatedScopeResolver

@@ -68,6 +68,18 @@ unless `--force` is explicitly supplied. For an existing extension,
   site the extension promised to install on. `ckcompat` adds what phpstan does
   not know (`json_validate()` arrived in 8.3), and `ckmodernize` reads the same
   floor, so rector never rewrites past it.
+- **`@ck-legacy`, not `@deprecated`, for code that must touch a deprecated
+  API.** phpstan's deprecation rules (bundled in the images) report every call
+  into an `@deprecated` symbol and exempt only scopes that are themselves
+  deprecated. That exemption is the wrong tool for the test of a deprecated
+  method or the fixture feeding a shim: they are living code, and
+  `@deprecated` on them would tell callers to stop using them. Mark the class,
+  trait or the single method with `@ck-legacy` instead — CiviKitchen ships a
+  `DeprecatedScopeResolver` (`images/lib/civikitchen-phpstan/`) that treats
+  such a scope as deprecated, so nothing inside it is reported. Exact tag; put
+  it as narrow as possible, and delete it together with the shim or test it
+  annotates. It is a scope marker, not a blanket suppression — production code
+  calling a deprecated API still has to migrate.
 - No positional padding: arguments that only repeat a parameter default are
   dropped and what follows them is named — `ckmodernize` rewrites
   `retrieve('delete', 'String', NULL, FALSE, NULL, 'POST')` to

@@ -3,7 +3,8 @@
 # and buildkit images:
 #   - civix    (CiviCRM extension scaffolding/build tool)
 #   - phpunit  (pinned to 9 for CiviCRM compatibility)
-#   - phpstan  (static analysis)
+#   - phpstan  (isolated; static analysis incl. the deprecation rules and
+#              CiviKitchen's `@ck-legacy` deprecated-scope resolver)
 #   - phpcs + the civicrm/coder fork of drupal/coder (the de-facto CiviCRM
 #              style guide — registers as the standard "Drupal" /
 #              "DrupalPractice" phpcs standards).
@@ -125,14 +126,24 @@ composer require --working-dir=/opt/civikitchen-rector --no-interaction --no-pro
 # tree, which means the rules are active for every project this phpstan
 # analyses without a single project neon mentioning them.
 PHPSTAN_DIR=/opt/civikitchen-phpstan
+# CiviKitchen's own phpstan extension (@ck-legacy deprecated-scope resolver).
+# The Dockerfile COPYs it here; it joins the install as a composer path
+# repository so extension-installer registers it exactly like the upstream
+# rules — see docs/extension-standards.md. Its composer.json carries an
+# explicit `version` because the COPYed directory has no git history for
+# composer to derive one from.
+PHPSTAN_EXT_DIR=/opt/civikitchen-phpstan-ext
 mkdir -p "${PHPSTAN_DIR}"
 [ -f "${PHPSTAN_DIR}/composer.json" ] || echo '{}' > "${PHPSTAN_DIR}/composer.json"
 composer config --working-dir="${PHPSTAN_DIR}" --no-plugins \
     allow-plugins.phpstan/extension-installer true
+composer config --working-dir="${PHPSTAN_DIR}" --no-plugins \
+    repositories.civikitchen-phpstan path "${PHPSTAN_EXT_DIR}"
 composer require --working-dir="${PHPSTAN_DIR}" --no-interaction --no-progress \
     "phpstan/phpstan:${PHPSTAN_VERSION}" \
     "phpstan/phpstan-deprecation-rules:${PHPSTAN_DEPRECATION_RULES_VERSION}" \
-    "phpstan/extension-installer:${PHPSTAN_EXTENSION_INSTALLER_VERSION}"
+    "phpstan/extension-installer:${PHPSTAN_EXTENSION_INSTALLER_VERSION}" \
+    "civikitchen/phpstan-ck-legacy:*"
 
 # Goes through composer's bin proxy — the documented entry point for a composer
 # install, and the one that keeps working if a future extension does need the
@@ -146,4 +157,4 @@ chmod +x /usr/local/bin/phpstan
 
 rm -rf /opt/composer/cache
 chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" \
-    /opt/civikitchen-rector "${PHPSTAN_DIR}"
+    /opt/civikitchen-rector "${PHPSTAN_DIR}" "${PHPSTAN_EXT_DIR}"

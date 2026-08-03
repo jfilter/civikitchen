@@ -68,6 +68,9 @@ COPY lib/ckrelease /usr/local/bin/ckrelease
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
 COPY lib/civikitchen-rector /opt/civikitchen-rector
 COPY lib/ckmodernize /usr/local/bin/ckmodernize
+# CiviKitchen's phpstan extension (@ck-legacy deprecated-scope resolver) —
+# install-dev-tools.sh pulls it in as a composer path repository from here.
+COPY lib/civikitchen-phpstan /opt/civikitchen-phpstan-ext
 # Reset helper for the headless-test scratch DB (reseeds <db>_test, clears
 # the per-DSN boot caches — see the script header for the failure mode).
 COPY lib/cktestreset /usr/local/bin/cktestreset

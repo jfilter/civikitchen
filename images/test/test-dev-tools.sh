@@ -225,6 +225,56 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 4b. deprecation rules fire, and @ck-legacy exempts the scope that must call
+#     a deprecated API (CiviKitchen's bundled deprecated-scope resolver).
+echo "== phpstan deprecation rules + @ck-legacy =="
+cat > "${WORKDIR}/plain-caller.php" <<'PHP'
+<?php
+/** @deprecated use Greeter */
+class OldGreeter {
+    public function greet(): string { return 'hi'; }
+}
+class PlainCaller {
+    public function call(): string { return (new OldGreeter())->greet(); }
+}
+PHP
+# Same code, only the marker differs — so a green run can only come from it.
+cat > "${WORKDIR}/marked-caller.php" <<'PHP'
+<?php
+/** @deprecated use Greeter */
+class OldGreeter {
+    public function greet(): string { return 'hi'; }
+}
+/** @ck-legacy */
+class PlainCaller {
+    public function call(): string { return (new OldGreeter())->greet(); }
+}
+PHP
+
+for fixture in plain-caller marked-caller; do
+    cat > "${WORKDIR}/phpstan-${fixture}.neon" <<NEON
+parameters:
+    level: 5
+    paths:
+        - ${fixture}.php
+NEON
+done
+
+DEPR_OUT="$(phpstan analyse -c "${WORKDIR}/phpstan-plain-caller.neon" --no-progress 2>&1 || true)"
+if echo "${DEPR_OUT}" | grep -q "deprecatedClass"; then
+    ok "phpstan reports the call into a deprecated class"
+else
+    fail "deprecation rules not active (output: ${DEPR_OUT:0:200})"
+fi
+
+MARKED_OUT="$(phpstan analyse -c "${WORKDIR}/phpstan-marked-caller.neon" --no-progress 2>&1 || true)"
+if echo "${MARKED_OUT}" | grep -q "deprecatedClass"; then
+    fail "@ck-legacy scope was still reported (output: ${MARKED_OUT:0:400})"
+else
+    ok "@ck-legacy exempts the scope from the deprecation rules"
+fi
+
+# ---------------------------------------------------------------------------
 # 5. phpunit runs a passing test
 echo "== phpunit run =="
 mkdir -p "${WORKDIR}/tests"
