@@ -182,14 +182,17 @@ jobs:
     if: ${{ inputs.check_template }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
       # Pinned to the SHA this very workflow was resolved from, so the template
       # under comparison is the one belonging to the pipeline that is running —
       # an unpinned second checkout could race a push to main in between.
       # job.workflow_sha (not github.workflow_sha, which is the CALLER's file)
       # is the official way for a reusable workflow to reach its own repo.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
+          persist-credentials: false
           repository: jfilter/civikitchen
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
@@ -207,7 +210,9 @@ jobs:
       # the empty default as unset, so not passing `image` changes nothing.
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - name: Validate inputs
         env:
@@ -238,7 +243,7 @@ jobs:
       # shebang away from needing a Node on PATH.
       - name: Set up Node
         if: ${{ inputs.npm_ci || inputs.js_tests || inputs.bun }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ inputs.node_version }}
           # The npm cache keys on package-lock.json and setup-node FAILS the
@@ -250,7 +255,7 @@ jobs:
 
       - name: Set up Bun
         if: ${{ inputs.bun }}
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       # --ignore-scripts is deliberate and not configurable — see the input
       # description. A package that genuinely needs a build step should run it
@@ -338,8 +343,9 @@ jobs:
       # which is the right behaviour for a public sibling.
       - name: Check out the sibling extension
         if: ${{ inputs.sibling_repo != '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
+          persist-credentials: false
           repository: ${{ inputs.sibling_repo }}
           ssh-key: ${{ secrets.sibling_deploy_key }}
           path: ${{ steps.sibling.outputs.path }}
@@ -526,8 +532,9 @@ jobs:
           exit 1
 
       # Full history: the previous release tag has to be checkoutable.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Validate inputs
@@ -635,7 +642,9 @@ jobs:
           echo "composer_install / sibling_repo are wired into the ci job only — this job would boot the extension without them. Turn this job off, or open an issue to have it wired up too." >&2
           exit 1
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - name: Validate inputs
         run: |
@@ -895,7 +904,9 @@ jobs:
           echo "composer_install / sibling_repo are wired into the ci job only — this job would boot the extension without them. Turn this job off, or open an issue to have it wired up too." >&2
           exit 1
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - name: Validate inputs
         run: |
@@ -964,7 +975,9 @@ jobs:
           echo "composer_install / sibling_repo are wired into the ci job only — this job would boot the extension without them. Turn this job off, or open an issue to have it wired up too." >&2
           exit 1
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - name: Validate inputs
         run: |
@@ -1005,7 +1018,7 @@ jobs:
             up -d --wait --quiet-pull
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # Same cache reasoning as the ci job: no package-lock.json to key on
           # when the repo is on Bun, and setup-node fails the step over it.
@@ -1014,7 +1027,7 @@ jobs:
 
       - name: Set up Bun
         if: ${{ inputs.bun }}
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       # Same --ignore-scripts rule as the ci job: this job installs the
       # extension's own tree, and a browser test repo is exactly where an
@@ -1067,7 +1080,7 @@ jobs:
       # writes elsewhere from turning a red suite into a red upload too.
       - name: Playwright report + traces on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-${{ inputs.key }}
           path: |
