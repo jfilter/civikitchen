@@ -10,6 +10,8 @@
 #              "DrupalPractice" phpcs standards).
 #   - rector   (isolated; powers `ckmodernize` — rector's PHP-version + quality
 #              sets plus CiviKitchen's CiviCRM footgun rules)
+#   - psalm    (isolated; powers `cktaint` — used ONLY as a taint engine, with
+#              CiviCRM source/sink/escape stubs)
 #
 # Prerequisites (handled per image):
 #   - composer, php, curl, git on PATH
@@ -56,6 +58,12 @@ CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
 RECTOR_VERSION="${RECTOR_VERSION:-2.4.6}"
 # PHPCompatibility powers `ckcompat`. See the require below for why an alpha.
 PHPCOMPATIBILITY_VERSION="${PHPCOMPATIBILITY_VERSION:-10.0.0-alpha2}"
+# psalm powers `cktaint`. Pinned for the same reason, and one more: a taint
+# engine that reports differently after an unrelated rebuild is worthless as a
+# review signal. Note psalm's own `php` constraint is patch-level
+# (~8.3.16 || ~8.4.3 || …), so a base image on an older PHP patch fails this
+# install loudly rather than silently skipping the tool.
+PSALM_VERSION="${PSALM_VERSION:-6.16.1}"
 # download.civicrm.org also serves versioned civix phars next to the floating
 # civix.phar, so the scaffolding tool can be pinned like everything else.
 CIVIX_VERSION="${CIVIX_VERSION:-26.02.0}"
@@ -215,7 +223,20 @@ exec php ${PHPSTAN_DIR}/vendor/bin/phpstan "\$@"
 EOF
 chmod +x /usr/local/bin/phpstan
 
+# ---------------------------------------------------------------------------
+# psalm (isolated install in its own dir) — powers `cktaint`. Its taint config
+# and CiviCRM stubs are COPYed to /opt/civikitchen-psalm by the Dockerfile
+# before this script runs; here we add the pinned psalm.
+#
+# Isolated, NOT `composer global require` alongside phpcs, and deliberately not
+# near phpstan: psalm pulls ~50 packages of its own (amphp, nikic/php-parser,
+# felixfbecker/…), and the phpstan tree above is what the static-analysis gate
+# every extension depends on — it must not be perturbed by another tool's
+# dependency resolution. Two engines, two roots, no shared resolution.
+composer require --working-dir=/opt/civikitchen-psalm --no-interaction --no-progress \
+    "vimeo/psalm:${PSALM_VERSION}"
+
 rm -rf /opt/composer/cache
 chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" \
     /opt/civikitchen-rector "${PHPSTAN_DIR}" "${PHPSTAN_EXT_DIR}" \
-    /opt/civikitchen-phpstan-config
+    /opt/civikitchen-phpstan-config /opt/civikitchen-psalm

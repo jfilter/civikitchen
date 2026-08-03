@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+<!--
+  CiviKitchen's Psalm config — taint analysis ONLY.
+
+  Psalm is not a second phpstan here. `cktaint` always runs it in taint mode,
+  which reports Tainted* issues and nothing else, so the
+  errorLevel below is set to the most permissive value (8) purely so that the
+  extension's undeclared CiviCRM surface (core classes, Smarty, hooks) cannot
+  turn into noise if someone runs psalm with this config by hand.
+
+  resolveFromConfigFile="false": this file lives in the image
+  (/opt/civikitchen-psalm), the code lives in the extension. With "false",
+  <projectFiles> resolves against the working directory — the extension root
+  cktaint runs in — instead of against the image directory, which would hold
+  no project code at all. The <stubs> entries below therefore have to be
+  absolute; they are the only paths here that belong to the image.
+
+  A project's own psalm.xml/.dist wins (cktaint skips this file entirely) —
+  same rule as phpcs.xml for cklint and rector.php for ckmodernize.
+-->
+<psalm
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+    xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+    errorLevel="8"
+    resolveFromConfigFile="false"
+    findUnusedCode="false"
+    findUnusedVariablesAndParams="false"
+    findUnusedBaselineEntry="false"
+    allowStringToStandInForClass="true"
+    usePhpDocMethodsWithoutMagicCall="true"
+    ensureArrayStringOffsetsExist="false"
+>
+  <projectFiles>
+    <directory name="." />
+    <!-- allowMissingFiles: most extensions have no vendor/ or node_modules at
+         all, and a missing ignore path is a hard config error otherwise. -->
+    <ignoreFiles allowMissingFiles="true">
+      <directory name="vendor" />
+      <directory name="node_modules" />
+      <!-- A sibling extension the shared CI checks out beside this one; its
+           own pipeline analyses it. Same exclusion cklint makes. -->
+      <directory name=".civikitchen-siblings" />
+    </ignoreFiles>
+  </projectFiles>
+
+  <stubs>
+    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_Request.php" />
+    <file name="/opt/civikitchen-psalm/stubs/CRM_Core_DAO.php" />
+    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_Type.php" />
+    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_System.php" />
+    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_File.php" />
+  </stubs>
+
+  <issueHandlers>
+    <!-- The taint issues we mean. Explicit rather than implied, so switching
+         one from advisory to blocking later is a one-line change here. -->
+    <TaintedSql errorLevel="error" />
+    <TaintedShell errorLevel="error" />
+    <TaintedInclude errorLevel="error" />
+    <TaintedFile errorLevel="error" />
+    <TaintedUnserialize errorLevel="error" />
+    <TaintedEval errorLevel="error" />
+    <TaintedSSRF errorLevel="error" />
+    <TaintedLdap errorLevel="error" />
+    <TaintedCallable errorLevel="error" />
+    <TaintedHeader errorLevel="error" />
+    <TaintedCookie errorLevel="error" />
+    <TaintedSystemSecret errorLevel="error" />
+    <TaintedUserSecret errorLevel="error" />
+    <TaintedCustom errorLevel="error" />
+
+    <!-- HTML/text taint is off, not advisory-off: CiviCRM output goes through
+         Smarty templates Psalm never sees, so what remains here is the escaping
+         Psalm cannot follow rather than the escaping nobody wrote. The
+         phpcs/phpstan layers own output escaping. -->
+    <TaintedHtml errorLevel="suppress" />
+    <TaintedTextWithQuotes errorLevel="suppress" />
+
+    <!-- Anything non-taint: suppressed even under a hand-run `psalm` outside
+         taint mode. These are the level-1 issues an unanalysable CiviCRM
+         surface produces by the hundred, and none of them is this tool's job. -->
+    <UndefinedClass errorLevel="suppress" />
+    <UndefinedGlobalVariable errorLevel="suppress" />
+    <UndefinedDocblockClass errorLevel="suppress" />
+    <UndefinedConstant errorLevel="suppress" />
+    <UndefinedFunction errorLevel="suppress" />
+    <UndefinedMethod errorLevel="suppress" />
+    <UndefinedThisPropertyFetch errorLevel="suppress" />
+    <UndefinedPropertyFetch errorLevel="suppress" />
+    <UndefinedInterface errorLevel="suppress" />
+    <UndefinedTrait errorLevel="suppress" />
+    <InvalidDocblock errorLevel="suppress" />
+    <MissingFile errorLevel="suppress" />
+    <UnresolvableInclude errorLevel="suppress" />
+    <DuplicateClass errorLevel="suppress" />
+    <InvalidExtendClass errorLevel="suppress" />
+  </issueHandlers>
+</psalm>

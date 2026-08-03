@@ -93,6 +93,7 @@ ARG PHPSTAN_DEPRECATION_RULES_VERSION
 ARG PHPSTAN_EXTENSION_INSTALLER_VERSION
 ARG CODER_REF
 ARG RECTOR_VERSION
+ARG PSALM_VERSION
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
 # install-dev-tools.sh) and the cklint linter that runs it.
@@ -121,10 +122,15 @@ COPY lib/ckmodernize /usr/local/bin/ckmodernize
 COPY lib/civikitchen-phpstan /opt/civikitchen-phpstan-ext
 # Ban lists as config (spaze/phpstan-disallowed-calls); inert until included.
 COPY lib/civikitchen-phpstan-config /opt/civikitchen-phpstan-config
+# psalm taint setup (taint-only config + CiviCRM source/sink/escape stubs) +
+# the `cktaint` wrapper. Advisory gate — see docs/extension-standards.md.
+COPY lib/civikitchen-psalm /opt/civikitchen-psalm
+COPY lib/cktaint /usr/local/bin/cktaint
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
+        PSALM_VERSION="${PSALM_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
-        /usr/local/bin/ckrelease /usr/local/bin/ckmodernize
+        /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktaint
 
 # PHP runtime tuning — matches what civibuild expects for site builds.
 RUN { \

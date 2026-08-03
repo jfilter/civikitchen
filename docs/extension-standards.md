@@ -128,8 +128,8 @@ unless `--force` is explicitly supplied. For an existing extension,
   so a repo opts in with one `includes:` line when it is ready.
 - CI per `template/extension/.github/workflows/ci.yml` — a thin caller of the
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
-  ckconform → phpunit under ckcoverage → phpstan → template-drift check →
-  lockfile vulnerability scan), so
+  ckconform → phpunit under ckcoverage → phpstan → cktaint (advisory) →
+  template-drift check → lockfile vulnerability scan), so
   the pipeline is defined once instead of copy-pasted per repo. The caller pins
   the released major (`@v1`) and the CI stack the matching `:v1` image —
   workflow, template, tools and images are one versioned contract, so they move
@@ -321,6 +321,92 @@ is what makes `npm publish` refuse.
 
 The tooling section is machine-checked by `ckconform` (run from the extension
 root) — CI should run it alongside cklint.
+
+## Taint analysis: `cktaint` (advisory pilot)
+
+`cktaint` runs Psalm — and Psalm *only* as a taint engine, never as a second
+phpstan — over the extension, asking one question: **does request input reach a
+dangerous sink without being escaped on the way?** It ships in the image, needs
+no per-repo config, and CI runs it with `continue-on-error: true`. It is the
+only step in the pipeline that cannot fail your build.
+
+```
+cktaint                 # whole extension
+cktaint CRM/Foo.php     # one file or directory
+cktaint --baseline      # accept today's findings, see only new ones
+```
+
+### What it finds
+
+Psalm cannot see CiviCRM core, so CiviKitchen supplies a deliberately small set
+of stubs (`/opt/civikitchen-psalm/stubs`, signatures verified against core):
+
+| role | modelled |
+| --- | --- |
+| sources | `CRM_Utils_Request::retrieve` / `retrieveValue` (Psalm covers `$_GET`/`$_POST`/`$_REQUEST`/`$_COOKIE` natively) |
+| SQL sinks | `CRM_Core_DAO::executeQuery` / `executeUnbufferedQuery` / `singleValueQuery` / `composeQuery` (the `$query` argument only), `CRM_Utils_File::runSqlQuery` |
+| path sinks | `CRM_Utils_File::createDir` / `cleanDir` / `copyDir` / `duplicate` / `sourceSQLFile` |
+| header sink | `CRM_Utils_System::redirect` |
+| escapes | `CRM_Utils_Type::escape` / `escapeAll`, `CRM_Core_DAO::escapeString` / `escapeStrings` — for **SQL taint only**, so a value escaped for the database is still tainted at a shell or path sink |
+
+Two modelling decisions worth knowing, because they decide what you see:
+
+- The `$params` array of `executeQuery` is **not** a sink. That is the safe
+  path (`composeQuery` type-validates and escapes every placeholder), and
+  tainting it would flag exactly the code this standard asks you to write.
+- `CRM_Utils_Type::validate()` is **not** an escape. For `String`/`Text`/
+  `Memo`/`Link` it returns the value unchanged, so taint flows straight
+  through it — a stub that stayed silent here would launder every injection
+  that goes through a validated string.
+
+Hooks, APIv4 parameters and Smarty assignments are deliberately *not* modelled
+as sources: everything would be tainted, and a report where everything is
+flagged is a report nobody reads.
+
+### What it does not see
+
+- Anything that leaves PHP and comes back: a value stored via a hook, passed
+  through the API kernel, or rendered by a Smarty template. Psalm follows
+  direct data flow, not the framework.
+- HTML/XSS. `TaintedHtml` is switched off: CiviCRM output escaping happens in
+  templates Psalm never analyses, so what remains would be Psalm's blind spot,
+  not missing escaping.
+- Additional call sites on a sink it already reported. Psalm reports **one
+  flow per source/sink pair** — fix the first `executeQuery` finding and the
+  next one can appear in the following run. A clean `cktaint` after a fix is
+  not proof there was only one.
+
+And the other direction: `CRM_Utils_Request::retrieve($name, 'Positive')` *is*
+safe (core validates it), but the type arrives as a runtime string, so Psalm
+taints it like any other retrieval. Expect false positives of exactly this
+shape.
+
+### Handling a finding
+
+1. **Fix the flow** — this is almost always right and almost always small:
+   parameterize the query (`%1` + `$params`), run the value through
+   `CRM_Utils_Type::escape($value, 'String')`, or validate the path.
+2. **Or record it as a justified exception.** Either
+   `@psalm-suppress TaintedSql` on the line *with a comment saying why it is
+   safe*, or `cktaint --baseline` to write `psalm-baseline.xml`. A baseline
+   entry is a dated statement that the finding was read and accepted — a
+   baseline nobody wrote a reason for is just a mute button.
+
+Never "fix" a finding by weakening the stubs.
+
+### Where this is going
+
+The pilot is advisory so the signal can be measured before it costs anyone a
+red build. The intended end state is a blocking gate for the taint classes
+where a true positive is an outright vulnerability —
+`TaintedSql`, `TaintedShell`, `TaintedInclude`, `TaintedUnserialize`,
+`TaintedSSRF` — with the noisier classes staying advisory. That switch is one
+`errorLevel` change per issue in the bundled `psalm-taint.xml.dist` plus
+dropping `continue-on-error` from the CI step, and it happens when the fleet's
+findings are demonstrably actionable, not before.
+
+A repo that wants its own rules ships a `psalm.xml`/`psalm.xml.dist`; `cktaint`
+uses it instead of the bundled config, same as `phpcs.xml` for `cklint`.
 
 ## Frontend: JS dependencies, JS tests and browser tests
 
