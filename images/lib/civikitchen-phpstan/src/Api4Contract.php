@@ -213,6 +213,11 @@ final class Api4Contract
                 return false;
             }
         }
+        foreach (Api4Catalog::DYNAMIC_FIELD_PREFIXES as $prefix) {
+            if (str_starts_with($field, $prefix)) {
+                return false;
+            }
+        }
 
         return preg_match('/^[A-Za-z_][A-Za-z0-9_]*(:[A-Za-z_]+)?$/', $field) === 1;
     }

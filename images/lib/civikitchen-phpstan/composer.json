@@ -3,7 +3,7 @@
     "type": "phpstan-extension",
     "description": "CiviKitchen PHPStan extension: @ck-legacy deprecated-scope resolver, fleet-wide phpat architecture rules (extension boundary, legacy UI bases) and the APIv4 contract rules.",
     "license": "MIT",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "require": {
         "php": ">=7.4",
         "phpstan/phpstan": "^2.1",

@@ -55,6 +55,50 @@ const NOT_ACTIONS = ['getEntityName', 'getEntityTitle', 'getInfo', 'getDaoName',
  */
 const DYNAMIC_PREFIXES = ['Custom_', 'Eck_', 'SK_', 'Import_'];
 
+/**
+ * Field-name prefixes core computes from site configuration.
+ *
+ * SearchKit exposes every saved search segment on the queried entity as
+ * `segment_<name>`, where <name> is whatever the site called it. The names
+ * are unknowable, the prefix is not.
+ */
+const DYNAMIC_FIELD_PREFIXES = ['segment_'];
+
+/**
+ * Providers that compute field names, and why that is safe.
+ *
+ * ContactSpecProvider is covered by DYNAMIC_SPEC_FIELDS below.
+ * SearchSegmentExtraFieldProvider is covered by DYNAMIC_FIELD_PREFIXES.
+ * PriceFieldSpecProvider builds `<price_set>.<field>`, which the rule skips
+ * for containing a dot. Anything not on this list gets a warning.
+ */
+const REVIEWED_COMPUTED_PROVIDERS = [
+    'ContactSpecProvider',
+    'PriceFieldSpecProvider',
+    'SearchSegmentExtraFieldProvider',
+];
+
+/**
+ * Spec-provider fields whose names core computes instead of writing them.
+ *
+ * ContactSpecProvider builds these as `strtolower($entity) . '_' . $type`
+ * over two nested literal arrays, mirroring the joins
+ * ContactSchemaMapSubscriber adds — no tokenizer reads a name out of that.
+ * The alternatives were both worse: flagging them is a false positive on
+ * real code, and dropping Contact's field list to incomplete would retire
+ * the check on the entity extensions touch most. Eight names, listed once,
+ * next to the reason. The generator reports any other provider that builds
+ * names this way, so a future release cannot add one unnoticed.
+ */
+const DYNAMIC_SPEC_FIELDS = [
+    'Contact' => [
+        'address_primary', 'address_billing',
+        'email_primary', 'email_billing',
+        'phone_primary', 'phone_billing',
+        'im_primary', 'im_billing',
+    ],
+];
+
 /** Classloader roots: core itself plus every ext dir carrying an info.xml. */
 function classloaderRoots(string $coreDir): array
 {
@@ -133,6 +177,53 @@ function classDeclaration(string $source): ?array
     }
 
     return null;
+}
+
+/**
+ * Traits a class pulls in, by short name.
+ *
+ * Actions do not only come down the extends chain: SavedSearch, Navigation,
+ * OptionValue and some twenty others get export() and revert() from
+ * Generic\Traits\ManagedEntity. Trait uses sit inside the class body, which
+ * is what separates them from the import statements at the top of the file
+ * and from a closure's `use (...)`.
+ *
+ * @return list<string>
+ */
+function traitNames(string $source): array
+{
+    $tokens = significantTokens($source);
+    $count = count($tokens);
+    $depth = 0;
+    $names = [];
+
+    for ($i = 0; $i < $count; $i++) {
+        if (tokenIs($tokens, $i, '{') || tokenIs($tokens, $i, T_CURLY_OPEN) || tokenIs($tokens, $i, T_DOLLAR_OPEN_CURLY_BRACES)) {
+            $depth++;
+            continue;
+        }
+        if (tokenIs($tokens, $i, '}')) {
+            $depth--;
+            continue;
+        }
+        if ($depth < 1 || !tokenIs($tokens, $i, T_USE) || tokenIs($tokens, $i + 1, '(')) {
+            continue;
+        }
+        for ($j = $i + 1; $j < $count; $j++) {
+            if (tokenIs($tokens, $j, ';') || tokenIs($tokens, $j, '{')) {
+                break;
+            }
+            if (tokenIs($tokens, $j, ',')) {
+                continue;
+            }
+            $name = ltrim(tokenText($tokens, $j), '\\');
+            if ($name !== '') {
+                $names[] = substr($name, (int) strrpos('\\' . $name, '\\'));
+            }
+        }
+    }
+
+    return array_values(array_unique($names));
 }
 
 /**
@@ -269,12 +360,13 @@ function declaredEntityName(array $methods, string $fallback): string
 }
 
 // ---------------------------------------------------------------------------
-// Collect classes: entities plus the Generic base classes they extend.
+// Collect classes: entities, the Generic base classes they extend and the
+// traits they use.
 // ---------------------------------------------------------------------------
 
 $roots = classloaderRoots($coreDir);
 
-/** @var array<string, array{parent: ?string, abstract: bool, actions: list<string>, entity: string, isEntity: bool}> */
+/** @var array<string, array{parent: ?string, uses: list<string>, abstract: bool, actions: list<string>, entity: string, isEntity: bool}> */
 $classes = [];
 /** @var array<string, list<string>> class name => actions from Action/<Class>/ */
 $magicActions = [];
@@ -283,11 +375,16 @@ foreach ($roots as $root) {
     foreach (array_merge(
         glob($root . '/Civi/Api4/*.php') ?: [],
         glob($root . '/Civi/Api4/Generic/*.php') ?: [],
+        glob($root . '/Civi/Api4/Generic/Traits/*.php') ?: [],
     ) as $file) {
         $source = (string) file_get_contents($file);
         $declaration = classDeclaration($source);
         if ($declaration === null) {
-            continue;
+            // A trait carries actions the same way a base class does.
+            if (preg_match('/\btrait\s+(\w+)/', $source, $m) !== 1) {
+                continue;
+            }
+            $declaration = [$m[1], null, true];
         }
         [$name, $parent, $abstract] = $declaration;
         $methods = staticMethods($source);
@@ -299,6 +396,7 @@ foreach ($roots as $root) {
         }
         $classes[$name] = [
             'parent' => $parent === null ? null : preg_replace('/^Generic\\\\/', '', $parent),
+            'uses' => traitNames($source),
             'abstract' => $abstract,
             'actions' => $actions,
             'entity' => declaredEntityName($methods, $name),
@@ -353,16 +451,28 @@ foreach ($roots as $root) {
 //
 // Spec providers add fields at runtime that no schema file mentions —
 // Contact's `groups` and `age_years`, Activity's `source_contact_id`. Only
-// the literal `new FieldSpec('x', ...)` names are collectable; the entity is
-// taken from every entity name the provider mentions, plus its class name.
-// Over-attribution is deliberate: an extra field name can only silence an
-// error, never invent one.
+// the literal `new FieldSpec('x', ...)` names are collectable.
+//
+// Attribution is deliberately cautious in both directions. A provider that
+// names its entity — in applies(), or as the second FieldSpec argument, or
+// through its own class name — contributes to that entity. A provider whose
+// applies() decides at runtime (EntityTagFilterSpecProvider answers for
+// contacts AND for every entity in the `tag_used_for` option group) names no
+// entity a source tree can pin down, so its fields go to every entity. An
+// extra field name can only silence an error, never invent one; guessing the
+// entity wrong in the other direction would invent one.
 // ---------------------------------------------------------------------------
 
 /** @var array<string, list<string>> */
 $specFields = [];
 /** @var list<string> fields from providers with no identifiable entity */
 $anyEntityFields = [];
+/** @var array<string, list<string>> entity => providers that compute field names */
+$computedFieldProviders = [];
+
+foreach (DYNAMIC_SPEC_FIELDS as $entity => $names) {
+    $specFields[$entity] = $names;
+}
 
 $entityNames = [];
 foreach ($classes as $name => $class) {
@@ -385,16 +495,12 @@ foreach ($roots as $root) {
         $methods = staticMethods($source, false);
         preg_match_all('/new\s+FieldSpec\s*\(\s*\'([a-z][A-Za-z0-9_]*)\'/', $source, $m);
         $fields = array_values(array_unique($m[1]));
-        if ($fields === []) {
+        $buildsNames = preg_match('/new\s+FieldSpec\s*\(\s*\$/', $source) === 1;
+        if ($fields === [] && !$buildsNames) {
             continue;
         }
 
         $targets = [];
-        $className = basename($entry->getFilename(), '.php');
-        $stem = preg_replace('/(Creation|Get|Filter)?SpecProvider$/', '', $className);
-        if (isset($entityNames[$stem])) {
-            $targets[$stem] = true;
-        }
         // The entity the provider declares it applies to, and the one an
         // explicit `new FieldSpec('x', 'Foo')` names. Every other entity
         // literal in the file is a reference (a foreign key, a join) and
@@ -404,6 +510,31 @@ foreach ($roots as $root) {
         foreach (array_merge($applies[1], $explicit[1]) as $literal) {
             if (isset($entityNames[$literal])) {
                 $targets[$literal] = true;
+            }
+        }
+        // `CoreUtil::isContact($entity)` is core's own name for "Contact or
+        // one of its pseudo-entities" — a decidable answer written as a call.
+        // Individual, Household and Organization pick the fields up through
+        // the ancestry.
+        if (str_contains($methods['applies'] ?? '', 'isContact(')) {
+            $targets['Contact'] = true;
+        }
+        // The class name is only evidence where applies() did not settle the
+        // question — an applies() that consults the database has an answer
+        // this generator cannot read, and the name of the file must not
+        // pretend otherwise.
+        $undecidableApplies = isset($methods['applies']) && $targets === [];
+        if (!$undecidableApplies) {
+            $className = basename($entry->getFilename(), '.php');
+            $stem = preg_replace('/(Creation|Get|Filter)?SpecProvider$/', '', $className);
+            if (isset($entityNames[$stem])) {
+                $targets[$stem] = true;
+            }
+        }
+
+        if ($buildsNames) {
+            foreach ($targets === [] ? ['*'] : array_keys($targets) as $target) {
+                $computedFieldProviders[$target][] = basename($entry->getFilename(), '.php');
             }
         }
 
@@ -432,6 +563,11 @@ function inheritedActions(string $class, array $classes, array $magicActions, ar
         $classes[$class]['actions'],
         $magicActions[$class] ?? [],
     );
+    // Traits first: a trait can itself use traits, and the recursion through
+    // $seen keeps that from looping.
+    foreach ($classes[$class]['uses'] as $trait) {
+        $actions = array_merge($actions, inheritedActions($trait, $classes, $magicActions, $seen));
+    }
     $parent = $classes[$class]['parent'];
     if ($parent !== null) {
         $actions = array_merge($actions, inheritedActions($parent, $classes, $magicActions, $seen));
@@ -470,6 +606,29 @@ function inheritedFieldSource(string $class, array $classes, array $entityTypeFi
     return $parent === null ? null : inheritedFieldSource($parent, $classes, $entityTypeFields, $seen);
 }
 
+/**
+ * Entity names along the ancestry, nearest first.
+ *
+ * Individual is a Contact with a filter: it inherits Contact's schema fields
+ * through the class chain, and it has to inherit Contact's spec fields
+ * (groups, age_years, next_birthday) the same way.
+ *
+ * @return list<string>
+ */
+function ancestryEntities(string $class, array $classes, array $seen = []): array
+{
+    if (!isset($classes[$class]) || isset($seen[$class])) {
+        return [];
+    }
+    $seen[$class] = true;
+    $entities = $classes[$class]['isEntity'] ? [$classes[$class]['entity']] : [];
+    $parent = $classes[$class]['parent'];
+
+    return $parent === null
+        ? $entities
+        : array_merge($entities, ancestryEntities($parent, $classes, $seen));
+}
+
 $catalog = [];
 $aliases = [];
 
@@ -487,7 +646,9 @@ foreach ($classes as $class => $info) {
 
     $source = inheritedFieldSource($class, $classes, $entityTypeFields);
     $fields = $source === null ? [] : $entityTypeFields[$source];
-    $fields = array_merge($fields, $specFields[$entity] ?? []);
+    foreach (ancestryEntities($class, $classes) as $ancestor) {
+        $fields = array_merge($fields, $specFields[$ancestor] ?? []);
+    }
     $fields = array_values(array_unique($fields));
     sort($fields);
 
@@ -544,6 +705,7 @@ $renderList = static function (array $names) use ($export): string {
 };
 
 $prefixes = $renderList(DYNAMIC_PREFIXES);
+$fieldPrefixes = $renderList(DYNAMIC_FIELD_PREFIXES);
 $anyFields = $renderList($anyEntityFields);
 
 $out = <<<PHP
@@ -607,6 +769,18 @@ final class Api4Catalog
 {$prefixes}    ];
 
     /**
+     * Field name prefixes core computes from a site's configuration.
+     *
+     * SearchKit publishes every search segment as `segment_<name>` on the
+     * entity it segments; the names live in the database, the prefix does
+     * not. Unknown names starting like this are left alone.
+     *
+     * @var list<string>
+     */
+    public const DYNAMIC_FIELD_PREFIXES = [
+{$fieldPrefixes}    ];
+
+    /**
      * Fields from spec providers that apply to no single entity.
      *
      * Accepted on every entity: these come from providers whose target is a
@@ -649,7 +823,10 @@ final class Api4Catalog
 PHP;
 
 $target = $argv[2] ?? dirname(__DIR__) . '/src/Api4Catalog.php';
-file_put_contents($target, $out);
+if (file_put_contents($target, $out) === false) {
+    fwrite(STDERR, "could not write $target\n");
+    exit(73);
+}
 
 $complete = count(array_filter($catalog, static fn (array $i): bool => $i['complete']));
 $fieldCount = array_sum(array_map(static fn (array $i): int => count($i['fields']), $catalog));
@@ -663,3 +840,19 @@ fwrite(STDOUT, sprintf(
     count($aliases),
     $version,
 ));
+
+// Providers that compute field names are the blind spot behind
+// DYNAMIC_SPEC_FIELDS. Any entity affected by one but not listed there can
+// produce false positives, so it gets said out loud rather than discovered
+// by a developer whose correct code was rejected.
+foreach ($computedFieldProviders as $entity => $providers) {
+    $unreviewed = array_diff(array_unique($providers), REVIEWED_COMPUTED_PROVIDERS);
+    if ($unreviewed === [] || $entity === '*' || ($catalog[$entity]['complete'] ?? false) === false) {
+        continue;
+    }
+    fwrite(STDERR, sprintf(
+        "warning: %s builds field names for %s that no literal names — review and list it in REVIEWED_COMPUTED_PROVIDERS\n",
+        implode(', ', $unreviewed),
+        $entity,
+    ));
+}

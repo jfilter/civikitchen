@@ -177,7 +177,10 @@ final class CoreNamespaceCatalog
 PHP;
 
 $target = $argv[2] ?? dirname(__DIR__) . '/src/CoreNamespaceCatalog.php';
-file_put_contents($target, $out);
+if (file_put_contents($target, $out) === false) {
+    fwrite(STDERR, "could not write $target\n");
+    exit(73);
+}
 
 fwrite(STDOUT, sprintf(
     "%s: %d CRM components, %d Civi namespaces (CiviCRM %s)\n",
