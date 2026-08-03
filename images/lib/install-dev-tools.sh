@@ -33,6 +33,15 @@ PHPSTAN_DEPRECATION_RULES_VERSION="${PHPSTAN_DEPRECATION_RULES_VERSION:-2.0.5}"
 # Registers the rules with phpstan automatically, so no project has to add an
 # `includes:` line to its phpstan.neon.
 PHPSTAN_EXTENSION_INSTALLER_VERSION="${PHPSTAN_EXTENSION_INSTALLER_VERSION:-1.4.3}"
+# Bans as CONFIG instead of sniff code (civicrm-disallowed.neon). Inert until a
+# project includes a config, so installing it changes nothing by itself.
+PHPSTAN_DISALLOWED_CALLS_VERSION="${PHPSTAN_DISALLOWED_CALLS_VERSION:-v4.14.0}"
+# Opt-in per repo (see the ignore list below) — switching these on fleet-wide
+# at level 10 would turn every repo red in one build.
+PHPSTAN_STRICT_RULES_VERSION="${PHPSTAN_STRICT_RULES_VERSION:-2.0.12}"
+# Cherry-picked sniffs only (DeclareStrictTypes today); the full standard would
+# fight the Drupal base the CiviKitchen ruleset is built on.
+SLEVOMAT_VERSION="${SLEVOMAT_VERSION:-8.31.1}"
 # civicrm/coder has no usable release tags, so pin to a commit on 8.x-2.x-civi.
 CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
 # rector powers `ckmodernize`; pin it too so a rebuild can't silently change
@@ -80,7 +89,8 @@ composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-co
 composer global require --no-interaction --no-progress \
     "squizlabs/php_codesniffer:^3" \
     "dealerdirect/phpcodesniffer-composer-installer:^1" \
-    "phpcompatibility/php-compatibility:${PHPCOMPATIBILITY_VERSION}"
+    "phpcompatibility/php-compatibility:${PHPCOMPATIBILITY_VERSION}" \
+    "slevomat/coding-standard:${SLEVOMAT_VERSION}"
 
 # Clone the civicrm fork of drupal/coder (relaxed Drupal CS rules; ruleset
 # still registers as "Drupal" / "DrupalPractice" via phpcs). Pinned to
@@ -104,7 +114,7 @@ rm -rf "${CODER_DIR}/.git"
 # or `ckcompat` loses its standard on the next build.
 CIVIKITCHEN_CODER_DIR=/opt/civikitchen-coder
 phpcs --config-set installed_paths \
-    "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR},${COMPOSER_HOME}/vendor/phpcompatibility/php-compatibility,${COMPOSER_HOME}/vendor/phpcsstandards/phpcsutils"
+    "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR},${COMPOSER_HOME}/vendor/phpcompatibility/php-compatibility,${COMPOSER_HOME}/vendor/phpcsstandards/phpcsutils,${COMPOSER_HOME}/vendor/slevomat/coding-standard"
 
 # ---------------------------------------------------------------------------
 # rector (isolated install in its own dir) — powers `ckmodernize`. Its config +
@@ -139,10 +149,18 @@ composer config --working-dir="${PHPSTAN_DIR}" --no-plugins \
     allow-plugins.phpstan/extension-installer true
 composer config --working-dir="${PHPSTAN_DIR}" --no-plugins \
     repositories.civikitchen-phpstan path "${PHPSTAN_EXT_DIR}"
+# strict-rules is installed but NOT auto-registered: at level 10 it would turn
+# every repo red in the build that shipped it. Repos opt in with one `includes:`
+# line (see docs/extension-standards.md). disallowed-calls stays auto-registered
+# because it is inert until a project includes a ban list.
+composer config --working-dir="${PHPSTAN_DIR}" --no-plugins --json \
+    extra.phpstan/extension-installer.ignore '["phpstan/phpstan-strict-rules"]'
 composer require --working-dir="${PHPSTAN_DIR}" --no-interaction --no-progress \
     "phpstan/phpstan:${PHPSTAN_VERSION}" \
     "phpstan/phpstan-deprecation-rules:${PHPSTAN_DEPRECATION_RULES_VERSION}" \
     "phpstan/extension-installer:${PHPSTAN_EXTENSION_INSTALLER_VERSION}" \
+    "spaze/phpstan-disallowed-calls:${PHPSTAN_DISALLOWED_CALLS_VERSION}" \
+    "phpstan/phpstan-strict-rules:${PHPSTAN_STRICT_RULES_VERSION}" \
     "civikitchen/phpstan-ck-legacy:*"
 
 # Goes through composer's bin proxy — the documented entry point for a composer
@@ -157,4 +175,5 @@ chmod +x /usr/local/bin/phpstan
 
 rm -rf /opt/composer/cache
 chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" \
-    /opt/civikitchen-rector "${PHPSTAN_DIR}" "${PHPSTAN_EXT_DIR}"
+    /opt/civikitchen-rector "${PHPSTAN_DIR}" "${PHPSTAN_EXT_DIR}" \
+    /opt/civikitchen-phpstan-config

@@ -71,6 +71,8 @@ COPY lib/ckmodernize /usr/local/bin/ckmodernize
 # CiviKitchen's phpstan extension (@ck-legacy deprecated-scope resolver) —
 # install-dev-tools.sh pulls it in as a composer path repository from here.
 COPY lib/civikitchen-phpstan /opt/civikitchen-phpstan-ext
+# Ban lists as config (spaze/phpstan-disallowed-calls); inert until included.
+COPY lib/civikitchen-phpstan-config /opt/civikitchen-phpstan-config
 # Reset helper for the headless-test scratch DB (reseeds <db>_test, clears
 # the per-DSN boot caches — see the script header for the failure mode).
 COPY lib/cktestreset /usr/local/bin/cktestreset

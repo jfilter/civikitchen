@@ -116,6 +116,8 @@ COPY lib/ckmodernize /usr/local/bin/ckmodernize
 # CiviKitchen's phpstan extension (@ck-legacy deprecated-scope resolver) —
 # install-dev-tools.sh pulls it in as a composer path repository from here.
 COPY lib/civikitchen-phpstan /opt/civikitchen-phpstan-ext
+# Ban lists as config (spaze/phpstan-disallowed-calls); inert until included.
+COPY lib/civikitchen-phpstan-config /opt/civikitchen-phpstan-config
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
