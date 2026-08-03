@@ -123,9 +123,21 @@ abstract class CheckTestCase extends TestCase
         return null;
     }
 
+    /**
+     * Git in the fixture repo, insulated from the developer's own config.
+     *
+     * A global gitignore listing `.env` (a common personal setting) makes
+     * `git add -A` skip a fixture that deliberately tracks one, so a check that
+     * works reports nothing and its test fails on that machine only. CI, with
+     * no global config, stays green — which is the worst version of a flaky
+     * test. Point both the global and system config at nowhere instead.
+     */
     protected function git(string $args): void
     {
-        exec('git -C ' . escapeshellarg((string) $this->dir) . ' ' . $args . ' 2>/dev/null');
+        exec(
+            'GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null git -C '
+            . escapeshellarg((string) $this->dir) . ' ' . $args . ' 2>/dev/null'
+        );
     }
 
     private function deleteTree(string $dir): void
