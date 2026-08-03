@@ -23,6 +23,7 @@ final class SniffsTest extends TestCase {
     . 'CiviKitchen.Api.NoRequiredOnExternalAction,'
     . 'CiviKitchen.Api.NoGenericVarOnActionParam,'
     . 'CiviKitchen.Security.NoUnsafeUnserialize,'
+    . 'CiviKitchen.Security.PermissionBypass,'
     . 'CiviKitchen.Tests.NoTautologicalAssertion,'
     . 'CiviKitchen.Extension.UseMixinsForStandardHooks,'
     . 'CiviKitchen.Files.MaxFileLength';
@@ -189,6 +190,26 @@ final class SniffsTest extends TestCase {
       $this->phpcs('LongFile.php', $armed),
       'a file over the configured cap is flagged on line 1'
     );
+  }
+
+  public function testPermissionBypassWarnsOnlyOnTheTwoLiteralForms(): void {
+    // The standard excludes tests/, and the fixture lives there — so the
+    // sniff has to be armed by path to see it at all. That the plain standard
+    // stays silent on the very same file IS the exclusion test below.
+    $armed = __DIR__ . '/fixtures/permission-bypass-ruleset.xml';
+
+    $expected = [
+      15 => ['CiviKitchen.Security.PermissionBypass.PermissionBypass'],
+      16 => ['CiviKitchen.Security.PermissionBypass.PermissionBypass'],
+      17 => ['CiviKitchen.Security.PermissionBypass.PermissionBypass'],
+      20 => ['CiviKitchen.Security.PermissionBypass.PermissionBypass'],
+    ];
+    self::assertSame($expected, $this->phpcs('PermissionBypass.php', $armed));
+  }
+
+  public function testPermissionBypassIsSilentUnderTests(): void {
+    self::assertSame([], $this->phpcs('PermissionBypass.php'),
+      'the standard excludes tests/, where running as nobody is the norm');
   }
 
   public function testRequiredGuardIsInertWithoutConfiguredExternalActions(): void {

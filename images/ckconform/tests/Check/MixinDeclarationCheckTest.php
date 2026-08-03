@@ -64,6 +64,35 @@ final class MixinDeclarationCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
     }
 
+    public function testAnApi4EntityWithoutScanClassesWarns(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->info("    <mixin>mgd-php@2.0.0</mixin>\n"),
+            'Civi/Api4/Widget.php' => "<?php\nnamespace Civi\\Api4;\nclass Widget {}\n",
+        ], git: true);
+        $this->assertWarns($this->run_(new MixinDeclarationCheck(), $context), 'scan-classes');
+    }
+
+    /** Action classes live below Civi/Api4/ and are not scanned entities. */
+    public function testActionClassesAloneDoNotDemandScanClasses(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->info("    <mixin>mgd-php@2.0.0</mixin>\n"),
+            'Civi/Api4/Action/Widget/Refresh.php' => "<?php\nclass Refresh {}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
+    }
+
+    public function testAnIgnoredEntityFileIsNoEvidence(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->info("    <mixin>mgd-php@2.0.0</mixin>\n"),
+            'Civi/Api4/Widget.php' => "<?php\n// ckconform-ignore-file mixin-declaration -- loaded by a bespoke hook\n"
+                . "namespace Civi\\Api4;\nclass Widget {}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
+    }
+
     public function testEveryMissingMixinIsNamed(): void
     {
         $context = $this->repo([
