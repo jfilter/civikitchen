@@ -1,0 +1,119 @@
+#!/bin/bash
+#
+# ckeslint — ESLint for CiviCRM extensions, with the CiviKitchen baseline
+# config, or the project's own eslint.config.* when it ships one.
+#
+# The JS counterpart to cklint, and built the same way round: the toolchain and
+# the default ruleset live in the IMAGE (pinned, installed once at build time),
+# not in eleven package.json files that would each drift and each need a
+# dependabot PR. A repo that wants its own rules writes an eslint.config.* and
+# this tool steps out of the way entirely.
+#
+# What the baseline gates and why is in the config itself
+# (/opt/civikitchen-eslint/eslint.config.mjs) — short version: real mistakes
+# (@eslint/js recommended), unsafe DOM sinks (Mozilla's no-unsanitized), and
+# type-aware promise handling when the repo has a tsconfig.json.
+#
+# No JS in the repo is a PASS, loudly: most CiviCRM extensions are PHP with a
+# couple of Angular files or none at all, and an unconditional CI step has to
+# say "nothing to lint" rather than fail on a missing target or, worse, exit 0
+# without saying anything.
+#
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+ckeslint — ESLint for CiviCRM extensions (CiviKitchen baseline config).
+
+  ckeslint              lint the project's JS/TS
+  ckeslint --fix        apply the fixes ESLint can apply, then report the rest
+  ckeslint path ...     lint the given files/dirs instead of the whole project
+
+The project's own eslint.config.{js,mjs,cjs,ts} wins when present; otherwise
+the bundled CiviKitchen baseline applies. Run from the extension root.
+EOF
+}
+
+fix=0
+paths=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --fix)     fix=1 ;;
+    -h|--help) usage; exit 0 ;;
+    --)        shift; break ;;
+    -*)        echo "ckeslint: unknown option: $1" >&2; usage >&2; exit 2 ;;
+    *)         paths+=("$1") ;;
+  esac
+  shift
+done
+while [ "$#" -gt 0 ]; do paths+=("$1"); shift; done
+
+[ -f info.xml ] || { echo "ckeslint: no info.xml here — run from the extension root." >&2; exit 2; }
+
+toolchain=/opt/civikitchen-eslint
+if [ ! -x "$toolchain/node_modules/.bin/eslint" ]; then
+  # Running out of a civikitchen checkout (developing the tool itself) rather
+  # than from the image that installs the toolchain.
+  candidate="$(cd "$(dirname "${BASH_SOURCE[0]}")/eslint" && pwd)"
+  if [ -x "$candidate/node_modules/.bin/eslint" ]; then
+    toolchain="$candidate"
+  else
+    echo "ckeslint: no ESLint toolchain at /opt/civikitchen-eslint — is this a civikitchen image?" >&2
+    exit 2
+  fi
+fi
+
+# Is there anything to lint at all? The same exclusions the baseline config
+# ignores, applied here too: a repo whose only JS is a vendored minified bundle
+# has no JS worth a gate, and finding that out from `git ls-files` costs
+# milliseconds where booting ESLint to discover it costs seconds.
+#
+# git ls-files, not find: a build tree or a stray node_modules/ in a developer's
+# checkout is not this repo's code, and the file list that matters is the one
+# that is committed.
+if [ "${#paths[@]}" -eq 0 ]; then
+  # `|| true` on the grep chain, not decoration: grep exits 1 when it filters
+  # everything away, and under `pipefail` that would abort the script on the
+  # exact case this block exists to detect — a repo with no JS at all.
+  count=$({ git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' 2>/dev/null \
+    | grep -Ev '(^|/)(node_modules|vendor|dist|build|bower_components|packages|\.civikitchen-siblings)/' \
+    | grep -Ev '\.(min|bundle)\.(js|ts)$' || true; } | wc -l | tr -d ' ')
+  if [ "$count" = 0 ]; then
+    echo "ckeslint: no JavaScript or TypeScript in this repo — nothing to lint."
+    exit 0
+  fi
+  echo "ckeslint: $count JS/TS file(s) to lint."
+  paths=(.)
+fi
+
+args=()
+[ "$fix" -eq 1 ] && args+=(--fix)
+
+# The project's own config wins, and it wins by ABSENCE of -c: ESLint's own
+# lookup then finds it, including a config that lives in a parent directory or
+# is named eslint.config.ts. Naming it explicitly here would guess at the
+# extension and get the .ts case wrong.
+if compgen -G 'eslint.config.*' > /dev/null; then
+  # A repo that owns its config owns its plugins too: ESLint resolves the
+  # imports in THAT file against THAT file's directory, so `@eslint/js` there
+  # means the repo's node_modules, not the toolchain's. Said out loud, because
+  # the alternative is a module-resolution stack trace that reads like a broken
+  # tool. In CI that means the repo also turns `npm_ci` on.
+  echo "ckeslint: using this repo's own eslint.config.* (the CiviKitchen baseline does not apply; its plugins must be installed in this repo's node_modules)."
+else
+  # Relative patterns in an externally-supplied flat config resolve against the
+  # working directory, so the baseline's `files`/`ignores` apply to the
+  # extension — verified, not assumed; it is the one behaviour this whole
+  # arrangement rests on.
+  args+=(-c "$toolchain/eslint.config.mjs")
+fi
+
+# node_modules for the plugins comes from the toolchain directory the config
+# lives in (ESM imports resolve against the importing module), so nothing has
+# to be installed in the extension. NODE_PATH is deliberately NOT set: it would
+# let a half-installed tree in the project shadow the pinned plugins.
+#
+# `${args[@]+...}`: an empty array under `set -u` is an unbound variable on
+# bash 3.2 (macOS, where this tool is also developed) — the case a repo with
+# its own eslint.config.* and no --fix lands in.
+exec "$toolchain/node_modules/.bin/eslint" ${args[@]+"${args[@]}"} "${paths[@]}"

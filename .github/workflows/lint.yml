@@ -24,7 +24,12 @@ jobs:
           # places. They are all clean; keep them that way.
           find images examples tools -name '*.sh' -print0 \
             | xargs -0 shellcheck -S style
-          find images/lib -maxdepth 1 -type f -name 'ck*' -print0 \
+          # -not -name '*.php': a ck* tool may have a PHP payload beside it,
+          # and shellcheck handed a PHP file reports a hundred findings about a
+          # file that is not shell at all. (cksmarty's payload is named
+          # civikitchen-smarty-compile.php for the same reason — belt and
+          # braces, because the next one will be named cksomething.php.)
+          find images/lib -maxdepth 1 -type f -name 'ck*' -not -name '*.php' -print0 \
             | xargs -0 shellcheck -S style
           echo "shellcheck clean"
 

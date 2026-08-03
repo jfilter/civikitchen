@@ -183,7 +183,28 @@ exec php ${PHPSTAN_DIR}/vendor/bin/phpstan "\$@"
 EOF
 chmod +x /usr/local/bin/phpstan
 
-rm -rf /opt/composer/cache
+# ---------------------------------------------------------------------------
+# ESLint toolchain (powers `ckeslint`) — installed into the directory the
+# Dockerfile COPYd the baseline flat config to, so the config's plugin imports
+# resolve against the node_modules right beside it.
+#
+# In the IMAGE and not in eleven package.json files, for the same reason the
+# phpcs standard lives here: an extension's frontend is a handful of files, and
+# an eslint devDependency block per repo is eleven trees to keep in step and
+# eleven dependabot PRs a month for a linter nobody chose per-repo. A repo that
+# wants its own rules writes an eslint.config.* and ckeslint steps aside.
+#
+# Versions are pinned in that package.json, not floated with a caret, and the
+# lockfile beside it is committed and installed with `npm ci`: the image tags
+# rebuild monthly, and an ESLint minor that adds a rule to `recommended` — or a
+# transitive dependency moving underneath a pinned direct one — would turn a
+# green repo red with no code change. Exactly what the phpstan pin above
+# prevents on the PHP side, and the same rule this project's own standards put
+# on every extension's lockfile.
+ESLINT_DIR=/opt/civikitchen-eslint
+npm ci --prefix "${ESLINT_DIR}" --no-audit --no-fund --loglevel=error
+
+rm -rf /opt/composer/cache ~/.npm
 chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" \
     /opt/civikitchen-rector "${PHPSTAN_DIR}" "${PHPSTAN_EXT_DIR}" \
-    /opt/civikitchen-phpstan-config
+    /opt/civikitchen-phpstan-config "${ESLINT_DIR}"

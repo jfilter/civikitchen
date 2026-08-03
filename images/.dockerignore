@@ -1,0 +1,9 @@
+# The image build context is images/ (so the Dockerfiles can COPY lib/*).
+#
+# lib/eslint/ is a package.json + lockfile and a flat config; the tree they
+# describe is installed INSIDE the image by install-dev-tools.sh (`npm ci`). A
+# node_modules/ left there by someone running the toolchain from a checkout
+# would otherwise be copied into the context — megabytes of host-built binaries
+# that `npm ci` deletes on its first line anyway, and that carry the host's
+# platform rather than the image's.
+lib/eslint/node_modules

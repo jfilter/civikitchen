@@ -83,6 +83,17 @@ on:
           existed at that tag; both are checked and reported, not skipped.
         type: boolean
         default: false
+      schema_parity:
+        description: >-
+          Schema-parity job: install the last release and upgrade it to HEAD,
+          then install HEAD fresh, and diff the two schemas over the
+          extension's OWN tables. Answers what the upgrade job cannot — the
+          upgrader ran, but did it ARRIVE where install() does. Two stack boots
+          on one runner; scheduled caller, not the push run. Skips itself with
+          a log line when the extension declares no tables or nothing has been
+          released yet.
+        type: boolean
+        default: false
       core_upgrade_from:
         description: >-
           Core-upgrade persistence job: install on THIS image, seed, move the
@@ -489,6 +500,43 @@ jobs:
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && ckdeps"
 
+      # The runtime half of the Smarty story. ckconform's template checks are
+      # static: they know a Page has no .tpl and that a `{ts}` is unscoped, and
+      # they say so in their own headers that they cannot tell whether a
+      # template COMPILES. That depends on the Smarty major this image ships,
+      # on the prefilters CRM_Core_Smarty installs, and on which `{crm*}`
+      # plugins are registered — including the ones the extension registers
+      # itself. All three exist only in a booted site, which is what this job
+      # already has.
+      #
+      # It also compiles the installed managed MessageTemplate BODIES, the one
+      # artifact nothing else in this pipeline can see at all: a Smarty string
+      # in the database, first compiled when the workflow fires, i.e. on a
+      # production site at the moment someone donates.
+      #
+      # A step here rather than a job of its own precisely because the boot is
+      # the expensive part and this job has already paid for it.
+      - name: Smarty compile smoke (cksmarty)
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && cksmarty"
+
+      # JS/TS linting with the image's pinned ESLint toolchain and the bundled
+      # baseline config — the same arrangement as cklint and the bundled phpcs
+      # standard, and for the same reason: eleven repos should not each carry
+      # an eslint devDependency block to drift.
+      #
+      # In the container, not on the runner, so it needs no Node setup step and
+      # no npm install: the toolchain is already installed in the image. Passes
+      # with a log line for the many extensions whose frontend is a couple of
+      # Angular files or nothing at all.
+      - name: ESLint (ckeslint)
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && ckeslint"
+
       # Same lifecycle block as the compat job below — deliberately duplicated
       # rather than factored out: a reusable workflow cannot share steps
       # between its own jobs, and pulling this into a script would mean
@@ -610,6 +658,176 @@ jobs:
             | tr -d '[:space:]')
           [ "$status" = installed ] \
             || { echo "upgrade: extension ended up '$status', expected 'installed'" >&2; exit 1; }
+
+      - name: App logs on failure
+        if: failure()
+        run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
+
+  # --- Schema parity (opt-in via schema_parity) -----------------------------
+  #
+  # The question the `upgrade` job leaves open. That one proves the upgrader
+  # RUNS and leaves nothing pending. It cannot tell you whether it ARRIVES
+  # where install() does — and install() and the upgrade_NNNN() chain are two
+  # independent descriptions of the same schema with nothing keeping them in
+  # step. NOT NULL in one and nullable in the other, varchar(64) here and
+  # varchar(255) there, an index the installer creates and the upgrader forgets:
+  # every fresh install is fine, every upgraded site is quietly different, and
+  # no later upgrader will ever reconcile them because none of them knows.
+  #
+  # Two databases in one stack, in this order:
+  #   B: install the last release, move the mount to HEAD, `cv upgrade:db` —
+  #      literally the `upgrade` job, whose result is the upgraded schema;
+  #   A: `down -v` and boot again on HEAD — a fresh install of this commit.
+  # Then diff A against B over the extension's OWN tables. Core's tables are
+  # not this extension's business and would drown the signal.
+  #
+  # mysqldump + a normalised text diff rather than Atlas — the reasoning is in
+  # images/lib/ckschemadiff, short version: the CI stack publishes no database
+  # port, so any tool has to run in the app container, and that container
+  # already ships a mysql client.
+  #
+  # Two boots on one runner, so: scheduled caller, like every other opt-in job
+  # here.
+  schema-parity:
+    if: ${{ inputs.schema_parity }}
+    runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    env:
+      CK_COMPOSE_FILE: ${{ inputs.compose_file }}
+      CK_EXT_KEY: ${{ inputs.key }}
+      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+    steps:
+      # Same reasoning as in `upgrade`: this job moves the working tree between
+      # two commits, so a vendor/ built once on the runner would belong to the
+      # wrong one for half the job.
+      - name: Reject the unsupported private-dependency combination
+        if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
+        run: |
+          echo "composer_install / sibling_repo are wired into the ci job only — this job would boot the extension without them. Turn this job off, or open an issue to have it wired up too." >&2
+          exit 1
+
+      # Full history: the previous release tag has to be checkoutable.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate inputs
+        run: |
+          [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
+            || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
+
+      # Two cheap questions before anything boots, because the expensive part of
+      # this job is two CiviCRM installs and neither is worth paying for if the
+      # answer is already known. Both are SKIPS with a log line, not failures:
+      # unlike `upgrade`, where a repo with no tag has switched on a check it
+      # cannot satisfy, this job's preconditions are ordinary states for a
+      # perfectly healthy extension — plenty of them own no tables at all, and
+      # every repo has a first commit before its first release.
+      #
+      # The table question is answered from the repo's schema DECLARATIONS
+      # (schema/*.entityType.php, xml/schema/**), which is also what the diff
+      # later scopes itself to. Done in a plain grep here rather than by running
+      # ckschemadiff: no container exists yet, and this only has to be right
+      # about "any" versus "none".
+      - name: Decide whether there is anything to compare
+        id: gate
+        run: |
+          set -euo pipefail
+          tables=0
+          if compgen -G 'schema/*.entityType.php' > /dev/null \
+            || { [ -d xml/schema ] && [ -n "$(find xml/schema -name '*.xml' -print -quit)" ]; }; then
+            tables=1
+          fi
+          prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ "$tables" = 0 ]; then
+            echo "schema parity: this extension declares no tables of its own (no schema/*.entityType.php, no xml/schema) — nothing to compare."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$prev" ]; then
+            echo "schema parity: no reachable git tag — there is no released schema to upgrade from yet."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git cat-file -e "$prev:$CK_COMPOSE_FILE" 2>/dev/null; then
+            echo "schema parity: $prev predates $CK_COMPOSE_FILE — that release cannot boot its own stack."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "schema parity: comparing a fresh install of HEAD against $prev upgraded to HEAD."
+          {
+            echo "run=true"
+            echo "prev=$prev"
+            # What actions/checkout put in the tree (on a PR: the merge commit),
+            # resolved before anything moves HEAD.
+            echo "head=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      # --- B: the last release, upgraded to HEAD ---------------------------
+      - name: Check the previous release into the mount
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        run: git checkout --force --detach "$PREV"
+        env:
+          PREV: ${{ steps.gate.outputs.prev }}
+
+      - name: Start CiviCRM stack on the previous release
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
+
+      - name: Move the mount to this commit
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        run: git checkout --force --detach "$HEAD_REF"
+        env:
+          HEAD_REF: ${{ steps.gate.outputs.head }}
+
+      # `cv flush` first for the same reason the upgrade job does it: the boot
+      # cached the OLD release's class and container maps, and the upgrader
+      # about to run belongs to the new code.
+      #
+      # The dump has to leave the container before the next step destroys it,
+      # and it leaves via `docker compose cp` rather than by being written into
+      # the bind mount: the workspace belongs to the runner user, and this
+      # command runs as www-data, which cannot write there.
+      - name: Upgrade the extension schema and dump it
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        run: |
+          set -euo pipefail
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "set -e
+             cd /var/www/html/ext/$CK_EXT_KEY
+             cv flush
+             cv upgrade:db --mode=ext
+             ckschemadiff dump \"\${CIVICRM_DB_NAME:-civicrm}\" /tmp/ck-schema-upgraded.sql"
+          docker compose -f "$CK_COMPOSE_FILE" cp \
+            app:/tmp/ck-schema-upgraded.sql "$RUNNER_TEMP/ck-schema-upgraded.sql"
+
+      # --- A: a fresh install of HEAD --------------------------------------
+      #
+      # `down -v` and not just `down`: the whole point is a database that has
+      # never seen the old release. The CI stack gives mariadb an anonymous
+      # volume, and -v is what guarantees it goes rather than being reattached.
+      # The working tree is already at HEAD, so the boot installs this commit.
+      - name: Reinstall from scratch on this commit
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        run: |
+          set -euo pipefail
+          docker compose -f "$CK_COMPOSE_FILE" down -v
+          docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
+
+      # The upgraded dump goes back INTO the new container rather than the diff
+      # being run on the runner: `ckschemadiff diff` is where the explanation of
+      # what a difference means lives, and duplicating that text into the
+      # workflow is how the two versions of it start disagreeing.
+      - name: Dump the freshly installed schema and compare
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        run: |
+          set -euo pipefail
+          docker compose -f "$CK_COMPOSE_FILE" cp \
+            "$RUNNER_TEMP/ck-schema-upgraded.sql" app:/tmp/ck-schema-upgraded.sql
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "set -e
+             cd /var/www/html/ext/$CK_EXT_KEY
+             ckschemadiff dump \"\${CIVICRM_DB_NAME:-civicrm}\" /tmp/ck-schema-fresh.sql
+             ckschemadiff diff /tmp/ck-schema-fresh.sql /tmp/ck-schema-upgraded.sql"
 
       - name: App logs on failure
         if: failure()

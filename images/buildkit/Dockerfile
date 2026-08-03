@@ -121,10 +121,20 @@ COPY lib/ckmodernize /usr/local/bin/ckmodernize
 COPY lib/civikitchen-phpstan /opt/civikitchen-phpstan-ext
 # Ban lists as config (spaze/phpstan-disallowed-calls); inert until included.
 COPY lib/civikitchen-phpstan-config /opt/civikitchen-phpstan-config
+# Smarty compile smoke (needs a booted site — drives `cv scr`), schema parity,
+# and the pinned ESLint toolchain + baseline config. Kept in lockstep with the
+# standalone image: a tool that exists in one and not the other is how a repo's
+# CI starts depending on which image it happens to run on.
+COPY lib/cksmarty /usr/local/bin/cksmarty
+COPY lib/civikitchen-smarty-compile.php /usr/local/share/civikitchen/cksmarty-compile.php
+COPY lib/ckschemadiff /usr/local/bin/ckschemadiff
+COPY lib/eslint /opt/civikitchen-eslint
+COPY lib/ckeslint /usr/local/bin/ckeslint
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
-        /usr/local/bin/ckrelease /usr/local/bin/ckmodernize
+        /usr/local/bin/ckrelease /usr/local/bin/ckmodernize \
+        /usr/local/bin/cksmarty /usr/local/bin/ckschemadiff /usr/local/bin/ckeslint
 
 # PHP runtime tuning — matches what civibuild expects for site builds.
 RUN { \
