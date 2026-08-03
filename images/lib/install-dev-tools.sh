@@ -27,22 +27,50 @@ CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
 # rector powers `ckmodernize`; pin it too so a rebuild can't silently change
 # what gets rewritten.
 RECTOR_VERSION="${RECTOR_VERSION:-2.4.6}"
-# civix is intentionally NOT pinned: it ships only as a floating phar on
-# download.civicrm.org (no versioned URLs), and as a scaffolding tool it
-# generates code on demand rather than running in CI, so its drift doesn't turn
-# existing extensions' pipelines red.
+# download.civicrm.org also serves versioned civix phars next to the floating
+# civix.phar, so the scaffolding tool can be pinned like everything else.
+CIVIX_VERSION="${CIVIX_VERSION:-26.02.0}"
+# phpunit 9 is the last line CiviCRM's test base supports; pin the patch too.
+PHPUNIT_VERSION="${PHPUNIT_VERSION:-9.6.35}"
 
 # ---------------------------------------------------------------------------
 # Phars: civix, phpunit, phpstan
-curl -LsS https://download.civicrm.org/civix/civix.phar -o /usr/local/bin/civix
-chmod +x /usr/local/bin/civix
+#
+# A pinned version only pins what the server chooses to serve — over TLS or
+# not, an unverified phar is arbitrary code entering every image. The hashes
+# below are the actual pin. Re-derive them after a version bump with:
+#
+#   curl -LsS <url> | shasum -a 256      # or sha256sum on Linux
+#
+# A mismatch is fatal on purpose: it means the artifact behind a version that
+# is supposed to be immutable changed. Overriding a *_VERSION at build time
+# therefore means overriding its *_SHA256 as well.
+CIVIX_SHA256="${CIVIX_SHA256:-1c480133bee248c1f09f19c724e2e44266297b63ff2e55a7cbf3ea17a910d906}"
+PHPUNIT_SHA256="${PHPUNIT_SHA256:-f39d634a5e5bcafd71565b33328ae4fb173703296c12ac94a24550cb8291e964}"
+PHPSTAN_SHA256="${PHPSTAN_SHA256:-487ab20ffe29ce405cf19b4e803933aa7dd97cdb871f457ca57fc9267f5a0f1a}"
 
-curl -LsS https://phar.phpunit.de/phpunit-9.phar -o /usr/local/bin/phpunit
-chmod +x /usr/local/bin/phpunit
+# Compared in the shell rather than with `sha256sum -c`: that exits 0 on a
+# malformed checksum line, so an empty or truncated *_SHA256 would wave the
+# download straight through.
+fetch_phar() {
+    local url="$1" dest="$2" want="$3" got
+    curl -LsS "${url}" -o "${dest}"
+    got=$(sha256sum < "${dest}" | cut -d' ' -f1)
+    if [ "${got}" != "${want}" ]; then
+        echo "checksum mismatch for ${url}: expected ${want}, got ${got}" >&2
+        exit 1
+    fi
+    chmod +x "${dest}"
+}
 
-curl -LsS "https://github.com/phpstan/phpstan/releases/download/${PHPSTAN_VERSION}/phpstan.phar" \
-    -o /usr/local/bin/phpstan
-chmod +x /usr/local/bin/phpstan
+fetch_phar "https://download.civicrm.org/civix/civix-${CIVIX_VERSION}.phar" \
+    /usr/local/bin/civix "${CIVIX_SHA256}"
+
+fetch_phar "https://phar.phpunit.de/phpunit-${PHPUNIT_VERSION}.phar" \
+    /usr/local/bin/phpunit "${PHPUNIT_SHA256}"
+
+fetch_phar "https://github.com/phpstan/phpstan/releases/download/${PHPSTAN_VERSION}/phpstan.phar" \
+    /usr/local/bin/phpstan "${PHPSTAN_SHA256}"
 
 # ---------------------------------------------------------------------------
 # phpcs (from packagist) + civicrm/coder fork (cloned directly).
