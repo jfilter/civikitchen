@@ -123,6 +123,53 @@ else
     fail "cklint didn't report the legacy call (output: ${CKLINT_OUT:0:200})"
 fi
 
+# Warning tier: a phpcs warning is reported but must not fail the gate, while
+# an error still does. Scoped to a two-sniff project ruleset so the assertion
+# is about cklint's exit code, not about the rest of the standard. No git init
+# here, so the mago stage skips itself and only the phpcs stage is under test.
+WARNDIR="${WORKDIR}/warnext"
+mkdir -p "${WARNDIR}"
+cat > "${WARNDIR}/phpcs.xml.dist" <<'XML'
+<?xml version="1.0"?>
+<ruleset name="WarnGate">
+  <rule ref="CiviKitchen.Modern.NameBooleanArguments"/>
+  <rule ref="CiviKitchen.I18n.UseExtensionTs"/>
+  <file>.</file>
+</ruleset>
+XML
+cat > "${WARNDIR}/Warn.php" <<'PHP'
+<?php
+
+declare(strict_types=1);
+
+function acme_probe(): void {
+  acme_helper('x', TRUE);
+}
+PHP
+cat > "${WARNDIR}/Err.php" <<'PHP'
+<?php
+
+declare(strict_types=1);
+
+function acme_label(): string {
+  return ts('hello');
+}
+PHP
+if WARN_OUT="$( (cd "${WARNDIR}" && cklint Warn.php) 2>&1 )"; then
+    if echo "${WARN_OUT}" | grep -qi "warning"; then
+        ok "cklint reports a phpcs warning and still exits 0"
+    else
+        fail "cklint exited 0 but swallowed the warning (output: ${WARN_OUT:0:300})"
+    fi
+else
+    fail "cklint failed on a warning-only file (output: ${WARN_OUT:0:300})"
+fi
+if ERR_OUT="$( (cd "${WARNDIR}" && cklint Err.php) 2>&1 )"; then
+    fail "cklint exited 0 on a phpcs error (output: ${ERR_OUT:0:300})"
+else
+    ok "cklint still fails on a phpcs error"
+fi
+
 # cklint's second engine: a mago bug-pattern rule fires, a house-idiom rule
 # stays disabled by the bundled baseline, and @mago-expect suppresses.
 MAGODIR="${WORKDIR}/magoext"

@@ -9,6 +9,10 @@
 # civilint: syntax + style in one command, changed-files by default. PHPStan
 # stays a separate step (it needs the project's bootstrap/config).
 #
+# phpcs warnings are reported but do not fail the run (errors do): the standard
+# marks a sniff as a warning exactly when a human has to judge the site. mago
+# findings stay gate-relevant — its baseline fails from level "note" up.
+#
 set -euo pipefail
 
 usage() {
@@ -25,6 +29,9 @@ root. If the project ships a phpcs.xml/.dist it is used as-is; otherwise the
 bundled CiviKitchen standard applies. The same override rule holds for the
 mago stage: a committed mago.toml beats the bundled baseline. Suppress a
 single mago finding with a `// @mago-expect lint:<rule>` line above it.
+
+phpcs warnings are printed but do not fail the run; phpcs errors and every
+mago finding do.
 EOF
 }
 
@@ -73,7 +80,11 @@ fi
 # codebase its own CI already lints. A CLI --ignore rather than one more
 # <exclude-pattern> in the bundled standard: the pattern then holds no matter
 # which ruleset the project supplies.
-args=(-q --ignore='*/.civikitchen-siblings/*')
+#
+# ignore_warnings_on_exit: phpcs exits 1 on warnings too, which would make the
+# standard's deliberate warning tier (a call site only a human can judge) as
+# blocking as an error. The warnings stay in the report, they just don't fail.
+args=(-q --ignore='*/.civikitchen-siblings/*' --runtime-set ignore_warnings_on_exit 1)
 if [ ! -f phpcs.xml ] && [ ! -f phpcs.xml.dist ]; then
   args+=(--standard=CiviKitchen --extensions=php)
 fi
