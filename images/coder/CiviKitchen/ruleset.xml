@@ -91,6 +91,10 @@
     <properties>
       <property name="spacesCountAroundEqualsSign" value="1"/>
     </properties>
+    <!-- The test bootstrap eval()s core's boot code, and eval() inherits the
+         calling file's strict_types — that would arm strict typing inside
+         CiviCRM, not just here. -->
+    <exclude-pattern>*/tests/phpunit/bootstrap.php</exclude-pattern>
   </rule>
 
   <!-- Sniffs in this standard's Sniffs/ dir are auto-discovered. -->
