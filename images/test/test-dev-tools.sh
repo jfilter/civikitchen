@@ -165,6 +165,33 @@ else
     ok "cklint mago stage honors @mago-expect"
 fi
 
+# too-many-methods is path-scoped in the baseline: a signal for production
+# classes, noise for a PHPUnit case. The per-rule `exclude` that does it is the
+# only path-aware setting in the config, so a mago upgrade dropping it is worth
+# catching here.
+mago_methods_class() {
+    { echo "<?php"; echo; echo "declare(strict_types=1);"; echo;
+      echo "class $1 {";
+      for i in $(seq 1 25); do echo "  public function m${i}(): void {}"; done
+      echo "}"; } > "$2"
+}
+mkdir -p "${MAGODIR}/tests/phpunit" "${MAGODIR}/Civi"
+rm -f "${MAGODIR}/Mago.php"
+mago_methods_class BigProd "${MAGODIR}/Civi/BigProd.php"
+mago_methods_class BigTest "${MAGODIR}/tests/phpunit/BigTest.php"
+(cd "${MAGODIR}" && git add -A) >/dev/null 2>&1
+MAGO_OUT3="$( (cd "${MAGODIR}" && cklint --all) 2>&1 || true)"
+if echo "${MAGO_OUT3}" | grep -q "Civi/BigProd.php.*too-many-methods"; then
+    ok "cklint mago stage flags too-many-methods in production code"
+else
+    fail "too-many-methods didn't fire outside tests/ (output: ${MAGO_OUT3:0:300})"
+fi
+if echo "${MAGO_OUT3}" | grep -q "tests/phpunit/BigTest.php.*too-many-methods"; then
+    fail "too-many-methods fired under tests/ — the baseline excludes that path"
+else
+    ok "cklint mago stage excludes tests/ from too-many-methods"
+fi
+
 # The sniffs' own unit tests ship with the standard (exact codes + line
 # numbers per fixture, zero findings on the modern counterparts, the
 # externalActions arming behavior).

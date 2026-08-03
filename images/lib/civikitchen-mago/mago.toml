@@ -5,9 +5,12 @@
 # [formatter] exists for one property, verified empirically before it shipped:
 # code formatted with it produces ZERO findings under the bundled CiviKitchen
 # phpcs standard (Drupal-based). Formatter and lint gate must never disagree,
-# or --fix and --check chase each other forever. If a mago upgrade ever breaks
-# that property, the fix belongs here (one more setting), not in the phpcs
-# ruleset.
+# or --fix and --check chase each other forever. Where a mago upgrade breaks
+# that, the fix is a setting here — or, where the formatter's layout is simply
+# a legitimate second opinion the Drupal sniff does not share, one named sniff
+# excluded in the phpcs ruleset (the formatter owns layout). Two such stand-offs
+# are known and documented in docs/extension-standards.md; both gates stay green
+# on formatter output either way.
 #
 # [linter] is cklint's second engine: the bug-pattern rules the phpcs standard
 # does not carry. The rule set is subtractive — mago's defaults minus anything
@@ -38,6 +41,11 @@ space-around-assignment-in-declare = true
 minimum-fail-level = "note"
 
 [linter.rules]
+# Turning a rule off retires its suppressions too: mago reports a disabled
+# rule's leftover `@mago-expect lint:<rule>` line as `unfulfilled-expect`
+# (warning), which this minimum-fail-level makes a failure. Rule out ⇒ its
+# expect lines out, same commit.
+#
 # Formatting, layout, and naming: ckfmt and the phpcs Drupal standard own
 # these; a second opinion here could only agree or contradict.
 array-style = { enabled = false }
@@ -75,3 +83,11 @@ no-isset = { enabled = false }
 # There is no TODO(#ticket) convention in these repos to enforce.
 tagged-todo = { enabled = false }
 tagged-fixme = { enabled = false }
+
+# `$x ?: fallback()` on a call result is the deliberate falsy-fallback idiom;
+# the rewrite this rule asks for evaluates the left-hand call twice.
+no-shorthand-ternary = { enabled = false }
+
+# A method count is a maintainability signal for production classes only — a
+# PHPUnit case with 30 test methods is the point. Prod keeps cyclomatic-complexity.
+too-many-methods = { enabled = true, exclude = ["tests/**", "**/tests/**"] }
