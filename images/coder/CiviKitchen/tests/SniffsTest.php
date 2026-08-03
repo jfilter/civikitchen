@@ -19,8 +19,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class SniffsTest extends TestCase {
 
-  private const SNIFFS = 'CiviKitchen.Legacy.NoLegacyCall,'
-    . 'CiviKitchen.Legacy.NoLegacyPageForm,'
+  private const SNIFFS = 'CiviKitchen.Legacy.NoLegacyPageForm,'
     . 'CiviKitchen.I18n.UseExtensionTs,'
     . 'CiviKitchen.Api.NoRequiredOnExternalAction,'
     . 'CiviKitchen.Api.NoGenericVarOnActionParam,'
@@ -29,8 +28,12 @@ final class SniffsTest extends TestCase {
     . 'CiviKitchen.Extension.UseMixinsForStandardHooks,'
     . 'CiviKitchen.Files.MaxFileLength';
 
-  /** Whole-file / call-site sniffs, exercised on their own fixtures. */
-  private const PHP8_SNIFFS = 'CiviKitchen.PHP.RequireStrictTypes,CiviKitchen.Modern.NameBooleanArguments';
+  /**
+   * Whole-file / call-site sniffs, exercised on their own fixtures. Includes
+   * the third-party sniff this standard configures: the wiring is ours to get
+   * wrong (registration, the no-spaces property), so it is ours to test.
+   */
+  private const PHP8_SNIFFS = 'SlevomatCodingStandard.TypeHints.DeclareStrictTypes,CiviKitchen.Modern.NameBooleanArguments';
 
   /**
    * Run phpcs over one fixture, restricted to the CiviKitchen sniffs, and
@@ -72,21 +75,6 @@ final class SniffsTest extends TestCase {
     }
     ksort($byLine);
     return $byLine;
-  }
-
-  public function testNoLegacyCallFlagsEveryDefaultBanOnTheExactLine(): void {
-    $findings = $this->phpcs('LegacyCalls.php');
-
-    $expected = [
-      7 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyFunction'],
-      8 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyFunction'],
-      9 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyStaticCall'],
-      10 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyStaticCall'],
-      11 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyStaticCall'],
-      12 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyStaticCall'],
-      13 => ['CiviKitchen.Legacy.NoLegacyCall.LegacyStaticCall'],
-    ];
-    self::assertSame($expected, $findings);
   }
 
   public function testUseExtensionTsFlagsBareAndFullyQualifiedTs(): void {
@@ -177,10 +165,16 @@ final class SniffsTest extends TestCase {
     self::assertSame([], $this->phpcs('CleanModern.php', NULL, self::PHP8_SNIFFS));
   }
 
-  public function testRequireStrictTypesFlagsTheFileOnItsOpeningTag(): void {
+  public function testDeclareStrictTypesIsWiredUpAndAcceptsTheFleetSpacing(): void {
     $findings = $this->phpcs('MissingStrictTypes.php', NULL, self::PHP8_SNIFFS);
 
-    self::assertSame([1 => ['CiviKitchen.PHP.RequireStrictTypes.MissingStrictTypes']], $findings);
+    // Reported on line 1: a missing declare is a whole-file fact. The clean
+    // fixtures above carry `strict_types=1` — unspaced, which the sniff only
+    // tolerates because this standard configures it to.
+    self::assertSame(
+      [1 => ['SlevomatCodingStandard.TypeHints.DeclareStrictTypes.DeclareStrictTypesMissing']],
+      $findings
+    );
   }
 
   public function testNameBooleanArgumentsFlagsOnlyBarePositionalLiterals(): void {

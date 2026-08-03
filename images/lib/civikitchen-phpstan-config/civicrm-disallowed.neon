@@ -1,0 +1,37 @@
+# CiviCRM call sites that have modern, mandatory replacements — the bans that
+# used to live in the hand-written CiviKitchen.Legacy.NoLegacyCall sniff.
+#
+# Now spaze/phpstan-disallowed-calls config instead of sniff code: the rules are
+# the same, but phpstan resolves types, so a ban also holds through a variable
+# (`$class::value()`) and an alias, which a token matcher cannot see.
+#
+# Shipped at /opt/civikitchen-phpstan/civicrm-disallowed.neon; a project opts in
+# with one `includes:` line (the template's phpstan.neon.dist has it).
+parameters:
+	disallowedFunctionCalls:
+		-
+			function: 'civicrm_api3()'
+			message: 'use civicrm_api4() / the APIv4 OO builders'
+		-
+			function: 'civicrm_api()'
+			message: 'use civicrm_api4() / the APIv4 OO builders'
+
+	disallowedStaticCalls:
+		-
+			method: 'CRM_Utils_Array::value()'
+			message: 'use the null-coalescing operator: $array[$key] ?? $default'
+		-
+			method: 'CRM_Core_Error::fatal()'
+			message: 'throw an exception — fatal() is gone from core'
+		-
+			method: 'CRM_Core_Error::debug_log_message()'
+			message: 'use \Civi::log()'
+		-
+			method: 'CRM_Core_Error::debug_var()'
+			message: 'use \Civi::log() with a context array'
+		-
+			method: 'PEAR::raiseError()'
+			message: 'construct new \PEAR_Error(...) — raiseError THROWS under the UnitTests UF'
+			# Test doubles are the one place raising is the point being tested.
+			allowIn:
+				- tests/*
