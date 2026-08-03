@@ -306,7 +306,15 @@ jobs:
             echo "no composer.lock, package-lock.json or bun.lock in the repository root — no dependencies to scan"
             exit 0
           fi
-          "$RUNNER_TEMP/osv-scanner" scan source "${args[@]}"
+          # 128 is osv-scanner's "no packages found" — a lockfile that locks
+          # nothing (extension with no runtime deps) is a pass, not a failure.
+          rc=0
+          "$RUNNER_TEMP/osv-scanner" scan source "${args[@]}" || rc=$?
+          if [ "$rc" -eq 128 ]; then
+            echo "osv-scanner found no packages in the scanned lockfiles — nothing to check"
+            exit 0
+          fi
+          exit "$rc"
 
   ci:
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
