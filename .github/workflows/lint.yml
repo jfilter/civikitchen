@@ -52,7 +52,26 @@ jobs:
       # checks are silent on success, so a rule that quietly stops matching
       # looks exactly like a clean repo — the tests are the only thing that
       # tells the difference. It has no composer dependencies, hence the phar.
+      # The hook catalog is generated from core, so it rots on its own: core
+      # adds hooks every release and a stale catalog reports them as typos.
+      # HookCatalogDriftTest regenerates and diffs, but SKIPS without a core
+      # checkout — so without this step the suite goes green while the gate
+      # never runs. Two files is all the generator reads; a full clone would
+      # cost minutes for the same answer. The ref comes from the catalog
+      # itself, so it can never disagree with what was committed.
+      - name: fetch the core release the hook catalog was generated from
+        run: |
+          ver=$(php -r 'require "images/ckconform/src/HookCatalog.php";
+            echo CiviKitchen\Ckconform\HookCatalog::CORE_VERSION;')
+          echo "pinned CiviCRM $ver"
+          mkdir -p /tmp/civicrm-core/CRM/Utils /tmp/civicrm-core/xml
+          base="https://raw.githubusercontent.com/civicrm/civicrm-core/$ver"
+          curl -fsSLo /tmp/civicrm-core/CRM/Utils/Hook.php "$base/CRM/Utils/Hook.php"
+          curl -fsSLo /tmp/civicrm-core/xml/version.xml "$base/xml/version.xml"
+
       - name: ckconform test suite
+        env:
+          CIVICRM_CORE_DIR: /tmp/civicrm-core
         run: |
           curl -fsSLo /tmp/phpunit.phar https://phar.phpunit.de/phpunit-9.6.35.phar
           php /tmp/phpunit.phar -c images/ckconform/phpunit.xml.dist

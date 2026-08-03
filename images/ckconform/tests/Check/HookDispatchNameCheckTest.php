@@ -183,8 +183,8 @@ final class HookDispatchNameCheckTest extends CheckTestCase
     public function testAnUnderscorePrefixIsStillChecked(): void
     {
         $context = $this->repo([
-            'info.xml' => $this->infoXml(key: 'mail_health'),
-            'mail_health.php' => "<?php\nfunction otherext_civicrm_post(\$op) {\n}\n",
+            'info.xml' => $this->infoXml(key: 'acme_widget'),
+            'acme_widget.php' => "<?php\nfunction otherext_civicrm_post(\$op) {\n}\n",
         ]);
         $this->assertFails($this->run_(new HookDispatchNameCheck(), $context), 'otherext');
     }
@@ -192,8 +192,214 @@ final class HookDispatchNameCheckTest extends CheckTestCase
     public function testAnUnderscorePrefixOwnHookPasses(): void
     {
         $context = $this->repo([
-            'info.xml' => $this->infoXml(key: 'mail_health'),
-            'mail_health.php' => "<?php\nfunction mail_health_civicrm_post(\$op) {\n}\n",
+            'info.xml' => $this->infoXml(key: 'acme_widget'),
+            'acme_widget.php' => "<?php\nfunction acme_widget_civicrm_post(\$op) {\n}\n",
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
+
+    public function testFailsOnARemovedHook(): void
+    {
+        // hook_civicrm_tabs went away in 5.31; the function is dead code that
+        // reads like a working feature.
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            function fixture_civicrm_tabs(&$tabs, $contactID) {
+            }
+            PHP,
+        ]);
+        $reporter = $this->run_(new HookDispatchNameCheck(), $context);
+        $this->assertFails($reporter, 'will never fire');
+        $this->assertFails($reporter, 'hook_civicrm_tabset');
+    }
+
+    public function testWarnsOnAHookCoreMarkedDeprecated(): void
+    {
+        // From the generated catalog: core carries @deprecated on dupeQuery.
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            function fixture_civicrm_dupeQuery($obj, $type, &$query) {
+            }
+            PHP,
+        ]);
+        $reporter = $this->run_(new HookDispatchNameCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'hook_civicrm_dupeQuery is deprecated');
+    }
+
+    public function testWarnsOnAHookDeprecatedOnlyInTheDocs(): void
+    {
+        // apiWrappers carries no marker in core at all — only the dev docs say
+        // it is deprecated, so it can only come from the curated list.
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            function fixture_civicrm_apiWrappers(&$wrappers, $apiRequest) {
+            }
+            PHP,
+        ]);
+        $reporter = $this->run_(new HookDispatchNameCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'civi.api.prepare');
+    }
+
+    /**
+     * The hook list used to be hand-maintained and ~56 hooks short, so ordinary
+     * core hooks were reported as typos. The catalog is generated now; this
+     * guards the regression with hooks that were missing from that old list.
+     */
+    public function testHooksAbsentFromTheOldHandWrittenListAreSilent(): void
+    {
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            function fixture_civicrm_alterRedirect(&$url, &$context) {
+            }
+
+            function fixture_civicrm_cryptoRotateKey($tag, $log) {
+            }
+
+            function fixture_civicrm_scanClasses(&$classes) {
+            }
+            PHP,
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
+
+    /**
+     * A third-party hook may share a name with one core has since dropped. The
+     * repo declaring it is the authority on its own dispatch.
+     */
+    public function testAPolicyDeclaredSuffixOutranksCoreHistory(): void
+    {
+        $context = $this->repo([
+            '.ckconform' => "known_hooks=tabs\n",
+            'fixture.php' => <<<'PHP'
+                <?php
+                function fixture_civicrm_tabs(&$tabs) {
+                }
+                PHP,
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
+
+    /** A foreign prefix is reported once, not also as deprecated/removed. */
+    public function testAForeignPrefixOnARemovedHookReportsOnlyThePrefix(): void
+    {
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            function otherext_civicrm_tabs(&$tabs) {
+            }
+            PHP,
+        ]);
+        $reporter = $this->run_(new HookDispatchNameCheck(), $context);
+        $this->assertFails($reporter, 'the hook prefix of this extension');
+        self::assertSame(1, $reporter->failures());
+    }
+
+    public function testWarnsOnATypoInAListenerString(): void
+    {
+        // The listener registers fine; the event just never arrives.
+        $context = $this->repo(['Civi/Fixture/Listener.php' => <<<'PHP'
+            <?php
+            \Civi::dispatcher()->addListener('hook_civicrm_pots', 'fixture_on_post');
+            PHP,
+        ]);
+        $reporter = $this->run_(new HookDispatchNameCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, "unknown hook suffix 'pots'");
+    }
+
+    public function testFailsOnAListenerStringForARemovedHook(): void
+    {
+        $context = $this->repo(['Civi/Fixture/Subscriber.php' => <<<'PHP'
+            <?php
+            class Subscriber extends \Civi\Core\Service\AutoSubscriber {
+              public static function getSubscribedEvents(): array {
+                return ['hook_civicrm_tabs' => 'onTabs'];
+              }
+            }
+            PHP,
+        ]);
+        $reporter = $this->run_(new HookDispatchNameCheck(), $context);
+        $this->assertFails($reporter, 'will never fire');
+        $this->assertFails($reporter, 'hook_civicrm_tabset');
+    }
+
+    public function testListenerStringsForLiveHooksAreSilent(): void
+    {
+        // '&' (by-reference marker) and '::Entity' (self_ scope) wrap the same
+        // name; dotted events are a namespace the catalog cannot judge.
+        $context = $this->repo(['Civi/Fixture/Subscriber.php' => <<<'PHP'
+            <?php
+            class Subscriber extends \Civi\Core\Service\AutoSubscriber {
+              public static function getSubscribedEvents(): array {
+                return [
+                  'hook_civicrm_post' => 'onPost',
+                  '&hook_civicrm_triggerInfo' => 'onTriggerInfo',
+                  'hook_civicrm_pre::Contact' => 'onContactPre',
+                  'civi.dao.postInsert' => 'onInsert',
+                ];
+              }
+            }
+            PHP,
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
+
+    public function testWarnsOnATypoInAListenerMethod(): void
+    {
+        // EventScanner binds hook_*/on_*/self_* methods by name — a typo'd
+        // method registers a listener no event will ever reach.
+        $context = $this->repo(['Civi/Fixture/Hooks.php' => <<<'PHP'
+            <?php
+            class Hooks implements \Civi\Core\HookInterface {
+              public function hook_civicrm_pots($op): void {
+              }
+            }
+            PHP,
+        ]);
+        $reporter = $this->run_(new HookDispatchNameCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'scan-classes listener');
+        $this->assertWarns($reporter, "unknown hook suffix 'pots'");
+    }
+
+    public function testListenerMethodsForLiveHooksAreSilent(): void
+    {
+        // All three EventScanner prefixes; on_civi_* maps to a dotted event
+        // outside the catalog's reach and must not be judged.
+        $context = $this->repo(['Civi/Fixture/Hooks.php' => <<<'PHP'
+            <?php
+            class Hooks implements \Civi\Core\HookInterface {
+              public function hook_civicrm_post($op): void {
+              }
+              public function on_hook_civicrm_pre($event): void {
+              }
+              public function self_hook_civicrm_pre($event): void {
+              }
+              public function on_civi_api_respond($event): void {
+              }
+            }
+            PHP,
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
+
+    public function testPolicyDeclaredSuffixCoversListenerForms(): void
+    {
+        // An extension dispatching its own hook names it as a string too; the
+        // .ckconform declaration is the authority for every binding form.
+        $context = $this->repo([
+            '.ckconform' => "known_hooks=acmeConnectors\n",
+            'Civi/Fixture/Registry.php' => <<<'PHP'
+                <?php
+                class Registry implements \Civi\Core\HookInterface {
+                  public function hook_civicrm_acmeConnectors(&$connectors): void {
+                  }
+                  public function collect(): void {
+                    \Civi::dispatcher()->dispatch('hook_civicrm_acmeConnectors');
+                  }
+                }
+                PHP,
         ]);
         $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
     }
