@@ -233,7 +233,9 @@ jobs:
   osv:
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       # Pinned version AND pinned checksum. Pinning the version alone still
       # trusts whatever that release tag serves on the day the job runs, and
@@ -842,9 +844,10 @@ jobs:
           exit 1
 
       # Full history: the previous release tag has to be checkoutable.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Validate inputs
         run: |
