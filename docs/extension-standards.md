@@ -39,10 +39,15 @@ unless `--force` is explicitly supplied. For an existing extension,
 
 ## Code
 
-- APIv4 only (`civicrm_api4()` / OO builders) — no `civicrm_api3()`
-  (`CiviKitchen.Legacy.NoLegacyCall`). The sniff reads PHP only, so `ckconform`
-  additionally rejects `CRM.api3` in JS/Smarty; annotate a genuine exception
-  with `ck-allow-api3 -- <reason>`.
+- APIv4 only (`civicrm_api4()` / OO builders) — no `civicrm_api3()`. Enforced
+  by phpstan, not phpcs: the bans live in
+  `/opt/civikitchen-phpstan-config/civicrm-disallowed.neon`
+  (spaze/phpstan-disallowed-calls) and the template's `phpstan.neon.dist`
+  includes it. Because phpstan resolves types, an indirect `$class::value()`
+  is caught too. An exception is an `allowIn`/`allowInMethods` entry in the
+  repo's own `phpstan.neon.dist`, with the reason next to it. phpstan reads PHP
+  only, so `ckconform` additionally rejects `CRM.api3` in JS/Smarty; annotate a
+  genuine exception there with `ck-allow-api3 -- <reason>`.
 - **An APIv4 entity has to exist in the core you claim to support.** Entities
   resolve at runtime, so `\Civi\Api4\Foo` compiles, passes phpstan and passes
   every test that never loads that page — then fatals in production. Check the
@@ -57,9 +62,11 @@ unless `--force` is explicitly supplied. For an existing extension,
   install-time imperative code.
 - phpstan level 10 clean (template `phpstan.neon.dist`), files ≤ 1000 lines
   (`CiviKitchen.Files.MaxFileLength`).
-- `declare(strict_types=1)` in every file (`CiviKitchen.PHP.RequireStrictTypes`,
-  `cklint --fix` inserts it). Without it the types phpstan verifies are
-  enforced by nothing at runtime.
+- `declare(strict_types=1)` in every file
+  (`SlevomatCodingStandard.TypeHints.DeclareStrictTypes`, configured by the
+  CiviKitchen standard for the fleet's unspaced form; `cklint --fix` inserts
+  it). Without it the types phpstan verifies are enforced by nothing at
+  runtime.
 - **One PHP floor, stated once and checked from three sides.**
   `composer.json` `require.php` is the source of truth; `info.xml`
   `<php_compatibility>` and phpstan's `phpVersion` must agree with it
@@ -94,7 +101,15 @@ unless `--force` is explicitly supplied. For an existing extension,
 - `phpunit.xml.dist` + headless tests per the template
   (`template/extension/`), incl. the `TEST_DB_DSN` bootstrap guard.
 - `phpstan.neon.dist` (level 10, no baseline, `phpVersion` at the declared
-  floor).
+  floor, and the `includes:` line for the CiviCRM ban list).
+- **Rule packs come from the image, not from each repo's `composer.json`.**
+  phpcs standards (civicrm/coder, PHPCompatibility, Slevomat) and phpstan
+  extensions (deprecation rules, disallowed-calls, strict-rules) are installed
+  and pinned once in `images/lib/install-dev-tools.sh` — an extension carries
+  no dev dependencies at all. Third-party rules are cherry-picked, never a
+  whole foreign standard, and every pack that would turn the fleet red at once
+  (`phpstan-strict-rules`) is installed but left out of the auto-registration
+  so a repo opts in with one `includes:` line when it is ready.
 - CI per `template/extension/.github/workflows/ci.yml` — a thin caller of the
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
   ckconform → phpunit under ckcoverage → phpstan → template-drift check), so
