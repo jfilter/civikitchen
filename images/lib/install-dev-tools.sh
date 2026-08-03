@@ -27,7 +27,9 @@ set -euo pipefail
 # tools would drift too, so a rebuild could silently bump phpstan to a new
 # major and turn a green `phpstan analyse` red with no code change. Override at
 # build time with --build-arg PHPSTAN_VERSION=... / CODER_REF=...
-PHPSTAN_VERSION="${PHPSTAN_VERSION:-2.2.2}"
+# FLOOR: 2.2.3 is the lowest release phpstan-phpunit 2.0.18 accepts (^2.2.3);
+# every other extension pinned below resolves against it, so keep the bump small.
+PHPSTAN_VERSION="${PHPSTAN_VERSION:-2.2.3}"
 # Reports every call into code marked @deprecated (or #[\Deprecated]). Not a
 # phpstan default and not implied by any level, including 10 — it ships as a
 # separate package. This is how deprecated CiviCRM *symbols* get caught without
@@ -67,6 +69,9 @@ CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
 # rector powers `ckmodernize`; pin it too so a rebuild can't silently change
 # what gets rewritten.
 RECTOR_VERSION="${RECTOR_VERSION:-2.4.6}"
+# CEILING: rector reads a private property of phpstan's RichParser that 2.2.6
+# removed, so its (loose ^2.2.2) phpstan must be pinned or every run fatals.
+RECTOR_PHPSTAN_VERSION="${RECTOR_PHPSTAN_VERSION:-2.2.5}"
 # PHPCompatibility powers `ckcompat`. See the require below for why an alpha.
 PHPCOMPATIBILITY_VERSION="${PHPCOMPATIBILITY_VERSION:-10.0.0-alpha2}"
 # psalm powers `cktaint`. Pinned for the same reason, and one more: a taint
@@ -209,7 +214,8 @@ phpcs --config-set installed_paths \
 # CiviCRM rules dir is COPYed to /opt/civikitchen-rector by the Dockerfile
 # before this script runs; here we add the pinned rector and dump the autoload.
 composer require --working-dir=/opt/civikitchen-rector --no-interaction --no-progress \
-    "rector/rector:${RECTOR_VERSION}"
+    "rector/rector:${RECTOR_VERSION}" \
+    "phpstan/phpstan:${RECTOR_PHPSTAN_VERSION}"
 
 # ---------------------------------------------------------------------------
 # phpstan (isolated install, same shape as rector above).
