@@ -1,0 +1,45 @@
+// Renovate keeps the pins current. SHA-pinning actions without an update path
+// is how a repo ends up on a two-year-old checkout with a known CVE — the pin
+// and the bot are one measure, not two.
+//
+// NOTE FOR THE MAINTAINER: this file does nothing on its own. Renovate has to
+// be enabled as a GitHub App on jfilter/civikitchen (github.com/apps/renovate)
+// — only a repo admin can do that. Until then the file is documentation.
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    // Rewrites `uses: owner/action@v1` to `owner/action@<sha> # v1` and keeps
+    // the trailing version comment in sync, so updates stay readable.
+    'helpers:pinGitHubActionDigests',
+  ],
+
+  // The moving major ref the extension repos call is a deliberate design
+  // decision (docs/releases.md), not a stale pin — keep the bot off it.
+  ignoreDeps: ['jfilter/civikitchen'],
+
+  // Base images in images/*/Dockerfile: pin to the digest as well, and keep
+  // the human-readable tag next to it.
+  docker: {
+    pinDigests: true,
+  },
+
+  packageRules: [
+    {
+      // One PR for all actions instead of one per action: the diff is a list
+      // of hashes either way, and eleven separate PRs get rubber-stamped.
+      matchManagers: ['github-actions'],
+      groupName: 'github actions',
+      // Digest-only bumps of an already-current tag are noise on their own.
+      automerge: false,
+    },
+    {
+      matchManagers: ['dockerfile', 'docker-compose'],
+      groupName: 'docker base images',
+    },
+  ],
+
+  // Renovate cannot see the phar hashes in images/lib/install-dev-tools.sh or
+  // .github/workflows/lint.yml — those are bumped by hand, hash included, per
+  // the instructions in those files.
+}

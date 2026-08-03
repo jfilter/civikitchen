@@ -78,7 +78,9 @@ jobs:
       CK_EXTRA_EXTENSIONS: ${{ inputs.extra_extensions }}
       CK_REQUIRE_CHANGELOG: ${{ inputs.require_changelog }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       # The archive is built from the tag, so there has to be one. A branch push
       # that reached this workflow would otherwise publish a release named after
@@ -93,8 +95,9 @@ jobs:
       # Pinned to the SHA this workflow was resolved from, so the ckrelease that
       # builds the artifact is the one belonging to the pinned contract — same
       # mechanism the drift job in extension-ci.yml uses.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
+          persist-credentials: false
           repository: jfilter/civikitchen
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
@@ -200,7 +203,7 @@ jobs:
           docker compose -f smoke-compose.yml logs app | tail -200
 
       - name: Upload the archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ckrelease-dist
           path: ${{ runner.temp }}/ckrelease/
@@ -213,9 +216,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ckrelease-dist
           path: ckrelease-dist

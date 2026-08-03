@@ -1,6 +1,7 @@
 # Static checks for everything that has no compiler: shell scripts (strict
 # shellcheck, style level), workflow files (actionlint, which also shellchecks
-# embedded run blocks), PHP syntax for seeds/scripts, and profile.json shape.
+# embedded run blocks, plus zizmor for their supply-chain posture), PHP syntax
+# for seeds/scripts, and profile.json shape.
 # Runs on every push/PR — fast, no Docker, no build dependency.
 name: Lint
 
@@ -9,12 +10,18 @@ on:
     branches: [main]
   pull_request:
 
+# Reads the repo and nothing else; do not inherit the org default token.
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - name: shellcheck (style level, fails on any finding)
         run: |
@@ -28,10 +35,30 @@ jobs:
             | xargs -0 shellcheck -S style
           echo "shellcheck clean"
 
+      # Every unverified curl in CI is a remote party choosing what runs here.
+      # The installer is a shell script piped into bash, so it gets the same
+      # treatment as the phars: pinned tag AND pinned content. Re-derive after
+      # a version bump with `curl -fsSL <url> | sha256sum`.
       - name: actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          INSTALLER_SHA256: 72fa3e45ac20f3c3a512d6747b4fcf719e21f890e8c43e78d48a41fdfb900c4e
         run: |
-          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12 .
+          set -euo pipefail
+          curl -fsSL -o download-actionlint.bash \
+            "https://raw.githubusercontent.com/rhysd/actionlint/v${ACTIONLINT_VERSION}/scripts/download-actionlint.bash"
+          echo "${INSTALLER_SHA256}  download-actionlint.bash" | sha256sum -c --strict -
+          bash download-actionlint.bash "${ACTIONLINT_VERSION}" .
           ./actionlint -color
+
+      # actionlint reads workflows as YAML+shell; zizmor reads them as a threat
+      # model — unpinned actions, expression injection into run blocks, tokens
+      # wider than the job needs, checkouts that leave credentials behind.
+      # Exemptions and their reasons live in zizmor.yml.
+      - name: zizmor
+        run: |
+          pipx run zizmor==1.29.0 --no-online-audits --config zizmor.yml \
+            .github/workflows template/extension/.github/workflows
 
       - name: php -l (seeds + profile scripts + tools)
         run: |
@@ -79,8 +106,14 @@ jobs:
       - name: ckconform test suite
         env:
           CIVICRM_CORE_DIR: /tmp/civicrm-core
+          # Same phar and same hash as images/lib/install-dev-tools.sh; bump
+          # both together. Re-derive with `curl -LsS <url> | sha256sum`.
+          PHPUNIT_VERSION: 9.6.35
+          PHPUNIT_SHA256: f39d634a5e5bcafd71565b33328ae4fb173703296c12ac94a24550cb8291e964
         run: |
-          curl -fsSLo /tmp/phpunit.phar https://phar.phpunit.de/phpunit-9.6.35.phar
+          set -euo pipefail
+          curl -fsSLo /tmp/phpunit.phar "https://phar.phpunit.de/phpunit-${PHPUNIT_VERSION}.phar"
+          echo "${PHPUNIT_SHA256}  /tmp/phpunit.phar" | sha256sum -c --strict -
           php /tmp/phpunit.phar -c images/ckconform/phpunit.xml.dist
 
       # The namespace catalog feeds the phpat boundary rule in every repo's

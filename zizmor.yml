@@ -1,0 +1,53 @@
+# zizmor (docs.zizmor.sh) audits the workflows for supply-chain footguns:
+# unpinned actions, expression injection, over-broad tokens, checkouts that
+# leave a usable token in .git/config. Run by the Lint workflow; locally:
+#
+#   pipx run zizmor==1.29.0 --no-online-audits --config zizmor.yml \
+#     .github/workflows template/extension/.github/workflows
+#
+# --no-online-audits keeps the run hermetic and deterministic: the online
+# audits (known-vulnerable-actions, stale-action-refs) would turn an upstream
+# advisory into a red build on an unrelated PR. Action updates arrive through
+# Renovate instead (renovate.json5).
+#
+# Every entry below is an exemption, and each one has to say why it is not a
+# finding. Nothing goes in here to make the run green.
+
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # The extension repos call this repo's reusable workflows at a moving
+        # major ref on purpose — workflow, template, ck* tools and images ship
+        # as one versioned contract, and fixes have to reach eleven repos
+        # without a PR in each. See docs/releases.md, which also spells out
+        # what a hash pin would cost. Third-party actions still need a hash.
+        jfilter/civikitchen/*: ref-pin
+        "*": hash-pin
+
+  template-injection:
+    ignore:
+      # `matrix.version` / `matrix.variant` come from resolve-civicrm, which
+      # accepts only ^[0-9]+\.[0-9]+(\.[0-9]+)?$ or the literal "latest" and
+      # exits non-zero otherwise — the values cannot carry shell syntax. The
+      # matrix is dynamic, so zizmor cannot see that check.
+      - build-dev-images.yml
+
+  cache-poisoning:
+    ignore:
+      # setup-node caches only when given a `cache:` input; this call does not
+      # pass one, so there is no cache for a tag build to poison.
+      - publish-schema.yml
+
+  use-trusted-publishing:
+    ignore:
+      # Trusted publishing (OIDC) is an npmjs.com feature; this package goes to
+      # GitHub Packages, where the scoped, run-lived GITHUB_TOKEN is the
+      # intended credential — there is no long-lived secret to replace.
+      - publish-schema.yml
+
+  artipacked:
+    ignore:
+      # The git-tag job force-pushes the moving major tag through exactly these
+      # persisted credentials. Dropping them would break the release.
+      - release.yml:203:9

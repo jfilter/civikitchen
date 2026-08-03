@@ -25,6 +25,10 @@ on:
         type: boolean
         default: false
 
+# The prune job widens this to packages: write; nothing else needs a token.
+permissions:
+  contents: read
+
 jobs:
   prune-candidates:
     runs-on: ubuntu-24.04
