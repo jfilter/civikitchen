@@ -119,6 +119,14 @@ unless `--force` is explicitly supplied. For an existing extension,
 
 - `phpcs.xml.dist` referencing `<rule ref="CiviKitchen"/>` (project layer on
   top is yours) — `cklint` picks it up automatically.
+- `cklint` also runs `mago lint` as a second engine: bug-pattern rules the
+  phpcs standard does not carry (loose `==`, empty catch blocks, `@`,
+  complexity ceilings). The rule set ships in the bundled `mago.toml` —
+  subtractive, mago's defaults minus everything another gate already owns
+  (phpcs/Slevomat/Rector/cktaint/spaze) and minus the CiviCRM house idiom
+  (`isset()`/`empty()` on API arrays). A deliberate single deviation is a
+  `// @mago-expect lint:<rule>` line in the code, visible in the diff; a
+  committed `mago.toml` replaces the baseline outright.
 - `phpunit.xml.dist` + headless tests per the template
   (`template/extension/`), incl. the `TEST_DB_DSN` bootstrap guard.
 - `phpstan.neon.dist` (level 10, no baseline, `phpVersion` at the declared

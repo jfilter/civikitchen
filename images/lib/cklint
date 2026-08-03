@@ -1,26 +1,30 @@
 #!/bin/bash
 #
-# cklint — fast PHP linting for CiviCRM extensions, using the bundled
-# CiviKitchen phpcs standard, or the project's own phpcs.xml/.dist when one is
-# present (so the per-extension layer always wins). A modern, deliberately
-# PHP-only take on civicrm-buildkit's civilint: syntax + style in one command,
-# changed-files by default. PHPStan stays a separate step (it needs the
-# project's bootstrap/config).
+# cklint — fast PHP linting for CiviCRM extensions, two engines in one gate:
+# phpcs with the bundled CiviKitchen standard (style + CiviCRM footgun sniffs;
+# a project phpcs.xml/.dist wins), and mago lint for the bug-pattern rules the
+# phpcs standard does not carry (loose comparisons, empty catch blocks, `@`,
+# complexity ceilings — rule set in the bundled mago.toml, a committed
+# mago.toml wins). A modern, deliberately PHP-only take on civicrm-buildkit's
+# civilint: syntax + style in one command, changed-files by default. PHPStan
+# stays a separate step (it needs the project's bootstrap/config).
 #
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-cklint — PHP linting for CiviCRM extensions (CiviKitchen phpcs standard).
+cklint — PHP linting for CiviCRM extensions (phpcs + mago lint).
 
   cklint                  lint PHP files with uncommitted git changes (default)
   cklint --all            lint the whole project (phpcs.xml.dist scope, or .)
   cklint path ...         lint the given files/dirs
-  cklint --fix [path...]  auto-fix with phpcbf instead of reporting
+  cklint --fix [path...]  auto-fix with phpcbf + mago instead of reporting
 
 Each PHP file is syntax-checked (php -l) before phpcs. Run from the project
 root. If the project ships a phpcs.xml/.dist it is used as-is; otherwise the
-bundled CiviKitchen standard applies.
+bundled CiviKitchen standard applies. The same override rule holds for the
+mago stage: a committed mago.toml beats the bundled baseline. Suppress a
+single mago finding with a `// @mago-expect lint:<rule>` line above it.
 EOF
 }
 
@@ -92,6 +96,59 @@ fi
 # else (--all with a project config): pass no path so phpcs uses the config's
 # own <file> scope instead of rescanning everything under '.'.
 
+rc=0
 bin=phpcs
 [ "$fix" -eq 1 ] && bin=phpcbf
-exec "$bin" "${args[@]}"
+"$bin" "${args[@]}" || rc=1
+
+# --- mago lint: the second engine --------------------------------------------
+libdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+mago_bin=$(command -v mago || true)
+[ -n "$mago_bin" ] || { echo "cklint: no mago on PATH — is this a civikitchen image?" >&2; exit 2; }
+mago_config=/opt/civikitchen-mago/mago.toml
+[ -f "$mago_config" ] || mago_config="$libdir/civikitchen-mago/mago.toml"
+
+# safe.directory per call, same as ckconform/ckfmt: in CI the checkout is
+# owned by the runner's uid while this runs as www-data, and git treats that
+# mismatch as dubious ownership — ls-files then silently reports nothing.
+ck_git() { git -c safe.directory="$PWD" "$@"; }
+if ! ck_git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "cklint: not a git checkout — skipping the mago lint stage (its file list comes from git)." >&2
+else
+  # Committed + new files, minus vendored and generated code — ckfmt's
+  # exclusion list plus the civix test bootstrap (its eval is template code).
+  list_php() {
+    { ck_git ls-files --cached --others --exclude-standard -- '*.php' 2>/dev/null \
+      | grep -Ev '(^|/)(node_modules|vendor|dist|build|bower_components|packages|\.civikitchen-siblings)/' \
+      | grep -Ev '\.civix\.php$' \
+      | grep -Ev '(^|/)DAO/' \
+      | grep -Ev '^tests/phpunit/bootstrap\.php$' || true; }
+  }
+  mago_files=()
+  if [ "$all" -eq 1 ]; then
+    while IFS= read -r f; do [ -n "$f" ] && mago_files+=("$f"); done < <(list_php)
+  else
+    # A path argument narrows the list, it never bypasses the exclusions.
+    while IFS= read -r f; do [ -n "$f" ] && mago_files+=("$f"); done < <(
+      comm -12 <(list_php | sort) \
+        <(ck_git ls-files --cached --others --exclude-standard -- "${paths[@]}" 2>/dev/null | sort -u)
+    )
+  fi
+  if [ "${#mago_files[@]}" -eq 0 ]; then
+    echo "cklint: no PHP files for the mago lint stage."
+  else
+    margs=()
+    # A committed mago.toml wins by ABSENCE of --config, exactly as in ckfmt.
+    if [ -f mago.toml ]; then
+      echo "cklint: using this repo's own mago.toml (the CiviKitchen lint baseline does not apply)."
+    else
+      margs+=(--config "$mago_config")
+    fi
+    lint_args=()
+    # Safe fixes only; re-format afterwards so --fix never trips the ckfmt gate.
+    [ "$fix" -eq 1 ] && lint_args+=(--fix --format-after-fix)
+    "$mago_bin" ${margs[@]+"${margs[@]}"} lint ${lint_args[@]+"${lint_args[@]}"} "${mago_files[@]}" || rc=1
+  fi
+fi
+
+exit "$rc"

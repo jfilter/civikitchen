@@ -123,6 +123,48 @@ else
     fail "cklint didn't report the legacy call (output: ${CKLINT_OUT:0:200})"
 fi
 
+# cklint's second engine: a mago bug-pattern rule fires, a house-idiom rule
+# stays disabled by the bundled baseline, and @mago-expect suppresses.
+MAGODIR="${WORKDIR}/magoext"
+mkdir -p "${MAGODIR}"
+cat > "${MAGODIR}/Mago.php" <<'PHP'
+<?php
+
+declare(strict_types=1);
+
+function magoext_probe(array $params): bool {
+  return !empty($params['id']) && @unlink('/tmp/nope');
+}
+PHP
+(cd "${MAGODIR}" && git init -q . && git add -A) >/dev/null 2>&1
+MAGO_OUT="$( (cd "${MAGODIR}" && cklint --all) 2>&1 || true)"
+if echo "${MAGO_OUT}" | grep -q "no-error-control-operator"; then
+    ok "cklint mago stage flags the error control operator"
+else
+    fail "cklint mago stage didn't flag @ (output: ${MAGO_OUT:0:300})"
+fi
+if echo "${MAGO_OUT}" | grep -q "no-empty"; then
+    fail "cklint mago stage runs no-empty — the baseline should disable it"
+else
+    ok "cklint mago stage honors the baseline's disabled rules"
+fi
+cat > "${MAGODIR}/Mago.php" <<'PHP'
+<?php
+
+declare(strict_types=1);
+
+function magoext_probe(array $params): bool {
+  // @mago-expect lint:no-error-control-operator
+  return !empty($params['id']) && @unlink('/tmp/nope');
+}
+PHP
+MAGO_OUT2="$( (cd "${MAGODIR}" && cklint --all) 2>&1 || true)"
+if echo "${MAGO_OUT2}" | grep -q "no-error-control-operator"; then
+    fail "@mago-expect did not suppress the finding (output: ${MAGO_OUT2:0:300})"
+else
+    ok "cklint mago stage honors @mago-expect"
+fi
+
 # The sniffs' own unit tests ship with the standard (exact codes + line
 # numbers per fixture, zero findings on the modern counterparts, the
 # externalActions arming behavior).
@@ -282,7 +324,7 @@ cat > "${FMTDIR}/acme.php" <<'PHP'
 declare(strict_types = 1);
 
 function acme_greet( string $name ){
-    if($name==null){ return 'nobody'; }
+    if($name===''){ return 'nobody'; }
   return "hi " . $name;
 }
 PHP
@@ -301,9 +343,10 @@ if FMT_OUT="$( (cd "${FMTDIR}" && ckfmt && ckfmt --check) 2>&1 )"; then
 else
     fail "ckfmt did not converge (output: ${FMT_OUT:0:300})"
 fi
-# The agreement property: formatted output is clean under the phpcs standard.
+# The agreement property: formatted output is clean under the full cklint
+# gate — the phpcs standard AND the mago lint baseline.
 if CKLINT_FMT_OUT="$( (cd "${FMTDIR}" && cklint --all) 2>&1 )"; then
-    ok "ckfmt output is clean under the CiviKitchen phpcs standard"
+    ok "ckfmt output is clean under the full cklint gate (phpcs + mago)"
 else
     fail "cklint rejects ckfmt output (output: ${CKLINT_FMT_OUT:0:300})"
 fi
