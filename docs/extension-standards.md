@@ -67,7 +67,8 @@ unless `--force` is explicitly supplied. For an existing extension,
 - `phpstan.neon.dist` (level 10, no baseline).
 - CI per `template/extension/.github/workflows/ci.yml` — a thin caller of the
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
-  ckconform → phpunit under ckcoverage → phpstan → template-drift check), so
+  ckconform → phpunit under ckcoverage → phpstan → template-drift check →
+  lockfile vulnerability scan), so
   the pipeline is defined once instead of copy-pasted per repo. The caller pins
   the released major (`@v1`) and the CI stack the matching `:v1` image —
   workflow, template, tools and images are one versioned contract, so they move
@@ -108,6 +109,103 @@ unless `--force` is explicitly supplied. For an existing extension,
   inherits the repository default, which on older repos and orgs is write-all —
   a lint job does not need to be able to push. Set it per job where a step
   genuinely writes (`packages: write` to push an image).
+
+## Known vulnerabilities: dependencies and images
+
+Two scanners, two layers, and neither replaces the other. The extension CI
+workflow scans what a repo *declares*; the image pipeline scans what a repo
+*runs on*. A CVE in the Debian base of the CI image appears in no lockfile
+anywhere, and a vulnerable npm dependency appears in no image — so a pipeline
+with only one of the two is blind in the direction it isn't looking.
+
+**Dependencies — `osv-scanner` in `extension-ci.yml`.** Its own job, alongside
+the template-drift check: it boots no CiviCRM stack, so it doesn't queue behind
+one, and a fresh advisory doesn't hide a red PHPUnit. It reads the *committed
+lockfiles in the repository root* — `composer.lock`, `package-lock.json`,
+`bun.lock` — one at a time and by name:
+
+- Lockfiles, not manifests. The range in `composer.json` says what *could* be
+  installed; the lock says what CI resolved and what every install actually
+  got. This is what the committed-lockfile rule above is for.
+- Root only, named explicitly. A recursive scan would also pick up the
+  lockfiles inside `vendor/` and `node_modules/` as soon as a previous step has
+  materialized them, and a dependency's own lockfile is not what this repo
+  ships.
+- A repo with none of the three — a PHP-only extension with no real composer
+  dependencies is the normal case — passes and **says so in the log**. An
+  opt-in check that quietly tests nothing is the failure mode this whole
+  pipeline argues against.
+
+There is no input to turn it off. An advisory published overnight can turn the
+fleet red without anyone pushing a commit, which is uncomfortable and also the
+point; the escape hatch is per finding, not per repo.
+
+That escape hatch is an **`osv-scanner.toml` in the repository root**, which the
+scanner discovers on its own because it sits beside the lockfiles — no flag, no
+workflow input. It excuses a single advisory or a whole package, and it makes
+you write down why:
+
+```toml
+[[IgnoredVulns]]
+id = "GHSA-xxxx-xxxx-xxxx"
+ignoreUntil = 2026-12-31T00:00:00Z
+reason = "only reachable through the CLI entry point, which this extension never calls"
+
+[[PackageOverrides]]
+name = "vendor/package"
+version = "1.2.3"
+ecosystem = "Packagist"
+ignore = true
+reason = "transitive dev-only dependency of the test harness"
+```
+
+`ignoreUntil` is enforced by the tool, not by convention: past that date the
+finding is back and the excuse has to be renewed or dropped. The reason is
+printed on every run, and an entry that no longer matches anything is reported
+as an unused ignore — so the file cleans itself up out loud instead of
+accumulating.
+
+**Images — `trivy` in `build-dev-images.yml`.** Runs after the candidate images
+are pushed, against the **published digest** resolved from the registry, not
+against a tag and not against the Dockerfile: only the digest is the artifact
+someone actually pulls. `imagetools create` copies a manifest list intact, so
+the digest scanned is bit-for-bit the digest the promote jobs publish.
+
+The gate is `--ignore-unfixed --severity HIGH,CRITICAL --exit-code 1`, limited
+to `--scanners vuln`. Unfixed findings don't block because no rebuild here can
+clear them, and a gate that cannot be met only teaches people to ignore it. A
+second run, unfiltered and non-blocking, writes the full picture — every
+severity, unfixed included — into the job summary, which is what you want when
+triaging a finding that has started to matter.
+
+It reports rather than gates the release: the promote jobs don't wait for it. A
+base-image CVE is fixed by an upstream rebuild, and holding the image back would
+just freeze everyone on an older one with strictly more of them. On the weekly
+cron the scan is wired into the failure notification, so a finding on an
+unchanged image still opens an issue instead of sitting in a summary nobody
+opens.
+
+Central exceptions go in **`.trivyignore` in the civikitchen repository root**.
+Plain `.trivyignore` has no expiry field, so the discipline is a comment
+convention the file documents and reviewers enforce:
+
+```
+# why: <what makes this finding not apply to these images>
+# until: YYYY-MM-DD -- <what happens on that date>
+CVE-0000-00000
+```
+
+Nothing being excused is the state to keep.
+
+**Recommended, not implemented: secrets.** Neither scanner looks for
+credentials in git history, and the private extension repos are exactly where a
+deploy key or an API token gets committed once and then lives forever in a blob
+that no `git rm` removes. Two things worth doing once, outside this pipeline:
+run a history-wide secret scan over each private repo (`gitleaks detect`,
+`trufflehog git`, or GitHub's own secret scanning where the plan includes it),
+and switch on **GitHub Push Protection** organization-wide so the next one is
+refused at push time rather than found later. A rotated credential is cheap; a
+credential nobody knows is in the history is not.
 
 ## Tests and coverage
 

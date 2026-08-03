@@ -34,6 +34,9 @@
 # auto-installs, enables the mounted extension and seeds the civicrm_test scratch
 # DB, and cklint / ckconform / phpstan / ckcoverage all ship in that image. The
 # coverage floor comes from the repo's .ckconform, so it needs no input here.
+# The two exceptions run on the bare runner because they have nothing to ask a
+# CiviCRM about: the template-drift check, and the lockfile vulnerability scan
+# (osv-scanner) — docs/extension-standards.md ("Known vulnerabilities").
 name: Extension CI
 
 on:
@@ -195,6 +198,96 @@ jobs:
           path: .civikitchen-ci
       - name: Check template drift (ckinit --check)
         run: php .civikitchen-ci/tools/ckinit.php --check .
+
+  # Known vulnerabilities in the dependencies the repo actually ships. Read from
+  # the committed lockfiles, not from the ranges in composer.json/package.json:
+  # a range says what *could* be installed, the lock says what CI resolved and
+  # what every install got — and the lockfile rule in
+  # docs/extension-standards.md is what makes that file exist to be scanned.
+  #
+  # Its own job, and one that boots no CiviCRM stack: it has nothing to do with
+  # the extension's code, so it should not queue behind a container, and a fresh
+  # advisory must not hide a red PHPUnit. Same reasoning as the independent
+  # gates inside `ci`.
+  #
+  # Deliberately not an opt-in input. An advisory published overnight can turn
+  # the whole fleet red without a single commit, which is uncomfortable and also
+  # the entire point; the escape hatch is per finding (osv-scanner.toml, see the
+  # scan step), not per repo — a switch that turns the gate off is one nobody
+  # ever turns back on.
+  osv:
+    runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Pinned version AND pinned checksum. Pinning the version alone still
+      # trusts whatever that release tag serves on the day the job runs, and
+      # this step executes on every push in eleven repos. The hashes are the
+      # release's own osv-scanner_SHA256SUMS entries; a version bump moves both.
+      #
+      # Both Linux architectures, because runs_on can point at a self-hosted
+      # arm64 host. Anything else is named and fails rather than quietly
+      # scanning nothing.
+      - name: Install osv-scanner
+        env:
+          CK_OSV_VERSION: v2.4.0
+        run: |
+          set -euo pipefail
+          case "$(uname -s)/$(uname -m)" in
+            Linux/x86_64)
+              asset=osv-scanner_linux_amd64
+              sha=15314940c10d26af9c6649f150b8a47c1262e8fc7e17b1d1029b0e479e8ed8a0
+              ;;
+            Linux/aarch64)
+              asset=osv-scanner_linux_arm64
+              sha=44e580752910f0ff36ec99aff59af20f65df1e859aa31e5605a8f0d055b496e9
+              ;;
+            *)
+              echo "no pinned osv-scanner build for $(uname -s)/$(uname -m) — this job needs a Linux runner" >&2
+              exit 1
+              ;;
+          esac
+          curl -fsSL -o "$RUNNER_TEMP/osv-scanner" \
+            "https://github.com/google/osv-scanner/releases/download/$CK_OSV_VERSION/$asset"
+          echo "$sha  $RUNNER_TEMP/osv-scanner" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+          "$RUNNER_TEMP/osv-scanner" --version
+
+      # Named lockfiles at the repository ROOT, one -L each, instead of letting
+      # the scanner walk the tree: a directory scan also finds the lockfiles
+      # inside vendor/ and node_modules/ once a previous step has materialized
+      # them, and a dependency's own lockfile is not what this repo ships.
+      #
+      # A repo with none of the three is a normal, common state (a PHP-only
+      # extension with no real composer dependencies), so it passes — but it
+      # says so in one line. `osv-scanner scan source` on a tree with no
+      # package source exits 128 unless told otherwise, which is why the empty
+      # case is answered here rather than by --allow-no-lockfiles: a step that
+      # prints what it did NOT scan is the difference between an honest pass
+      # and a green tick over nothing.
+      #
+      # Exceptions live in an osv-scanner.toml in the repo root, which the
+      # scanner picks up on its own because it sits beside the lockfiles — no
+      # flag, no input here. It excuses a single advisory
+      # ([[IgnoredVulns]] with id/reason and an ignoreUntil date that makes the
+      # excuse expire) or a whole package ([[PackageOverrides]]), prints the
+      # reason on every run, and reports ignores that no longer match anything.
+      # docs/extension-standards.md has the shape.
+      - name: Scan lockfiles for known vulnerabilities (osv-scanner)
+        run: |
+          set -euo pipefail
+          args=()
+          for lock in composer.lock package-lock.json bun.lock; do
+            if [ -f "$lock" ]; then
+              echo "scanning $lock"
+              args+=(-L "$lock")
+            fi
+          done
+          if [ ${#args[@]} -eq 0 ]; then
+            echo "no composer.lock, package-lock.json or bun.lock in the repository root — no dependencies to scan"
+            exit 0
+          fi
+          "$RUNNER_TEMP/osv-scanner" scan source "${args[@]}"
 
   ci:
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}

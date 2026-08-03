@@ -1,0 +1,22 @@
+# Central exceptions for the image scan in .github/workflows/build-dev-images.yml
+# (`trivy image`, gate policy: --ignore-unfixed --severity HIGH,CRITICAL).
+#
+# Every entry needs two comment lines above it, and an entry without them is a
+# review comment, not a merge:
+#
+#   # why: <what makes this finding not apply to these images>
+#   # until: YYYY-MM-DD -- <what happens on that date>
+#   CVE-0000-00000
+#
+# The date is a convention, not a mechanism: trivy's plain .trivyignore has no
+# expiry field, so nothing enforces it — that is precisely why it has to be
+# written down and re-read. An entry past its date is either renewed with a
+# fresh reason or deleted; "it was here when I got here" is not a reason.
+#
+# Scope: these images are DEVELOPMENT and CI images. That is an argument for
+# some exceptions (a CVE reachable only through a service nothing here runs) and
+# for none at all in the direction people usually reach for — a dev image that
+# eleven repos boot on every push is not an image where an unaudited exception
+# is cheap.
+#
+# Nothing is excused right now, which is the state to keep.
