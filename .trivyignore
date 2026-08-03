@@ -57,6 +57,18 @@
 #   and delete this entry as soon as an npm release ships >= 5.0.8.
 CVE-2026-14257
 
+# why: the follow-up to CVE-2026-14257 — unbounded intermediate arrays that
+#   bypass the mitigation shipped for it, so npm's bundled 5.0.7 is affected
+#   again. Same reachability as above: only npm's own CLI calls expand(), on
+#   the developer's glob and workspace patterns. Still nothing to install over
+#   it — brace-expansion 5.0.9 is released, but npm 12.0.2 is the current npm
+#   and it bundles 5.0.7 (both checked 2026-08-03). This ID also covers
+#   brace-expansion 1.1.11 in buildkit's jshint@2.13.4 -> minimatch@3.0.8 tree,
+#   the same chain already excused under CVE-2026-13149.
+# until: 2026-11-01 -- as for CVE-2026-14257: re-read the bundled version and
+#   drop both entries once an npm release ships >= 5.0.9.
+CVE-2026-69152
+
 # ---------------------------------------------------------------------------
 # CiviCRM core's bundled frontend libraries
 #
