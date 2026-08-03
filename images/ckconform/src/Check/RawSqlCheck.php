@@ -48,7 +48,10 @@ final class RawSqlCheck implements Check
             $isUpgrader = str_contains($file, 'Upgrader');
 
             foreach ($this->sinkCalls($contents) as [$method, $line, $interpolates]) {
-                if ($suppressions->suppressed($this->name(), $line)) {
+                // Suppression last: a plain sink in an upgrader is no finding,
+                // and consulting the ignore there would mark it consumed and
+                // hide SuppressionHygieneCheck's unused-ignore report.
+                if ((!$interpolates && $isUpgrader) || $suppressions->suppressed($this->name(), $line)) {
                     continue;
                 }
                 if ($interpolates) {
@@ -58,7 +61,7 @@ final class RawSqlCheck implements Check
                         $line,
                         $method,
                     ));
-                } elseif (!$isUpgrader) {
+                } else {
                     $reporter->warn(sprintf(
                         '%s:%d: CRM_Core_DAO::%s() — raw SQL needs a reason: say why APIv4, the BAO or a CRM_Utils_SQL builder cannot express this (ckconform-ignore raw-sql -- <reason>)',
                         $file,

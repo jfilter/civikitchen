@@ -91,16 +91,73 @@ final class SuppressionTest extends CheckTestCase
         $this->assertWarns($reporter, "unknown check 'hook-dispach-name'");
     }
 
-    public function testHygieneIsSilentOnAWellFormedIgnore(): void
+    public function testHygieneIsSilentOnAConsumedIgnore(): void
     {
         $context = $this->repo(['fixture.php' => <<<'PHP'
             <?php
-            // ckconform-ignore hook-dispatch-name, hook-style -- both judged elsewhere
-            function fixture_civicrm_config(&$config) {
+            // ckconform-ignore hook-dispatch-name -- third-party hook, catalogued upstream
+            function fixture_civicrm_postCommmit($op) {
             }
             PHP,
         ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
         $this->assertSilent($this->run_(new SuppressionHygieneCheck(), $context));
+    }
+
+    public function testHygieneWarnsOnALineIgnoreThatSuppressedNothing(): void
+    {
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            // ckconform-ignore hook-dispatch-name -- the typo this covered is fixed
+            function fixture_civicrm_postCommit($op) {
+            }
+            PHP,
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+        $this->assertWarns($this->run_(new SuppressionHygieneCheck(), $context), 'suppressed nothing');
+    }
+
+    public function testHygieneWarnsOnAFileIgnoreThatSuppressedNothing(): void
+    {
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            // ckconform-ignore-file hook-dispatch-name -- the legacy hooks are gone
+            function fixture_civicrm_postCommit($op) {
+            }
+            PHP,
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+        $this->assertWarns($this->run_(new SuppressionHygieneCheck(), $context), 'ckconform-ignore-file');
+    }
+
+    public function testHygieneIsSilentOnAnIgnoreForARepoSkippedCheck(): void
+    {
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            // ckconform-ignore hook-dispatch-name -- would it match? nobody looked
+            function fixture_civicrm_postCommit($op) {
+            }
+            PHP,
+        ]);
+        // ignore_checks= skipped the check, so the run never looked for the
+        // finding — unused cannot be concluded from a check that did not run.
+        $context->skipChecks(['hook-dispatch-name']);
+        $this->assertSilent($this->run_(new SuppressionHygieneCheck(), $context));
+    }
+
+    public function testHygieneReportsOnlyTheUnconsumedNameOfAMultiNameIgnore(): void
+    {
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            // ckconform-ignore hook-dispatch-name, hook-style -- one still needed
+            function fixture_civicrm_postCommmit($op) {
+            }
+            PHP,
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+        $reporter = $this->run_(new SuppressionHygieneCheck(), $context);
+        $this->assertWarns($reporter, "for 'hook-style' suppressed nothing");
+        self::assertStringNotContainsString('hook-dispatch-name', implode("\n", $reporter->messages('warn')));
     }
 
     public function testCommaListAndTrailingCommentForms(): void

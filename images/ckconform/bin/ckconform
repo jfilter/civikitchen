@@ -47,6 +47,9 @@ if ($ignoreRaw !== null) {
         }
     }
 }
+// Hand the skip list on: an inline ignore for a check that never ran is not an
+// unused ignore, and only this loop knows which checks were skipped.
+$context->skipChecks(array_values($ignored));
 
 foreach (Registry::all() as $check) {
     if (in_array($check->name(), $ignored, true)) {

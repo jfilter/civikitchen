@@ -119,38 +119,34 @@ final class HookDispatchNameCheck implements Check
                 // functions are not hooks at all.
                 if ($prefix === 'civicrm' || str_starts_with($function, 'civicrm_api3_')
                     || str_contains($function, '_civicrm_api3_')
-                    || $suppressions->suppressed($this->name(), $line)
                 ) {
                     continue;
                 }
 
                 if (!in_array($prefix, $expected, true)) {
-                    $reporter->fail(sprintf(
+                    $this->emit($reporter, $suppressions, $line, [true, sprintf(
                         '%s: %s() will never fire — the hook prefix of this extension is \'%s\', so the function must be named %s_civicrm_%s()',
                         $file,
                         $function,
                         $expected[0],
                         $expected[0],
                         $suffix,
-                    ));
+                    )]);
                     continue;
                 }
 
-                $this->judgeSuffix($file, $function . '()', $suffix, $policyHooks, $reporter);
+                $verdict = $this->suffixVerdict($file, $function . '()', $suffix, $policyHooks);
+                $this->emit($reporter, $suppressions, $line, $verdict);
             }
 
             foreach ($this->listenerMethods($contents) as [$method, $suffix, $line]) {
-                if ($suppressions->suppressed($this->name(), $line)) {
-                    continue;
-                }
-                $this->judgeSuffix($file, $method . '() (scan-classes listener)', $suffix, $policyHooks, $reporter);
+                $verdict = $this->suffixVerdict($file, $method . '() (scan-classes listener)', $suffix, $policyHooks);
+                $this->emit($reporter, $suppressions, $line, $verdict);
             }
 
             foreach ($this->hookNameStrings($contents) as [$name, $suffix, $line]) {
-                if ($suppressions->suppressed($this->name(), $line)) {
-                    continue;
-                }
-                $this->judgeSuffix($file, "listener/dispatch string '{$name}'", $suffix, $policyHooks, $reporter);
+                $verdict = $this->suffixVerdict($file, "listener/dispatch string '{$name}'", $suffix, $policyHooks);
+                $this->emit($reporter, $suppressions, $line, $verdict);
             }
         }
     }
@@ -159,48 +155,68 @@ final class HookDispatchNameCheck implements Check
      * The suffix verdict shared by all three binding forms; the prefix rule is
      * function-only and stays with its loop.
      *
-     * @param list<string> $policyHooks
+     * Judging and reporting are separate so that the ignore is consulted only
+     * where there is something to ignore: a suppression consulted on a clean
+     * hook would count as consumed and hide the unused-ignore report that
+     * SuppressionHygieneCheck exists for.
+     *
+     * @param  list<string> $policyHooks
+     * @return array{bool, string}|null [is a failure, message], null if clean
      */
-    private function judgeSuffix(string $file, string $subject, string $suffix, array $policyHooks, Reporter $reporter): void
+    private function suffixVerdict(string $file, string $subject, string $suffix, array $policyHooks): ?array
     {
         // A repo that declares a suffix in .ckconform is asserting a live
         // third-party hook under that name; core's history about a same-named
         // hook then says nothing about this code.
         if (in_array($suffix, $policyHooks, true)) {
-            return;
+            return null;
         }
 
         if (isset(self::REMOVED_HOOKS[$suffix])) {
-            $reporter->fail(sprintf(
+            return [true, sprintf(
                 '%s: %s will never fire — hook_civicrm_%s was %s',
                 $file,
                 $subject,
                 $suffix,
                 self::REMOVED_HOOKS[$suffix],
-            ));
-            return;
+            )];
         }
 
         $deprecation = HookCatalog::DEPRECATED[$suffix] ?? self::DOCS_DEPRECATED_HOOKS[$suffix] ?? null;
         if ($deprecation !== null) {
-            $reporter->warn(sprintf(
+            return [false, sprintf(
                 '%s: %s — hook_civicrm_%s is %s',
                 $file,
                 $subject,
                 $suffix,
                 $deprecation,
-            ));
-            return;
+            )];
         }
 
         if (!in_array($suffix, HookCatalog::LIVE, true)) {
-            $reporter->warn(sprintf(
+            return [false, sprintf(
                 '%s: %s — unknown hook suffix \'%s\'; a typo never fires, a third-party hook is fine (declare it via known_hooks= in .ckconform)',
                 $file,
                 $subject,
                 $suffix,
-            ));
+            )];
         }
+
+        return null;
+    }
+
+    /**
+     * Report a verdict unless an ignore on that line covers it.
+     *
+     * @param array{bool, string}|null $verdict
+     */
+    private function emit(Reporter $reporter, Suppressions $suppressions, int $line, ?array $verdict): void
+    {
+        if ($verdict === null || $suppressions->suppressed($this->name(), $line)) {
+            return;
+        }
+        [$fails, $message] = $verdict;
+        $fails ? $reporter->fail($message) : $reporter->warn($message);
     }
 
     /**

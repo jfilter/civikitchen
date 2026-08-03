@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Tests;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
+use CiviKitchen\Ckconform\Suppressions;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -22,8 +23,20 @@ abstract class CheckTestCase extends TestCase
 {
     private ?string $dir = null;
 
+    /**
+     * Suppressions share instances per contents across a run, so a fixture
+     * whose ignore was consumed in one test would still count as consumed in
+     * the next. One run per test.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Suppressions::reset();
+    }
+
     protected function tearDown(): void
     {
+        Suppressions::reset();
         if ($this->dir !== null && is_dir($this->dir)) {
             $this->deleteTree($this->dir);
         }

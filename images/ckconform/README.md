@@ -92,3 +92,9 @@ Several checks may be listed comma-separated. A marker without a reason
 suppresses nothing and is itself reported, and one naming a check that does
 not exist is reported as a dead ignore — a typo'd check name would otherwise
 silently narrow nothing.
+
+An inline ignore that silenced nothing in the whole run is reported too
+(phpstan's `reportUnmatchedIgnoredErrors`): the finding it covered is gone, so
+the ignore now only waits to swallow the next one unnoticed — delete it. Each
+listed check name is judged on its own. Not reported: a name whose check
+`ignore_checks=` skipped repo-wide, since nothing ever looked for its finding.

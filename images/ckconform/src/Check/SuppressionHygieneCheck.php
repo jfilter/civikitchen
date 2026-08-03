@@ -14,11 +14,23 @@ use CiviKitchen\Ckconform\Suppressions;
 /**
  * Keeps the inline ignores honest.
  *
- * Two failure modes, both silent by nature: a `ckconform-ignore` without the
+ * Three failure modes, all silent by nature: a `ckconform-ignore` without the
  * mandatory `-- <reason>` suppresses nothing (and its author believes it
- * does), and one naming a check that does not exist is a dead ignore that
- * never matches — usually a typo'd check name, the exact class of bug the
- * hook checks exist to catch in hook names.
+ * does), one naming a check that does not exist is a dead ignore that never
+ * matches — usually a typo'd check name, the exact class of bug the hook
+ * checks exist to catch in hook names — and one that silenced nothing this run
+ * outlived its finding, so the next real one under it would be swallowed
+ * unnoticed. That last one is phpstan's `reportUnmatchedIgnoredErrors`.
+ *
+ * This check is last in the registry precisely for the third: consumption is
+ * recorded on the shared Suppressions instances as the other checks match
+ * against them, so the tally is only complete once they have all run. Re-read
+ * the files here, but not re-parse them — `Suppressions::of()` hands back the
+ * very instance the earlier checks marked up.
+ *
+ * Not reported as unused: a name for a check `ignore_checks=` skipped (nothing
+ * looked for the finding, so nothing can be concluded) and a name no check
+ * carries (already reported above — one confused ignore, one message).
  */
 final class SuppressionHygieneCheck implements Check
 {
@@ -56,6 +68,22 @@ final class SuppressionHygieneCheck implements Check
                         $unknown,
                     ));
                 }
+            }
+
+            $skipped = $context->skippedChecks();
+            foreach ($suppressions->unconsumed() as $unused) {
+                if (!in_array($unused['name'], $known, true)
+                    || in_array($unused['name'], $skipped, true)
+                ) {
+                    continue;
+                }
+                $reporter->warn(sprintf(
+                    "%s:%d: ckconform-ignore%s for '%s' suppressed nothing — the finding it silenced is gone, remove it",
+                    $file,
+                    $unused['line'],
+                    $unused['file'] ? '-file' : '',
+                    $unused['name'],
+                ));
             }
         }
     }
