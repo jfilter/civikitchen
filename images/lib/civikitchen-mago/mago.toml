@@ -19,6 +19,11 @@
 # without configured paths, so ckfmt/cklint always pass an explicit file list —
 # which is also where vendored and generated code gets filtered out.
 
+# Fleet floor. Without this the formatter happily rewrites `(new X())->m()` to
+# the PHP-8.4-only `new X()->m()` — a parse error on every declared 8.1–8.3
+# floor, and the PHP-8.4 container's `php -l` cannot catch it.
+php-version = "8.1"
+
 [formatter]
 # Drupal preset: 2-space indent, same-line braces, uppercase TRUE/FALSE/NULL —
 # the shape the phpcs standard checks.
