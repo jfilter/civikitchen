@@ -11,3 +11,21 @@ services:
 			- %currentWorkingDirectory%
 		tags:
 			- phpat.test
+	# The APIv4 contract rules share one analyser; the split into three
+	# rules is only because a phpstan rule binds to a single node type.
+	-
+		class: CiviKitchen\PHPStan\Api4Contract
+		arguments:
+			- %currentWorkingDirectory%
+	-
+		class: CiviKitchen\PHPStan\Api4FunctionCallRule
+		tags:
+			- phpstan.rules.rule
+	-
+		class: CiviKitchen\PHPStan\Api4StaticCallRule
+		tags:
+			- phpstan.rules.rule
+	-
+		class: CiviKitchen\PHPStan\Api4FluentFieldRule
+		tags:
+			- phpstan.rules.rule
