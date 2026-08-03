@@ -3,3 +3,11 @@ services:
 		class: CiviKitchen\PHPStan\CkLegacyScopeResolver
 		tags:
 			- phpstan.deprecations.deprecatedScopeResolver
+	# phpat discovers rule classes by this tag; without phpat installed the
+	# service is simply never requested, so the package stays usable alone.
+	-
+		class: CiviKitchen\PHPStan\ArchitectureTest
+		arguments:
+			- %currentWorkingDirectory%
+		tags:
+			- phpat.test

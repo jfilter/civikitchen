@@ -54,20 +54,27 @@ jobs:
       # tells the difference. It has no composer dependencies, hence the phar.
       # The hook catalog is generated from core, so it rots on its own: core
       # adds hooks every release and a stale catalog reports them as typos.
-      # HookCatalogDriftTest regenerates and diffs, but SKIPS without a core
-      # checkout — so without this step the suite goes green while the gate
-      # never runs. Two files is all the generator reads; a full clone would
-      # cost minutes for the same answer. The ref comes from the catalog
-      # itself, so it can never disagree with what was committed.
-      - name: fetch the core release the hook catalog was generated from
+      # HookCatalogDriftTest and CoreNamespaceCatalogDriftTest regenerate and
+      # diff, but SKIP without a core checkout — so without this step the
+      # suites go green while the gates never run. The namespace generator
+      # scans the whole tree (CRM/, Civi/, ext/), so this fetches the source
+      # tarball (~10 MB) rather than single files. Both catalogs must pin the
+      # same release, or the two gates would silently test different cores.
+      - name: fetch the core release the catalogs were generated from
         run: |
           ver=$(php -r 'require "images/ckconform/src/HookCatalog.php";
             echo CiviKitchen\Ckconform\HookCatalog::CORE_VERSION;')
+          nsver=$(php -r 'require "images/lib/civikitchen-phpstan/src/CoreNamespaceCatalog.php";
+            echo CiviKitchen\PHPStan\CoreNamespaceCatalog::CORE_VERSION;')
+          if [ "$ver" != "$nsver" ]; then
+            echo "catalog pins disagree: hooks=$ver namespaces=$nsver — regenerate both from one release" >&2
+            exit 1
+          fi
           echo "pinned CiviCRM $ver"
-          mkdir -p /tmp/civicrm-core/CRM/Utils /tmp/civicrm-core/xml
-          base="https://raw.githubusercontent.com/civicrm/civicrm-core/$ver"
-          curl -fsSLo /tmp/civicrm-core/CRM/Utils/Hook.php "$base/CRM/Utils/Hook.php"
-          curl -fsSLo /tmp/civicrm-core/xml/version.xml "$base/xml/version.xml"
+          curl -fsSLo /tmp/civicrm-core.tar.gz \
+            "https://github.com/civicrm/civicrm-core/archive/refs/tags/$ver.tar.gz"
+          mkdir -p /tmp/civicrm-core
+          tar -xzf /tmp/civicrm-core.tar.gz -C /tmp/civicrm-core --strip-components=1
 
       - name: ckconform test suite
         env:
@@ -75,6 +82,14 @@ jobs:
         run: |
           curl -fsSLo /tmp/phpunit.phar https://phar.phpunit.de/phpunit-9.6.35.phar
           php /tmp/phpunit.phar -c images/ckconform/phpunit.xml.dist
+
+      # The namespace catalog feeds the phpat boundary rule in every repo's
+      # phpstan run — a stale one flags new core components as foreign
+      # extensions, fleet-wide.
+      - name: civikitchen-phpstan test suite
+        env:
+          CIVICRM_CORE_DIR: /tmp/civicrm-core
+        run: php /tmp/phpunit.phar -c images/lib/civikitchen-phpstan/phpunit.xml.dist
 
       - name: profile.json valid against schema
         # packages/civicrm-profile-schema/profile.schema.json is the canonical spec

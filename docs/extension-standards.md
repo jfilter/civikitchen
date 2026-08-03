@@ -24,13 +24,16 @@ unless `--force` is explicitly supplied. For an existing extension,
   `hook_civicrm_afformSubmit` or APIv4 actions — not QuickForm
   (`CRM_Core_Form`).
 - **Data endpoints** → APIv4 actions, not page callbacks.
+- Enforced by the phpat rule `testNoLegacyUiBases` (in
+  `civikitchen/phpstan-ck-legacy`, auto-registered in every phpstan run).
+  It resolves the full ancestry, so an own intermediate base or a concrete
+  core report subclass is caught too — unlike the retired
+  `CiviKitchen.Legacy.NoLegacyPageForm` sniff, which only saw the direct
+  `extends`. Audits should still grep for `.tpl` templates and page routes.
 - Legitimate exceptions (raw callback endpoints, iframe hosts, third-party
   framework bases like CiviRules' `CRM_CivirulesActions_Form_Form` that
-  mandate QuickForm) — suppress with
-  `// phpcs:ignore CiviKitchen.Legacy.NoLegacyPageForm` and say why.
-- Enforced (as a warning) by `CiviKitchen.Legacy.NoLegacyPageForm`; the sniff
-  only sees the direct `extends`, so audits should still grep for `.tpl`
-  templates and page routes.
+  mandate QuickForm) and grandfathered screens get an `ignoreErrors` entry
+  for `phpat.testNoLegacyUiBases` in `phpstan.neon.dist`, with a reason.
 - Afform: `permission` in `*.aff.json` is declared `data_type => Array` in core
   (`Civi\Api4\Afform`), and all 36 afforms core ships use the list form
   `["access foo"]`. Prefer it. A plain string is tolerated but non-canonical —
@@ -102,11 +105,15 @@ unless `--force` is explicitly supplied. For an existing extension,
   (`template/extension/`), incl. the `TEST_DB_DSN` bootstrap guard.
 - `phpstan.neon.dist` (level 10, no baseline, `phpVersion` at the declared
   floor, and the `includes:` line for the CiviCRM ban list).
-- **Architecture rules belong in phpstan, not in review.** `phpat` is installed
-  and inert until a repo writes an `ArchitectureRule` class — the natural home
-  for the boundary that keeps costing us: no class reference across extension
-  repos, APIv4 only in both directions. It runs inside the normal
-  `phpstan analyse`, so it is not another gate to keep green.
+- **Architecture rules belong in phpstan, not in review.** `phpat` runs inside
+  the normal `phpstan analyse`, and the fleet-wide rules ship in the image
+  (`civikitchen/phpstan-ck-legacy`, `ArchitectureTest`): the extension
+  boundary — an extension may depend on core (per the generated
+  `CoreNamespaceCatalog`) and on itself; every other `CRM_`/`Civi\` symbol is
+  another extension's internals, and the supported way across is APIv4 —
+  plus the legacy-UI-base ban. Both derive the extension from its own
+  `info.xml`/classloader layout, so no repo configures anything. A repo can
+  still add its own `phpat.test`-tagged classes for repo-specific boundaries.
 - `ckdeps` checks `composer.json` against what the code really uses (shadow /
   unused / dev-in-prod dependencies). Extensions depending on core alone pass
   silently — CiviCRM is not a composer dependency, and the bundled config

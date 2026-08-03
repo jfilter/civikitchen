@@ -5,9 +5,7 @@
     civikitchen image. It is CiviCRM's Drupal base MINUS the doc-comment
     sniffs that fight modern PHPStan array-shape / generic PHPDocs (which
     PHPStan validates far more precisely), PLUS reusable footgun sniffs:
-    NoLegacyPageForm
-    (warning on classes extending the QuickForm/Smarty UI bases — new UI
-    belongs in SearchKit/Afform), UseExtensionTs (bare
+    UseExtensionTs (bare
     ts() resolves in core's translation domain — extensions must use E::ts()),
     UseMixinsForStandardHooks (no bespoke managed/menu/settings/entity/angular
     hooks where standard mixins exist), NoRequiredOnExternalAction (the
@@ -22,7 +20,10 @@
     the Drupal base this is built on. The banned CiviCRM call sites that used
     to be the NoLegacyCall sniff are now phpstan config
     (/opt/civikitchen-phpstan-config/civicrm-disallowed.neon), which resolves
-    types and so catches the indirect calls a token matcher never saw.
+    types and so catches the indirect calls a token matcher never saw. The
+    former NoLegacyPageForm sniff moved the same way: it is now the phpat
+    rule testNoLegacyUiBases in civikitchen/phpstan-ck-legacy, which resolves
+    the full ancestry instead of the direct parent's name.
 
     Use it directly (`phpcs --standard=CiviKitchen` / `cklint`) or reference
     it from a project phpcs.xml.dist (`<rule ref="CiviKitchen"/>`) and add

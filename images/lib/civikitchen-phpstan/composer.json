@@ -1,13 +1,14 @@
 {
     "name": "civikitchen/phpstan-ck-legacy",
     "type": "phpstan-extension",
-    "description": "PHPStan deprecated-scope resolver: @ck-legacy exempts code that deliberately exercises a deprecated API (tests, shims, fixtures).",
+    "description": "CiviKitchen PHPStan extension: @ck-legacy deprecated-scope resolver plus fleet-wide phpat architecture rules (extension boundary, legacy UI bases).",
     "license": "MIT",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "require": {
         "php": ">=7.4",
         "phpstan/phpstan": "^2.1",
-        "phpstan/phpstan-deprecation-rules": "^2.0"
+        "phpstan/phpstan-deprecation-rules": "^2.0",
+        "phpat/phpat": "^0.12"
     },
     "autoload": {
         "psr-4": {
