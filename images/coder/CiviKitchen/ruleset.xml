@@ -13,8 +13,12 @@
     UseMixinsForStandardHooks (no bespoke managed/menu/settings/entity/angular
     hooks where standard mixins exist), NoRequiredOnExternalAction (the
     @required trap — inert until an extension lists its externally reachable
-    actions) and MaxFileLength (a per-file line-count cap, default 1000, so a
-    runaway class gets split rather than sailing through every token check).
+    actions), MaxFileLength (a per-file line-count cap, default 1000, so a
+    runaway class gets split rather than sailing through every token check),
+    RequireStrictTypes (declare(strict_types=1) per file — phpcbf-fixable;
+    without it the types phpstan checks are enforced by nothing at runtime)
+    and NameBooleanArguments (a warning on positional TRUE/FALSE literals,
+    which since PHP 8 only need a parameter name to become readable).
 
     Use it directly (`phpcs --standard=CiviKitchen` / `cklint`) or reference
     it from a project phpcs.xml.dist (`<rule ref="CiviKitchen"/>`) and add

@@ -29,6 +29,9 @@ final class SniffsTest extends TestCase {
     . 'CiviKitchen.Extension.UseMixinsForStandardHooks,'
     . 'CiviKitchen.Files.MaxFileLength';
 
+  /** Whole-file / call-site sniffs, exercised on their own fixtures. */
+  private const PHP8_SNIFFS = 'CiviKitchen.PHP.RequireStrictTypes,CiviKitchen.Modern.NameBooleanArguments';
+
   /**
    * Run phpcs over one fixture, restricted to the CiviKitchen sniffs, and
    * return the [line => [sniff codes]] map from the JSON report.
@@ -40,7 +43,7 @@ final class SniffsTest extends TestCase {
    *
    * @return array<int, list<string>>
    */
-  private function phpcs(string $fixture, ?string $standard = NULL): array {
+  private function phpcs(string $fixture, ?string $standard = NULL, ?string $sniffs = NULL): array {
     $fixturePath = __DIR__ . '/fixtures/' . $fixture;
     self::assertFileExists($fixturePath);
 
@@ -54,7 +57,7 @@ final class SniffsTest extends TestCase {
     $cmd = sprintf(
       'phpcs -q --standard=%s --sniffs=%s --report=json %s 2>/dev/null',
       escapeshellarg($standard),
-      escapeshellarg(self::SNIFFS),
+      escapeshellarg($sniffs ?? self::SNIFFS),
       escapeshellarg($fixturePath)
     );
     exec($cmd, $outputLines, $exitCode);
@@ -168,6 +171,30 @@ final class SniffsTest extends TestCase {
 
   public function testModernCounterpartsProduceZeroFindings(): void {
     self::assertSame([], $this->phpcs('CleanModern.php'));
+    // The two PHP-8 sniffs run apart from the list above: they would report
+    // every fixture's opening tag, and shifting those files' lines to add a
+    // declare would move the line numbers the other tests assert.
+    self::assertSame([], $this->phpcs('CleanModern.php', NULL, self::PHP8_SNIFFS));
+  }
+
+  public function testRequireStrictTypesFlagsTheFileOnItsOpeningTag(): void {
+    $findings = $this->phpcs('MissingStrictTypes.php', NULL, self::PHP8_SNIFFS);
+
+    self::assertSame([1 => ['CiviKitchen.PHP.RequireStrictTypes.MissingStrictTypes']], $findings);
+  }
+
+  public function testNameBooleanArgumentsFlagsOnlyBarePositionalLiterals(): void {
+    $findings = $this->phpcs('BooleanArgs.php', NULL, self::PHP8_SNIFFS);
+
+    // Flagged: the two positional literals. Not flagged: in_array's strict
+    // flag (ignoreCalls), an already-named argument, a variable, a comparison
+    // that merely contains TRUE, an assignment, an array element, and the
+    // parameter default in the declaration.
+    $expected = [
+      9 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
+      10 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
+    ];
+    self::assertSame($expected, $findings);
   }
 
   public function testMaxFileLengthFlagsOnlyFilesOverTheConfiguredCap(): void {
