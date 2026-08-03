@@ -72,6 +72,7 @@ final class Registry
         Check\PermissionClosureCheck::class,
         Check\MessageTemplateTokenCheck::class,
         Check\CrmScopeCheck::class,
+        Check\SmartyCompatCheck::class,
         Check\TranslationCatalogCheck::class,
         Check\SuppressionHygieneCheck::class,
     ];
