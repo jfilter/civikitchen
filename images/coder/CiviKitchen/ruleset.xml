@@ -4,7 +4,9 @@
     Opinionated phpcs standard for CiviCRM extensions, shipped in the
     civikitchen image. It is CiviCRM's Drupal base MINUS the doc-comment
     sniffs that fight modern PHPStan array-shape / generic PHPDocs (which
-    PHPStan validates far more precisely), PLUS reusable footgun sniffs:
+    PHPStan validates far more precisely), MINUS the two layout checks the
+    bundled formatter contradicts (ckfmt owns layout), PLUS reusable footgun
+    sniffs:
     UseExtensionTs (bare
     ts() resolves in core's translation domain — extensions must use E::ts()),
     UseMixinsForStandardHooks (no bespoke managed/menu/settings/entity/angular
@@ -53,6 +55,16 @@
     <exclude name="Drupal.Commenting.VariableComment"/>
     <exclude name="Drupal.Commenting.HookComment"/>
     <exclude name="Drupal.Commenting.DataTypeNamespace"/>
+    <!-- ckfmt wraps long `implements` lists with a 2-space continuation, this
+         sniff wants 4. The formatter owns layout; one gate must yield. -->
+    <exclude name="Drupal.Classes.ClassDeclaration.InterfaceWrongIndent"/>
+  </rule>
+
+  <!-- The test bootstrap's `if (!function_exists('cv')) { function cv() {…} }`
+       idiom: ckfmt strips the blank lines at the block edges, this sniff wants
+       them. Scoped to that one file, not disabled fleet-wide. -->
+  <rule ref="Squiz.WhiteSpace.FunctionSpacing">
+    <exclude-pattern>*/tests/phpunit/bootstrap.php</exclude-pattern>
   </rule>
 
   <!-- Commented-out code (dead civix example blocks are an audit regular).

@@ -225,6 +225,40 @@ unless `--force` is explicitly supplied. For an existing extension,
   a lint job does not need to be able to push. Set it per job where a step
   genuinely writes (`packages: write` to push an image).
 
+### Known formatter/phpcs stand-offs
+
+`ckfmt` and `cklint` are tuned to agree, and where they cannot the ruleset
+yields (the formatter owns layout — currently the wrapped-`implements` indent
+and the function spacing inside the test bootstrap). Two cases stay open on
+purpose, because in both the formatter is right and the readable fix is in the
+source, not in a gate:
+
+- **A single-element nested array literal — `foo([[…]])`.** The formatter hugs
+  the two brackets, the Drupal array-indent sniff measures the inner array
+  against the outer one and objects. Pull the inner array into a local variable
+  and pass that; with APIv4 the better fix is usually `addRecord($record)`
+  instead of `setRecords([[…]])`.
+- **`echo` with a long concatenation chain.** The formatter wraps the operands,
+  the sniff wants the continuation lines somewhere else. Use `printf()` with
+  placeholders, or build the string in a variable first and echo the variable —
+  both read better than the chain did.
+
+Suppression placement matters for the mago engine. A class-level
+`@mago-expect` goes either **above the docblock**, separated from it by a blank
+line, or **inside** it as a ` * @mago-expect lint:<rule>` line — never as a
+`//` line between the docblock and the declaration, where the formatter and the
+pragma scanner disagree about what the comment is attached to.
+
+Two more habits around the mago engine:
+
+- Turning a rule off retires its suppressions. mago reports a leftover
+  `@mago-expect` for a disabled rule as `unfulfilled-expect`, and the baseline's
+  `minimum-fail-level` makes that a red gate — remove the expect lines in the
+  same change.
+- Run `phpstan` once after `cklint --fix`. The safe fixes include an
+  inline-variable-return rewrite that can take a `@var` annotation with it, and
+  the type it pinned is then gone.
+
 ## Known vulnerabilities: dependencies and images
 
 Two scanners, two layers, and neither replaces the other. The extension CI
