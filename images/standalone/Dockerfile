@@ -46,6 +46,7 @@ ENV PATH="/opt/composer/vendor/bin:${PATH}"
 ARG PHPSTAN_VERSION
 ARG CODER_REF
 ARG RECTOR_VERSION
+ARG PSALM_VERSION
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
 # install-dev-tools.sh) and the cklint linter that runs it.
@@ -65,13 +66,19 @@ COPY lib/ckrelease /usr/local/bin/ckrelease
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
 COPY lib/civikitchen-rector /opt/civikitchen-rector
 COPY lib/ckmodernize /usr/local/bin/ckmodernize
+# psalm taint setup (taint-only config + CiviCRM source/sink/escape stubs) +
+# the `cktaint` wrapper. Advisory gate — see docs/extension-standards.md.
+COPY lib/civikitchen-psalm /opt/civikitchen-psalm
+COPY lib/cktaint /usr/local/bin/cktaint
 # Reset helper for the headless-test scratch DB (reseeds <db>_test, clears
 # the per-DSN boot caches — see the script header for the failure mode).
 COPY lib/cktestreset /usr/local/bin/cktestreset
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
+        PSALM_VERSION="${PSALM_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
-        /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktestreset
+        /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktestreset \
+        /usr/local/bin/cktaint
 
 # Add our vhost extras (e.g. the bare-/ → /civicrm/login redirect) via the
 # standard apache conf-available + a2enconf flow rather than editing the

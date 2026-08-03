@@ -234,6 +234,20 @@ The default config combines Rector's PHP-version / code-quality sets with
 CiviKitchen rules for CiviCRM-specific footguns such as
 `CRM_Utils_Array::value()` and `CRM_Core_Error::fatal()`.
 
+## Taint analysis
+
+`cktaint` runs Psalm as a taint engine only: it follows request input
+(`CRM_Utils_Request::retrieve`, `$_GET`/`$_POST`) into SQL, shell, path and
+redirect sinks, using CiviKitchen's CiviCRM stubs. It is **advisory** — CI
+never fails on it.
+
+```bash
+docker compose exec app bash -c "cd /var/www/html/ext/myextension && cktaint"
+```
+
+What is modelled, what it cannot see, and how to handle a finding:
+[extension-standards.md](extension-standards.md#taint-analysis-cktaint-advisory-pilot).
+
 ## IDE step debugging
 
 Xdebug is installed but disabled until you set `XDEBUG_MODE`. Add it to your compose file:

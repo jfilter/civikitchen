@@ -32,7 +32,8 @@
 # the `secrets:` block: docs/extension-standards.md ("Private dependencies").
 # Everything runs inside the extension's own CiviCRM stack: the standalone image
 # auto-installs, enables the mounted extension and seeds the civicrm_test scratch
-# DB, and cklint / ckconform / phpstan / ckcoverage all ship in that image. The
+# DB, and cklint / ckconform / phpstan / ckcoverage / cktaint all ship in that
+# image (cktaint is advisory — it can never fail the run). The
 # coverage floor comes from the repo's .ckconform, so it needs no input here.
 name: Extension CI
 
@@ -471,6 +472,41 @@ jobs:
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && phpstan analyse --no-progress"
+
+      # Taint analysis (psalm, CiviCRM stubs) — an ADVISORY pilot, and the only
+      # step in this workflow that cannot fail the run. Psalm sees the
+      # extension but not CiviCRM core, so it both over-reports (a
+      # 'Positive'-typed CRM_Utils_Request::retrieve is validated in reality)
+      # and under-reports (anything crossing a hook, the API kernel or a Smarty
+      # template). A finding is a prompt to look, not a verdict — the day the
+      # signal proves itself, TaintedSql/Shell/Include/Unserialize/SSRF move
+      # into the blocking set. docs/extension-standards.md has the details.
+      # On an image older than cktaint the step reports "command not found" and
+      # stays advisory, so the fleet needs no lockstep image bump.
+      - name: Taint analysis (cktaint, advisory)
+        id: cktaint
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && cktaint"
+
+      - name: Taint analysis summary
+        if: ${{ !cancelled() && steps.cktaint.outcome != 'skipped' }}
+        run: |
+          if [ "${{ steps.cktaint.outcome }}" = success ]; then
+            echo "### Taint analysis (advisory): clean" >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Taint analysis (advisory): findings"
+              echo
+              echo "\`cktaint\` reported tainted data flows — see the **Taint analysis (cktaint, advisory)** step log."
+              echo "**This did not fail the build.** The gate is an advisory pilot: Psalm cannot see CiviCRM core,"
+              echo "so it over- and under-reports. Fix the flow, or record a justified exception"
+              echo "(\`cktaint --baseline\` / \`@psalm-suppress\` with a reason)."
+              echo "See docs/extension-standards.md, section \"Taint analysis\"."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       # Same lifecycle block as the compat job below — deliberately duplicated
       # rather than factored out: a reusable workflow cannot share steps
