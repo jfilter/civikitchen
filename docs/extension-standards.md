@@ -118,6 +118,22 @@ unless `--force` is explicitly supplied. For an existing extension,
   unused / dev-in-prod dependencies). Extensions depending on core alone pass
   silently — CiviCRM is not a composer dependency, and the bundled config
   teaches the analyser exactly that.
+- `cksmarty` compiles every `.tpl` in the repo — and the bodies of the managed
+  MessageTemplates the extension installed — with the real `CRM_Core_Smarty`,
+  in the booted CI stack. It is a step in the normal `ci` job, not an opt-in:
+  the boot is the expensive part and that job has already paid for it. The
+  static template checks in `ckconform` say in their own headers what they
+  cannot answer, and this is it — whether a template compiles depends on the
+  Smarty major core ships, on the prefilters `CRM_Core_Smarty` installs and on
+  which `{crm*}` plugins are registered, your own included. The message-template
+  half is the part with no other coverage anywhere: those bodies are Smarty
+  strings in the database, and the first thing that compiles them is the
+  workflow firing on a live site. No `.tpl` in the repo is a pass with a log
+  line.
+- `ckeslint` lints JS/TS with a toolchain pinned in the image — see
+  [Frontend](#frontend-js-dependencies-js-tests-and-browser-tests). Also an
+  unconditional step in `ci`, and also a pass-with-a-log-line for the many
+  extensions that ship no JS.
 - **Rule packs come from the image, not from each repo's `composer.json`.**
   phpcs standards (civicrm/coder, PHPCompatibility, Slevomat) and phpstan
   extensions (deprecation rules, disallowed-calls, strict-rules) are installed
@@ -423,6 +439,23 @@ on `extension-ci.yml`, all off by default:
 | `playwright` | Own job: boots the stack with port 8080 published and an `admin` / `admin` demo user, then runs `npm run test:e2e` from the runner. Report and traces are uploaded on failure. |
 | `node_version` | Node for all of the above. Default `'20'`. Still applies under `bun` — see below. |
 
+**Linting the JS needs none of them.** `ckeslint` runs in the `ci` job on every
+push, from inside the container, with a toolchain pinned in the image — no Node
+setup step, no `npm install`, and no eslint devDependency in your
+`package.json`. The baseline is deliberately not a style guide: `@eslint/js`
+recommended (mistakes, not fashion), Mozilla's `eslint-plugin-no-unsanitized`
+(`innerHTML` and its family — an XSS in an extension is an XSS on every site
+that installs it), and, *only when the repo has a `tsconfig.json`*,
+`typescript-eslint` recommended-type-checked, which is where
+`no-floating-promises` and `no-misused-promises` come from. CiviCRM's globals
+(`CRM`, `cj`, `ts`, `_`, `angular`) are declared for you; `dist/`, `vendor/`,
+`node_modules/`, the vendored-asset directories and `*.min.js` are ignored.
+
+Ship your own `eslint.config.*` and it wins outright — the baseline is not
+merged into it, not layered under it, just not used. The cost of owning it is
+owning its plugins too: ESLint resolves that file's imports against *your*
+`node_modules`, so a repo with its own config also turns `npm_ci` on.
+
 Two scripts, two suites, and the names are the contract:
 
 - **`test`** — the JS unit suite, in whatever runner the repo picked (vitest,
@@ -586,7 +619,8 @@ What goes in those secrets, and why deploy keys rather than a PAT:
 Two limits worth knowing before you switch something else on as well:
 
 - The opt-in extra jobs (`matrix_images`, `upgrade_from_last_release`,
-  `core_upgrade_from`, `playwright`) boot the stack from a plain checkout and
+  `schema_parity`, `core_upgrade_from`, `playwright`) boot the stack from a
+  plain checkout and
   are **not** wired up for private dependencies. Combining them with these inputs fails fast with
   that message rather than booting an extension that cannot load.
 - `composer.lock` still has to be committed — see the lockfile rule above. An
@@ -599,8 +633,8 @@ Two limits worth knowing before you switch something else on as well:
 ## Compatibility: test the range you claim
 
 `info.xml` `<compatibility><ver>` is a promise; the default CI run checks one
-CiviCRM version, on one day, installed from scratch. Four opt-in inputs on the
-shared `extension-ci.yml` close that gap. All four default to off — a caller
+CiviCRM version, on one day, installed from scratch. Five opt-in inputs on the
+shared `extension-ci.yml` close that gap. All five default to off — a caller
 that sets none of them gets exactly the run it has today.
 
 | Input | What it adds |
@@ -608,6 +642,7 @@ that sets none of them gets exactly the run it has today.
 | `matrix_images` | One extra job per CiviKitchen image tag (comma-separated): boots the stack and runs the suite against that CiviCRM. |
 | `lifecycle` | After the suite, in the running stack: `disable` → `enable` → `uninstall` → `install`, then asserts the extension is installed again. |
 | `upgrade_from_last_release` | Installs the newest reachable git tag, swaps the working tree to the tested commit, runs `cv upgrade:db --mode=ext` and asserts no upgrade stayed pending. |
+| `schema_parity` | Own job: installs the last release and upgrades it to this commit, then installs this commit from scratch, and diffs the two schemas over the extension's own tables. See [below](#schema-parity-does-the-upgrader-arrive-where-install-does). |
 | `core_upgrade_from` | Own job: installs the site on an older CiviKitchen image, then moves that same database to the run's image and upgrades it with `cv upgrade:db`. See [below](#core-upgrade-what-an-existing-site-goes-through). |
 
 Pick the ends of your claimed range, not everything in between: the oldest
@@ -623,6 +658,43 @@ The matrix jobs run the **suite**, not the full `ci` pass: `cklint`,
 the image, so re-running them on a pinned older image grades that image's
 tooling rather than your extension. What the extra boot answers is the version
 question — does it install here, do the tests pass here.
+
+### Schema parity: does the upgrader arrive where install() does?
+
+`upgrade_from_last_release` proves the upgrader **runs** and leaves nothing
+pending. It says nothing about where it **arrives** — and `install()` and the
+`upgrade_NNNN()` chain are two independent descriptions of the same schema with
+nothing keeping them in step. `NOT NULL` in one and nullable in the other,
+`varchar(64)` here and `varchar(255)` there, an index the installer creates and
+the upgrader forgets: every fresh install is fine, every upgraded site is
+quietly different, and no later upgrader ever reconciles them, because none of
+them knows there is anything to reconcile.
+
+```yaml
+      schema_parity: true
+```
+
+Two databases in one stack: install the last tag, move the mount to this
+commit, `cv upgrade:db --mode=ext`, dump — then `down -v`, boot again on this
+commit for a fresh install, dump, and diff. The diff is scoped to the tables the
+extension declares itself (`schema/*.entityType.php`, `xml/schema/**`), because
+core's own tables are not your business and would drown the signal.
+
+`mysqldump --no-data` plus a normalised text diff, not Atlas: the CI stack
+publishes no database port, so any tool has to run inside the app container —
+and that container already ships a mysql client, while Atlas would mean a pinned
+binary download per run to diff two whole schemas it has no way to restrict to
+your tables. The normalisation is deliberately small and documented in
+`images/lib/ckschemadiff` (the `AUTO_INCREMENT` counter and mysqldump's version
+wrappers, and nothing else). The trade is that this compares DDL *text*, so a
+semantically empty difference is possible; the fix when it happens is one more
+normalisation rule there.
+
+The job skips itself, with a log line, when the extension declares no tables of
+its own or nothing has been released yet — unlike `upgrade_from_last_release`,
+where a missing tag means you switched on a check you cannot satisfy, both of
+these are ordinary states for a perfectly healthy extension. Two stack boots on
+one runner, so: scheduled caller, not the push run.
 
 ### Core upgrade: what an existing site goes through
 
@@ -732,6 +804,9 @@ jobs:
       matrix_images: ghcr.io/jfilter/civikitchen:standalone-6.12
       lifecycle: true
       upgrade_from_last_release: true
+      # The other half of that question: the upgrader ran, but did it arrive
+      # where install() does? Skips itself when the extension owns no tables.
+      schema_parity: true
       # The site an existing user has: installed on that oldest minor, then
       # upgraded to the image above. Two boots and a core schema upgrade —
       # the slowest check here, and the one nothing else covers.

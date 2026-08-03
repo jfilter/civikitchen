@@ -202,6 +202,115 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 3e. ckeslint: the pinned toolchain is installed and the baseline config fires.
+#     Two findings on purpose — one from @eslint/js recommended and one from
+#     no-unsanitized — because either could be missing on its own if the
+#     toolchain install half-worked.
+echo "== ckeslint =="
+ESDIR="${WORKDIR}/eslintext"
+mkdir -p "${ESDIR}/js"
+cat > "${ESDIR}/info.xml" <<'XML'
+<?xml version="1.0"?>
+<extension key="org.example.widget" type="module">
+  <file>widget</file>
+</extension>
+XML
+cat > "${ESDIR}/js/widget.js" <<'JS'
+function render(el, userInput) {
+  var unused = 1;
+  el.innerHTML = '<b>' + userInput + '</b>';
+}
+JS
+(cd "${ESDIR}" && git init -q . && git add -A) >/dev/null 2>&1
+
+ESLINT_OUT="$( (cd "${ESDIR}" && ckeslint) 2>&1 || true)"
+if echo "${ESLINT_OUT}" | grep -q "no-unsanitized/property"; then
+    ok "ckeslint flags an unsafe innerHTML assignment"
+else
+    fail "ckeslint didn't flag innerHTML (output: ${ESLINT_OUT:0:300})"
+fi
+if echo "${ESLINT_OUT}" | grep -q "no-unused-vars"; then
+    ok "ckeslint applies the @eslint/js recommended rules"
+else
+    fail "ckeslint didn't report the unused variable (output: ${ESLINT_OUT:0:300})"
+fi
+
+# CRM/cj/ts/_/angular must not read as undefined identifiers, or every real
+# extension's frontend drowns in no-undef and the gate gets switched off.
+cat > "${ESDIR}/js/globals.js" <<'JS'
+export function boot() {
+  return [CRM.url('civicrm/x'), cj('body'), ts('Hi'), _.size([]), angular.module('x')];
+}
+JS
+(cd "${ESDIR}" && git add -A) >/dev/null 2>&1
+GLOBALS_OUT="$( (cd "${ESDIR}" && ckeslint js/globals.js) 2>&1 || true)"
+if echo "${GLOBALS_OUT}" | grep -q "no-undef"; then
+    fail "ckeslint reports CiviCRM globals as undefined (output: ${GLOBALS_OUT:0:300})"
+else
+    ok "ckeslint knows the CiviCRM globals"
+fi
+
+# A repo with no JS at all must PASS, and say so — the common case in this
+# fleet, and the one where a silent exit 0 is indistinguishable from a broken
+# tool.
+NOJS="${WORKDIR}/nojsext"
+mkdir -p "${NOJS}"
+cp "${ESDIR}/info.xml" "${NOJS}/info.xml"
+(cd "${NOJS}" && git init -q . && git add -A) >/dev/null 2>&1
+if NOJS_OUT="$( (cd "${NOJS}" && ckeslint) 2>&1 )" \
+    && echo "${NOJS_OUT}" | grep -q "nothing to lint"; then
+    ok "ckeslint passes with a log line when there is no JS"
+else
+    fail "ckeslint on a JS-free repo (output: ${NOJS_OUT:0:200})"
+fi
+
+# ---------------------------------------------------------------------------
+# 3f. ckschemadiff: table discovery from both schema formats, and the
+#     normalisation that makes two dumps of the same schema compare equal.
+#     The database half is exercised by the shared CI's schema-parity job,
+#     which is the only place two CiviCRM databases exist.
+echo "== ckschemadiff =="
+SCHDIR="${WORKDIR}/schemaext"
+mkdir -p "${SCHDIR}/schema" "${SCHDIR}/xml/schema/CRM/Widget"
+cp "${ESDIR}/info.xml" "${SCHDIR}/info.xml"
+cat > "${SCHDIR}/schema/Widget.entityType.php" <<'PHP'
+<?php
+return ['name' => 'Widget', 'table' => 'civicrm_widget', 'getFields' => fn() => []];
+PHP
+cat > "${SCHDIR}/xml/schema/CRM/Widget/Gadget.xml" <<'XML'
+<?xml version="1.0" encoding="iso-8859-1" ?>
+<table>
+  <name>civicrm_gadget</name>
+  <field><name>id</name></field>
+</table>
+XML
+SCH_TABLES="$( (cd "${SCHDIR}" && ckschemadiff tables) 2>&1 || true)"
+if [ "${SCH_TABLES}" = "civicrm_gadget
+civicrm_widget" ]; then
+    ok "ckschemadiff reads tables from both schema formats"
+else
+    fail "ckschemadiff table discovery (output: ${SCH_TABLES:0:200})"
+fi
+
+printf 'CREATE TABLE `civicrm_widget` (\n  `id` int NOT NULL AUTO_INCREMENT\n) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4;\n' > "${WORKDIR}/schema-a.sql"
+printf '/*!40101 SET @saved_cs_client = @@character_set_client */;\nCREATE TABLE `civicrm_widget` (\n  `id` int NOT NULL AUTO_INCREMENT\n) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4;\n' > "${WORKDIR}/schema-b.sql"
+ckschemadiff normalize < "${WORKDIR}/schema-a.sql" > "${WORKDIR}/schema-a.norm"
+ckschemadiff normalize < "${WORKDIR}/schema-b.sql" > "${WORKDIR}/schema-b.norm"
+if ckschemadiff diff "${WORKDIR}/schema-a.norm" "${WORKDIR}/schema-b.norm" >/dev/null 2>&1; then
+    ok "ckschemadiff normalises away the AUTO_INCREMENT counter and dump wrappers"
+else
+    fail "ckschemadiff reported a difference between two dumps of the same schema"
+fi
+
+printf 'CREATE TABLE `civicrm_widget` (\n  `label` varchar(64) DEFAULT NULL\n) ENGINE=InnoDB;\n' \
+    | ckschemadiff normalize > "${WORKDIR}/schema-c.norm"
+if ckschemadiff diff "${WORKDIR}/schema-a.norm" "${WORKDIR}/schema-c.norm" >/dev/null 2>&1; then
+    fail "ckschemadiff called two genuinely different schemas equal"
+else
+    ok "ckschemadiff reports a real schema difference"
+fi
+
+# ---------------------------------------------------------------------------
 # 4. phpstan analyses a sample file
 echo "== phpstan run =="
 cat > "${WORKDIR}/typed.php" <<'PHP'

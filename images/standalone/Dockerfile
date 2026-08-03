@@ -84,12 +84,25 @@ COPY lib/cktaint /usr/local/bin/cktaint
 # Reset helper for the headless-test scratch DB (reseeds <db>_test, clears
 # the per-DSN boot caches — see the script header for the failure mode).
 COPY lib/cktestreset /usr/local/bin/cktestreset
+# Smarty compile smoke: the runtime counterpart to ckconform's static template
+# checks. Needs a booted site, so it drives `cv scr` with the payload below.
+COPY lib/cksmarty /usr/local/bin/cksmarty
+COPY lib/civikitchen-smarty-compile.php /usr/local/share/civikitchen/cksmarty-compile.php
+# install()-vs-upgrader schema parity (used by the shared CI's schema-parity
+# job; needs the mysql client this image already has).
+COPY lib/ckschemadiff /usr/local/bin/ckschemadiff
+# ESLint: the pinned toolchain (installed by install-dev-tools.sh) plus the
+# CiviKitchen baseline flat config, and the ckeslint runner that picks between
+# it and a repo's own eslint.config.*.
+COPY lib/eslint /opt/civikitchen-eslint
+COPY lib/ckeslint /usr/local/bin/ckeslint
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         PSALM_VERSION="${PSALM_VERSION}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
         /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktestreset \
-        /usr/local/bin/cktaint
+        /usr/local/bin/cktaint \
+        /usr/local/bin/cksmarty /usr/local/bin/ckschemadiff /usr/local/bin/ckeslint
 
 # Add our vhost extras (e.g. the bare-/ → /civicrm/login redirect) via the
 # standard apache conf-available + a2enconf flow rather than editing the
