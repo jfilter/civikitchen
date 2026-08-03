@@ -147,6 +147,17 @@ unless `--force` is explicitly supplied. For an existing extension,
 - `phpunit.xml.dist` must declare a `<coverage>` section scoped to real
   extension code (exclude the civix shim and DAO/BAO boilerplate). Without it
   `--coverage-text` measures nothing while still looking like a passing gate.
+- **Runtime deprecations are test failures.** CiviCRM announces them at
+  runtime via `CRM_Core_Error::deprecatedWarning()` /
+  `deprecatedFunctionWarning()`, which end in
+  `trigger_error(..., E_USER_DEPRECATED)`. Two ingredients turn that into a red
+  build, and both live in the template: `convertDeprecationsToExceptions="true"`
+  in `phpunit.xml.dist`, and `error_reporting(E_ALL)` in
+  `tests/phpunit/bootstrap.php` — PHPUnit's error handler ignores anything
+  outside the mask, and the PHP CLI default hides `E_DEPRECATED`, which
+  `Civi\Test\CiviTestListener` only widens for its own tests. Without them a
+  call into a deprecated code path is green and the notice lands in a PHP log
+  nobody reads; `ckconform` (`deprecation-gate`) warns when a repo drops either.
 - CI runs the suite **with** coverage: `ckcoverage` (or at minimum
   `phpunit --coverage-text`).
 - `ckcoverage` reports line coverage and fails below the `min_coverage` floor
