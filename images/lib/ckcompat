@@ -8,6 +8,15 @@
 # json_validate() arrived in 8.3: that is what the PHPCompatibility standard is
 # for, and this runs it against the floor the repo itself declares.
 #
+# Two stages, because they answer the question differently:
+#   1. mago --semantics at the floor version — a real PARSE at the floor. Any
+#      syntax the floor cannot read is a fatal on install, and this is
+#      categorical: it needs no sniff to have been written for the construct.
+#      The image has exactly one PHP (8.4), so `php -l` here is blind to
+#      8.4-only syntax — mago's parser takes a target version, php's does not.
+#   2. PHPCompatibility — everything a parse cannot see: functions, constants,
+#      ini settings and behaviour that moved between versions.
+#
 # Pairs with cklint (style) and ckconform (repo structure).
 #
 set -euo pipefail
@@ -64,9 +73,44 @@ if [ "${#paths[@]}" -eq 0 ]; then
 fi
 
 echo "ckcompat: PHP ${test_version} (from composer.json unless overridden)"
-exec phpcs -q \
+rc=0
+
+# --- stage 1: does the floor's parser even accept this code? -----------------
+# `--php-version` overrides mago.toml and the environment, so the floor wins
+# over a repo baseline pinned to something else. `--semantics` runs no lint
+# rules, so a committed mago.toml changes nothing here.
+floor_version="${test_version%%-*}"
+mago_bin=$(command -v mago || true)
+# mago's parser starts at 8.0 and refuses to run below it. The fleet floor is
+# 8.1, so this only fires for a legacy repo — and there stage 2 alone is still
+# a better answer than an abort nobody can read.
+case "${floor_version}" in
+  [0-7].*) mago_bin="" ;;
+esac
+if [ -z "${mago_bin}" ]; then
+  echo "ckcompat: no usable mago for PHP ${floor_version} — floor parse check skipped" >&2
+else
+  mago_files=()
+  while IFS= read -r f; do [ -n "${f}" ] && mago_files+=("${f}"); done < <(
+    find "${paths[@]}" -type f -name '*.php' 2>/dev/null \
+      | grep -Ev '(^|/)(vendor|node_modules|\.civikitchen-siblings)/' \
+      | grep -Ev '\.civix\.php$' \
+      | grep -Ev '(^|/)DAO/' || true
+  )
+  if [ "${#mago_files[@]}" -eq 0 ]; then
+    echo "ckcompat: no PHP files for the floor parse check."
+  else
+    "${mago_bin}" --php-version "${floor_version}" lint --semantics \
+      "${mago_files[@]}" || rc=1
+  fi
+fi
+
+# --- stage 2: version-specific APIs and behaviour ----------------------------
+phpcs -q \
   --standard=PHPCompatibility \
   --runtime-set testVersion "${test_version}" \
   --extensions=php \
   --ignore='*/vendor/*,*/node_modules/*,*.civix.php,*/CRM/*/DAO/*,*/.civikitchen-siblings/*' \
-  "${paths[@]}"
+  "${paths[@]}" || rc=1
+
+exit "${rc}"

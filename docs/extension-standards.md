@@ -97,7 +97,12 @@ unless `--force` is explicitly supplied. For an existing extension,
   (`ckconform` `php-version-coherence`). Without `phpVersion`, phpstan analyses
   with the image's PHP — 8.3-only syntax then passes CI and fatals on the 8.1
   site the extension promised to install on. `ckcompat` adds what phpstan does
-  not know (`json_validate()` arrived in 8.3), and `ckmodernize` reads the same
+  not know, in two stages against that floor: `mago lint --semantics` parses
+  the code AS the floor version (so PHP-8.4-only syntax such as
+  `new Foo()->bar()` or property hooks is a hard error on an 8.3 floor — the
+  image ships a single PHP 8.4, which makes `php -l` structurally blind to
+  exactly that), then PHPCompatibility for the version-specific APIs a parse
+  cannot see (`json_validate()` arrived in 8.3). `ckmodernize` reads the same
   floor, so rector never rewrites past it.
 - **`@ck-legacy`, not `@deprecated`, for code that must touch a deprecated
   API.** phpstan's deprecation rules (bundled in the images) report every call

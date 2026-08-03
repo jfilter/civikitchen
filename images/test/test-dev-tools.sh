@@ -17,6 +17,7 @@
 #   3b. The CiviKitchen footgun sniffs fire, and cklint applies them
 #   3c. ckmodernize boots rector and previews a CiviCRM footgun rewrite
 #   3d. ckrelease builds a dist zip and rejects a mismatched tag
+#   3g. ckcompat rejects syntax the declared PHP floor cannot parse
 #   4. phpstan actually analyses a sample file (intentionally with type errors)
 #   5. phpunit actually runs a passing assertion
 #   6. composer can install a real package from packagist
@@ -521,6 +522,75 @@ if ckschemadiff diff "${WORKDIR}/schema-a.norm" "${WORKDIR}/schema-c.norm" >/dev
     fail "ckschemadiff called two genuinely different schemas equal"
 else
     ok "ckschemadiff reports a real schema difference"
+fi
+
+# ---------------------------------------------------------------------------
+# 3g. ckcompat: the declared PHP floor is checked by BOTH stages — mago's
+#     parser at the floor version (categorical: syntax the floor cannot read)
+#     and PHPCompatibility (version-specific APIs). The image runs a single PHP
+#     8.4, so `php -l` is structurally blind to 8.4-only syntax; this is the
+#     only gate that sees it.
+echo "== ckcompat =="
+CMPDIR="${WORKDIR}/compatext"
+mkdir -p "${CMPDIR}/Civi"
+echo '{"require":{"php":">=8.3"}}' > "${CMPDIR}/composer.json"
+cat > "${CMPDIR}/Civi/Floor.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+class AcmeFloor {
+
+  public function m(): int {
+    return 1;
+  }
+
+}
+
+function acme_floor_run(): int {
+  return new AcmeFloor()->m();
+}
+PHP
+CMP_OUT="$( (cd "${CMPDIR}" && ckcompat) 2>&1 || true)"
+if (cd "${CMPDIR}" && ckcompat) >/dev/null 2>&1; then
+    fail "ckcompat passed PHP-8.4-only syntax against an 8.3 floor (output: ${CMP_OUT:0:300})"
+else
+    ok "ckcompat rejects PHP-8.4-only syntax against the declared 8.3 floor"
+fi
+if echo "${CMP_OUT}" | grep -q "semantics"; then
+    ok "ckcompat runs the mago floor-parse stage"
+else
+    fail "ckcompat's mago parse stage did not run (output: ${CMP_OUT:0:300})"
+fi
+# The same code with the floor it really needs must be silent, or the gate is
+# just noise.
+if (cd "${CMPDIR}" && ckcompat --php 8.4) >/dev/null 2>&1; then
+    ok "ckcompat passes when the floor matches the syntax"
+else
+    CMP_OK_OUT="$( (cd "${CMPDIR}" && ckcompat --php 8.4) 2>&1 || true)"
+    fail "ckcompat failed on code that matches its floor (output: ${CMP_OK_OUT:0:300})"
+fi
+# Property hooks are the case PHPCompatibility 10.0.0-alpha2 gets wrong twice
+# over — it reports them as a removed curly-brace string offset, at ANY
+# testVersion, and offers phpcbf a "fix". The parse stage is what actually
+# names them, which is the whole reason it exists. Assert the verdict only.
+cat > "${CMPDIR}/Civi/Hooked.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+class AcmeHooked {
+
+  public string $n = '' {
+    get => $this->n;
+  }
+
+}
+PHP
+if (cd "${CMPDIR}" && ckcompat) >/dev/null 2>&1; then
+    fail "ckcompat passed PHP-8.4 property hooks against an 8.3 floor"
+else
+    ok "ckcompat rejects PHP-8.4 property hooks against the declared floor"
 fi
 
 # ---------------------------------------------------------------------------
