@@ -94,6 +94,12 @@ ARG PHPSTAN_EXTENSION_INSTALLER_VERSION
 ARG CODER_REF
 ARG RECTOR_VERSION
 ARG PSALM_VERSION
+# Overriding a phar *_VERSION requires overriding its *_SHA256 too — the
+# install script fails a mismatch on purpose.
+ARG CIVIX_VERSION
+ARG CIVIX_SHA256
+ARG PHPUNIT_VERSION
+ARG PHPUNIT_SHA256
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
 # install-dev-tools.sh) and the cklint linter that runs it.
@@ -137,6 +143,10 @@ COPY lib/eslint /opt/civikitchen-eslint
 COPY lib/ckeslint /usr/local/bin/ckeslint
 RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
         PSALM_VERSION="${PSALM_VERSION}" \
+        PHPSTAN_DEPRECATION_RULES_VERSION="${PHPSTAN_DEPRECATION_RULES_VERSION}" \
+        PHPSTAN_EXTENSION_INSTALLER_VERSION="${PHPSTAN_EXTENSION_INSTALLER_VERSION}" \
+        CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
+        PHPUNIT_VERSION="${PHPUNIT_VERSION}" PHPUNIT_SHA256="${PHPUNIT_SHA256}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
         /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktaint \

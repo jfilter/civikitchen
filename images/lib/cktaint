@@ -81,7 +81,14 @@ echo "== cktaint: taint analysis (ADVISORY — findings are a review prompt, not
 echo "cktaint: config ${config}"
 
 args=(--taint-analysis --config="${config}" --no-progress)
-[ "${baseline}" -eq 1 ] && args+=(--set-baseline=psalm-baseline.xml)
+if [ "${baseline}" -eq 1 ]; then
+  args+=(--set-baseline=psalm-baseline.xml)
+elif [ -f psalm-baseline.xml ]; then
+  # Psalm does not pick a baseline up on its own: without --use-baseline (or an
+  # errorBaseline in the config) the file written by --baseline changes nothing.
+  echo "cktaint: applying psalm-baseline.xml (only NEW findings are reported)"
+  args+=(--use-baseline=psalm-baseline.xml)
+fi
 [ "${#extra[@]}" -gt 0 ] && args+=("${extra[@]}")
 [ "${#paths[@]}" -gt 0 ] && args+=("${paths[@]}")
 

@@ -160,8 +160,9 @@ unless `--force` is explicitly supplied. For an existing extension,
   so a repo opts in with one `includes:` line when it is ready.
 - CI per `template/extension/.github/workflows/ci.yml` — a thin caller of the
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
-  ckconform → phpunit under ckcoverage → phpstan → cktaint (advisory) →
-  template-drift check → lockfile vulnerability scan), so
+  ckconform → phpunit under ckcoverage → phpstan → ckcompat → ckdeps →
+  cktaint (advisory) → cksmarty → ckeslint → template-drift check →
+  lockfile vulnerability scan, plus the opt-in schema-parity job), so
   the pipeline is defined once instead of copy-pasted per repo. The caller pins
   the released major (`@v1`) and the CI stack the matching `:v1` image —
   workflow, template, tools and images are one versioned contract, so they move

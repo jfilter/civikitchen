@@ -6,6 +6,8 @@ on:
     paths:
       - 'images/**'
       - '.github/workflows/build-dev-images.yml'
+      # Changes the scan verdict directly, so it must re-run the scan jobs.
+      - '.trivyignore'
   schedule:
     # Weekly (Mondays 04:00 UTC, an hour before the GHCR cleanup cron): the
     # resolve-civicrm job picks up the current upstream stable release each
@@ -835,10 +837,15 @@ jobs:
       packages: read
 
     strategy:
-      # One flavor's CVE must not hide the report for the other nine.
+      # One flavor's CVE must not hide the report for the other nine. Platform
+      # is a real dimension, not a formality: the published manifests carry
+      # amd64 AND arm64, whose base/OS layers resolve packages independently —
+      # scanning one arch says nothing about a CVE that only ships in the
+      # other's build of the same library.
       fail-fast: false
       matrix:
         image: ${{ fromJSON(needs.scan-image-list.outputs.images) }}
+        platform: [linux/amd64, linux/arm64]
 
     steps:
       - name: Checkout (for .trivyignore)
@@ -906,11 +913,12 @@ jobs:
       - name: Scan the published image (gate)
         env:
           IMAGE_REF: ${{ steps.digest.outputs.ref }}
+          PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/trivy" image \
             --image-src remote \
-            --platform linux/amd64 \
+            --platform "$PLATFORM" \
             --scanners vuln \
             --ignore-unfixed \
             --severity HIGH,CRITICAL \
@@ -930,12 +938,13 @@ jobs:
         env:
           IMAGE_REF: ${{ steps.digest.outputs.ref }}
           IMAGE: ${{ matrix.image }}
+          PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
           report="$RUNNER_TEMP/trivy-report.txt"
           "$RUNNER_TEMP/trivy" image \
             --image-src remote \
-            --platform linux/amd64 \
+            --platform "$PLATFORM" \
             --scanners vuln \
             --exit-code 0 \
             --skip-db-update \
@@ -945,7 +954,7 @@ jobs:
             --output "$report" \
             "$IMAGE_REF"
           {
-            echo "## trivy: $IMAGE"
+            echo "## trivy: $IMAGE ($PLATFORM)"
             echo
             echo "\`$IMAGE_REF\` — all severities, unfixed included."
             echo

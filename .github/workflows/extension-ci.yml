@@ -627,11 +627,15 @@ jobs:
             echo "### Taint analysis (advisory): clean" >> "$GITHUB_STEP_SUMMARY"
           else
             {
-              echo "### Taint analysis (advisory): findings"
+              # A non-zero exit is not necessarily a finding: an image without
+              # cktaint, a broken config or an analyzer crash land here too, so
+              # the summary must not claim taint flows were found.
+              echo "### Taint analysis (advisory): findings or analysis failure"
               echo
-              echo "\`cktaint\` reported tainted data flows — see the **Taint analysis (cktaint, advisory)** step log."
+              echo "\`cktaint\` exited non-zero — see the **Taint analysis (cktaint, advisory)** step log for"
+              echo "whether it reported tainted data flows or failed to run at all."
               echo "**This did not fail the build.** The gate is an advisory pilot: Psalm cannot see CiviCRM core,"
-              echo "so it over- and under-reports. Fix the flow, or record a justified exception"
+              echo "so it over- and under-reports. For real findings, fix the flow or record a justified exception"
               echo "(\`cktaint --baseline\` / \`@psalm-suppress\` with a reason)."
               echo "See docs/extension-standards.md, section \"Taint analysis\"."
             } >> "$GITHUB_STEP_SUMMARY"

@@ -71,7 +71,10 @@ CIVIX_VERSION="${CIVIX_VERSION:-26.02.0}"
 PHPUNIT_VERSION="${PHPUNIT_VERSION:-9.6.35}"
 
 # ---------------------------------------------------------------------------
-# Phars: civix, phpunit, phpstan
+# Phars: civix, phpunit. (phpstan is NOT a phar: it is composer-installed
+# below so extensions can register, and its integrity is composer's dist
+# checksum — a phar fetched here would be overwritten by that wrapper and its
+# hash check would guard nothing.)
 #
 # A pinned version only pins what the server chooses to serve — over TLS or
 # not, an unverified phar is arbitrary code entering every image. The hashes
@@ -84,7 +87,6 @@ PHPUNIT_VERSION="${PHPUNIT_VERSION:-9.6.35}"
 # therefore means overriding its *_SHA256 as well.
 CIVIX_SHA256="${CIVIX_SHA256:-1c480133bee248c1f09f19c724e2e44266297b63ff2e55a7cbf3ea17a910d906}"
 PHPUNIT_SHA256="${PHPUNIT_SHA256:-f39d634a5e5bcafd71565b33328ae4fb173703296c12ac94a24550cb8291e964}"
-PHPSTAN_SHA256="${PHPSTAN_SHA256:-487ab20ffe29ce405cf19b4e803933aa7dd97cdb871f457ca57fc9267f5a0f1a}"
 
 # Compared in the shell rather than with `sha256sum -c`: that exits 0 on a
 # malformed checksum line, so an empty or truncated *_SHA256 would wave the
@@ -105,9 +107,6 @@ fetch_phar "https://download.civicrm.org/civix/civix-${CIVIX_VERSION}.phar" \
 
 fetch_phar "https://phar.phpunit.de/phpunit-${PHPUNIT_VERSION}.phar" \
     /usr/local/bin/phpunit "${PHPUNIT_SHA256}"
-
-fetch_phar "https://github.com/phpstan/phpstan/releases/download/${PHPSTAN_VERSION}/phpstan.phar" \
-    /usr/local/bin/phpstan "${PHPSTAN_SHA256}"
 
 # ---------------------------------------------------------------------------
 # phpcs (from packagist) + civicrm/coder fork (cloned directly).
@@ -233,8 +232,18 @@ chmod +x /usr/local/bin/phpstan
 # felixfbecker/…), and the phpstan tree above is what the static-analysis gate
 # every extension depends on — it must not be perturbed by another tool's
 # dependency resolution. Two engines, two roots, no shared resolution.
-composer require --working-dir=/opt/civikitchen-psalm --no-interaction --no-progress \
-    "vimeo/psalm:${PSALM_VERSION}"
+# From the committed lockfile: psalm drags ~50 transitive packages, and a
+# monthly rebuild re-resolving them would be exactly the drift the version
+# pins exist to prevent (ESLint installs from its lockfile for the same
+# reason). Overriding PSALM_VERSION re-resolves — accepting a fresh tree is
+# the meaning of that override.
+PSALM_LOCKED=$(php -r 'echo json_decode(file_get_contents("/opt/civikitchen-psalm/composer.json"))->require->{"vimeo/psalm"} ?? "";')
+if [ "${PSALM_VERSION}" = "${PSALM_LOCKED}" ] && [ -f /opt/civikitchen-psalm/composer.lock ]; then
+    composer install --working-dir=/opt/civikitchen-psalm --no-interaction --no-progress
+else
+    composer require --working-dir=/opt/civikitchen-psalm --no-interaction --no-progress \
+        "vimeo/psalm:${PSALM_VERSION}"
+fi
 
 # ---------------------------------------------------------------------------
 # ESLint toolchain (powers `ckeslint`) — installed into the directory the

@@ -3,6 +3,12 @@
     "description": "CiviKitchen taint-analysis setup: Psalm used ONLY as a taint engine (`cktaint`), with CiviCRM source/sink/escape stubs. Isolated from the image's phpstan on purpose.",
     "license": "AGPL-3.0-or-later",
     "config": {
-        "sort-packages": true
+        "sort-packages": true,
+        "platform": {
+            "php": "8.3.16"
+        }
+    },
+    "require": {
+        "vimeo/psalm": "6.16.1"
     }
 }

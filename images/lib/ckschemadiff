@@ -145,18 +145,27 @@ ck_dump() {
   while IFS= read -r line; do
     [ -n "$line" ] && tables+=("$line")
   done < <(ck_tables)
-  [ "${#tables[@]}" -gt 0 ] || { echo "ckschemadiff: this extension declares no tables of its own." >&2; exit 3; }
+  # Not a failure: the CI gate only greps for schema FILES, and a file that
+  # declares no table of its own (helper/abstract XML) is legitimate. An empty
+  # dump keeps the pipeline honest — two empty dumps compare equal downstream.
+  if [ "${#tables[@]}" -eq 0 ]; then
+    echo "ckschemadiff: this extension declares no tables of its own — writing an empty dump."
+    : > "$out"
+    return 0
+  fi
 
   : "${CIVICRM_DB_HOST:=db}"
   : "${CIVICRM_DB_PORT:=3306}"
   : "${CIVICRM_DB_USER:=civicrm}"
   : "${CIVICRM_DB_PASSWORD:=civicrm}"
 
+  # stderr passes through minus the password-on-CLI warning: a failing dump
+  # (missing table, bad credentials) must say WHY, not just exit non-zero.
   mysqldump \
     -h "$CIVICRM_DB_HOST" -P "$CIVICRM_DB_PORT" \
     -u "$CIVICRM_DB_USER" -p"$CIVICRM_DB_PASSWORD" \
     --no-data --compact --skip-comments --skip-add-drop-table --skip-set-charset \
-    "$db" "${tables[@]}" 2>/dev/null \
+    "$db" "${tables[@]}" 2> >(grep -v 'Using a password on the command line' >&2) \
     | ck_normalize > "$out"
 
   [ -s "$out" ] || { echo "ckschemadiff: mysqldump produced nothing for $db (are the tables installed?)" >&2; exit 2; }
