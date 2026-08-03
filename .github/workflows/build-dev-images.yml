@@ -957,13 +957,24 @@ jobs:
             --quiet \
             --output "$report" \
             "$IMAGE_REF"
+          # GitHub drops the WHOLE summary over 1 MiB, so an untruncated report
+          # made this step silently produce nothing. Cut it and say so.
+          budget=900000
+          total=$(wc -l < "$report")
+          head -c "$budget" "$report" > "$report.cut"
+          kept=$(wc -l < "$report.cut")
           {
             echo "## trivy: $IMAGE ($PLATFORM)"
             echo
             echo "\`$IMAGE_REF\` — all severities, unfixed included."
+            if [ "$kept" -lt "$total" ]; then
+              echo
+              echo "**Truncated to fit GitHub's 1 MiB summary limit: $kept of $total lines.**"
+              echo "Re-run the scan locally for the rest: \`trivy image $IMAGE_REF\`"
+            fi
             echo
             echo '```'
-            cat "$report"
+            cat "$report.cut"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
