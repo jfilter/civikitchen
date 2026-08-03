@@ -785,6 +785,173 @@ jobs:
           docker buildx imagetools create -t ${{ env.IMAGE_PREFIX }}:${{ matrix.tag }} \
             ${{ env.IMAGE_PREFIX }}:${{ matrix.tag }}-${{ github.sha }}
 
+  # --- Image vulnerability scan (trivy) -------------------------------------
+  #
+  # What is IN the images, as opposed to what the extension workflow's
+  # osv-scanner job covers (an extension's own lockfiles): the Debian base, the
+  # PHP packages, CiviCRM's vendored composer tree, the node bits the dev tools
+  # bring. Nobody writes those into a lockfile in this repo, so nothing else
+  # here would ever notice a base-image CVE — and these images are what eleven
+  # repos boot their CI on and what developers run locally.
+  #
+  # A matrix needs a JSON array and workflow expressions have no way to append
+  # to one, so the tag list is assembled here — same shape as resolve-civicrm.
+  # The candidate tags, not the stable ones: they are already pushed at this
+  # point, and `imagetools create` copies a manifest list intact, so the digest
+  # promote publishes is bit-for-bit the digest scanned here.
+  scan-image-list:
+    needs: resolve-civicrm
+    runs-on: ubuntu-24.04
+    outputs:
+      images: ${{ steps.list.outputs.images }}
+    steps:
+      - name: Assemble the candidate tag list
+        id: list
+        env:
+          STANDALONE_VERSIONS: ${{ needs.resolve-civicrm.outputs.standalone_versions }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          images=$(jq -nc --arg sha "$SHA" --argjson standalone "$STANDALONE_VERSIONS" '
+            ($standalone | map("standalone-" + .))
+            + ["drupal10", "drupal11", "wordpress", "joomla"]
+            + ["standalone-demo", "drupal10-demo", "drupal11-demo", "wordpress-demo", "joomla-demo"]
+            | map(. + "-" + $sha)
+          ')
+          echo "images=$images" >> "$GITHUB_OUTPUT"
+          echo "scanning: $images"
+
+  scan-images:
+    # Reports, does not gate: the promote jobs do not wait for this one. A CVE
+    # in the Debian base is fixed by an upstream rebuild, not by holding back an
+    # image whose predecessor has the same CVE — blocking promotion would just
+    # freeze the fleet on an older image with strictly more of them. Making it a
+    # gate is one line (add this job to promote-*'s `needs`), and should stay a
+    # deliberate decision rather than a side effect.
+    needs: [scan-image-list, merge-standalone, merge-buildkit, merge-demo]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      # One flavor's CVE must not hide the report for the other nine.
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.scan-image-list.outputs.images) }}
+
+    steps:
+      - name: Checkout (for .trivyignore)
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pinned version AND pinned checksum, for the reason spelled out on the
+      # same step in extension-ci.yml: a version pin still trusts whatever the
+      # tag serves today. The hash is the release's own
+      # trivy_<version>_checksums.txt entry and moves with the version.
+      - name: Install trivy
+        env:
+          CK_TRIVY_VERSION: 0.72.0
+          CK_TRIVY_SHA256: bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea
+        run: |
+          set -euo pipefail
+          tarball="$RUNNER_TEMP/trivy.tar.gz"
+          curl -fsSL -o "$tarball" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${CK_TRIVY_VERSION}/trivy_${CK_TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "$CK_TRIVY_SHA256  $tarball" | sha256sum -c -
+          tar -xzf "$tarball" -C "$RUNNER_TEMP" trivy
+          "$RUNNER_TEMP/trivy" --version
+
+      # The scan target is the DIGEST, resolved from the registry — the point of
+      # the whole job. Scanning a tag re-resolves it at scan time and scanning
+      # the Dockerfile grades an intention; only the digest is the artifact a
+      # developer or a CI run actually pulls.
+      - name: Resolve the published digest
+        id: digest
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          ref="${IMAGE_PREFIX}:${IMAGE}"
+          digest=$(docker buildx imagetools inspect "$ref" --format '{{.Manifest.Digest}}')
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] \
+            || { echo "could not resolve a digest for $ref (got: '$digest')" >&2; exit 1; }
+          echo "$ref -> $digest"
+          echo "ref=${IMAGE_PREFIX}@${digest}" >> "$GITHUB_OUTPUT"
+
+      # The gate, and the only run whose exit code matters:
+      #   --ignore-unfixed  nothing upstream has patched yet is not something a
+      #                     rebuild here can fix; a gate that cannot be met
+      #                     teaches people to ignore it.
+      #   --severity HIGH,CRITICAL  the rest belongs in the report below.
+      #   --scanners vuln   this job is about CVEs. Trivy's secret scanner is on
+      #                     by default and would block on findings
+      #                     --ignore-unfixed cannot apply to; secret scanning is
+      #                     a separate concern with a separate answer
+      #                     (docs/extension-standards.md).
+      # --image-src remote: the image is in the registry, not in this runner's
+      # docker daemon, and the default source order would try three local
+      # backends first.
+      #
+      # Central exceptions go in .trivyignore in the repository root, which
+      # trivy reads by default. See the file itself for the comment convention.
+      - name: Scan the published image (gate)
+        env:
+          IMAGE_REF: ${{ steps.digest.outputs.ref }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/trivy" image \
+            --image-src remote \
+            --platform linux/amd64 \
+            --scanners vuln \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --no-progress \
+            "$IMAGE_REF"
+
+      # The same image without any of the filters, exit code 0, into the job
+      # summary. The gate above answers "is there anything to do?"; this answers
+      # "what is actually in there" — including the unfixed and the low-severity
+      # findings a policy deliberately does not block on, which is the part you
+      # want when triaging one that starts to matter. Runs even when the gate
+      # went red (that is when it is most useful), and skips the database
+      # download the gate just did.
+      - name: Full report into the job summary
+        if: ${{ !cancelled() && steps.digest.outcome == 'success' }}
+        env:
+          IMAGE_REF: ${{ steps.digest.outputs.ref }}
+          IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/trivy-report.txt"
+          "$RUNNER_TEMP/trivy" image \
+            --image-src remote \
+            --platform linux/amd64 \
+            --scanners vuln \
+            --exit-code 0 \
+            --skip-db-update \
+            --skip-java-db-update \
+            --no-progress \
+            --quiet \
+            --output "$report" \
+            "$IMAGE_REF"
+          {
+            echo "## trivy: $IMAGE"
+            echo
+            echo "\`$IMAGE_REF\` — all severities, unfixed included."
+            echo
+            echo '```'
+            cat "$report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   notify-scheduled-failure:
     # The weekly cron rebuild fails SILENTLY otherwise: test-then-promote
     # keeps serving the last good stable tags, so nothing user-visible breaks
@@ -793,7 +960,10 @@ jobs:
     # over the needs chain, so any failed job anywhere in the pipeline
     # triggers this — push-triggered runs are excluded (those failures are
     # visible on the commit/PR already).
-    needs: [promote-standalone, promote-buildkit, promote-demo]
+    # scan-images is in the list even though it gates nothing: the weekly cron
+    # is the run that finds a base-image CVE nobody pushed a commit for, and
+    # without this edge that finding would sit in a job summary nobody opens.
+    needs: [promote-standalone, promote-buildkit, promote-demo, scan-images]
     if: github.event_name == 'schedule' && failure()
     runs-on: ubuntu-24.04
     permissions:
