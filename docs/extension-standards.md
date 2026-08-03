@@ -57,17 +57,23 @@ unless `--force` is explicitly supplied. For an existing extension,
   install-time imperative code.
 - phpstan level 10 clean (template `phpstan.neon.dist`), files ≤ 1000 lines
   (`CiviKitchen.Files.MaxFileLength`).
-- **One PHP floor, stated once and analysed against.** `composer.json`
-  `require.php` is the source of truth; `info.xml` `<php_compatibility>` and
-  phpstan's `phpVersion` must agree with it (`ckconform`
-  `php-version-coherence`). Without `phpVersion`, phpstan analyses with the
-  image's PHP — 8.3-only syntax then passes CI and fatals on the 8.1 site the
-  extension promised to install on. `ckmodernize` reads the same floor, so
-  rector never rewrites past it.
+- `declare(strict_types=1)` in every file (`CiviKitchen.PHP.RequireStrictTypes`,
+  `cklint --fix` inserts it). Without it the types phpstan verifies are
+  enforced by nothing at runtime.
+- **One PHP floor, stated once and checked from three sides.**
+  `composer.json` `require.php` is the source of truth; `info.xml`
+  `<php_compatibility>` and phpstan's `phpVersion` must agree with it
+  (`ckconform` `php-version-coherence`). Without `phpVersion`, phpstan analyses
+  with the image's PHP — 8.3-only syntax then passes CI and fatals on the 8.1
+  site the extension promised to install on. `ckcompat` adds what phpstan does
+  not know (`json_validate()` arrived in 8.3), and `ckmodernize` reads the same
+  floor, so rector never rewrites past it.
 - No positional padding: arguments that only repeat a parameter default are
   dropped and what follows them is named — `ckmodernize` rewrites
   `retrieve('delete', 'String', NULL, FALSE, NULL, 'POST')` to
-  `retrieve('delete', 'String', method: 'POST')`.
+  `retrieve('delete', 'String', method: 'POST')`. Bare `TRUE`/`FALSE` at a call
+  site is a warning (`CiviKitchen.Modern.NameBooleanArguments`) — only a human
+  knows which parameter it is.
 
 ## Tooling every repo must have
 
@@ -75,7 +81,8 @@ unless `--force` is explicitly supplied. For an existing extension,
   top is yours) — `cklint` picks it up automatically.
 - `phpunit.xml.dist` + headless tests per the template
   (`template/extension/`), incl. the `TEST_DB_DSN` bootstrap guard.
-- `phpstan.neon.dist` (level 10, no baseline).
+- `phpstan.neon.dist` (level 10, no baseline, `phpVersion` at the declared
+  floor).
 - CI per `template/extension/.github/workflows/ci.yml` — a thin caller of the
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
   ckconform → phpunit under ckcoverage → phpstan → template-drift check), so
