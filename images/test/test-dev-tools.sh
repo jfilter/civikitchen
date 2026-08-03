@@ -87,15 +87,14 @@ function f() {
 PHP
 
 CK_OUT="$(phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/Legacy.php" 2>&1 || true)"
-if echo "${CK_OUT}" | grep -q "civicrm_api3"; then
-    ok "CiviKitchen NoLegacyCall flags civicrm_api3"
+# NOTE: the banned CiviCRM call sites (civicrm_api3, CRM_Core_Error::debug_*)
+# are NOT asserted here any more — they left this standard for phpstan
+# (civicrm-disallowed.neon) and phpat, which resolve types instead of matching
+# tokens. See the ruleset description.
+if echo "${CK_OUT}" | grep -q "DeclareStrictTypesMissing\|Missing declare(strict_types"; then
+    ok "CiviKitchen DeclareStrictTypes (Slevomat) flags the missing declare"
 else
-    fail "CiviKitchen NoLegacyCall didn't flag civicrm_api3 (output: ${CK_OUT:0:200})"
-fi
-if echo "${CK_OUT}" | grep -q "debug_log_message"; then
-    ok "CiviKitchen NoLegacyCall flags CRM_Core_Error::debug_log_message"
-else
-    fail "CiviKitchen NoLegacyCall didn't flag debug_log_message (output: ${CK_OUT:0:200})"
+    fail "Slevomat DeclareStrictTypes didn't fire — is slevomat installed? (output: ${CK_OUT:0:200})"
 fi
 if echo "${CK_OUT}" | grep -qi "translation domain"; then
     ok "CiviKitchen UseExtensionTs flags bare ts()"
@@ -117,10 +116,51 @@ fi
 # Explicit-path mode without a project phpcs.xml(.dist) in cwd: cklint must
 # syntax-check (php -l) and then apply the CiviKitchen fallback standard.
 CKLINT_OUT="$( (cd "${WORKDIR}" && cklint Legacy.php) 2>&1 || true)"
-if echo "${CKLINT_OUT}" | grep -q "civicrm_api3"; then
+if echo "${CKLINT_OUT}" | grep -qi "translation domain"; then
     ok "cklint lints with the CiviKitchen fallback standard"
 else
-    fail "cklint didn't report the legacy call (output: ${CKLINT_OUT:0:200})"
+    fail "cklint didn't report the bare ts() (output: ${CKLINT_OUT:0:200})"
+fi
+
+# The declare spacing has to be the SAME shape in the sniff and in ckfmt, or
+# every file in the fleet is unfixable: Slevomat and Drupal.WhiteSpace.
+# OperatorSpacing would each demand what the other forbids. Both spellings are
+# asserted so a Slevomat bump that changes the default cannot pass silently.
+cat > "${WORKDIR}/DeclSpaced.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+namespace Acme;
+
+/**
+ * A widget.
+ */
+class Widget {
+
+  /**
+   * Go.
+   *
+   * @return int
+   *   The number.
+   */
+  public function go(): int {
+    return 1;
+  }
+
+}
+PHP
+sed 's/strict_types = 1/strict_types=1/' "${WORKDIR}/DeclSpaced.php" > "${WORKDIR}/DeclTight.php"
+if phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/DeclSpaced.php" >/dev/null 2>&1; then
+    ok "declare(strict_types = 1) is clean under the CiviKitchen standard"
+else
+    DECL_OUT="$(phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/DeclSpaced.php" 2>&1 || true)"
+    fail "CiviKitchen rejects the formatter's declare spelling (output: ${DECL_OUT:0:300})"
+fi
+if phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/DeclTight.php" >/dev/null 2>&1; then
+    fail "CiviKitchen accepts declare(strict_types=1) — it must match ckfmt's spacing"
+else
+    ok "CiviKitchen rejects the unspaced declare (ckfmt owns the spelling)"
 fi
 
 # Warning tier: a phpcs warning is reported but must not fail the gate, while
@@ -140,7 +180,7 @@ XML
 cat > "${WARNDIR}/Warn.php" <<'PHP'
 <?php
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 function acme_probe(): void {
   acme_helper('x', TRUE);
@@ -149,7 +189,7 @@ PHP
 cat > "${WARNDIR}/Err.php" <<'PHP'
 <?php
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 function acme_label(): string {
   return ts('hello');
@@ -177,7 +217,7 @@ mkdir -p "${MAGODIR}"
 cat > "${MAGODIR}/Mago.php" <<'PHP'
 <?php
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 function magoext_probe(array $params): bool {
   return !empty($params['id']) && @unlink('/tmp/nope');
@@ -198,7 +238,7 @@ fi
 cat > "${MAGODIR}/Mago.php" <<'PHP'
 <?php
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 function magoext_probe(array $params): bool {
   // @mago-expect lint:no-error-control-operator
@@ -217,7 +257,7 @@ fi
 # only path-aware setting in the config, so a mago upgrade dropping it is worth
 # catching here.
 mago_methods_class() {
-    { echo "<?php"; echo; echo "declare(strict_types=1);"; echo;
+    { echo "<?php"; echo; echo "declare(strict_types = 1);"; echo;
       echo "class $1 {";
       for i in $(seq 1 25); do echo "  public function m${i}(): void {}"; done
       echo "}"; } > "$2"

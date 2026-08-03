@@ -82,12 +82,14 @@
     <exclude-pattern>*/Test/*</exclude-pattern>
   </rule>
 
-  <!-- declare(strict_types=1) per file: without it the types phpstan verifies
-       are enforced by nothing at runtime. Slevomat's, not ours — the fleet
-       writes it without spaces, which is all this needs configuring. -->
+  <!-- declare(strict_types = 1) per file: without it the types phpstan verifies
+       are enforced by nothing at runtime. Slevomat's sniff, not ours. The
+       spacing has to match ckfmt (space-around-assignment-in-declare) and
+       Drupal.WhiteSpace.OperatorSpacing, which both want the spaces; a 0 here
+       makes the two sniffs contradict each other in every file. -->
   <rule ref="SlevomatCodingStandard.TypeHints.DeclareStrictTypes">
     <properties>
-      <property name="spacesCountAroundEqualsSign" value="0"/>
+      <property name="spacesCountAroundEqualsSign" value="1"/>
     </properties>
   </rule>
 

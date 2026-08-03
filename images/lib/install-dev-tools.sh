@@ -53,7 +53,15 @@ PHPAT_VERSION="${PHPAT_VERSION:-0.12.4}"
 COMPOSER_DEPENDENCY_ANALYSER_VERSION="${COMPOSER_DEPENDENCY_ANALYSER_VERSION:-1.8.4}"
 # Cherry-picked sniffs only (DeclareStrictTypes today); the full standard would
 # fight the Drupal base the CiviKitchen ruleset is built on.
-SLEVOMAT_VERSION="${SLEVOMAT_VERSION:-8.31.1}"
+#
+# CEILING: 8.22.1 is the last release that accepts phpcs ^3 — from 8.23 on it
+# requires php_codesniffer ^4.0.1, and this whole install would stop resolving.
+# phpcs cannot follow: the civicrm/coder fork pinned at CODER_REF still requires
+# phpcs ^3, and under 4.0 the Drupal standard aborts outright ("Referenced sniff
+# Squiz.CSS.* does not exist", plus the CSS/JS scanning removal). So this pin
+# moves only together with a coder fork that speaks phpcs 4 — do not bump it on
+# its own, and do not let a bot do it.
+SLEVOMAT_VERSION="${SLEVOMAT_VERSION:-8.22.1}"
 # civicrm/coder has no usable release tags, so pin to a commit on 8.x-2.x-civi.
 CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
 # rector powers `ckmodernize`; pin it too so a rebuild can't silently change

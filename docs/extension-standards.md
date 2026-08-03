@@ -83,11 +83,14 @@ unless `--force` is explicitly supplied. For an existing extension,
   install-time imperative code.
 - phpstan level 10 clean (template `phpstan.neon.dist`), files ≤ 1000 lines
   (`CiviKitchen.Files.MaxFileLength`).
-- `declare(strict_types=1)` in every file
-  (`SlevomatCodingStandard.TypeHints.DeclareStrictTypes`, configured by the
-  CiviKitchen standard for the fleet's unspaced form; `cklint --fix` inserts
-  it). Without it the types phpstan verifies are enforced by nothing at
-  runtime.
+- `declare(strict_types = 1)` in every file
+  (`SlevomatCodingStandard.TypeHints.DeclareStrictTypes`; `cklint --fix`
+  inserts it). Without it the types phpstan verifies are enforced by nothing at
+  runtime. The spacing is not cosmetic: `Drupal.WhiteSpace.OperatorSpacing`
+  wants the spaces and ckfmt writes them (`space-around-assignment-in-declare`),
+  so the CiviKitchen standard sets Slevomat's `spacesCountAroundEqualsSign` to
+  1. With a 0 there the two sniffs demand opposite things and no file in the
+  fleet can satisfy both.
 - **One PHP floor, stated once and checked from three sides.**
   `composer.json` `require.php` is the source of truth; `info.xml`
   `<php_compatibility>` and phpstan's `phpVersion` must agree with it

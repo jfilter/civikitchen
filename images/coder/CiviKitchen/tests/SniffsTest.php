@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 use PHPUnit\Framework\TestCase;
 
@@ -155,8 +155,8 @@ final class SniffsTest extends TestCase {
     $findings = $this->phpcs('MissingStrictTypes.php', NULL, self::PHP8_SNIFFS);
 
     // Reported on line 1: a missing declare is a whole-file fact. The clean
-    // fixtures above carry `strict_types=1` — unspaced, which the sniff only
-    // tolerates because this standard configures it to.
+    // fixtures above carry `strict_types = 1` — spaced, the shape ckfmt writes
+    // and the only one this standard's spacesCountAroundEqualsSign accepts.
     self::assertSame(
       [1 => ['SlevomatCodingStandard.TypeHints.DeclareStrictTypes.DeclareStrictTypesMissing']],
       $findings

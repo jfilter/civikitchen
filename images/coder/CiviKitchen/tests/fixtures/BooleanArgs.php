@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 // Fixture: positional boolean literals (flagged) against every near-miss a
 // token matcher would trip on (not flagged). The test asserts exact lines.

@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+declare(strict_types = 1);
 
 // Fixture: the modern counterparts of everything the footgun sniffs ban.
 // The test asserts ZERO findings from the CiviKitchen sniffs here — every
