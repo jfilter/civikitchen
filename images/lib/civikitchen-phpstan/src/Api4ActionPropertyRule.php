@@ -32,6 +32,13 @@ use PHPStan\Rules\RuleErrorBuilder;
  */
 final class Api4ActionPropertyRule implements Rule
 {
+    private bool $strict;
+
+    public function __construct(bool $strict = false)
+    {
+        $this->strict = $strict;
+    }
+
     public function getNodeType(): string
     {
         return InClassNode::class;
@@ -71,6 +78,19 @@ final class Api4ActionPropertyRule implements Rule
                         $name,
                         self::typeToString($stmt->type),
                     ))->identifier('ck.api4.uninitializedActionParam')->line($stmt->getStartLine())->build();
+
+                    continue;
+                }
+
+                // `?string $x;` with no default is uninitialized until the
+                // kernel fills it — usually intended, occasionally a bug, so
+                // it is a separate identifier a repo turns on for itself.
+                if ($this->strict && !$required && !$default && $nullable) {
+                    $errors[] = RuleErrorBuilder::message(sprintf(
+                        'APIv4 action parameter $%s is nullable with no default, so it is uninitialized rather than null '
+                        . 'until the kernel writes it — give it a default of null to make that explicit.',
+                        $name,
+                    ))->identifier('ck.api4.nullableActionParamWithoutDefault')->line($stmt->getStartLine())->build();
 
                     continue;
                 }

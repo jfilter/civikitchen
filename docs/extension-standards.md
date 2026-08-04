@@ -79,6 +79,22 @@ unless `--force` is explicitly supplied. For an existing extension,
   (`$q = Contact::get(); $q->addSelect(…)`) is judged through its type, which
   names the entity exactly; only `orderBy`/`groupBy` are skipped there,
   because an alias defined by an earlier link is out of sight.
+- **The right-hand side of an implicit join is checked too.** The catalog
+  carries a join map (`Api4Catalog::JOINS`): every field with an
+  `entity_reference` becomes a joinable of the same name
+  (`SchemaMapBuilder::addJoins`), plus the eight primary/billing links
+  `ContactSchemaMapSubscriber` adds to Contact. So in
+  `addSelect('address_primary.street_address')` the left side is resolved to
+  Address and the right side checked against Address's fields — the correct
+  form of the address-fields-on-Contact bug now gets the same scrutiny as the
+  wrong one, `address_primary.no_such_field` included. It stays silent
+  wherever the source tree cannot decide: a left side the map does not know
+  (an explicit `->addJoin('Address AS x')` alias, a custom-group name, another
+  extension's entity), a name an explicit join rebound, a multi-level path
+  (`a.b.c`), a builder held in a variable — there the joins an earlier link
+  declared are invisible — and any target entity whose own field list is not
+  table-backed. Writes (`addValue`/`setValues`) are out of scope: a join is
+  not a write target.
 - **A protected property on a custom APIv4 action is an API parameter.** The
   kernel fills it from the caller's params, so a non-nullable typed property
   without a default and without `@required` does not produce an API validation
@@ -86,7 +102,15 @@ unless `--force` is explicitly supplied. For an existing extension,
   before initialization", from inside the kernel, naming no field
   (`ck.api4.uninitializedActionParam`). The reverse combination, `@required`
   next to a default or a nullable type, promises a validation that can never
-  fire (`ck.api4.requiredActionParamWithDefault`). The template enables
+  fire (`ck.api4.requiredActionParamWithDefault`). A third, quieter reading —
+  `protected ?string $x;`, nullable with no default, which PHP leaves
+  uninitialized rather than null until the kernel writes it — is usually what
+  the author meant, so it ships **off**: set
+  `parameters.civikitchen.strictActionParams: true` in the repo's
+  `phpstan.neon.dist` to turn on `ck.api4.nullableActionParamWithoutDefault`.
+  The recommendation is `= null`, written out; the separate identifier exists
+  so a repo can adopt or ignore this one without touching the other two. The
+  template enables
   `checkUninitializedProperties`; a `ReadWritePropertiesExtension` in the same
   package keeps that usable by declaring action parameters
   kernel-written — the rule above is the precise statement about them.
@@ -99,8 +123,24 @@ unless `--force` is explicitly supplied. For an existing extension,
   (`ck.test.customFieldInTransaction`, `ck.test.extensionInTransaction`,
   `ck.test.ddlInTransaction`). The rule follows `$this->…()` helpers, because
   that is where the schema work usually sits. The fix is `setUpHeadless()`,
-  never a suppression — and the rule only sees this when `tests` is in the
-  repo's analysed `paths`.
+  never a suppression — and the rule only sees this when the test code is
+  analysed at all, which is the next bullet.
+- **Analysing the test suite is opt-in, and the switch is a file.** The main
+  `phpstan.neon.dist` covers production code only, because test code is where
+  the fleet's remaining level-10 debt sits and a fleet-wide flip would have
+  turned green repos red. `template/extension/phpstan-tests.neon.dist` is a
+  second, seeded config that includes the first one, overrides `paths` to
+  `tests/phpunit` and keeps **level 10** — a lower level for test code is a
+  test suite that will not catch what it was written for; the honest lever is
+  not adopting the file yet. CI runs `phpstan analyse -c
+  phpstan-tests.neon.dist` as its own gate **when the file exists** and logs a
+  skip line when it does not; there is no input and no second flag. Adopt it
+  per repo once the run is clean — measure first, and fix the test code rather
+  than commit the file with a baseline, since a baseline here would restore
+  exactly the blind spot the file removes. Until a repo adopts it the
+  test-only rules above are inert, which is the strongest reason to. `ckinit`
+  seeds it into new extensions and treats its absence in an existing one as
+  neither drift nor something `--update` fixes.
 - **A catch around a query must not be a silent fallback.** If the `try`
   reaches the database directly (`CRM_Core_DAO::executeQuery()`,
   `singleValueQuery()`, a DAO's `find()`) the catch has to rethrow or
@@ -271,7 +311,8 @@ unless `--force` is explicitly supplied. For an existing extension,
   so a repo opts in with one `includes:` line when it is ready.
 - CI per `template/extension/.github/workflows/ci.yml` — a thin caller of the
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
-  ckconform → ckfmt --check → phpunit under ckcoverage → phpstan → ckcompat →
+  ckconform → ckfmt --check → phpunit under ckcoverage → phpstan → phpstan over
+  the tests when the repo opted in → ckcompat →
   ckdeps → cktaint (advisory) → cksmarty → ckeslint → template-drift check →
   lockfile vulnerability scan, plus the opt-in schema-parity job), so
   the pipeline is defined once instead of copy-pasted per repo. The caller pins

@@ -46,6 +46,11 @@ parameters:
 		# this repo queries — they exist on the site but in no catalog:
 		#	- civicrm_someext_thing
 		sqlKnownTables: []
+		# Report `protected ?string $x;` on an APIv4 action — nullable, no
+		# default, so uninitialized until the kernel fills it
+		# (ck.api4.nullableActionParamWithoutDefault). Off by default; the
+		# fix is writing `= null`.
+		# strictActionParams: true
 	# ignoreErrors: only ever narrowly scoped (identifier + path + count) and
 	# carrying a comment that says WHY the report is wrong — never blanket
 	# patterns, never a baseline file.

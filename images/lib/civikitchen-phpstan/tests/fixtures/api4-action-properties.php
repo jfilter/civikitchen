@@ -30,6 +30,9 @@ class GreetAction extends AbstractAction
     /** @required */
     protected ?string $locale;
 
+    /** Nullable, no default: uninitialized until the kernel fills it. */
+    protected ?string $signature;
+
     /** Internal state, not an API parameter. */
     protected string $_cache;
 

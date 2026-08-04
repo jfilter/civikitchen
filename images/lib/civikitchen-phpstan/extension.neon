@@ -6,11 +6,17 @@ parameters:
 		# Optional override for the generated route list. Absent, the rule
 		# parses xml/Menu/*.xml itself — a missing file must not blind it.
 		routeCatalog: %currentWorkingDirectory%/.ck-routes.json
+		# Off by default: a nullable action parameter without a default is
+		# uninitialized until the kernel fills it, which is usually what the
+		# author meant. Repos that want it say so — the identifier is
+		# ck.api4.nullableActionParamWithoutDefault.
+		strictActionParams: false
 
 parametersSchema:
 	civikitchen: structure([
 		sqlKnownTables: listOf(string())
 		routeCatalog: string()
+		strictActionParams: bool()
 	])
 
 services:
@@ -48,6 +54,8 @@ services:
 	# errors rather than API validation errors.
 	-
 		class: CiviKitchen\PHPStan\Api4ActionPropertyRule
+		arguments:
+			- %civikitchen.strictActionParams%
 		tags:
 			- phpstan.rules.rule
 	# The counterpart that keeps checkUninitializedProperties usable: the
