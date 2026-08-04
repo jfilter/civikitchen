@@ -23,6 +23,19 @@
 #   - /opt/composer/vendor/bin on PATH (so phpcs/phpcbf are picked up)
 set -euo pipefail
 
+# Pins with more than one consumer come from versions.env, which Make `include`s
+# and bash sources natively — no parser on either side. Only PHPUNIT_* is shared
+# today (the Makefile runs the tool test suites on the same phar this image
+# bakes); everything else below has exactly one consumer and stays here, next to
+# the comment that explains it.
+#
+# One path expression for both worlds: versions.env sits beside this script in
+# the checkout AND beside it at /tmp/ in the image, because the Dockerfiles COPY
+# the pair. The CK_ prefix is why a --build-arg still wins — the file's values
+# land in CK_*, and the ${VAR:-...} defaults below only fall back to them.
+# shellcheck source=versions.env
+. "$(dirname "$0")/versions.env"
+
 # ---------------------------------------------------------------------------
 # Pinned tool versions — bump deliberately here. The image tags are floating
 # (standalone-6.12 rebuilds monthly for CiviCRM patches); without pins the dev
@@ -86,7 +99,8 @@ PSALM_VERSION="${PSALM_VERSION:-6.16.1}"
 # civix.phar, so the scaffolding tool can be pinned like everything else.
 CIVIX_VERSION="${CIVIX_VERSION:-26.02.0}"
 # phpunit 9 is the last line CiviCRM's test base supports; pin the patch too.
-PHPUNIT_VERSION="${PHPUNIT_VERSION:-9.6.35}"
+# From versions.env — the Makefile runs the tool test suites on this same phar.
+PHPUNIT_VERSION="${PHPUNIT_VERSION:-$CK_PHPUNIT_VERSION}"
 # infection powers `ckmutate` (nightly mutation testing, never a push gate).
 # Pinned like everything else: a mutation SCORE that moves because the engine
 # gained mutators would push a repo through its .ckconform floor with no code
@@ -119,7 +133,7 @@ NPM_VERSION="${NPM_VERSION:-12.0.2}"
 # is supposed to be immutable changed. Overriding a *_VERSION at build time
 # therefore means overriding its *_SHA256 as well.
 CIVIX_SHA256="${CIVIX_SHA256:-1c480133bee248c1f09f19c724e2e44266297b63ff2e55a7cbf3ea17a910d906}"
-PHPUNIT_SHA256="${PHPUNIT_SHA256:-f39d634a5e5bcafd71565b33328ae4fb173703296c12ac94a24550cb8291e964}"
+PHPUNIT_SHA256="${PHPUNIT_SHA256:-$CK_PHPUNIT_SHA256}"
 # mago ships per-arch binaries and publishes no checksum file, so both hashes
 # are derived locally at pin time (curl -LsS <url> | shasum -a 256) — one per
 # platform the images build for.

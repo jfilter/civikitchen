@@ -110,6 +110,10 @@ ARG MAGO_SHA256_AARCH64
 ARG NPM_VERSION
 ARG INFECTION_VERSION
 COPY toolbelt/install-dev-tools.sh /tmp/install-dev-tools.sh
+# Beside the script, because that is where it looks for it — the same relative
+# path that resolves in a checkout. Shared pins only (the phpunit phar the tool
+# test suites also run on); everything single-consumer stays in the script.
+COPY toolbelt/versions.env /tmp/versions.env
 
 # Shared plumbing every ck* tool sources. The destination is /usr/local/lib on
 # purpose: the tools resolve it as "../lib/ckcommon.sh" relative to their own
