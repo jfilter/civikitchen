@@ -69,13 +69,10 @@ done
 
 ck_require_extension_root
 
-info=$(tr '\n' ' ' < info.xml)
-if [ -z "$key" ]; then
-  key=$(echo "$info" | grep -o '<extension[^>]*key="[^"]*"' | head -1 | sed 's/.*key="//; s/"$//')
-fi
+[ -n "$key" ] || key=$(ck_xml_field info.xml key)
 # The <file> value is civix's short name, and the prefix every hand-named
 # table, option group and scheduled job in the extension is built from.
-prefix=$(echo "$info" | grep -o '<file>[^<]*</file>' | head -1 | sed 's/<file>//; s|</file>||')
+prefix=$(ck_xml_field info.xml file)
 if [ -z "$key" ] || [ -z "$prefix" ]; then
   ck_die "could not read the extension key and <file> from info.xml."
 fi

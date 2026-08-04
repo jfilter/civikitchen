@@ -26,13 +26,13 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/ckcommon.sh"
 
 ck_require_extension_root
+ck_policy_load
 if [ ! -f phpunit.xml.dist ] && [ ! -f phpunit.xml ]; then
   # A repo may have no PHP suite BY POLICY (tests=optional in .ckconform, the
   # file where every other policy lives) — a generator-driven theme whose
   # behaviour is covered by another harness, say. For those the shared CI's
   # unconditional ckcoverage step must be a documented no-op, not exit 2:
   # otherwise the policy exists but no pipeline can honour it.
-  ck_policy_load
   if [ "${CK_POLICY_TESTS:-}" = optional ]; then
     echo "ckcoverage: no phpunit config, and .ckconform declares tests=optional — nothing to measure, by policy."
     exit 0
@@ -79,7 +79,6 @@ fi
 pct=$(php -r 'printf("%.2f", $argv[1] * 100 / $argv[2]);' "$covered" "$total")
 echo "ckcoverage: ${pct}% line coverage (${covered}/${total} statements)"
 
-ck_policy_load
 floor="${CK_POLICY_MIN_COVERAGE:-}"
 if [ -z "$floor" ]; then
   echo "ckcoverage: no min_coverage in .ckconform — reporting only. Set it to what you have now, then ratchet."

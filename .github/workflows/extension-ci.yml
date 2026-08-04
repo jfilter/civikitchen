@@ -516,9 +516,18 @@ jobs:
           # expects, and the directory a consuming phpstan.neon points its
           # scanDirectories at. A repo name is none of those and is free to
           # differ. Reading it costs one step and cannot go stale.
-          sibling_key=$(tr '\n' ' ' < "$info" \
-            | grep -o '<extension[^>]*key="[^"]*"' | head -1 \
-            | sed 's/.*key="//; s/"$//')
+          # Parsed as XML, not with a tag-shaped regex: an attribute order or a
+          # root element split over two lines is legal and would silently yield
+          # an empty key. Same reader as the toolbelt's ck_xml_field — inline,
+          # because this runs on the bare runner where the toolbelt is not on
+          # PATH. php is preinstalled on the GitHub-hosted images.
+          # shellcheck disable=SC2016  # the $vars belong to PHP, not the shell.
+          sibling_key=$(php -r '
+            libxml_use_internal_errors(TRUE);
+            $xml = simplexml_load_file($argv[1]);
+            if ($xml === FALSE) { fwrite(STDERR, "cannot parse {$argv[1]}\n"); exit(2); }
+            echo trim((string) $xml["key"]);
+          ' "$info")
           [[ "$sibling_key" =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]] \
             || { echo "sibling_repo: could not read a usable extension key from $CK_SIBLING_DIR/info.xml (got: '$sibling_key')" >&2; exit 1; }
           echo "sibling extension: $sibling_key (from $CK_SIBLING_DIR)"

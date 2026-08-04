@@ -113,30 +113,6 @@ DIST_EXCLUDE_FILES=(
   tsconfig.json
 )
 
-# --- small readers ----------------------------------------------------------
-# XML and JSON are parsed as XML and JSON. The same line-oriented shortcuts that
-# ckconform was rewritten in PHP to get rid of would misread a <version> split
-# over two lines just as happily here.
-xml_field() {
-  php -r '
-    libxml_use_internal_errors(TRUE);
-    $xml = simplexml_load_file($argv[1]);
-    if ($xml === FALSE) { fwrite(STDERR, "cannot parse {$argv[1]}\n"); exit(2); }
-    echo trim($argv[2] === "key" ? (string) $xml["key"] : (string) $xml->{$argv[2]});
-  ' "$1" "$2"
-}
-
-json_field() {
-  php -r '
-    $raw = file_get_contents($argv[1]);
-    if ($raw === FALSE) { exit(0); }
-    $data = json_decode($raw, TRUE);
-    if (!is_array($data)) { fwrite(STDERR, "invalid JSON: {$argv[1]}\n"); exit(2); }
-    $value = $data[$argv[2]] ?? NULL;
-    echo is_string($value) ? $value : "";
-  ' "$1" "$2"
-}
-
 # Central list ± the repo's .ckconform, as two global arrays.
 #
 # The .ckconform read is ck_policy_load's, not this tool's own any more: of the
@@ -178,10 +154,10 @@ resolve_excludes() {
 
 # --- context ----------------------------------------------------------------
 require_extension_root() {
-  [ -f info.xml ] || die "no info.xml here — run from the extension root."
-  EXT_KEY=$(xml_field info.xml key)
-  EXT_FILE=$(xml_field info.xml file)
-  EXT_VERSION=$(xml_field info.xml version)
+  [ -f info.xml ] || die "no info.xml here — run from the extension root."  # exit 1, not ck_require_extension_root's 2
+  EXT_KEY=$(ck_xml_field info.xml key)
+  EXT_FILE=$(ck_xml_field info.xml file)
+  EXT_VERSION=$(ck_xml_field info.xml version)
   [ -n "$EXT_KEY" ] || die "info.xml has no key attribute."
   [ -n "$EXT_FILE" ] || die "info.xml has no <file>."
   [ -n "$EXT_VERSION" ] || die "info.xml has no <version>."
@@ -207,7 +183,7 @@ run_check() {
   fi
 
   if [ -f composer.json ]; then
-    composer_version=$(json_field composer.json version)
+    composer_version=$(ck_json_field composer.json version)
     if [ -n "$composer_version" ] && [ "$composer_version" != "$EXT_VERSION" ]; then
       echo "ckrelease: FAIL — composer.json says $composer_version, info.xml says $EXT_VERSION." >&2
       ok=1
@@ -297,7 +273,7 @@ run_verify() {
   else
     info=$(mktemp)
     unzip -p "$zip" "${EXT_KEY}/info.xml" > "$info"
-    if [ "$(xml_field "$info" version)" != "$EXT_VERSION" ]; then
+    if [ "$(ck_xml_field "$info" version)" != "$EXT_VERSION" ]; then
       echo "ckrelease: FAIL — the info.xml inside the archive is not version $EXT_VERSION." >&2
       ok=1
     fi

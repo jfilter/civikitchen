@@ -57,14 +57,9 @@ done
 
 ck_require_extension_root
 
-# Same one-liner the shared CI workflow uses to read a sibling's key: the
-# extension KEY from its own info.xml, not the directory name, because that is
-# the name CiviCRM registered the templates and managed entities under.
-if [ -z "$key" ]; then
-  key=$(tr '\n' ' ' < info.xml \
-    | grep -o '<extension[^>]*key="[^"]*"' | head -1 \
-    | sed 's/.*key="//; s/"$//')
-fi
+# The extension KEY from its own info.xml, not the directory name: that is the
+# name CiviCRM registered the templates and managed entities under.
+[ -n "$key" ] || key=$(ck_xml_field info.xml key)
 [[ "$key" =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]] \
   || { echo "cksmarty: could not read a usable extension key from info.xml (got: '$key')" >&2; exit 2; }
 
