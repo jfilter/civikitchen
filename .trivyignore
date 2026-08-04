@@ -182,6 +182,31 @@ CVE-2026-27903
 # until: 2026-11-01 -- recheck after a buildkit rebuild.
 CVE-2026-27904
 
+# why: guzzle 7.15.1 in the vendor/ trees of seven buildkit CLI tools
+#   (tools/civici, releaser, zipdiff, …). Host-check bypass needs an attacker
+#   controlling the request URL of a running HTTP client; these are hand-run
+#   release/maintenance scripts talking to endpoints their invoker chose, and
+#   nothing the image serves loads them. Same not-ours-to-pin reasoning as the
+#   node_modules block above. NOTE: suppressed image-wide; extension repos lock
+#   their own guzzle and their osv gate still catches this ID.
+# until: 2026-11-01 -- recheck after a buildkit rebuild; upstream re-locking
+#   guzzle >= 7.15.2 drops this.
+CVE-2026-69246
+
+# why: ip-address 10.2.0 in buildkit's node tree. The octet-decoding mismatch
+#   matters when untrusted input reaches an IP allow/deny decision; the only
+#   consumers here are hand-run dev tooling that never takes network input.
+# until: 2026-11-01 -- recheck after a buildkit rebuild.
+CVE-2026-69192
+
+# why: socket.io-parser 4.2.6 via karma's socket.io stack. Memory exhaustion
+#   needs an attacker speaking Socket.IO to a running server — karma's dev
+#   server only runs when a developer starts it by hand, bound for a local test
+#   browser; the served site never opens a socket.
+# until: 2026-11-01 -- recheck after a buildkit rebuild; upstream bumping karma
+#   or its lockfile drops this.
+CVE-2026-69185
+
 # ---------------------------------------------------------------------------
 # Drupal's package_manager test FIXTURE (drupal11 flavors)
 #
