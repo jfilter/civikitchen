@@ -13,23 +13,10 @@
 # Build context: the repo root, so this can COPY from both toolbelt/ (what gets
 # baked in) and docker/ (this image's own runtime files). See docs/building.md.
 #
-# Build:
+# Build (all four flavors, and the run recipe: docs/building.md):
 #   docker build -f docker/buildkit/Dockerfile \
-#                --build-arg PHP_VERSION=8.3 \
 #                --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
 #                -t civikitchen:drupal10 .
-#   docker build -f docker/buildkit/Dockerfile \
-#                --build-arg PHP_VERSION=8.3 \
-#                --build-arg DEFAULT_SITE_TYPE=drupal11-demo \
-#                -t civikitchen:drupal11 .
-#   docker build -f docker/buildkit/Dockerfile \
-#                --build-arg PHP_VERSION=8.3 \
-#                --build-arg DEFAULT_SITE_TYPE=wp-demo \
-#                -t civikitchen:wordpress .
-#   docker build -f docker/buildkit/Dockerfile \
-#                --build-arg PHP_VERSION=8.3 \
-#                --build-arg DEFAULT_SITE_TYPE=joomla-demo \
-#                -t civikitchen:joomla .
 #
 # Run (needs MariaDB):
 #   docker run -d -p 8080:80 \

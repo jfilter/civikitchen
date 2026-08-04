@@ -1,6 +1,5 @@
 # The one CI definition every civico extension calls, so the pipeline lives in
-# one place instead of drifting between eleven copy-pasted workflows. A calling
-# repo's own workflow is a few lines:
+# one place instead of drifting between eleven copy-pasted workflows:
 #
 #   jobs:
 #     ci:
@@ -9,35 +8,17 @@
 #         key: <extension-key>
 #
 # Pin the major (@v1), not @main: workflow, template, ck* tools and images are
-# released as one versioned contract, so a caller moves deliberately instead of
-# with every push here. The canary repo is the exception — see
-# docs/releases.md.
+# released as one versioned contract (docs/releases.md).
 #
-# Beyond that default run the workflow has opt-in extras. The slow ones — a
-# compatibility matrix over further CiviCRM images, a lifecycle smoke test, an
-# upgrade-from-the-last-release test, a core-upgrade persistence test and a
-# Playwright browser job — are off
-# unless asked for, and they belong in a second, scheduled caller rather than
-# in the push run: docs/extension-standards.md ("Compatibility: test the range
-# you claim") has the reasoning and a ready-made compat.yml. The cheap ones are
-# the frontend steps (npm_ci, js_tests, and `bun` to run them with Bun instead
-# of npm): seconds on the runner, and they belong in the push run —
-# docs/extension-standards.md ("Frontend: JS dependencies, JS tests and browser
-# tests").
+# Everything runs inside the extension's own CiviCRM stack — the standalone
+# image auto-installs, enables the mounted extension and seeds the civicrm_test
+# scratch DB, and cklint / ckconform / phpstan / ckcoverage / cktaint all ship
+# in it. The two exceptions run on the bare runner because they have nothing to
+# ask a CiviCRM about: the template-drift check and the lockfile scan.
 #
-# civikitchen is public, so any repo can call this without a cross-repo token.
-# A repo whose dependencies are NOT public is the one case that needs more than
-# `with:` — a repo that keeps vendor/ out of git, or that needs a private
-# sibling extension mounted beside itself, passes read-only deploy keys through
-# the `secrets:` block: docs/extension-standards.md ("Private dependencies").
-# Everything runs inside the extension's own CiviCRM stack: the standalone image
-# auto-installs, enables the mounted extension and seeds the civicrm_test scratch
-# DB, and cklint / ckconform / phpstan / ckcoverage / cktaint all ship in that
-# image (cktaint is advisory — it can never fail the run). The
-# coverage floor comes from the repo's .ckconform, so it needs no input here.
-# The two exceptions run on the bare runner because they have nothing to ask a
-# CiviCRM about: the template-drift check, and the lockfile vulnerability scan
-# (osv-scanner) — docs/extension-standards.md ("Known vulnerabilities").
+# The opt-in extras, which of them belong in a scheduled second caller, and how
+# a repo with private dependencies passes deploy keys: see
+# docs/extension-standards.md. The inputs below document themselves.
 name: Extension CI
 
 on:
@@ -496,11 +477,9 @@ jobs:
       # project directory — the directory of the FIRST -f file, i.e. .docker/,
       # not the workspace this override was written from.
       #
-      # Mounted read-only and as is: no composer install runs in the sibling
-      # (out of scope — that needs a key of its own), and read-only is what a
-      # dependency you are not testing should be. The image's own
-      # CIVIKITCHEN_AUTO_COMPOSER may log a warning if the sibling ships no
-      # vendor/; it is a warning, not a failed boot.
+      # Read-only and as is: no composer install runs in the sibling. If it
+      # ships no vendor/, CIVIKITCHEN_AUTO_COMPOSER logs a warning — not a
+      # failed boot.
       - name: Compose override — mount and enable the sibling
         if: ${{ inputs.sibling_repo != '' }}
         env:
@@ -870,10 +849,9 @@ jobs:
   # RUNS and leaves nothing pending. It cannot tell you whether it ARRIVES
   # where install() does — and install() and the upgrade_NNNN() chain are two
   # independent descriptions of the same schema with nothing keeping them in
-  # step. NOT NULL in one and nullable in the other, varchar(64) here and
-  # varchar(255) there, an index the installer creates and the upgrader forgets:
-  # every fresh install is fine, every upgraded site is quietly different, and
-  # no later upgrader will ever reconcile them because none of them knows.
+  # step. NOT NULL in one and nullable in the other, an index the installer
+  # creates and the upgrader forgets: every fresh install is fine, every
+  # upgraded site is quietly different, and no later upgrader reconciles them.
   #
   # Two databases in one stack, in this order:
   #   B: install the last release, move the mount to HEAD, `cv upgrade:db` —
@@ -1155,10 +1133,8 @@ jobs:
       # A named volume on that directory fixes it, and carries more than the
       # settings file: both provisioning markers (.civikitchen-configured,
       # .civikitchen-provisioned) live there too, so the new container also skips
-      # the first-boot config and provisioning bundles — which would otherwise
-      # re-run their cv calls against a database the new core has not upgraded
-      # yet. What is left is exactly the state a real site is in mid-upgrade: new
-      # core files, old database, the same settings file.
+      # the first-boot config and provisioning bundles, which would re-run their
+      # cv calls against a database the new core has not upgraded yet.
       #
       # The DATABASE needs a named volume of its own, and that is not optional
       # here: the template CI stack gives mariadb no volume at all, so its data
@@ -1168,16 +1144,12 @@ jobs:
       # about would be an empty one. Naming it states the contract instead: the
       # containers go, the two volumes stay.
       #
-      # Written here rather than into the template compose file for the same
-      # reason the browser job writes its own: that file is template-managed
-      # (ckinit checks it), and no repo should take drift — or a persistent
-      # volume — for a job it may never switch on.
+      # Written here rather than into the template compose file, which is
+      # template-managed (ckinit checks it): no repo should take drift, or a
+      # persistent volume, for a job it may never switch on.
       #
-      # Both merges only ever ADD: `volumes` under a service is a list that
-      # merges by container path, and the top-level `volumes:` mapping merges by
-      # key, so the extension's own bind mount and the db-init mount are
-      # untouched. No host paths, so it does not matter that compose resolves
-      # relative paths against the FIRST -f file's directory.
+      # Both merges only ever ADD, and there are no host paths, so compose
+      # resolving relative paths against the first -f file does not matter.
       - name: Compose override — carry the site and the database across the swap
         run: |
           set -euo pipefail
