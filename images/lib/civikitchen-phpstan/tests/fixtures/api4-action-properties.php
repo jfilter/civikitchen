@@ -10,11 +10,19 @@ use Civi\Api4\Generic\AbstractAction;
 class GreetAction extends AbstractAction
 {
     /**
-     * The contact to greet.
+     * The contact to greet — @required does not stop the kernel reading it.
      *
      * @required
      */
     protected int $contactId;
+
+    /**
+     * The mandatory form that actually works: untyped, @var, @required.
+     *
+     * @var int
+     * @required
+     */
+    protected $recipientId;
 
     /** An optional override; unset means "use the default template". */
     protected ?string $template = null;

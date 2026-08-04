@@ -97,10 +97,17 @@ unless `--force` is explicitly supplied. For an existing extension,
   not a write target.
 - **A protected property on a custom APIv4 action is an API parameter.** The
   kernel fills it from the caller's params, so a non-nullable typed property
-  without a default and without `@required` does not produce an API validation
-  error when the caller omits it — it produces PHP's "must not be accessed
-  before initialization", from inside the kernel, naming no field
-  (`ck.api4.uninitializedActionParam`). The reverse combination, `@required`
+  without a default does not produce an API validation error when the caller
+  omits it — it produces PHP's "must not be accessed before initialization",
+  from inside the kernel, naming no field
+  (`ck.api4.uninitializedActionParam`). **`@required` does not rescue that
+  form**, which is the counter-intuitive part and was verified in a running
+  install: `ValidateFieldsSubscriber::onApiPrepare()` reads every parameter
+  through its getter *first* and only then asks whether it was required, so
+  the read fatals before the check that would have said
+  `Parameter "x" is required.`. The form that works is core's own dominant
+  one — **untyped property, no default, `@var` docblock for the type,
+  `@required`** — and it is what the rule's message points at. The reverse combination, `@required`
   next to a default or a nullable type, promises a validation that can never
   fire (`ck.api4.requiredActionParamWithDefault`). A third, quieter reading —
   `protected ?string $x;`, nullable with no default, which PHP leaves

@@ -20,9 +20,15 @@ use PHPStan\Rules\RuleErrorBuilder;
  * typed property without a default therefore does not produce the API
  * validation error the author expected — it produces PHP's "must not be
  * accessed before initialization" Error, from inside the API kernel, with a
- * stack trace that names no field. `@required` is core's marker for "the
- * kernel rejects the call when this is missing", and it is what makes such a
- * declaration honest.
+ * stack trace that names no field.
+ *
+ * `@required` does NOT save it, which is the whole point of this rule:
+ * ValidateFieldsSubscriber::onApiPrepare() reads every parameter through its
+ * getter FIRST and only then asks whether it was required, so the read that
+ * fatals happens before the check that would have produced
+ * `Parameter "x" is required.`. Verified in a running install. Core's own
+ * dominant form for a mandatory parameter is therefore untyped: a property
+ * with no default, an `@var` docblock for the type and `@required`.
  *
  * The mirror image is reported too: `@required` next to a default (or a
  * nullable type) promises a validation that cannot happen, because the
@@ -70,13 +76,19 @@ final class Api4ActionPropertyRule implements Rule
                 }
                 $default = $property->default !== null;
 
-                if (!$required && !$default && !$nullable) {
+                // `@required` is deliberately not an escape here: the kernel
+                // reads the parameter before it checks the requirement, so
+                // both spellings fatal the same way.
+                if (!$default && !$nullable) {
                     $errors[] = RuleErrorBuilder::message(sprintf(
-                        'APIv4 action parameter $%s is typed %s with no default and no @required — a caller that omits it '
-                        . 'gets "must not be accessed before initialization" instead of an API validation error. '
-                        . 'Add @required, or give it a default.',
+                        'APIv4 action parameter $%s is typed %s with no default — a caller that omits it gets '
+                        . '"must not be accessed before initialization" instead of an API validation error, because '
+                        . 'ValidateFieldsSubscriber reads every parameter through its getter before it checks '
+                        . '@required.%s Declare it untyped with an @var docblock and @required (core\'s own form for a '
+                        . 'mandatory parameter), or give it a default.',
                         $name,
                         self::typeToString($stmt->type),
+                        $required ? ' @required does not prevent this.' : '',
                     ))->identifier('ck.api4.uninitializedActionParam')->line($stmt->getStartLine())->build();
 
                     continue;
