@@ -20,6 +20,8 @@
 #   3g. ckcompat rejects syntax the declared PHP floor cannot parse
 #   4. phpstan actually analyses a sample file (intentionally with type errors)
 #   5. phpunit actually runs a passing assertion
+#   5b. ckphpunit injects the transaction canary listener, after CiviTestListener
+#   5c. cklifecycle's guards (the cycle itself needs a booted site)
 #   6. composer can install a real package from packagist
 #   7. civix can render help (signals the phar boots)
 #   8. Xdebug toggle: php -m has no xdebug by default; setting XDEBUG_MODE
@@ -801,6 +803,76 @@ if (cd "${WORKDIR}" && phpunit --no-configuration tests/SmokeTest.php >/dev/null
     ok "phpunit runs a passing test"
 else
     fail "phpunit failed on a trivial passing test"
+fi
+
+# ---------------------------------------------------------------------------
+# 5b. ckphpunit injects the transaction canary into the repo's config.
+#     The canary itself needs a booted site (the shared CI's PHPUnit step is
+#     where it earns its keep); what is checkable here is the wiring — that the
+#     listener is added, and added AFTER CiviTestListener, which is what puts
+#     the marker inside the transaction and the check after the rollback.
+echo "== ckphpunit =="
+CKPU="${WORKDIR}/ckphpunit"
+mkdir -p "${CKPU}/fake"
+printf '<extension key="org.acme.widget" type="module"><file>widget</file></extension>\n' > "${CKPU}/info.xml"
+cat > "${CKPU}/phpunit.xml.dist" <<'XML'
+<?xml version="1.0"?>
+<phpunit bootstrap="tests/bootstrap.php">
+    <listeners>
+        <listener class="Civi\Test\CiviTestListener"><arguments/></listener>
+    </listeners>
+</phpunit>
+XML
+# A stand-in for phpunit that only records the config it was handed: the real
+# one would need a CiviCRM to boot.
+cat > "${CKPU}/fake/phpunit" <<SH
+#!/bin/bash
+while [ "\$#" -gt 0 ]; do
+    [ "\$1" = -c ] && { cp "\$2" "${CKPU}/handed.xml"; exit 0; }
+    shift
+done
+exit 3
+SH
+chmod +x "${CKPU}/fake/phpunit"
+(cd "${CKPU}" && PATH="${CKPU}/fake:${PATH}" ckphpunit tests >/dev/null 2>&1) || true
+if [ -f "${CKPU}/handed.xml" ] && grep -q 'TransactionCanaryListener' "${CKPU}/handed.xml"; then
+    ok "ckphpunit injects the transaction canary listener"
+else
+    fail "ckphpunit did not inject the canary listener"
+fi
+if [ -f "${CKPU}/handed.xml" ] \
+    && [ "$(grep -n 'CiviTestListener' "${CKPU}/handed.xml" | cut -d: -f1)" -lt \
+         "$(grep -n 'TransactionCanaryListener' "${CKPU}/handed.xml" | cut -d: -f1)" ]; then
+    ok "the canary listener is registered after CiviTestListener"
+else
+    fail "canary listener ordering (it must come after CiviTestListener)"
+fi
+if [ -e "${CKPU}/.ckphpunit-canary.xml" ]; then
+    fail "ckphpunit left its generated config behind"
+else
+    ok "ckphpunit removes its generated config"
+fi
+rm -f "${CKPU}/handed.xml"
+(cd "${CKPU}" && PATH="${CKPU}/fake:${PATH}" CK_TX_CANARY=0 ckphpunit tests >/dev/null 2>&1) || true
+if [ -f "${CKPU}/handed.xml" ]; then
+    fail "CK_TX_CANARY=0 still generated a config"
+else
+    ok "CK_TX_CANARY=0 runs plain phpunit"
+fi
+
+# ---------------------------------------------------------------------------
+# 5c. cklifecycle: the cycle itself needs a booted site, so only the guards are
+#     checkable here.
+echo "== cklifecycle =="
+if cklifecycle --help 2>&1 | grep -q 'disable'; then
+    ok "cklifecycle --help describes the cycle"
+else
+    fail "cklifecycle --help"
+fi
+if (cd "${WORKDIR}" && cklifecycle >/dev/null 2>&1); then
+    fail "cklifecycle ran outside an extension root"
+else
+    ok "cklifecycle refuses to run without info.xml"
 fi
 
 # ---------------------------------------------------------------------------

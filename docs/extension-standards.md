@@ -395,8 +395,20 @@ credential nobody knows is in the history is not.
   `Civi\Test\CiviTestListener` only widens for its own tests. Without them a
   call into a deprecated code path is green and the notice lands in a PHP log
   nobody reads; `ckconform` (`deprecation-gate`) warns when a repo drops either.
+- **A transactional test that lost its transaction is a failure, not a
+  surprise.** `Civi\Test\TransactionalInterface` wraps a test in a transaction
+  that is rolled back afterwards — but MySQL COMMITs implicitly on DDL, so one
+  `CREATE TABLE`, one `CustomField.create`, one schema rebuild in `setUp()` and
+  the rollback rolls back nothing. The fixtures leak into every later test and
+  the suite stays green until an unrelated test fails somewhere the order
+  differs. `ckphpunit` runs the suite with a listener that writes a marker
+  inside the transaction and looks for it over a second connection after the
+  rollback; a marker that survived can only have been committed. The fix it
+  names is the right one: move schema work into `setUpHeadless()`, where the
+  `CiviEnvBuilder` runs before the transaction opens.
 - CI runs the suite **with** coverage: `ckcoverage` (or at minimum
-  `phpunit --coverage-text`).
+  `phpunit --coverage-text`). `ckcoverage` runs through `ckphpunit`, so the
+  canary above comes with it; nothing in the repo has to reference it.
 - `ckcoverage` reports line coverage and fails below the `min_coverage` floor
   in `.ckconform`. Adopt it in that order: **measure first, set the floor to
   what you actually have, then ratchet it up.** A floor nobody measured only
@@ -739,7 +751,7 @@ that sets none of them gets exactly the run it has today.
 | Input | What it adds |
 |---|---|
 | `matrix_images` | One extra job per CiviKitchen image tag (comma-separated): boots the stack and runs the suite against that CiviCRM. |
-| `lifecycle` | After the suite, in the running stack: `disable` → `enable` → `uninstall` → `install`, then asserts the extension is installed again. |
+| `lifecycle` | After the suite, in the running stack: `disable` → `enable` → `uninstall` → `install`, then asserts the extension is installed again — plus the post-uninstall and log checks described [below](#the-lifecycle-gate-what-cklifecycle-adds-to-the-cycle). |
 | `upgrade_from_last_release` | Installs the newest reachable git tag, swaps the working tree to the tested commit, runs `cv upgrade:db --mode=ext` and asserts no upgrade stayed pending. |
 | `schema_parity` | Own job: installs the last release and upgrades it to this commit, then installs this commit from scratch, and diffs the two schemas over the extension's own tables. See [below](#schema-parity-does-the-upgrader-arrive-where-install-does). |
 | `core_upgrade_from` | Own job: installs the site on an older CiviKitchen image, then moves that same database to the run's image and upgrades it with `cv upgrade:db`. See [below](#core-upgrade-what-an-existing-site-goes-through). |
@@ -757,6 +769,39 @@ The matrix jobs run the **suite**, not the full `ci` pass: `cklint`,
 the image, so re-running them on a pinned older image grades that image's
 tooling rather than your extension. What the extra boot answers is the version
 question — does it install here, do the tests pass here.
+
+### The lifecycle gate: what `cklifecycle` adds to the cycle
+
+The step runs `cklifecycle` from the image, and the `cv ext:*` sequence is only
+its setup. Two things around it are the actual gate.
+
+**After uninstall, the database must be back where it started.** `cv
+ext:uninstall` exiting 0 means `uninstall()` did not throw — nothing more. The
+check asserts that no table the extension declares (`sql/*.sql`, `xml/schema/`)
+or that carries its `<file>` prefix survived, that `civicrm_managed` holds no
+row for the module, and that no option group, option value or scheduled job
+with that prefix is left running against code that is gone.
+
+**Nothing may fail quietly during the cycle.** Every step's output plus the
+delta of the CiviCRM ConfigAndLog files is scanned for `SQLSTATE[…]`, `DB
+Error`, `Table '…' doesn't exist`, `Unknown table`, `Unknown column`,
+`Duplicate column`, `Syntax error or access violation` and PHP
+Fatal/Parse/Warning/Recoverable lines. An `install()` whose `try`/`catch`
+swallows a missing-table error otherwise leaves the run green and the site
+broken.
+
+`PHP Notice` and `PHP Deprecated` are **not** matched: core emits them on every
+supported version, and deprecations are already covered by the phpunit config's
+`convertDeprecationsToExceptions` and by phpstan. The gate is scoped to this
+job and never to the suite — a negative test that asserts an API call fails is
+supposed to log an error.
+
+The findings land in the job summary. A line that is genuinely expected is
+declared in `.ckconform`, with a reason, the same shape `ckinit` uses:
+
+```ini
+lifecycle_log_ignore=Unknown column 'is_legacy' -- dropped in the 5.x upgrader
+```
 
 ### Schema parity: does the upgrader arrive where install() does?
 

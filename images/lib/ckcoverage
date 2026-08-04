@@ -41,7 +41,11 @@ clover=$(mktemp /tmp/ckcoverage-XXXXXX.xml)
 trap 'rm -f "$clover"' EXIT
 
 echo "ckcoverage: running the suite with coverage (this is slower than a plain run) ..."
-CIVICRM_UF=${CIVICRM_UF:-UnitTests} phpunit --coverage-clover "$clover" "$@" >/tmp/ckcoverage-run.log 2>&1
+# ckphpunit, not phpunit: it is the same run with the transaction canary
+# attached. Older images have no ckphpunit — fall back rather than fail.
+runner=phpunit
+command -v ckphpunit >/dev/null 2>&1 && runner=ckphpunit
+CIVICRM_UF=${CIVICRM_UF:-UnitTests} "$runner" --coverage-clover "$clover" "$@" >/tmp/ckcoverage-run.log 2>&1
 run_status=$?
 if [ "$run_status" -ne 0 ]; then
   echo "ckcoverage: the test suite itself failed — coverage is meaningless until it passes." >&2

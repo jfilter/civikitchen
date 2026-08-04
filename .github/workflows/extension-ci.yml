@@ -703,23 +703,26 @@ jobs:
 
       # Same lifecycle block as the compat job below — deliberately duplicated
       # rather than factored out: a reusable workflow cannot share steps
-      # between its own jobs, and pulling this into a script would mean
-      # checking civikitchen out into every caller's CI run just to get it.
-      - name: Lifecycle smoke (disable → enable → uninstall → install)
+      # between its own jobs. The substance lives in `cklifecycle` in the
+      # image, which is also why this is two lines instead of twenty: the
+      # sequence is only the setup, and the checks it exists for (post-uninstall
+      # DB invariants, and a log scan so a swallowed SQL error cannot stay
+      # green) need a booted site anyway.
+      - name: Lifecycle smoke + gate (cklifecycle)
+        id: lifecycle
         if: ${{ inputs.lifecycle }}
         run: |
+          set -o pipefail
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "set -e
-             cd /var/www/html/ext/$CK_EXT_KEY
-             cv ext:disable $CK_EXT_KEY
-             cv ext:enable $CK_EXT_KEY
-             cv ext:uninstall $CK_EXT_KEY
-             cv ext:enable $CK_EXT_KEY"
-          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
-            | tr -d '[:space:]')
-          [ "$status" = installed ] \
-            || { echo "lifecycle: extension ended up '$status', expected 'installed'" >&2; exit 1; }
+            "cd /var/www/html/ext/$CK_EXT_KEY && cklifecycle" 2>&1 | tee /tmp/cklifecycle.md
+
+      # The report is the point of the step, so it is published whether the
+      # gate passed or failed — a leftover table named in a job summary gets
+      # fixed, one buried 300 lines into a red step log does not.
+      - name: Lifecycle summary
+        if: ${{ !cancelled() && steps.lifecycle.outcome != 'skipped' }}
+        run: |
+          sed -n '/^### Lifecycle gate/,$p' /tmp/cklifecycle.md >> "$GITHUB_STEP_SUMMARY" || true
 
       # A failed stack is a stack trace of nothing without its logs.
       - name: App logs on failure
@@ -1324,23 +1327,23 @@ jobs:
       - name: PHPUnit
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && CIVICRM_UF=UnitTests phpunit tests/phpunit"
+            "cd /var/www/html/ext/$CK_EXT_KEY && CIVICRM_UF=UnitTests ckphpunit tests/phpunit"
 
-      - name: Lifecycle smoke (disable → enable → uninstall → install)
+      - name: Lifecycle smoke + gate (cklifecycle)
+        id: lifecycle
         if: ${{ inputs.lifecycle }}
         run: |
+          set -o pipefail
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "set -e
-             cd /var/www/html/ext/$CK_EXT_KEY
-             cv ext:disable $CK_EXT_KEY
-             cv ext:enable $CK_EXT_KEY
-             cv ext:uninstall $CK_EXT_KEY
-             cv ext:enable $CK_EXT_KEY"
-          status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
-            | tr -d '[:space:]')
-          [ "$status" = installed ] \
-            || { echo "lifecycle: extension ended up '$status', expected 'installed'" >&2; exit 1; }
+            "cd /var/www/html/ext/$CK_EXT_KEY && cklifecycle" 2>&1 | tee /tmp/cklifecycle.md
+
+      # The report is the point of the step, so it is published whether the
+      # gate passed or failed — a leftover table named in a job summary gets
+      # fixed, one buried 300 lines into a red step log does not.
+      - name: Lifecycle summary
+        if: ${{ !cancelled() && steps.lifecycle.outcome != 'skipped' }}
+        run: |
+          sed -n '/^### Lifecycle gate/,$p' /tmp/cklifecycle.md >> "$GITHUB_STEP_SUMMARY" || true
 
       - name: App logs on failure
         if: failure()
