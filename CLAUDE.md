@@ -45,3 +45,6 @@ the rest; `make test-images` is the ~1 h Docker round.
 - The `ck*` tools carry no `.sh` suffix; a `*.sh` sweep silently skips them all.
 - `shellcheck` needs `external-sources` (`.shellcheckrc`) to see `ckcommon.sh`.
 - `toolbelt/versions.env` holds only pins with two or more readers.
+- `zizmor.yml` exemptions are anchored `file:line:col`. Editing a workflow
+  above an exempted step shifts the line and the finding returns — re-pin it,
+  never widen the entry to the whole file.

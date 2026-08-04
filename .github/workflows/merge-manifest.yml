@@ -62,7 +62,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Through env, not interpolated into the run block: `prefix` is a
+      # workflow_call input, so its value comes from the caller and expands
+      # into shell if written inline. The three jobs this replaced took the
+      # matrix values inline and were covered by zizmor's template-injection
+      # exemption for build-dev-images.yml; that exemption is for values
+      # resolve-civicrm validates, and it does not extend to an input.
       - name: Create multi-platform candidate manifest
+        env:
+          CK_TAG: ${{ inputs.prefix }}${{ matrix.tag }}
         run: |
-          IMG=${{ env.IMAGE_PREFIX }}:${{ inputs.prefix }}${{ matrix.tag }}-${{ github.sha }}
+          IMG="${IMAGE_PREFIX}:${CK_TAG}-${GITHUB_SHA}"
           docker buildx imagetools create -t "$IMG" "$IMG-arm64" "$IMG-amd64"
