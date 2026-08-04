@@ -472,14 +472,21 @@ cron the scan is wired into the failure notification, so a finding on an
 unchanged image still opens an issue instead of sitting in a summary nobody
 opens.
 
-Central exceptions go in **`.trivyignore` in the civikitchen repository root**.
-Plain `.trivyignore` has no expiry field, so the discipline is a comment
-convention the file documents and reviewers enforce:
+Central exceptions go in **`trivyignore.yaml` in the civikitchen repository
+root**, passed to the scan with `--ignorefile` (trivy auto-loads only the plain
+`.trivyignore`; the YAML format is still experimental upstream). The format
+carries what the discipline needs: `expired_at` is enforced by trivy itself —
+an expired entry is pruned, the finding comes back and the gate goes red — and
+`paths` scopes an entry to the tree the vulnerable copy actually lives in, so
+excusing upstream's copy of a CVE does not also excuse ours.
 
-```
-# why: <what makes this finding not apply to these images>
-# until: YYYY-MM-DD -- <what happens on that date>
-CVE-0000-00000
+```yaml
+vulnerabilities:
+  - id: CVE-0000-00000
+    paths:
+      - "home/buildkit/buildkit/**"
+    statement: <what makes this finding not apply to these images>
+    expired_at: 2026-11-01
 ```
 
 The file is not empty. What is excused there is upstream trees the images

@@ -7,7 +7,7 @@ on:
       - 'images/**'
       - '.github/workflows/build-dev-images.yml'
       # Changes the scan verdict directly, so it must re-run the scan jobs.
-      - '.trivyignore'
+      - 'trivyignore.yaml'
   schedule:
     # Weekly (Mondays 04:00 UTC, an hour before the GHCR cleanup cron): the
     # resolve-civicrm job picks up the current upstream stable release each
@@ -852,7 +852,7 @@ jobs:
         platform: [linux/amd64, linux/arm64]
 
     steps:
-      - name: Checkout (for .trivyignore)
+      - name: Checkout (for trivyignore.yaml)
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
@@ -912,8 +912,11 @@ jobs:
       # docker daemon, and the default source order would try three local
       # backends first.
       #
-      # Central exceptions go in .trivyignore in the repository root, which
-      # trivy reads by default. See the file itself for the comment convention.
+      # Central exceptions go in trivyignore.yaml in the repository root, named
+      # explicitly because trivy auto-loads only the plain .trivyignore — the
+      # YAML format is still flagged experimental upstream. It buys per-entry
+      # `paths` scoping and a real `expired_at` (an expired entry is pruned, so
+      # the finding comes back and the gate goes red). See the file itself.
       - name: Scan the published image (gate)
         env:
           IMAGE_REF: ${{ steps.digest.outputs.ref }}
@@ -926,6 +929,7 @@ jobs:
             --scanners vuln \
             --ignore-unfixed \
             --severity HIGH,CRITICAL \
+            --ignorefile trivyignore.yaml \
             --exit-code 1 \
             --no-progress \
             "$IMAGE_REF"
