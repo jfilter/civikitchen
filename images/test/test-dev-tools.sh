@@ -23,6 +23,8 @@
 #   5b. ckphpunit injects the transaction canary listener, after CiviTestListener
 #   5c. cklifecycle's guards (the cycle itself needs a booted site)
 #   5d. ckmutate: red on a surviving mutant with a floor, no-op without one
+#   5e. cktaint: twelve source/sink fixture pairs — the flow is reported, the
+#       escaped twin stays silent
 #   6. composer can install a real package from packagist
 #   7. civix can render help (signals the phar boots)
 #   8. Xdebug toggle: php -m has no xdebug by default; setting XDEBUG_MODE
@@ -1158,6 +1160,243 @@ else
     MUT_OK_OUT="$( (cd "${MUT}" && ckmutate) 2>&1 || true)"
     fail "ckmutate failed a floor it should meet (output: ${MUT_OK_OUT:0:300})"
 fi
+
+# ---------------------------------------------------------------------------
+# 5e. cktaint: the stubs, proven by fixtures.
+#
+# Every case is a pair: a `_bad` file where request input reaches a sink and
+# has to be reported, and a `_good` file with the escape (or the safe API) in
+# between, which has to stay silent. A stub that stops matching core — a
+# renamed method, a changed argument position — turns the pair red on the
+# side that matters: the flow stops being found.
+echo "== cktaint (Psalm taint analysis) =="
+TAINT="$(mktemp -d)/taint"
+mkdir -p "${TAINT}"
+
+# --- PSR-7 request input (the house standard for HTTP endpoints) -> SQL
+cat > "${TAINT}/01_psr7_sql_bad.php" <<'PHP'
+<?php
+use Psr\Http\Message\ServerRequestInterface;
+function f01(ServerRequestInterface $r): void {
+  $q = $r->getQueryParams();
+  CRM_Core_DAO::executeQuery("SELECT id FROM civicrm_contact WHERE sort_name = '" . $q['name'] . "'");
+}
+PHP
+cat > "${TAINT}/01_psr7_sql_good.php" <<'PHP'
+<?php
+use Psr\Http\Message\ServerRequestInterface;
+function f01g(ServerRequestInterface $r): void {
+  $q = $r->getQueryParams();
+  $safe = CRM_Utils_Type::escape($q['name'], 'String');
+  CRM_Core_DAO::executeQuery("SELECT id FROM civicrm_contact WHERE sort_name = '" . $safe . "'");
+}
+PHP
+# --- the request body (webhook payload) -> SQL
+cat > "${TAINT}/02_body_sql_bad.php" <<'PHP'
+<?php
+use Psr\Http\Message\RequestInterface;
+function f02(RequestInterface $r): void {
+  $body = (string) $r->getBody();
+  CRM_Core_DAO::singleValueQuery("SELECT COUNT(*) FROM civicrm_mailing WHERE name = '$body'");
+}
+PHP
+cat > "${TAINT}/02_body_sql_good.php" <<'PHP'
+<?php
+use Psr\Http\Message\RequestInterface;
+function f02g(RequestInterface $r): void {
+  $body = CRM_Core_DAO::escapeString((string) $r->getBody());
+  CRM_Core_DAO::singleValueQuery("SELECT COUNT(*) FROM civicrm_mailing WHERE name = '$body'");
+}
+PHP
+# --- the request URI -> Location header
+cat > "${TAINT}/03_uri_header_bad.php" <<'PHP'
+<?php
+use Psr\Http\Message\RequestInterface;
+function f03(RequestInterface $r): void {
+  CRM_Utils_System::redirect($r->getUri()->getQuery());
+}
+PHP
+cat > "${TAINT}/03_uri_header_good.php" <<'PHP'
+<?php
+use Psr\Http\Message\RequestInterface;
+function f03g(RequestInterface $r): void {
+  CRM_Utils_System::redirect(CRM_Utils_String::munge($r->getUri()->getQuery()));
+}
+PHP
+# --- a route attribute -> filesystem path
+cat > "${TAINT}/04_attr_file_bad.php" <<'PHP'
+<?php
+use Psr\Http\Message\ServerRequestInterface;
+function f04(ServerRequestInterface $r): void {
+  CRM_Utils_File::createDir('/tmp/x/' . $r->getAttribute('slug'));
+}
+PHP
+cat > "${TAINT}/04_attr_file_good.php" <<'PHP'
+<?php
+use Psr\Http\Message\ServerRequestInterface;
+function f04g(ServerRequestInterface $r): void {
+  CRM_Utils_File::createDir('/tmp/x/' . CRM_Utils_File::makeFileName((string) $r->getAttribute('slug')));
+}
+PHP
+# --- an upload's client filename -> moveTo()
+cat > "${TAINT}/05_upload_file_bad.php" <<'PHP'
+<?php
+use Psr\Http\Message\UploadedFileInterface;
+function f05(UploadedFileInterface $u): void {
+  $u->moveTo('/var/tmp/' . $u->getClientFilename());
+}
+PHP
+cat > "${TAINT}/05_upload_file_good.php" <<'PHP'
+<?php
+use Psr\Http\Message\UploadedFileInterface;
+function f05g(UploadedFileInterface $u): void {
+  $u->moveTo('/var/tmp/' . CRM_Utils_File::makeFileName((string) $u->getClientFilename()));
+}
+PHP
+# --- CRM_Utils_SQL_Select: raw fragment vs. the interpolation array
+cat > "${TAINT}/06_sqlselect_bad.php" <<'PHP'
+<?php
+function f06(): void {
+  $id = CRM_Utils_Request::retrieve('cid', 'String');
+  CRM_Utils_SQL_Select::from('civicrm_contact')->where('id = ' . $id)->execute();
+}
+PHP
+cat > "${TAINT}/06_sqlselect_good.php" <<'PHP'
+<?php
+function f06g(): void {
+  $id = CRM_Utils_Request::retrieve('cid', 'String');
+  CRM_Utils_SQL_Select::from('civicrm_contact')->where('id = #cid', ['cid' => $id])->execute();
+}
+PHP
+# --- SSRF: Guzzle (the client Civi::httpClient() hands out)
+cat > "${TAINT}/07_guzzle_ssrf_bad.php" <<'PHP'
+<?php
+use Psr\Http\Message\ServerRequestInterface;
+function f07(ServerRequestInterface $r): void {
+  $client = new \GuzzleHttp\Client();
+  $client->get((string) $r->getQueryParams()['url']);
+}
+PHP
+cat > "${TAINT}/07_guzzle_ssrf_good.php" <<'PHP'
+<?php
+use Psr\Http\Message\ServerRequestInterface;
+function f07g(ServerRequestInterface $r): void {
+  $client = new \GuzzleHttp\Client();
+  $client->get('https://api.example.org/v1/ping', ['json' => $r->getParsedBody()]);
+}
+PHP
+# --- SSRF: CRM_Utils_HttpClient
+cat > "${TAINT}/08_httpclient_ssrf_bad.php" <<'PHP'
+<?php
+function f08(): void {
+  $url = CRM_Utils_Request::retrieveValue('target', 'String');
+  (new CRM_Utils_HttpClient())->get($url);
+}
+PHP
+cat > "${TAINT}/08_httpclient_ssrf_good.php" <<'PHP'
+<?php
+function f08g(): void {
+  $token = CRM_Utils_Request::retrieveValue('token', 'String');
+  (new CRM_Utils_HttpClient())->post('https://api.example.org/v1/ping', ['token' => $token]);
+}
+PHP
+# --- a request header echoed back into a response header
+cat > "${TAINT}/09_setheader_bad.php" <<'PHP'
+<?php
+use Psr\Http\Message\ServerRequestInterface;
+function f09(ServerRequestInterface $r): void {
+  CRM_Utils_System::setHttpHeader('X-Trace', (string) $r->getHeaderLine('X-Request-Id'));
+}
+PHP
+cat > "${TAINT}/09_setheader_good.php" <<'PHP'
+<?php
+use Psr\Http\Message\ServerRequestInterface;
+function f09g(ServerRequestInterface $r): void {
+  CRM_Utils_System::setHttpHeader('X-Trace', CRM_Utils_String::munge((string) $r->getHeaderLine('X-Request-Id')));
+}
+PHP
+# --- a request-chosen filename -> Content-Disposition
+cat > "${TAINT}/10_download_bad.php" <<'PHP'
+<?php
+function f10(): void {
+  $name = CRM_Utils_Request::retrieveValue('file', 'String');
+  $buf = 'x';
+  CRM_Utils_System::download($name, 'text/plain', $buf);
+}
+PHP
+cat > "${TAINT}/10_download_good.php" <<'PHP'
+<?php
+function f10g(): void {
+  $name = CRM_Utils_String::munge((string) CRM_Utils_Request::retrieveValue('file', 'String'));
+  $buf = 'x';
+  CRM_Utils_System::download($name, 'text/plain', $buf);
+}
+PHP
+# --- shell (Psalm's own sink, reached from a PSR-7 source)
+cat > "${TAINT}/11_shell_bad.php" <<'PHP'
+<?php
+use Psr\Http\Message\ServerRequestInterface;
+function f11(ServerRequestInterface $r): void {
+  exec('convert ' . (string) $r->getQueryParams()['f']);
+}
+PHP
+cat > "${TAINT}/11_shell_good.php" <<'PHP'
+<?php
+use Psr\Http\Message\ServerRequestInterface;
+function f11g(ServerRequestInterface $r): void {
+  exec('convert ' . escapeshellarg((string) $r->getQueryParams()['f']));
+}
+PHP
+# --- file_get_contents on a request-controlled path
+cat > "${TAINT}/12_fgc_bad.php" <<'PHP'
+<?php
+use Psr\Http\Message\RequestInterface;
+function f12(RequestInterface $r): void {
+  echo strlen((string) file_get_contents((string) $r->getUri()->getPath()));
+}
+PHP
+cat > "${TAINT}/12_fgc_good.php" <<'PHP'
+<?php
+use Psr\Http\Message\RequestInterface;
+function f12g(RequestInterface $r): void {
+  echo strlen((string) file_get_contents('/srv/data/' . CRM_Utils_File::makeFileName((string) $r->getUri()->getPath())));
+}
+PHP
+
+# One run over the whole fixture set — Psalm reports one flow per source/sink
+# pair, and every pair here is distinct, so all twelve findings show up
+# together. --no-cache because the fixtures live in a fresh temp dir.
+TAINT_OUT="$( (cd "${TAINT}" && cktaint --no-cache) 2>&1 | sed -E 's/\x1b\[[0-9;]*m//g' || true)"
+
+# case-file -> the issue that must be reported for it
+TAINT_CASES=(
+    "01_psr7_sql_bad.php:TaintedSql:PSR-7 getQueryParams -> executeQuery"
+    "02_body_sql_bad.php:TaintedSql:PSR-7 request body -> singleValueQuery"
+    "03_uri_header_bad.php:TaintedHeader:request URI -> CRM_Utils_System::redirect"
+    "04_attr_file_bad.php:TaintedFile:route attribute -> CRM_Utils_File::createDir"
+    "05_upload_file_bad.php:TaintedFile:upload filename -> moveTo"
+    "06_sqlselect_bad.php:TaintedSql:request input -> CRM_Utils_SQL_Select::where"
+    "07_guzzle_ssrf_bad.php:TaintedSSRF:request input -> Guzzle client"
+    "08_httpclient_ssrf_bad.php:TaintedSSRF:request input -> CRM_Utils_HttpClient"
+    "09_setheader_bad.php:TaintedHeader:request header -> setHttpHeader"
+    "10_download_bad.php:TaintedHeader:request input -> CRM_Utils_System::download"
+    "11_shell_bad.php:TaintedShell:PSR-7 input -> exec"
+    "12_fgc_bad.php:TaintedFile:PSR-7 input -> file_get_contents"
+)
+for case in "${TAINT_CASES[@]}"; do
+    file="${case%%:*}"; rest="${case#*:}"; issue="${rest%%:*}"; label="${rest#*:}"
+    if echo "${TAINT_OUT}" | grep -q "${issue}.*${file}"; then
+        ok "cktaint reports ${issue}: ${label}"
+    else
+        fail "cktaint missed ${issue} in ${file} (${label})"
+    fi
+    good="${file/_bad.php/_good.php}"
+    if echo "${TAINT_OUT}" | grep -q "${good}"; then
+        fail "cktaint false positive: the escaped ${good} was reported"
+    else
+        ok "cktaint stays silent on the escaped ${good}"
+    fi
+done
 
 # ---------------------------------------------------------------------------
 echo

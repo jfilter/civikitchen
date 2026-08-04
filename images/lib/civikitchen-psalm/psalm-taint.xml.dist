@@ -46,10 +46,15 @@
 
   <stubs>
     <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_Request.php" />
+    <file name="/opt/civikitchen-psalm/stubs/Psr7.php" />
     <file name="/opt/civikitchen-psalm/stubs/CRM_Core_DAO.php" />
+    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_SQL_Select.php" />
     <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_Type.php" />
+    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_String.php" />
     <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_System.php" />
     <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_File.php" />
+    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_HttpClient.php" />
+    <file name="/opt/civikitchen-psalm/stubs/Guzzle.php" />
   </stubs>
 
   <issueHandlers>

@@ -27,4 +27,16 @@ class CRM_Utils_Request {
    */
   public static function retrieveValue($name, $type, $defaultValue = NULL, $isRequired = FALSE, $method = 'REQUEST') {}
 
+  /**
+   * The whole request array, unfiltered.
+   *
+   * @psalm-taint-source input
+   */
+  public static function exportValues() {}
+
+  /**
+   * @psalm-taint-source input
+   */
+  public static function retrieveComponent($attributes) {}
+
 }

@@ -614,13 +614,21 @@ of stubs (`/opt/civikitchen-psalm/stubs`, signatures verified against core):
 
 | role | modelled |
 | --- | --- |
-| sources | `CRM_Utils_Request::retrieve` / `retrieveValue` (Psalm covers `$_GET`/`$_POST`/`$_REQUEST`/`$_COOKIE` natively) |
-| SQL sinks | `CRM_Core_DAO::executeQuery` / `executeUnbufferedQuery` / `singleValueQuery` / `composeQuery` (the `$query` argument only), `CRM_Utils_File::runSqlQuery` |
-| path sinks | `CRM_Utils_File::createDir` / `cleanDir` / `copyDir` / `duplicate` / `sourceSQLFile` |
-| header sink | `CRM_Utils_System::redirect` |
-| escapes | `CRM_Utils_Type::escape` / `escapeAll`, `CRM_Core_DAO::escapeString` / `escapeStrings` — for **SQL taint only**, so a value escaped for the database is still tainted at a shell or path sink |
+| sources | **PSR-7 requests** — everything readable off a route handler's `$request`: `getQueryParams` / `getParsedBody` / `getCookieParams` / `getServerParams` / `getUploadedFiles` / `getAttribute(s)` / `getHeader(s)` / `getHeaderLine` / `getRequestTarget`, the `UriInterface` getters (`getQuery`, `getPath`, `getHost`, …), the body via `StreamInterface::getContents` / `__toString` / `read`, and an upload's `getClientFilename` / `getClientMediaType`. Plus `CRM_Utils_Request::retrieve` / `retrieveValue` / `exportValues` / `retrieveComponent` (Psalm covers `$_GET`/`$_POST`/`$_REQUEST`/`$_COOKIE` natively) |
+| SQL sinks | `CRM_Core_DAO::executeQuery` / `executeUnbufferedQuery` / `singleValueQuery` / `composeQuery` (the `$query` argument only), `CRM_Utils_File::runSqlQuery`, and every raw fragment of `CRM_Utils_SQL_Select` (`from` / `join` / `select` / `where` / `groupBy` / `having` / `orderBy` / `onDuplicate`, the `insertInto`/`replaceInto`/`syncInto` table) |
+| path sinks | `CRM_Utils_File::createDir` / `cleanDir` / `copyDir` / `duplicate` / `sourceSQLFile` / `findFiles` / `getFilesByExtension` / `replaceDir` / `createFakeFile` / `resizeImage`, `UploadedFileInterface::moveTo` |
+| header sinks | `CRM_Utils_System::redirect` / `setHttpHeader` / `download` (its `$name`/`$mimeType`/`$ext` become Content-Disposition and Content-Type) |
+| SSRF sinks | `CRM_Utils_HttpClient::get` / `post` / `fetch` and Guzzle — `Client::request` / `requestAsync` / `get` / `post` / `put` / `patch` / `delete` / `head`, the URI argument only |
+| escapes | `CRM_Utils_Type::escape` / `escapeAll`, `CRM_Core_DAO::escapeString` / `escapeStrings` — for **SQL taint only**, so a value escaped for the database is still tainted at a shell or path sink. `CRM_Utils_File::makeFileName` / `makeFilenameWithUnicode` for **paths**, `CRM_Utils_String::purifyHTML` for HTML, and `CRM_Utils_String::munge` for all of them at once (it reduces the value to `[a-zA-Z0-9]` plus a separator) |
 
-Two modelling decisions worth knowing, because they decide what you see:
+Everything PHP itself offers is Psalm's own: `exec`/`system`/`shell_exec`/
+`proc_open`, `include`, `eval`, `unserialize`, `header`/`setcookie`,
+`file_get_contents`/`fopen`, `curl_setopt`, and `escapeshellarg`/
+`htmlspecialchars` as escapes. The stubs above are only what Psalm cannot see:
+CiviCRM core, and the PSR-7/Guzzle classes that live in the `vendor/` cktaint
+ignores.
+
+Modelling decisions worth knowing, because they decide what you see:
 
 - The `$params` array of `executeQuery` is **not** a sink. That is the safe
   path (`composeQuery` type-validates and escapes every placeholder), and
@@ -629,6 +637,18 @@ Two modelling decisions worth knowing, because they decide what you see:
   `Memo`/`Link` it returns the value unchanged, so taint flows straight
   through it — a stub that stayed silent here would launder every injection
   that goes through a validated string.
+- The same for `$args` of `CRM_Utils_SQL_Select::where()` and friends, and for
+  `param()`: the interpolation array is the safe half of the builder, only the
+  expression string is a sink.
+- `$request->getMethod()` is **not** a source. It is compared, never
+  concatenated, and tainting it would flag every `if ($request->getMethod()
+  !== 'POST')` guard the standard asks you to write.
+- `CRM_Utils_String::stripPathChars()` is **not** an escape. It strips quotes
+  and shell metacharacters but leaves `/`, `.` and `..` alone, so a traversal
+  walks straight through it — it stays a pass-through in the graph.
+- Guzzle's `$options` (body, headers, query) is not an SSRF sink; only the
+  URI is. An attacker-controlled body sent to a fixed host is not SSRF, and
+  flagging it would redden every forwarder.
 
 Hooks, APIv4 parameters and Smarty assignments are deliberately *not* modelled
 as sources: everything would be tainted, and a report where everything is
@@ -642,6 +662,12 @@ flagged is a report nobody reads.
 - HTML/XSS. `TaintedHtml` is switched off: CiviCRM output escaping happens in
   templates Psalm never analyses, so what remains would be Psalm's blind spot,
   not missing escaping.
+- Values that leave a function through a by-reference out-parameter.
+  `parse_str($request->getUri()->getQuery(), $query)` is the one that matters
+  in practice: `$query` comes out clean as far as Psalm is concerned, so a
+  handler that parses its query string this way is invisible. `json_decode()`
+  on the other hand propagates fine — read a webhook body, index into the
+  decoded array, and the flow is still followed.
 - Additional call sites on a sink it already reported. Psalm reports **one
   flow per source/sink pair** — fix the first `executeQuery` finding and the
   next one can appear in the following run. A clean `cktaint` after a fix is
@@ -663,7 +689,11 @@ shape.
    entry is a dated statement that the finding was read and accepted — a
    baseline nobody wrote a reason for is just a mute button.
 
-Never "fix" a finding by weakening the stubs.
+Never "fix" a finding by weakening the stubs. They are held in place by
+fixture pairs in `images/test/test-dev-tools.sh` — for every modelled
+source/sink combination one file where the flow must be reported and one with
+the escape in between that must stay silent — so a weakened stub shows up as a
+red image test, not as a quieter report.
 
 ### Where this is going
 
