@@ -570,6 +570,9 @@ jobs:
           if [ -n "${CK_SIBLING_OVERRIDE:-}" ]; then
             compose+=(-f "$CK_SIBLING_OVERRIDE")
           fi
+          # Self-hosted runners keep the previous run's stack; without -v the
+          # anonymous mariadb volume reattaches and the entrypoint skips install.
+          docker compose "${compose[@]}" down -v --remove-orphans
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       # The three gates below report INDEPENDENTLY (each runs as long as the
@@ -794,7 +797,9 @@ jobs:
       # and therefore the image that release was tested with, unless the
       # caller pins `image`.
       - name: Start CiviCRM stack on the previous release
-        run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" down -v --remove-orphans
+          docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
 
       # The container sees the checkout through the bind mount, so this alone
       # puts the new code in front of the installed old schema.
@@ -934,7 +939,9 @@ jobs:
 
       - name: Start CiviCRM stack on the previous release
         if: ${{ steps.gate.outputs.run == 'true' }}
-        run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" down -v --remove-orphans
+          docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
 
       - name: Move the mount to this commit
         if: ${{ steps.gate.outputs.run == 'true' }}
@@ -1109,6 +1116,8 @@ jobs:
           CIVIKITCHEN_IMAGE: ${{ inputs.core_upgrade_from }}
         run: |
           set -euo pipefail
+          docker compose -f "$CK_COMPOSE_FILE" -f "$CK_UPGRADE_OVERRIDE" \
+            down -v --remove-orphans
           docker compose -f "$CK_COMPOSE_FILE" -f "$CK_UPGRADE_OVERRIDE" \
             up -d --wait --quiet-pull
 
@@ -1308,7 +1317,9 @@ jobs:
       # CiviCRM and enables the mounted extension, so an installer that fails
       # on this version never gets to the suite.
       - name: Start CiviCRM stack
-        run: docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" down -v --remove-orphans
+          docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
 
       - name: PHPUnit
         run: |
@@ -1405,6 +1416,8 @@ jobs:
 
       - name: Start CiviCRM stack
         run: |
+          docker compose -f "$CK_COMPOSE_FILE" -f "$CK_PW_OVERRIDE" \
+            down -v --remove-orphans
           docker compose -f "$CK_COMPOSE_FILE" -f "$CK_PW_OVERRIDE" \
             up -d --wait --quiet-pull
 
