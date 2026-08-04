@@ -134,30 +134,18 @@ jobs:
           cache-from: type=gha,scope=standalone-${{ matrix.version }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=standalone-${{ matrix.version }}-${{ matrix.arch }}
 
+  # The per-arch candidates become one multi-platform tag. Three callers, one
+  # implementation — see .github/workflows/merge-manifest.yml. The matrix here
+  # carries bare CiviCRM versions, hence the prefix.
   merge-standalone:
     needs: [resolve-civicrm, build-standalone]
-    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
-
-    strategy:
-      matrix:
-        version: ${{ fromJSON(needs.resolve-civicrm.outputs.standalone_versions) }}
-
-    steps:
-      - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create multi-platform candidate manifest
-        run: |
-          docker buildx imagetools create -t ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }} \
-            ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}-arm64 \
-            ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}-amd64
+    uses: ./.github/workflows/merge-manifest.yml
+    with:
+      prefix: standalone-
+      tags: ${{ needs.resolve-civicrm.outputs.standalone_versions }}
 
   smoke-test-standalone:
     needs: [resolve-civicrm, merge-standalone]
@@ -401,28 +389,12 @@ jobs:
 
   merge-buildkit:
     needs: build-buildkit
-    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
-
-    strategy:
-      matrix:
-        variant: [drupal10, drupal11, wordpress, joomla]
-
-    steps:
-      - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create multi-platform candidate manifest
-        run: |
-          docker buildx imagetools create -t ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }} \
-            ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }}-arm64 \
-            ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }}-amd64
+    uses: ./.github/workflows/merge-manifest.yml
+    with:
+      tags: '["drupal10", "drupal11", "wordpress", "joomla"]'
 
   smoke-test-buildkit:
     needs: merge-buildkit
@@ -683,27 +655,12 @@ jobs:
 
   merge-demo:
     needs: build-demo
-    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
-
-    strategy:
-      matrix:
-        tag: [standalone-demo, drupal10-demo, drupal11-demo, wordpress-demo, joomla-demo]
-
-    steps:
-      - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create multi-platform candidate manifest
-        run: |
-          IMG=${{ env.IMAGE_PREFIX }}:${{ matrix.tag }}-${{ github.sha }}
-          docker buildx imagetools create -t "$IMG" "$IMG-arm64" "$IMG-amd64"
+    uses: ./.github/workflows/merge-manifest.yml
+    with:
+      tags: '["standalone-demo", "drupal10-demo", "drupal11-demo", "wordpress-demo", "joomla-demo"]'
 
   smoke-test-demo:
     needs: merge-demo

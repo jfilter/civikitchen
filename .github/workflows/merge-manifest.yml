@@ -1,0 +1,68 @@
+# Merge this run's per-arch candidate images into one multi-platform manifest.
+#
+# The build jobs push `<tag>-<sha>-amd64` and `<tag>-<sha>-arm64` separately —
+# one runner per architecture, no emulation — and this joins them under
+# `<tag>-<sha>`, which is what the smoke, e2e and promote jobs then refer to.
+#
+# It exists as a called workflow because the operation was written out three
+# times (standalone, buildkit, demo) and differed only in which tags to iterate:
+# three copies of the same `imagetools create`, and three copies of the pinned
+# GHCR login next to them. What is left at each call site is configuration —
+# which jobs it waits for, which tags, what the token may do — and that is
+# genuinely per-caller, not a copy.
+#
+# `./.github/workflows/...` resolves in THIS repository at the commit being
+# run, which is why this works where a composite action would not: a composite
+# action referenced by path from a REUSABLE workflow (extension-ci.yml) would
+# resolve against the calling extension repo instead. This file is only ever
+# called from workflows that run here.
+name: Merge candidate manifest
+
+on:
+  workflow_call:
+    inputs:
+      tags:
+        description: >-
+          JSON array of tag basenames to merge, one job each — e.g.
+          '["drupal10", "drupal11"]', or the standalone_versions output.
+        required: true
+        type: string
+      prefix:
+        description: >-
+          Prepended to every entry of `tags`. The standalone caller passes
+          'standalone-' because its matrix carries bare CiviCRM versions; the
+          others pass whole tag names and leave this empty.
+        type: string
+        default: ''
+
+# Derived from the run's own repository, exactly as in the calling workflow: a
+# called workflow does not inherit `env`, and deriving it again is better than
+# passing a value that could be passed wrongly.
+env:
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/civikitchen
+
+jobs:
+  merge:
+    runs-on: ubuntu-24.04
+    # Capped by the caller's own permissions block, which has to grant
+    # packages: write for this to be able to push the manifest.
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        tag: ${{ fromJSON(inputs.tags) }}
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-platform candidate manifest
+        run: |
+          IMG=${{ env.IMAGE_PREFIX }}:${{ inputs.prefix }}${{ matrix.tag }}-${{ github.sha }}
+          docker buildx imagetools create -t "$IMG" "$IMG-arm64" "$IMG-amd64"
