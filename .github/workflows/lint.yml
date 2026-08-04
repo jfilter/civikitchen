@@ -100,8 +100,10 @@ jobs:
             echo CiviKitchen\PHPStan\CoreNamespaceCatalog::CORE_VERSION;')
           apiver=$(php -r 'require "images/lib/civikitchen-phpstan/src/Api4Catalog.php";
             echo CiviKitchen\PHPStan\Api4Catalog::CORE_VERSION;')
-          if [ "$ver" != "$nsver" ] || [ "$ver" != "$apiver" ]; then
-            echo "catalog pins disagree: hooks=$ver namespaces=$nsver api4=$apiver — regenerate them from one release" >&2
+          schemaver=$(php -r 'require "images/lib/civikitchen-phpstan/src/SchemaCatalog.php";
+            echo CiviKitchen\PHPStan\SchemaCatalog::CORE_VERSION;')
+          if [ "$ver" != "$nsver" ] || [ "$ver" != "$apiver" ] || [ "$ver" != "$schemaver" ]; then
+            echo "catalog pins disagree: hooks=$ver namespaces=$nsver api4=$apiver schema=$schemaver — regenerate them from one release" >&2
             exit 1
           fi
           echo "pinned CiviCRM $ver"

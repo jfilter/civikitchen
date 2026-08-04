@@ -108,6 +108,23 @@ unless `--force` is explicitly supplied. For an existing extension,
   `info`, turns a failed query into a substituted value the caller cannot
   tell from real data (`ck.db.silentCatch`). APIv4 calls are out of scope:
   their exceptions are legitimate control flow.
+- **A table name in raw SQL is checked against the schema.** `DELETE FROM
+  civicrm_civirules_rule` parses, analyses and unit-tests clean, and then
+  fatals on a site — the table is called `civirule_rule`. The rule reads the
+  literal SQL of `CRM_Core_DAO::executeQuery()`/`singleValueQuery()`/
+  `executeUnbufferedQuery()`, a DAO's `query()`, and the
+  `CRM_Utils_SQL_Select` builder's `from()`/`join()`, and reports a table the
+  pinned core does not have (`ck.sql.unknownTable`). The calibration is what
+  keeps it usable: only `civicrm_`-prefixed names are judged at all, because
+  that prefix is core's — an extension table like `civirule_rule` or
+  `mailjet_event` is invisible to the analysis and stays silent. Custom-value
+  and temp tables (`civicrm_value_*`, `civicrm_tmp_*`), the tables the repo's
+  own `schema/`, `xml/schema/` or `sql/` declares, and anything listed under
+  `parameters.civikitchen.sqlKnownTables` in `phpstan.neon` count as known.
+  Non-literal SQL — a `{$table}` interpolation, a `%1` placeholder in table
+  position, a statement built in a variable — is skipped without a word.
+  That last list is why other extensions' `civicrm_`-prefixed tables are the
+  one thing to declare rather than baseline.
 - `E::ts()`, never bare `ts()` (`CiviKitchen.I18n.UseExtensionTs`).
 - Standard mixins for managed entities / menu / settings / Angular — no
   bespoke hooks (`CiviKitchen.Extension.UseMixinsForStandardHooks`).

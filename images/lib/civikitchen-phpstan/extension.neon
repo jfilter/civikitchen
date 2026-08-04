@@ -1,3 +1,14 @@
+parameters:
+	civikitchen:
+		# `civicrm_`-prefixed tables of OTHER extensions this repo queries.
+		# Core's tables and the repo's own schema are found automatically.
+		sqlKnownTables: []
+
+parametersSchema:
+	civikitchen: structure([
+		sqlKnownTables: listOf(string())
+	])
+
 services:
 	-
 		class: CiviKitchen\PHPStan\CkLegacyScopeResolver
@@ -47,5 +58,20 @@ services:
 			- phpstan.rules.rule
 	-
 		class: CiviKitchen\PHPStan\NoSilentDatabaseCatchRule
+		tags:
+			- phpstan.rules.rule
+	# Raw SQL against the generated table catalog. Split into two rules for
+	# the same reason as the APIv4 ones: one node type per rule.
+	-
+		class: CiviKitchen\PHPStan\SqlSchema
+		arguments:
+			- %currentWorkingDirectory%
+			- %civikitchen.sqlKnownTables%
+	-
+		class: CiviKitchen\PHPStan\SqlTableStaticCallRule
+		tags:
+			- phpstan.rules.rule
+	-
+		class: CiviKitchen\PHPStan\SqlTableMethodCallRule
 		tags:
 			- phpstan.rules.rule

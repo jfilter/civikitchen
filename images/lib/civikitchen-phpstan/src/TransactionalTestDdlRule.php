@@ -254,32 +254,9 @@ final class TransactionalTestDdlRule implements Rule
         return false;
     }
 
-    /**
-     * A literal string, including one built by concatenating literals.
-     *
-     * Heredocs and simple concatenation are how long DDL is written; a
-     * statement assembled from a variable is not readable here and is left
-     * alone rather than guessed at.
-     */
     private static function literal(Node\Expr $expr): ?string
     {
-        if ($expr instanceof Node\Scalar\String_) {
-            return $expr->value;
-        }
-        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
-            $left = self::literal($expr->left);
-
-            return $left === null ? null : $left . (self::literal($expr->right) ?? '');
-        }
-        if ($expr instanceof Node\Scalar\InterpolatedString || $expr instanceof Node\Scalar\Encapsed) {
-            $first = $expr->parts[0] ?? null;
-
-            return $first instanceof Node\InterpolatedStringPart || $first instanceof Node\Scalar\EncapsedStringPart
-                ? $first->value
-                : null;
-        }
-
-        return null;
+        return Sql::literalString($expr);
     }
 
     private static function isExtensionManager(Node\Expr $expr): bool

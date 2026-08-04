@@ -45,6 +45,36 @@ final class Sql
         return false;
     }
 
+    /**
+     * A literal string, including one built by concatenating literals.
+     *
+     * Heredocs and simple concatenation are how long SQL is written; a
+     * statement assembled from a variable is not readable here and is left
+     * alone rather than guessed at. An interpolated string yields only its
+     * leading literal part, which is enough to see the statement's verb and
+     * its first table.
+     */
+    public static function literalString(Node\Expr $expr): ?string
+    {
+        if ($expr instanceof Node\Scalar\String_) {
+            return $expr->value;
+        }
+        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
+            $left = self::literalString($expr->left);
+
+            return $left === null ? null : $left . (self::literalString($expr->right) ?? '');
+        }
+        if ($expr instanceof Node\Scalar\InterpolatedString || $expr instanceof Node\Scalar\Encapsed) {
+            $first = $expr->parts[0] ?? null;
+
+            return $first instanceof Node\InterpolatedStringPart || $first instanceof Node\Scalar\EncapsedStringPart
+                ? $first->value
+                : null;
+        }
+
+        return null;
+    }
+
     /** A DDL statement that would commit an open test transaction. */
     public static function isDdlLiteral(string $sql): bool
     {
