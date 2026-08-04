@@ -80,6 +80,55 @@ final class Api4Fluent
         return $aliases;
     }
 
+    /**
+     * Aliases the chain bound with an explicit `->addJoin('Entity AS x')`.
+     *
+     * Such an alias shadows an implicit join of the same name, so the join
+     * map must not be consulted for it. Only the links BELOW this node are
+     * visible; a join added later cannot mislead the caller, because an
+     * alias the map does not know is passed over in silence anyway.
+     *
+     * @return list<string>
+     */
+    public static function joinAliasesOfChain(MethodCall $node, Scope $scope): array
+    {
+        $aliases = [];
+        $expr = $node->var;
+        while ($expr instanceof MethodCall) {
+            if ($expr->name instanceof Identifier && in_array($expr->name->toLowerString(), ['addjoin', 'setjoin'], true)) {
+                foreach ($expr->getArgs() as $arg) {
+                    $type = $scope->getType($arg->value);
+                    $strings = array_merge(
+                        $type->getConstantStrings(),
+                        ...array_map(
+                            static fn ($array) => $array->getValuesArray()->getConstantStrings(),
+                            $type->getConstantArrays(),
+                        ),
+                    );
+                    foreach ($strings as $string) {
+                        $alias = self::joinAliasOf($string->getValue());
+                        if ($alias !== null) {
+                            $aliases[] = $alias;
+                        }
+                    }
+                }
+            }
+            $expr = $expr->var;
+        }
+
+        return $aliases;
+    }
+
+    /** The name `Address AS addr` binds — `Address` when it binds none. */
+    private static function joinAliasOf(string $join): ?string
+    {
+        if (preg_match('/^([A-Za-z_][A-Za-z0-9_]*)(?:\s+AS\s+([A-Za-z_][A-Za-z0-9_]*))?$/i', trim($join), $m) !== 1) {
+            return null;
+        }
+
+        return $m[2] ?? $m[1];
+    }
+
     /** The name a select expression binds, if it binds one. */
     private static function aliasOf(string $select): ?string
     {

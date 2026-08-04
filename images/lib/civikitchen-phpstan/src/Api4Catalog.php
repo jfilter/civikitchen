@@ -223,6 +223,144 @@ final class Api4Catalog
     ];
 
     /**
+     * Entity name => implicit joins, as `name:TargetEntity` pairs.
+     *
+     * The left-hand side of `address_primary.street_address`: every field
+     * carrying an `entity_reference` becomes a joinable of the same name
+     * (SchemaMapBuilder::addJoins), plus the eight primary/billing links
+     * ContactSchemaMapSubscriber adds to Contact. Entities with no implicit
+     * join are absent.
+     *
+     * NOT in here, and therefore never judged: explicit `addJoin()` aliases,
+     * custom-group joins (named after site data) and multi-level paths.
+     *
+     * @var array<string, string>
+     */
+    public const JOINS = [
+        'ActionSchedule' => 'group_id:Group msg_template_id:MessageTemplate sms_provider_id:SmsProvider sms_template_id:MessageTemplate',
+        'Activity' => 'campaign_id:Campaign original_id:Activity parent_id:Activity phone_id:Phone relationship_id:Relationship',
+        'ActivityContact' => 'activity_id:Activity contact_id:Contact',
+        'Address' => 'contact_id:Contact country_id:Country county_id:County master_id:Address state_province_id:StateProvince',
+        'AfformSubmission' => 'contact_id:Contact',
+        'Batch' => 'created_id:Contact modified_id:Contact saved_search_id:SavedSearch',
+        'BouncePattern' => 'bounce_type_id:BounceType',
+        'Campaign' => 'created_id:Contact last_modified_id:Contact parent_id:Campaign',
+        'Case' => 'case_type_id:CaseType',
+        'CaseActivity' => 'activity_id:Activity case_id:Case',
+        'CaseContact' => 'case_id:Case contact_id:Contact',
+        'Contact' => 'address_billing:Address address_primary:Address email_billing:Email email_primary:Email employer_id:Contact im_billing:IM im_primary:IM phone_billing:Phone phone_primary:Phone primary_contact_id:Contact',
+        'ContactType' => 'parent_id:ContactType',
+        'Contribution' => 'address_id:Address campaign_id:Campaign contact_id:Contact contribution_page_id:ContributionPage contribution_recur_id:ContributionRecur financial_type_id:FinancialType',
+        'ContributionPage' => 'campaign_id:Campaign created_id:Contact financial_type_id:FinancialType',
+        'ContributionProduct' => 'contribution_id:Contribution financial_type_id:FinancialType product_id:Product',
+        'ContributionRecur' => 'campaign_id:Campaign contact_id:Contact financial_type_id:FinancialType payment_processor_id:PaymentProcessor payment_token_id:PaymentToken',
+        'ContributionSoft' => 'contact_id:Contact contribution_id:Contribution pcp_id:PCP',
+        'Country' => 'region_id:WorldRegion',
+        'County' => 'state_province_id:StateProvince',
+        'CustomField' => 'custom_group_id:CustomGroup option_group_id:OptionGroup',
+        'CustomGroup' => 'created_id:Contact',
+        'Dashboard' => 'domain_id:Domain',
+        'DashboardContact' => 'contact_id:Contact dashboard_id:Dashboard',
+        'DedupeException' => 'contact_id1:Contact contact_id2:Contact',
+        'DedupeRule' => 'dedupe_rule_group_id:DedupeRuleGroup',
+        'Discount' => 'price_set_id:PriceSet',
+        'Domain' => 'contact_id:Contact',
+        'Email' => 'contact_id:Contact',
+        'EmailMessage' => 'created_id:Contact from_site_email_address_id:SiteEmailAddress to_contact_id:Contact',
+        'EntityBatch' => 'batch_id:Batch',
+        'EntityFile' => 'file_id:File',
+        'EntityFinancialAccount' => 'financial_account_id:FinancialAccount',
+        'EntityFinancialTrxn' => 'financial_trxn_id:FinancialTrxn',
+        'EntityTag' => 'tag_id:Tag',
+        'Event' => 'campaign_id:Campaign created_id:Contact dedupe_rule_group_id:DedupeRuleGroup loc_block_id:LocBlock',
+        'EventCartParticipant' => 'participant_id:Participant',
+        'File' => 'created_id:Contact',
+        'FinancialAccount' => 'contact_id:Contact parent_id:FinancialAccount',
+        'FinancialItem' => 'contact_id:Contact financial_account_id:FinancialAccount',
+        'FinancialTrxn' => 'from_financial_account_id:FinancialAccount payment_processor_id:PaymentProcessor to_financial_account_id:FinancialAccount',
+        'Grant' => 'contact_id:Contact financial_type_id:FinancialType',
+        'Group' => 'created_id:Contact modified_id:Contact saved_search_id:SavedSearch',
+        'GroupContact' => 'contact_id:Contact email_id:Email group_id:Group location_id:LocBlock',
+        'GroupNesting' => 'child_group_id:Group parent_group_id:Group',
+        'GroupOrganization' => 'group_id:Group organization_id:Contact',
+        'Household' => 'address_billing:Address address_primary:Address email_billing:Email email_primary:Email employer_id:Contact im_billing:IM im_primary:IM phone_billing:Phone phone_primary:Phone primary_contact_id:Contact',
+        'IM' => 'contact_id:Contact',
+        'Individual' => 'address_billing:Address address_primary:Address email_billing:Email email_primary:Email employer_id:Contact im_billing:IM im_primary:IM phone_billing:Phone phone_primary:Phone primary_contact_id:Contact',
+        'Job' => 'domain_id:Domain',
+        'JobLog' => 'domain_id:Domain job_id:Job',
+        'LineItem' => 'contribution_id:Contribution financial_type_id:FinancialType price_field_id:PriceField price_field_value_id:PriceFieldValue',
+        'LocBlock' => 'address_2_id:Address address_id:Address email_2_id:Email email_id:Email im_2_id:IM im_id:IM phone_2_id:Phone phone_id:Phone',
+        'Log' => 'modified_id:Contact',
+        'MailSettings' => 'campaign_id:Campaign domain_id:Domain',
+        'Mailing' => 'approver_id:Contact campaign_id:Campaign created_id:Contact domain_id:Domain footer_id:MailingComponent header_id:MailingComponent location_type_id:LocationType msg_template_id:MessageTemplate optout_id:MailingComponent reply_id:MailingComponent scheduled_id:Contact sms_provider_id:SmsProvider unsubscribe_id:MailingComponent',
+        'MailingEventBounce' => 'event_queue_id:MailingEventQueue',
+        'MailingEventConfirm' => 'event_subscribe_id:MailingEventSubscribe',
+        'MailingEventDelivered' => 'event_queue_id:MailingEventQueue',
+        'MailingEventOpened' => 'event_queue_id:MailingEventQueue',
+        'MailingEventQueue' => 'contact_id:Contact email_id:Email job_id:MailingJob mailing_id:Mailing phone_id:Phone',
+        'MailingEventReply' => 'event_queue_id:MailingEventQueue',
+        'MailingEventSubscribe' => 'contact_id:Contact group_id:Group',
+        'MailingEventTrackableURLOpen' => 'event_queue_id:MailingEventQueue trackable_url_id:MailingTrackableURL',
+        'MailingEventUnsubscribe' => 'event_queue_id:MailingEventQueue',
+        'MailingGroup' => 'mailing_id:Mailing',
+        'MailingJob' => 'mailing_id:Mailing parent_id:MailingJob',
+        'MailingTrackableURL' => 'mailing_id:Mailing',
+        'MappingField' => 'location_type_id:LocationType mapping_id:Mapping relationship_type_id:RelationshipType',
+        'Membership' => 'campaign_id:Campaign contact_id:Contact contribution_recur_id:ContributionRecur membership_type_id:MembershipType owner_membership_id:Membership status_id:MembershipStatus',
+        'MembershipBlock' => 'entity_id:ContributionPage membership_type_default:MembershipType',
+        'MembershipLog' => 'membership_id:Membership membership_type_id:MembershipType modified_id:Contact status_id:MembershipStatus',
+        'MembershipType' => 'domain_id:Domain financial_type_id:FinancialType member_of_contact_id:Contact',
+        'Navigation' => 'domain_id:Domain parent_id:Navigation',
+        'Note' => 'contact_id:Contact',
+        'OAuthContactToken' => 'client_id:OAuthClient contact_id:Contact',
+        'OAuthSysToken' => 'client_id:OAuthClient',
+        'OpenID' => 'contact_id:Contact',
+        'OptionValue' => 'domain_id:Domain option_group_id:OptionGroup',
+        'Organization' => 'address_billing:Address address_primary:Address email_billing:Email email_primary:Email employer_id:Contact im_billing:IM im_primary:IM phone_billing:Phone phone_primary:Phone primary_contact_id:Contact',
+        'PCP' => 'contact_id:Contact',
+        'PCPBlock' => 'supporter_profile_id:UFGroup',
+        'Participant' => 'campaign_id:Campaign contact_id:Contact created_id:Contact discount_id:Discount event_id:Event registered_by_id:Participant status_id:ParticipantStatusType transferred_to_contact_id:Contact',
+        'PaymentProcessor' => 'domain_id:Domain payment_processor_type_id:PaymentProcessorType',
+        'PaymentToken' => 'contact_id:Contact created_id:Contact payment_processor_id:PaymentProcessor',
+        'Phone' => 'contact_id:Contact',
+        'Pledge' => 'campaign_id:Campaign contact_id:Contact contribution_page_id:ContributionPage financial_type_id:FinancialType',
+        'PledgePayment' => 'contribution_id:Contribution pledge_id:Pledge',
+        'PremiumsProduct' => 'financial_type_id:FinancialType premiums_id:Premium product_id:Product',
+        'PriceField' => 'price_set_id:PriceSet',
+        'PriceFieldValue' => 'financial_type_id:FinancialType membership_type_id:MembershipType price_field_id:PriceField',
+        'PriceSet' => 'domain_id:Domain financial_type_id:FinancialType',
+        'PriceSetEntity' => 'price_set_id:PriceSet',
+        'PrintLabel' => 'created_id:Contact',
+        'Product' => 'financial_type_id:FinancialType',
+        'Relationship' => 'case_id:Case contact_id_a:Contact contact_id_b:Contact relationship_type_id:RelationshipType',
+        'RelationshipCache' => 'case_id:Case far_contact_id:Contact near_contact_id:Contact relationship_id:Relationship relationship_type_id:RelationshipType',
+        'ReportInstance' => 'created_id:Contact domain_id:Domain drilldown_id:ReportInstance navigation_id:Navigation owner_id:Contact',
+        'SavedSearch' => 'created_id:Contact mapping_id:Mapping modified_id:Contact',
+        'SearchDisplay' => 'saved_search_id:SavedSearch',
+        'SearchParamSet' => 'created_by:Contact',
+        'Setting' => 'contact_id:Contact created_id:Contact domain_id:Domain',
+        'SiteEmailAddress' => 'domain_id:Domain',
+        'SiteToken' => 'created_id:Contact domain_id:Domain modified_id:Contact',
+        'SmsProvider' => 'domain_id:Domain',
+        'StateProvince' => 'country_id:Country',
+        'StatusPreference' => 'domain_id:Domain',
+        'SubscriptionHistory' => 'contact_id:Contact group_id:Group',
+        'Survey' => 'campaign_id:Campaign created_id:Contact last_modified_id:Contact',
+        'Tag' => 'created_id:Contact parent_id:Tag',
+        'Totp' => 'user_id:UFMatch',
+        'Translation' => 'source_key:TranslationSource',
+        'UFField' => 'location_type_id:LocationType uf_group_id:UFGroup',
+        'UFGroup' => 'add_to_group_id:Group created_id:Contact limit_listings_group_id:Group',
+        'UFJoin' => 'uf_group_id:UFGroup',
+        'UFMatch' => 'contact_id:Contact domain_id:Domain',
+        'User' => 'contact_id:Contact domain_id:Domain',
+        'UserJob' => 'created_id:Contact queue_id:Queue search_display_id:SearchDisplay',
+        'UserRole' => 'role_id:Role user_id:User',
+        'Website' => 'contact_id:Contact',
+        'WordReplacement' => 'domain_id:Domain',
+    ];
+
+    /**
      * Entity name prefixes that only exist on a configured site.
      *
      * @var list<string>
@@ -282,5 +420,25 @@ final class Api4Catalog
         $fields = self::ENTITIES[$entity]['f'] ?? '';
 
         return $fields === '' ? [] : explode(' ', $fields);
+    }
+
+    /**
+     * The implicit joins of an entity, join name => target entity.
+     *
+     * @return array<string, string>
+     */
+    public static function joins(string $entity): array
+    {
+        $joins = self::JOINS[$entity] ?? '';
+        if ($joins === '') {
+            return [];
+        }
+        $map = [];
+        foreach (explode(' ', $joins) as $pair) {
+            [$name, $target] = explode(':', $pair, 2);
+            $map[$name] = $target;
+        }
+
+        return $map;
     }
 }

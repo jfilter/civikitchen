@@ -99,6 +99,25 @@ const DYNAMIC_SPEC_FIELDS = [
     ],
 ];
 
+/**
+ * Joins no entityType file declares, because a subscriber adds them.
+ *
+ * ContactSchemaMapSubscriber builds `{email,address,phone,im}_{primary,
+ * billing}` on civicrm_contact in a nested loop — the same eight names
+ * DYNAMIC_SPEC_FIELDS already lists as fields, here with their target so the
+ * right-hand side of `address_primary.street_address` becomes checkable. Any
+ * other subscriber to `api.schema_map.build` would have to be added here;
+ * core 6.16.2 has this one plus the custom-group joins, which are site data.
+ */
+const IMPLICIT_JOINS = [
+    'Contact' => [
+        'address_primary' => 'Address', 'address_billing' => 'Address',
+        'email_primary' => 'Email', 'email_billing' => 'Email',
+        'phone_primary' => 'Phone', 'phone_billing' => 'Phone',
+        'im_primary' => 'IM', 'im_billing' => 'IM',
+    ],
+];
+
 /** Classloader roots: core itself plus every ext dir carrying an info.xml. */
 function classloaderRoots(string $coreDir): array
 {
@@ -348,6 +367,80 @@ function entityTypeFields(string $source): array
     return $fields;
 }
 
+/**
+ * Implicit joins field name => target entity, from the entityType source.
+ *
+ * SchemaMapBuilder::addJoins() turns every field carrying an
+ * `entity_reference` into a joinable named after the field, which is what
+ * makes `contact_id.display_name` a legal select. The `key` is irrelevant
+ * here — only the name and its target entity.
+ *
+ * @return array<string, string>
+ */
+function entityTypeReferences(string $source): array
+{
+    $tokens = significantTokens($source);
+    $count = count($tokens);
+    $references = [];
+
+    for ($i = 0; $i < $count; $i++) {
+        if (!tokenIs($tokens, $i, T_CONSTANT_ENCAPSED_STRING) || trim(tokenText($tokens, $i), "'\"") !== 'getFields') {
+            continue;
+        }
+        $open = null;
+        for ($j = $i + 1; $j < min($i + 12, $count); $j++) {
+            if (tokenIs($tokens, $j, '[')) {
+                $open = $j;
+                break;
+            }
+        }
+        if ($open === null) {
+            continue;
+        }
+        $depth = 1;
+        $field = null;
+        for ($j = $open + 1; $j < $count && $depth > 0; $j++) {
+            if (tokenIs($tokens, $j, '[')) {
+                $depth++;
+                continue;
+            }
+            if (tokenIs($tokens, $j, ']')) {
+                $depth--;
+                continue;
+            }
+            if (!tokenIs($tokens, $j, T_CONSTANT_ENCAPSED_STRING) || !tokenIs($tokens, $j + 1, T_DOUBLE_ARROW)) {
+                continue;
+            }
+            $key = trim(tokenText($tokens, $j), "'\"");
+            if ($depth === 1) {
+                $field = $key;
+                continue;
+            }
+            if ($depth !== 2 || $key !== 'entity_reference' || $field === null) {
+                continue;
+            }
+            // 'entity_reference' => ['entity' => 'Contact', 'key' => 'id'],
+            for ($k = $j + 2; $k < min($j + 24, $count); $k++) {
+                if (tokenIs($tokens, $k, ']')) {
+                    break;
+                }
+                if (
+                    tokenIs($tokens, $k, T_CONSTANT_ENCAPSED_STRING)
+                    && trim(tokenText($tokens, $k), "'\"") === 'entity'
+                    && tokenIs($tokens, $k + 1, T_DOUBLE_ARROW)
+                    && tokenIs($tokens, $k + 2, T_CONSTANT_ENCAPSED_STRING)
+                ) {
+                    $references[$field] = trim(tokenText($tokens, $k + 2), "'\"");
+                    break;
+                }
+            }
+        }
+        break;
+    }
+
+    return $references;
+}
+
 /** The entity name a class declares, when it differs from the class name. */
 function declaredEntityName(array $methods, string $fallback): string
 {
@@ -425,6 +518,9 @@ foreach ($roots as $root) {
 /** @var array<string, list<string>> entity name => field names */
 $entityTypeFields = [];
 
+/** @var array<string, array<string, string>> entity name => join name => target */
+$entityTypeJoins = [];
+
 foreach ($roots as $root) {
     $schemaDir = $root . '/schema';
     if (!is_dir($schemaDir)) {
@@ -442,6 +538,7 @@ foreach ($roots as $root) {
         $fields = entityTypeFields($source);
         if ($fields !== []) {
             $entityTypeFields[$m[1]] = $fields;
+            $entityTypeJoins[$m[1]] = entityTypeReferences($source);
         }
     }
 }
@@ -652,14 +749,31 @@ foreach ($classes as $class => $info) {
     $fields = array_values(array_unique($fields));
     sort($fields);
 
+    $joins = $source === null ? [] : ($entityTypeJoins[$source] ?? []);
+    foreach (ancestryEntities($class, $classes) as $ancestor) {
+        $joins = array_merge($joins, IMPLICIT_JOINS[$ancestor] ?? []);
+    }
+    ksort($joins);
+
     // Only a table-backed entity has a field list a schema file can settle.
     // Setting has a civicrm_setting table but its API fields are the setting
     // names, so the DAOEntity ancestry — not the table — is the test.
     $catalog[$entity] = [
         'actions' => $actions,
         'fields' => $fields,
+        'joins' => $joins,
         'complete' => $source !== null && isDaoEntity($class, $classes),
     ];
+}
+
+// A join whose target is not an entity in this catalog cannot be validated
+// against anything, so it is dropped rather than recorded as unresolvable.
+$knownEntities = array_fill_keys(array_keys($catalog), true);
+foreach ($catalog as $entity => $info) {
+    $catalog[$entity]['joins'] = array_filter(
+        $info['joins'],
+        static fn (string $target): bool => isset($knownEntities[$target]),
+    );
 }
 
 ksort($catalog);
@@ -680,6 +794,7 @@ if (is_file($versionXml) && preg_match('#<version_no>([^<]+)</version_no>#', (st
 $export = static fn (string $value): string => var_export($value, true);
 
 $entityLines = '';
+$joinLines = '';
 foreach ($catalog as $entity => $info) {
     $entityLines .= sprintf(
         "        %s => ['a' => %s, 'f' => %s, 'c' => %s],\n",
@@ -687,6 +802,18 @@ foreach ($catalog as $entity => $info) {
         $export(implode(' ', $info['actions'])),
         $export(implode(' ', $info['fields'])),
         $info['complete'] ? 'true' : 'false',
+    );
+    if ($info['joins'] === []) {
+        continue;
+    }
+    $pairs = [];
+    foreach ($info['joins'] as $name => $target) {
+        $pairs[] = $name . ':' . $target;
+    }
+    $joinLines .= sprintf(
+        "        %s => %s,\n",
+        $export((string) $entity),
+        $export(implode(' ', $pairs)),
     );
 }
 
@@ -761,6 +888,23 @@ final class Api4Catalog
 {$aliasLines}    ];
 
     /**
+     * Entity name => implicit joins, as `name:TargetEntity` pairs.
+     *
+     * The left-hand side of `address_primary.street_address`: every field
+     * carrying an `entity_reference` becomes a joinable of the same name
+     * (SchemaMapBuilder::addJoins), plus the eight primary/billing links
+     * ContactSchemaMapSubscriber adds to Contact. Entities with no implicit
+     * join are absent.
+     *
+     * NOT in here, and therefore never judged: explicit `addJoin()` aliases,
+     * custom-group joins (named after site data) and multi-level paths.
+     *
+     * @var array<string, string>
+     */
+    public const JOINS = [
+{$joinLines}    ];
+
+    /**
      * Entity name prefixes that only exist on a configured site.
      *
      * @var list<string>
@@ -817,6 +961,26 @@ final class Api4Catalog
         \$fields = self::ENTITIES[\$entity]['f'] ?? '';
 
         return \$fields === '' ? [] : explode(' ', \$fields);
+    }
+
+    /**
+     * The implicit joins of an entity, join name => target entity.
+     *
+     * @return array<string, string>
+     */
+    public static function joins(string \$entity): array
+    {
+        \$joins = self::JOINS[\$entity] ?? '';
+        if (\$joins === '') {
+            return [];
+        }
+        \$map = [];
+        foreach (explode(' ', \$joins) as \$pair) {
+            [\$name, \$target] = explode(':', \$pair, 2);
+            \$map[\$name] = \$target;
+        }
+
+        return \$map;
     }
 }
 

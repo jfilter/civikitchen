@@ -41,6 +41,41 @@ final class AddressExport
             ->execute();
     }
 
+    /** The right-hand side of an implicit join is a field of its target. */
+    public function joinTypo(): void
+    {
+        Contact::get(false)
+            ->addSelect('address_primary.no_such_field')
+            ->addWhere('email_primary.nope', '=', 'x')
+            ->execute();
+    }
+
+    /** An explicit alias names a join the catalog cannot resolve. */
+    public function explicitJoin(): void
+    {
+        Contact::get(false)
+            ->addJoin('Address AS myalias', 'LEFT')
+            ->addSelect('myalias.anything', 'myalias.no_such_field')
+            ->execute();
+    }
+
+    /** An explicit join may rebind an implicit name; then it is not ours. */
+    public function shadowedJoin(): void
+    {
+        Contact::get(false)
+            ->addJoin('Address AS address_primary', 'LEFT')
+            ->addSelect('address_primary.no_such_field')
+            ->execute();
+    }
+
+    /** Multi-level paths and custom groups resolve on a live site only. */
+    public function unresolvablePaths(): void
+    {
+        Contact::get(false)
+            ->addSelect('address_primary.country_id.nonsense', 'my_custom_group.whatever')
+            ->execute();
+    }
+
     /** A chain kept in a variable addresses the same entity. */
     public function viaVariable(): void
     {

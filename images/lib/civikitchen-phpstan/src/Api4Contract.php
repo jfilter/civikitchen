@@ -162,6 +162,37 @@ final class Api4Contract
     }
 
     /**
+     * The right-hand side of a dotted path, against the join's target entity.
+     *
+     * `address_primary.street_address` is only checkable when the left side
+     * is an implicit join the catalog knows: everything else that reads like
+     * a path — an explicit `addJoin()` alias, a custom-group name, a
+     * multi-level path, a price-set field — names something no source tree
+     * can resolve, and is passed over without a word.
+     *
+     * @param list<string> $shadowedAliases aliases an explicit join rebound
+     *
+     * @return list<IdentifierRuleError>
+     */
+    public function checkJoinField(string $entity, string $path, string $clause, array $shadowedAliases): array
+    {
+        $parts = explode('.', $path);
+        if (count($parts) !== 2) {
+            return [];
+        }
+        [$alias, $field] = $parts;
+        if (in_array($alias, $shadowedAliases, true)) {
+            return [];
+        }
+        $target = Api4Catalog::joins($entity)[$alias] ?? null;
+        if ($target === null) {
+            return [];
+        }
+
+        return $this->checkField($target, $field, $path . ' in ' . $clause);
+    }
+
+    /**
      * The core entity an unknown name is probably a misspelling of.
      *
      * Short names are exempt: two edits away from a four-letter entity is

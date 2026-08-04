@@ -53,6 +53,7 @@ final class Api4FluentFieldRule implements Rule
         }
 
         $entity = Api4Fluent::entityOfChain($node, $scope);
+        $chainVisible = $entity !== null;
         if ($entity === null) {
             // A builder held in a variable: the type still names the entity,
             // but the aliases an earlier link defined are out of sight, so
@@ -102,10 +103,22 @@ final class Api4FluentFieldRule implements Rule
         }
 
         $aliases = Api4Fluent::aliasesOfChain($node, $scope);
+        // Dotted paths are only resolvable when the whole chain is in sight —
+        // a builder in a variable hides the joins an earlier link declared.
+        // Writes are excluded: a join is not a write target.
+        $checkJoins = $chainVisible && !in_array($method, ['addvalue', 'setvalues'], true);
+        $shadowed = $checkJoins ? Api4Fluent::joinAliasesOfChain($node, $scope) : [];
 
         $errors = [];
+        $clause = $node->name->toString() . '()';
         foreach (array_diff($fields, $aliases) as $field) {
-            $errors = array_merge($errors, $this->contract->checkField($entity, $field, $node->name->toString() . '()'));
+            if (str_contains($field, '.')) {
+                if ($checkJoins) {
+                    $errors = array_merge($errors, $this->contract->checkJoinField($entity, $field, $clause, $shadowed));
+                }
+                continue;
+            }
+            $errors = array_merge($errors, $this->contract->checkField($entity, $field, $clause));
         }
 
         return $errors;

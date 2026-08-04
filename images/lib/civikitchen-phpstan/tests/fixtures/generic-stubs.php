@@ -39,6 +39,12 @@ class DummyAction extends AbstractAction
         return $this;
     }
 
+    /** @return $this */
+    public function addJoin(string $entity, string $side = 'LEFT', mixed ...$conditions): self
+    {
+        return $this;
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function execute(): array
     {

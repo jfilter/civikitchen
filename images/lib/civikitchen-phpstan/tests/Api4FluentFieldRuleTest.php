@@ -18,6 +18,10 @@ use PHPStan\Testing\RuleTestCase;
  * the option-value suffixes are how the correct code looks, and a rule that
  * flags those would be turned off fleet-wide within a day.
  *
+ * The join half is the same bargain: the right-hand side of a KNOWN implicit
+ * join is checkable, an explicit alias, a custom group and a multi-level path
+ * are not, and the fixture pins both directions.
+ *
  * @extends RuleTestCase<Api4FluentFieldRule>
  */
 final class Api4FluentFieldRuleTest extends RuleTestCase
@@ -31,7 +35,9 @@ final class Api4FluentFieldRuleTest extends RuleTestCase
                 ['APIv4 field Contact.postal_code does not exist in CiviCRM 6.16.2 — addSelect()', 14],
                 ['APIv4 field Contact.city does not exist in CiviCRM 6.16.2 — addSelect()', 14],
                 ['APIv4 field Contact.country_id does not exist in CiviCRM 6.16.2 — addSelect()', 14],
-                ['APIv4 field Contact.street_address does not exist in CiviCRM 6.16.2 — addSelect()', 48],
+                ['APIv4 field Address.no_such_field does not exist in CiviCRM 6.16.2 — address_primary.no_such_field in addSelect()', 47],
+                ['APIv4 field Email.nope does not exist in CiviCRM 6.16.2 — email_primary.nope in addWhere()', 47],
+                ['APIv4 field Contact.street_address does not exist in CiviCRM 6.16.2 — addSelect()', 83],
             ],
         );
     }
