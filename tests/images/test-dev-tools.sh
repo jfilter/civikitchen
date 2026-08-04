@@ -368,6 +368,58 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 3d-bis. ckcommon.sh's readers parse XML as XML.
+#
+# Regression fixtures for two inputs that a tag-shaped regex gets wrong, and
+# that three tools plus one CI step used to read that way. Both are legal XML
+# and both were silently wrong rather than loud:
+#   - a single-quoted attribute yielded an EMPTY key, so the tool aborted
+#   - a commented-out root element won over the real one, so the tool ran under
+#     the wrong extension name
+# Tested against the shared helper because it is now the only implementation.
+echo "== ckcommon xml reader =="
+# shellcheck source=/dev/null
+. /usr/local/lib/ckcommon.sh
+
+XMLDIR="${WORKDIR}/xmlread"
+mkdir -p "${XMLDIR}"
+
+printf '%s\n' "<extension key='org.example.single' type='module'><file>single</file></extension>" \
+    > "${XMLDIR}/single-quoted.xml"
+if [ "$(ck_xml_field "${XMLDIR}/single-quoted.xml" key)" = "org.example.single" ]; then
+    ok "ck_xml_field reads a single-quoted key attribute"
+else
+    fail "ck_xml_field returned '$(ck_xml_field "${XMLDIR}/single-quoted.xml" key)' for a single-quoted key"
+fi
+
+{
+    printf '%s\n' '<?xml version="1.0"?>'
+    printf '%s\n' '<!-- <extension key="org.example.decoy" type="module"> -->'
+    printf '%s\n' '<extension key="org.example.real" type="module"><file>real</file></extension>'
+} > "${XMLDIR}/commented-decoy.xml"
+if [ "$(ck_xml_field "${XMLDIR}/commented-decoy.xml" key)" = "org.example.real" ]; then
+    ok "ck_xml_field ignores a commented-out root element"
+else
+    fail "ck_xml_field returned '$(ck_xml_field "${XMLDIR}/commented-decoy.xml" key)' instead of the real key"
+fi
+
+# A child element, which is how <file>, <version> and core's <version_no> are read.
+if [ "$(ck_xml_field "${XMLDIR}/commented-decoy.xml" file)" = "real" ]; then
+    ok "ck_xml_field reads a child element"
+else
+    fail "ck_xml_field did not read <file>"
+fi
+
+# Unparseable input must be loud: exit 2, not an empty string a caller treats
+# as "the field is absent".
+if ! printf 'not xml at all\n' > "${XMLDIR}/broken.xml" \
+    || ck_xml_field "${XMLDIR}/broken.xml" key >/dev/null 2>&1; then
+    fail "ck_xml_field accepted unparseable XML instead of failing"
+else
+    ok "ck_xml_field fails on unparseable XML"
+fi
+
+# ---------------------------------------------------------------------------
 # 3e. ckeslint: the pinned oxlint toolchain is installed and every layer of the
 #     baseline fires. Four findings on purpose, one per layer, because each can
 #     go missing on its own without anything else looking wrong:

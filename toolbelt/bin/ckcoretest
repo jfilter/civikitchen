@@ -39,7 +39,7 @@ if [ ! -d "${CK_CORE_DIR}" ]; then
   exit 1
 fi
 
-version=$(sed -n 's/.*<version_no>\(.*\)<\/version_no>.*/\1/p' "${CK_CORE_DIR}/xml/version.xml")
+version=$(ck_xml_field "${CK_CORE_DIR}/xml/version.xml" version_no)
 if [ -z "${version}" ]; then
   echo "[ckcoretest] Could not read core version from ${CK_CORE_DIR}/xml/version.xml" >&2
   exit 1

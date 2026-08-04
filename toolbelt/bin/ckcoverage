@@ -85,6 +85,14 @@ if [ -z "$floor" ]; then
   exit 0
 fi
 
+# A floor that is not a number would reach the comparison below as 0 and let
+# every percentage through — a gate that reports "met" and enforces nothing.
+# ckconform's policy-key check catches it in the shared CI, which runs before
+# this step; this makes the tool correct on its own too.
+case "$floor" in
+  ''|*[!0-9]*) ck_die "min_coverage in .ckconform is not a whole percentage: '$floor'" ;;
+esac
+
 if php -r 'exit($argv[1] + 0 >= $argv[2] + 0 ? 0 : 1);' "$pct" "$floor"; then
   echo "ckcoverage: floor ${floor}% met."
 else
