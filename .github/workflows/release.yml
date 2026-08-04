@@ -50,7 +50,7 @@ jobs:
       # fetch-depth 0: the release has to reach both its own history and the
       # main-branch commits the live images were built from.
       - name: Checkout the tag
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ inputs.tag || github.ref }}
@@ -201,7 +201,7 @@ jobs:
       # The one checkout in this repo that keeps its credentials: the next step
       # force-pushes the moving major tag through the persisted git remote.
       - name: Checkout the tag
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.images.outputs.tag }}
           fetch-depth: 0

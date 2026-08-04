@@ -78,7 +78,7 @@ jobs:
       CK_EXTRA_EXTENSIONS: ${{ inputs.extra_extensions }}
       CK_REQUIRE_CHANGELOG: ${{ inputs.require_changelog }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -95,7 +95,7 @@ jobs:
       # Pinned to the SHA this workflow was resolved from, so the ckrelease that
       # builds the artifact is the one belonging to the pinned contract — same
       # mechanism the drift job in extension-ci.yml uses.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
@@ -216,7 +216,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
