@@ -443,6 +443,32 @@ else
     ok "ckeslint fails when tsgolint is missing"
 fi
 
+# Without a root tsconfig there is no TypeScript program: every import is
+# `any` and no-unsafe-* would bury the gate in false positives. The wrapper
+# must pick the no-type-aware baseline then — while no-unsanitized stays live.
+ESNOTS="${WORKDIR}/eslintnotsext"
+mkdir -p "${ESNOTS}/js"
+cp "${ESDIR}/info.xml" "${ESNOTS}/info.xml"
+cat > "${ESNOTS}/js/loose.ts" <<'TS'
+const v: any = JSON.parse('{}');
+export const picked = v.thing;
+export function render(el: HTMLElement, userInput: string): void {
+  el.innerHTML = userInput;
+}
+TS
+(cd "${ESNOTS}" && git init -q . && git add -A) >/dev/null 2>&1
+NOTS_OUT="$( (cd "${ESNOTS}" && ckeslint --format=unix) 2>&1 || true)"
+if echo "${NOTS_OUT}" | grep -q "no-unsafe"; then
+    fail "ckeslint ran type-aware rules without a tsconfig (output: ${NOTS_OUT:0:300})"
+else
+    ok "ckeslint skips type-aware rules when the repo has no tsconfig"
+fi
+if echo "${NOTS_OUT}" | grep -q "no-unsanitized(property)"; then
+    ok "ckeslint keeps no-unsanitized live without a tsconfig"
+else
+    fail "ckeslint lost no-unsanitized in the no-tsconfig baseline (output: ${NOTS_OUT:0:300})"
+fi
+
 # A repo that still ships only an eslint.config.* has to stop the gate loudly:
 # ESLint is not in the image any more, and running the baseline over rules that
 # repo never chose is the silent-wrong-answer case.

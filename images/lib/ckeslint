@@ -115,7 +115,13 @@ elif compgen -G 'eslint.config.*' > /dev/null; then
   echo "ckeslint: this repo ships an eslint.config.* but the image gate is oxlint now — add an .oxlintrc.json or remove the custom config." >&2
   exit 2
 else
-  args+=(-c "$toolchain/.oxlintrc.json")
+  # Type-aware rules need a real TypeScript program; without a root tsconfig
+  # every import is `any` and no-unsafe-* buries the gate in false positives.
+  if [ -f tsconfig.json ]; then
+    args+=(-c "$toolchain/.oxlintrc.json")
+  else
+    args+=(-c "$toolchain/.oxlintrc-no-type-aware.json")
+  fi
   # ignorePatterns inside a config are rooted at THAT config's directory, so
   # the baseline cannot carry them from /opt — they have to arrive as flags,
   # which resolve against the working directory instead.
