@@ -1,9 +1,9 @@
 {
     "name": "civikitchen/phpstan-ck-legacy",
     "type": "phpstan-extension",
-    "description": "CiviKitchen PHPStan extension: @ck-legacy deprecated-scope resolver, fleet-wide phpat architecture rules (extension boundary, legacy UI bases), the APIv4 contract rules, the APIv4 action-parameter rules, the test-transaction and silent-database-catch rules, and the SQL table-name rule.",
+    "description": "CiviKitchen PHPStan extension: @ck-legacy deprecated-scope resolver, fleet-wide phpat architecture rules (extension boundary, legacy UI bases), the APIv4 contract rules, the APIv4 action-parameter rules, the test-transaction and silent-database-catch rules, the SQL table-name rule and the GET-mutation route rule.",
     "license": "MIT",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "require": {
         "php": ">=7.4",
         "phpstan/phpstan": "^2.1",

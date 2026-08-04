@@ -125,6 +125,29 @@ unless `--force` is explicitly supplied. For an existing extension,
   position, a statement built in a variable — is skipped without a word.
   That last list is why other extensions' `civicrm_`-prefixed tables are the
   one thing to declare rather than baseline.
+- **A route a browser can GET must not change data** (`ck.route.mutationOnGet`).
+  Prefetchers, link scanners, mail-security proxies and the back button all
+  issue GETs nobody typed, and an `<img src="…/civicrm/x/delete?id=5">` on a
+  hostile page fires with the victim's session — a write on GET is a CSRF
+  hole and a data-integrity bug at once. The rule checks two kinds of
+  handler: the static `page_callback` methods a repo declares in
+  `xml/Menu/*.xml`, and `run()` of a `CRM_Core_Page` subclass. Writes are
+  followed two hops through the class's own methods (APIv4 create/save/
+  update/delete/replace including custom actions built on them like
+  `createMailing()`, `civicrm_api3` writes, DAO/BAO `save()`/`delete()`/
+  `create()`, and literal INSERT/UPDATE/DELETE in a DAO call). A handler
+  that looks at the request method — `$request->getMethod() !== 'POST'` with
+  a 405, or `$_SERVER['REQUEST_METHOD']` — is silent, which is the shape
+  every webhook should have. The XML half needs the generated catalog:
+  `php /opt/civikitchen-phpstan-ext/tools/gen-route-catalog.php .` writes
+  `.ck-routes.json`, which belongs in the repo (a diff in it is a routing
+  change); without it only page classes are checked, and the catalog has to
+  be regenerated when `xml/Menu` changes. The remaining legitimate case is a
+  GET that writes on purpose — a redirect flow whose links are static hrefs
+  in a menu or a SearchKit display, so no qfKey is available, mitigated by
+  its own `Sec-Fetch-Site: cross-site` refusal. That is a narrow
+  `@phpstan-ignore ck.route.mutationOnGet` naming the mitigation, never a
+  baseline entry.
 - `E::ts()`, never bare `ts()` (`CiviKitchen.I18n.UseExtensionTs`).
 - Standard mixins for managed entities / menu / settings / Angular — no
   bespoke hooks (`CiviKitchen.Extension.UseMixinsForStandardHooks`).

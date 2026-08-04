@@ -1,0 +1,24 @@
+{
+    "routes": [
+        {
+            "path": "civicrm/greeter/new",
+            "class": "CiviKitchen\\Fixtures\\Routes\\GreeterEndpoint",
+            "method": "handle"
+        },
+        {
+            "path": "civicrm/report",
+            "class": "CiviKitchen\\Fixtures\\Routes\\ReportEndpoint",
+            "method": "handle"
+        },
+        {
+            "path": "civicrm/webhook",
+            "class": "CiviKitchen\\Fixtures\\Routes\\WebhookEndpoint",
+            "method": "handle"
+        },
+        {
+            "path": "civicrm/widget",
+            "class": "CiviKitchen\\Fixtures\\Routes\\WidgetPage",
+            "method": null
+        }
+    ]
+}
