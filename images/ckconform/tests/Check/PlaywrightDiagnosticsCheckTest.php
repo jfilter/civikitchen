@@ -69,6 +69,27 @@ final class PlaywrightDiagnosticsCheckTest extends CheckTestCase
     }
 
     /**
+     * A caller job has no steps to upload from — `playwright: true` is an input
+     * to the reusable workflow, and that workflow owns the upload.
+     */
+    public function testAReusableWorkflowCallerIsExempt(): void
+    {
+        $caller = <<<'YML'
+            jobs:
+              compat:
+                uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+                with:
+                  key: demo
+                  playwright: true
+            YML;
+        $context = $this->repo([
+            'playwright.config.ts' => self::GOOD,
+            '.github/workflows/compat.yml' => $caller . "\n",
+        ], git: true);
+        $this->assertPasses($this->run_(new PlaywrightDiagnosticsCheck(), $context));
+    }
+
+    /**
      * An upload with no `if:` is skipped precisely when a test failed — the one
      * run whose report is worth keeping.
      */

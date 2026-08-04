@@ -30,6 +30,10 @@ use CiviKitchen\Ckconform\Reporter;
  *     runners share no filesystem, so an upload in another job collects
  *     nothing. A global "some workflow runs playwright, some workflow uploads"
  *     lets two unrelated workflows satisfy each other.
+ *
+ * A job that delegates to a reusable workflow (`uses:` at job level) is exempt:
+ * it has no steps of its own, so `playwright: true` there is an input to the
+ * callee, and the callee is where the upload has to live.
  */
 final class PlaywrightDiagnosticsCheck implements Check
 {
@@ -97,7 +101,10 @@ final class PlaywrightDiagnosticsCheck implements Check
             return $this->flatCiProblems($context);
         }
 
-        $playwrightJobs = array_filter($jobs, fn (string $t): bool => $this->runsPlaywright($t));
+        $playwrightJobs = array_filter(
+            $jobs,
+            fn (string $t): bool => $this->runsPlaywright($t) && !$this->callsReusableWorkflow($t),
+        );
         if ($playwrightJobs === []) {
             return [];
         }
@@ -137,6 +144,14 @@ final class PlaywrightDiagnosticsCheck implements Check
     private function runsPlaywright(string $text): bool
     {
         return str_contains($text, 'playwright');
+    }
+
+    /**
+     * A caller job: `uses:` as a job key (four-space indent, not a `- ` step).
+     */
+    private function callsReusableWorkflow(string $jobText): bool
+    {
+        return preg_match('/^ {4}uses:\s*\S/m', $jobText) === 1;
     }
 
     private function mentionsUpload(string $text): bool
