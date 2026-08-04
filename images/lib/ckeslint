@@ -1,18 +1,23 @@
 #!/bin/bash
 #
-# ckeslint — ESLint for CiviCRM extensions, with the CiviKitchen baseline
-# config, or the project's own eslint.config.* when it ships one.
+# ckeslint — JS/TS lint gate for CiviCRM extensions, with the CiviKitchen
+# baseline config, or the project's own .oxlintrc.json when it ships one.
 #
 # The JS counterpart to cklint, and built the same way round: the toolchain and
 # the default ruleset live in the IMAGE (pinned, installed once at build time),
-# not in eleven package.json files that would each drift and each need a
-# dependabot PR. A repo that wants its own rules writes an eslint.config.* and
+# not in a dozen package.json files that would each drift and each need a
+# dependabot PR. A repo that wants its own rules writes an .oxlintrc.json and
 # this tool steps out of the way entirely.
 #
+# The engine is oxlint (plus oxlint-tsgolint for the type-aware rules and the
+# eslint-plugin-no-unsanitized JS plugin). The name and the CLI contract are
+# unchanged on purpose: the fleet's CI calls `ckeslint`.
+#
 # What the baseline gates and why is in the config itself
-# (/opt/civikitchen-eslint/eslint.config.mjs) — short version: real mistakes
-# (@eslint/js recommended), unsafe DOM sinks (Mozilla's no-unsanitized), and
-# type-aware promise handling when the repo has a tsconfig.json.
+# (/opt/civikitchen-oxlint/.oxlintrc.json) — short version: real mistakes
+# (oxlint's `correctness` category), unsafe DOM sinks (Mozilla's
+# no-unsanitized), and type-aware promise/any handling on TS when the repo has
+# a tsconfig.json.
 #
 # No JS in the repo is a PASS, loudly: most CiviCRM extensions are PHP with a
 # couple of Angular files or none at all, and an unconditional CI step has to
@@ -23,22 +28,28 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-ckeslint — ESLint for CiviCRM extensions (CiviKitchen baseline config).
+ckeslint — JS/TS lint gate for CiviCRM extensions (CiviKitchen baseline, oxlint).
 
   ckeslint              lint the project's JS/TS
-  ckeslint --fix        apply the fixes ESLint can apply, then report the rest
+  ckeslint --fix        apply the fixes oxlint can apply, then report the rest
   ckeslint path ...     lint the given files/dirs instead of the whole project
+  ckeslint --format=X   oxlint's reporter (unix, github, json, sarif, ...). The
+                        default reporter varies with the terminal, so anything
+                        parsing the output should pin one.
 
-The project's own eslint.config.{js,mjs,cjs,ts} wins when present; otherwise
-the bundled CiviKitchen baseline applies. Run from the extension root.
+The project's own .oxlintrc.json wins when present; otherwise the bundled
+CiviKitchen baseline applies. Run from the extension root.
 EOF
 }
 
 fix=0
+format=()
 paths=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --fix)     fix=1 ;;
+    --format=*) format=(--format="${1#--format=}") ;;
+    --format)  shift; format=(--format="${1:-}") ;;
     -h|--help) usage; exit 0 ;;
     --)        shift; break ;;
     -*)        echo "ckeslint: unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -50,23 +61,22 @@ while [ "$#" -gt 0 ]; do paths+=("$1"); shift; done
 
 [ -f info.xml ] || { echo "ckeslint: no info.xml here — run from the extension root." >&2; exit 2; }
 
-toolchain=/opt/civikitchen-eslint
-if [ ! -x "$toolchain/node_modules/.bin/eslint" ]; then
+toolchain=/opt/civikitchen-oxlint
+if [ ! -x "$toolchain/node_modules/.bin/oxlint" ]; then
   # Running out of a civikitchen checkout (developing the tool itself) rather
   # than from the image that installs the toolchain.
-  candidate="$(cd "$(dirname "${BASH_SOURCE[0]}")/eslint" && pwd)"
-  if [ -x "$candidate/node_modules/.bin/eslint" ]; then
+  candidate="$(cd "$(dirname "${BASH_SOURCE[0]}")/oxlint" 2>/dev/null && pwd || true)"
+  if [ -n "$candidate" ] && [ -x "$candidate/node_modules/.bin/oxlint" ]; then
     toolchain="$candidate"
   else
-    echo "ckeslint: no ESLint toolchain at /opt/civikitchen-eslint — is this a civikitchen image?" >&2
+    echo "ckeslint: no oxlint toolchain at /opt/civikitchen-oxlint — is this a civikitchen image?" >&2
     exit 2
   fi
 fi
 
-# Is there anything to lint at all? The same exclusions the baseline config
-# ignores, applied here too: a repo whose only JS is a vendored minified bundle
-# has no JS worth a gate, and finding that out from `git ls-files` costs
-# milliseconds where booting ESLint to discover it costs seconds.
+# Is there anything to lint at all? The same exclusions the gate ignores,
+# applied here too: a repo whose only JS is a vendored minified bundle has no
+# JS worth a gate, and finding that out from `git ls-files` costs milliseconds.
 #
 # git ls-files, not find: a build tree or a stray node_modules/ in a developer's
 # checkout is not this repo's code, and the file list that matters is the one
@@ -91,32 +101,46 @@ fi
 
 args=()
 [ "$fix" -eq 1 ] && args+=(--fix)
+args+=(${format[@]+"${format[@]}"})
 
-# The project's own config wins, and it wins by ABSENCE of -c: ESLint's own
-# lookup then finds it, including a config that lives in a parent directory or
-# is named eslint.config.ts. Naming it explicitly here would guess at the
-# extension and get the .ts case wrong.
-if compgen -G 'eslint.config.*' > /dev/null; then
-  # A repo that owns its config owns its plugins too: ESLint resolves the
-  # imports in THAT file against THAT file's directory, so `@eslint/js` there
-  # means the repo's node_modules, not the toolchain's. Said out loud, because
-  # the alternative is a module-resolution stack trace that reads like a broken
-  # tool. In CI that means the repo also turns `npm_ci` on.
-  echo "ckeslint: using this repo's own eslint.config.* (the CiviKitchen baseline does not apply; its plugins must be installed in this repo's node_modules)."
+if [ -f .oxlintrc.json ]; then
+  # A repo that owns its config owns its jsPlugins too: oxlint resolves those
+  # against the config file's directory, so a `jsPlugins` entry there means the
+  # repo's node_modules, not the toolchain's. In CI that means the repo also
+  # turns `npm_ci` on. oxlint's own discovery finds it — no -c needed.
+  echo "ckeslint: using this repo's own .oxlintrc.json (the CiviKitchen baseline does not apply; any jsPlugins it names must be installed in this repo's node_modules)."
+elif compgen -G 'eslint.config.*' > /dev/null; then
+  # Loud stop, not a silent skip: the image no longer ships ESLint, so an
+  # untranslated repo config would leave the gate running rules nobody chose.
+  echo "ckeslint: this repo ships an eslint.config.* but the image gate is oxlint now — add an .oxlintrc.json or remove the custom config." >&2
+  exit 2
 else
-  # Relative patterns in an externally-supplied flat config resolve against the
-  # working directory, so the baseline's `files`/`ignores` apply to the
-  # extension — verified, not assumed; it is the one behaviour this whole
-  # arrangement rests on.
-  args+=(-c "$toolchain/eslint.config.mjs")
+  args+=(-c "$toolchain/.oxlintrc.json")
+  # ignorePatterns inside a config are rooted at THAT config's directory, so
+  # the baseline cannot carry them from /opt — they have to arrive as flags,
+  # which resolve against the working directory instead.
+  args+=(
+    --ignore-pattern '**/node_modules/**'
+    --ignore-pattern '**/vendor/**'
+    --ignore-pattern '**/dist/**'
+    --ignore-pattern '**/build/**'
+    --ignore-pattern '**/.civikitchen-siblings/**'
+    --ignore-pattern '**/bower_components/**'
+    --ignore-pattern '**/packages/**'
+    --ignore-pattern '**/*.min.js'
+    --ignore-pattern '**/*.bundle.js'
+  )
 fi
 
-# node_modules for the plugins comes from the toolchain directory the config
-# lives in (ESM imports resolve against the importing module), so nothing has
-# to be installed in the extension. NODE_PATH is deliberately NOT set: it would
-# let a half-installed tree in the project shadow the pinned plugins.
-#
+# oxlint resolves the tsgolint binary by Node resolution from the PROJECT, and
+# the project has no node_modules — so point it at the toolchain's copy. The
+# npm package ships one platform-specific subpackage; glob rather than name it.
+if [ -z "${OXLINT_TSGOLINT_PATH:-}" ]; then
+  for c in "$toolchain"/node_modules/@oxlint-tsgolint/*/tsgolint; do
+    [ -x "$c" ] && { export OXLINT_TSGOLINT_PATH="$c"; break; }
+  done
+fi
+
 # `${args[@]+...}`: an empty array under `set -u` is an unbound variable on
-# bash 3.2 (macOS, where this tool is also developed) — the case a repo with
-# its own eslint.config.* and no --fix lands in.
-exec "$toolchain/node_modules/.bin/eslint" ${args[@]+"${args[@]}"} "${paths[@]}"
+# bash 3.2 (macOS, where this tool is also developed).
+exec "$toolchain/node_modules/.bin/oxlint" ${args[@]+"${args[@]}"} "${paths[@]}"

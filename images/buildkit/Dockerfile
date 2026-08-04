@@ -140,13 +140,13 @@ COPY lib/civikitchen-phpstan-config /opt/civikitchen-phpstan-config
 COPY lib/civikitchen-psalm /opt/civikitchen-psalm
 COPY lib/cktaint /usr/local/bin/cktaint
 # Smarty compile smoke (needs a booted site — drives `cv scr`), schema parity,
-# and the pinned ESLint toolchain + baseline config. Kept in lockstep with the
+# and the pinned oxlint toolchain + baseline config. Kept in lockstep with the
 # standalone image: a tool that exists in one and not the other is how a repo's
 # CI starts depending on which image it happens to run on.
 COPY lib/cksmarty /usr/local/bin/cksmarty
 COPY lib/civikitchen-smarty-compile.php /usr/local/share/civikitchen/cksmarty-compile.php
 COPY lib/ckschemadiff /usr/local/bin/ckschemadiff
-COPY lib/eslint /opt/civikitchen-eslint
+COPY lib/oxlint /opt/civikitchen-oxlint
 COPY lib/ckeslint /usr/local/bin/ckeslint
 # Formatting (ckfmt): mago baseline + oxfmt toolchain + runner, same trio as
 # the standalone image.

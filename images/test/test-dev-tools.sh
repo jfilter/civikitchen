@@ -363,10 +363,15 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3e. ckeslint: the pinned toolchain is installed and the baseline config fires.
-#     Two findings on purpose — one from @eslint/js recommended and one from
-#     no-unsanitized — because either could be missing on its own if the
-#     toolchain install half-worked.
+# 3e. ckeslint: the pinned oxlint toolchain is installed and every layer of the
+#     baseline fires. Four findings on purpose, one per layer, because each can
+#     go missing on its own without anything else looking wrong:
+#       - oxlint's own `correctness` category (the native rules)
+#       - no-unsanitized on .js AND on .ts — that plugin runs through oxlint's
+#         alpha jsPlugins bridge, and if the bridge stops loading it, oxlint
+#         still exits 0 over the same file
+#       - a type-aware rule, which needs the tsgolint binary to be found
+#     A silently empty gate is the failure mode this block exists to catch.
 echo "== ckeslint =="
 ESDIR="${WORKDIR}/eslintext"
 mkdir -p "${ESDIR}/js"
@@ -376,24 +381,96 @@ cat > "${ESDIR}/info.xml" <<'XML'
   <file>widget</file>
 </extension>
 XML
+cat > "${ESDIR}/tsconfig.json" <<'JSON'
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["js/**/*.ts"]
+}
+JSON
 cat > "${ESDIR}/js/widget.js" <<'JS'
 function render(el, userInput) {
   var unused = 1;
-  el.innerHTML = '<b>' + userInput + '</b>';
+  el.innerHTML = userInput;
 }
 JS
+cat > "${ESDIR}/js/widget.ts" <<'TS'
+export function render(el: HTMLElement, userInput: string): void {
+  el.innerHTML = userInput;
+}
+async function work(): Promise<void> {}
+export function boot(): void {
+  work();
+}
+TS
 (cd "${ESDIR}" && git init -q . && git add -A) >/dev/null 2>&1
 
-ESLINT_OUT="$( (cd "${ESDIR}" && ckeslint) 2>&1 || true)"
-if echo "${ESLINT_OUT}" | grep -q "no-unsanitized/property"; then
-    ok "ckeslint flags an unsafe innerHTML assignment"
+# --format=unix: oxlint's default reporter is the graphical one in some
+# terminals and a one-liner in others, and these assertions name file AND rule.
+ESLINT_OUT="$( (cd "${ESDIR}" && ckeslint --format=unix) 2>&1 || true)"
+if echo "${ESLINT_OUT}" | grep -q "^js/widget.js:.*no-unsanitized(property)"; then
+    ok "ckeslint flags an unsafe innerHTML assignment in .js"
 else
-    fail "ckeslint didn't flag innerHTML (output: ${ESLINT_OUT:0:300})"
+    fail "ckeslint didn't flag innerHTML in .js (output: ${ESLINT_OUT:0:400})"
+fi
+if echo "${ESLINT_OUT}" | grep -q "^js/widget.ts:.*no-unsanitized(property)"; then
+    ok "ckeslint flags an unsafe innerHTML assignment in .ts"
+else
+    fail "ckeslint didn't flag innerHTML in .ts (output: ${ESLINT_OUT:0:400})"
 fi
 if echo "${ESLINT_OUT}" | grep -q "no-unused-vars"; then
-    ok "ckeslint applies the @eslint/js recommended rules"
+    ok "ckeslint applies oxlint's correctness rules"
 else
-    fail "ckeslint didn't report the unused variable (output: ${ESLINT_OUT:0:300})"
+    fail "ckeslint didn't report the unused variable (output: ${ESLINT_OUT:0:400})"
+fi
+if echo "${ESLINT_OUT}" | grep -q "no-floating-promises"; then
+    ok "ckeslint runs the type-aware rules (tsgolint is wired up)"
+else
+    fail "ckeslint didn't report the floating promise (output: ${ESLINT_OUT:0:400})"
+fi
+
+# The type-aware rules are the half that can vanish quietly: oxlint reports the
+# missing binary and exits non-zero, and the gate must not read that as a pass.
+TSGO_OUT="$( (cd "${ESDIR}" && OXLINT_TSGOLINT_PATH=/nonexistent/tsgolint ckeslint --format=unix) 2>&1 || true)"
+if (cd "${ESDIR}" && OXLINT_TSGOLINT_PATH=/nonexistent/tsgolint ckeslint --format=unix) >/dev/null 2>&1; then
+    fail "ckeslint passed with an unusable tsgolint (output: ${TSGO_OUT:0:300})"
+else
+    ok "ckeslint fails when tsgolint is missing"
+fi
+
+# A repo that still ships only an eslint.config.* has to stop the gate loudly:
+# ESLint is not in the image any more, and running the baseline over rules that
+# repo never chose is the silent-wrong-answer case.
+ESCFG="${WORKDIR}/eslintcfgext"
+mkdir -p "${ESCFG}/js"
+cp "${ESDIR}/info.xml" "${ESCFG}/info.xml"
+cp "${ESDIR}/js/widget.js" "${ESCFG}/js/widget.js"
+echo 'export default [];' > "${ESCFG}/eslint.config.mjs"
+(cd "${ESCFG}" && git init -q . && git add -A) >/dev/null 2>&1
+ESCFG_OUT="$( (cd "${ESCFG}" && ckeslint) 2>&1 || true)"
+if (cd "${ESCFG}" && ckeslint) >/dev/null 2>&1; then
+    fail "ckeslint passed a repo whose only config is an eslint.config.* (output: ${ESCFG_OUT:0:300})"
+elif echo "${ESCFG_OUT}" | grep -q "the image gate is oxlint now"; then
+    ok "ckeslint refuses a stale eslint.config.* with a pointer to the fix"
+else
+    fail "ckeslint's eslint.config.* refusal is unclear (output: ${ESCFG_OUT:0:300})"
+fi
+
+# ... and an .oxlintrc.json of the repo's own takes over from the baseline.
+cat > "${ESCFG}/.oxlintrc.json" <<'JSON'
+{ "rules": { "no-unused-vars": "off" } }
+JSON
+(cd "${ESCFG}" && git add -A) >/dev/null 2>&1
+OWN_OUT="$( (cd "${ESCFG}" && ckeslint --format=unix) 2>&1 || true)"
+if echo "${OWN_OUT}" | grep -q "own .oxlintrc.json"; then
+    ok "ckeslint prefers the repo's own .oxlintrc.json"
+else
+    fail "ckeslint ignored the repo's .oxlintrc.json (output: ${OWN_OUT:0:300})"
 fi
 
 # CRM/cj/ts/_/angular must not read as undefined identifiers, or every real
@@ -404,7 +481,7 @@ export function boot() {
 }
 JS
 (cd "${ESDIR}" && git add -A) >/dev/null 2>&1
-GLOBALS_OUT="$( (cd "${ESDIR}" && ckeslint js/globals.js) 2>&1 || true)"
+GLOBALS_OUT="$( (cd "${ESDIR}" && ckeslint --format=unix js/globals.js) 2>&1 || true)"
 if echo "${GLOBALS_OUT}" | grep -q "no-undef"; then
     fail "ckeslint reports CiviCRM globals as undefined (output: ${GLOBALS_OUT:0:300})"
 else

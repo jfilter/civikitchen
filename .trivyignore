@@ -25,7 +25,7 @@
 # Second thing this format cannot do: scope an entry to a path. Every ID below
 # is suppressed image-wide, so a line excused because upstream Joomla or
 # upstream buildkit ships a vulnerable copy ALSO hides the same CVE if it ever
-# appears in a tree this repo controls (images/lib/eslint, images/lib/oxfmt).
+# appears in a tree this repo controls (images/lib/oxlint, images/lib/oxfmt).
 # Where that overlap is real it is named in the entry. The compensating check is
 # `npm audit` on those two lockfiles, which trivy is not the only reader of.
 #
@@ -50,7 +50,7 @@
 #   own CLI calls it, on the glob and workspace patterns of whatever project the
 #   developer runs npm in. Nothing the images serve reaches it, and no npm
 #   release bundles the fix yet. NOTE: this ID is suppressed image-wide, and
-#   images/lib/eslint resolves brace-expansion 5.0.9 — a regression there would
+#   images/lib/oxlint resolves brace-expansion 5.0.9 — a regression there would
 #   be hidden from trivy and would have to be caught by `npm audit`.
 # until: 2026-11-01 -- re-read the bundled version (`node -p
 #   'require("/usr/lib/node_modules/npm/node_modules/brace-expansion/package.json").version'`)
@@ -165,7 +165,7 @@ CVE-2026-13149
 # why: minimatch 3.0.8 via jshint@2.13.4 and karma@6.4.4 (both directly and
 #   through glob@7.x). ReDoS on a crafted glob pattern — again the developer's
 #   own pattern, in tooling that never sees a request. NOTE: suppressed
-#   image-wide; images/lib/eslint resolves minimatch 10.2.6, which is fixed, and
+#   image-wide; images/lib/oxlint resolves minimatch 10.2.6, which is fixed, and
 #   a regression there would only be caught by `npm audit`.
 # until: 2026-11-01 -- recheck after a buildkit rebuild.
 CVE-2026-26996

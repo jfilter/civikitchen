@@ -14,6 +14,7 @@
 #              CiviCRM source/sink/escape stubs)
 #   - mago     (Rust binary; PHP half of `ckfmt`, formats to the bundled
 #              phpcs standard's expectations)
+#   - oxlint   (npm toolchain + tsgolint Go binary; powers `ckeslint`)
 #   - oxfmt    (npm toolchain; JS/TS half of `ckfmt`)
 #
 # Prerequisites (handled per image):
@@ -287,7 +288,7 @@ chmod +x /usr/local/bin/phpstan
 # dependency resolution. Two engines, two roots, no shared resolution.
 # From the committed lockfile: psalm drags ~50 transitive packages, and a
 # monthly rebuild re-resolving them would be exactly the drift the version
-# pins exist to prevent (ESLint installs from its lockfile for the same
+# pins exist to prevent (oxlint installs from its lockfile for the same
 # reason). Overriding PSALM_VERSION re-resolves — accepting a fresh tree is
 # the meaning of that override.
 PSALM_LOCKED=$(php -r 'echo json_decode(file_get_contents("/opt/civikitchen-psalm/composer.json"))->require->{"vimeo/psalm"} ?? "";')
@@ -314,27 +315,31 @@ npm install -g "npm@${NPM_VERSION}" --no-audit --no-fund --loglevel=error
 npm config set dangerously-allow-all-scripts true --location=global
 
 # ---------------------------------------------------------------------------
-# ESLint toolchain (powers `ckeslint`) — installed into the directory the
-# Dockerfile COPYd the baseline flat config to, so the config's plugin imports
+# oxlint toolchain (powers `ckeslint`) — installed into the directory the
+# Dockerfile COPYd the baseline .oxlintrc.json to, so the config's `jsPlugins`
 # resolve against the node_modules right beside it.
 #
-# In the IMAGE and not in eleven package.json files, for the same reason the
+# In the IMAGE and not in a dozen package.json files, for the same reason the
 # phpcs standard lives here: an extension's frontend is a handful of files, and
-# an eslint devDependency block per repo is eleven trees to keep in step and
-# eleven dependabot PRs a month for a linter nobody chose per-repo. A repo that
-# wants its own rules writes an eslint.config.* and ckeslint steps aside.
+# a linter devDependency block per repo is a dozen trees to keep in step and a
+# dozen dependabot PRs a month for a linter nobody chose per-repo. A repo that
+# wants its own rules writes an .oxlintrc.json and ckeslint steps aside.
 #
 # Versions are pinned in that package.json, not floated with a caret, and the
 # lockfile beside it is committed and installed with `npm ci`: the image tags
-# rebuild monthly, and an ESLint minor that adds a rule to `recommended` — or a
+# rebuild monthly, and a linter minor that adds a rule to a category — or a
 # transitive dependency moving underneath a pinned direct one — would turn a
 # green repo red with no code change. Exactly what the phpstan pin above
 # prevents on the PHP side, and the same rule this project's own standards put
 # on every extension's lockfile.
-ESLINT_DIR=/opt/civikitchen-eslint
-npm ci --prefix "${ESLINT_DIR}" --no-audit --no-fund --loglevel=error
+OXLINT_DIR=/opt/civikitchen-oxlint
+npm ci --prefix "${OXLINT_DIR}" --no-audit --no-fund --loglevel=error
 
-# oxfmt toolchain (JS half of `ckfmt`) — same shape as the ESLint install:
+# The type-aware half is a Go binary in a platform-specific subpackage; if npm
+# resolved none of them, ckeslint would silently lose every type-aware rule.
+ls "${OXLINT_DIR}"/node_modules/@oxlint-tsgolint/*/tsgolint >/dev/null
+
+# oxfmt toolchain (JS half of `ckfmt`) — same shape as the oxlint install:
 # pinned in its package.json, resolved from its committed lockfile. The npm
 # package selects the platform binding itself via optionalDependencies.
 OXFMT_DIR=/opt/civikitchen-oxfmt
@@ -343,5 +348,5 @@ npm ci --prefix "${OXFMT_DIR}" --no-audit --no-fund --loglevel=error
 rm -rf /opt/composer/cache ~/.npm
 chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" \
     /opt/civikitchen-rector "${PHPSTAN_DIR}" "${PHPSTAN_EXT_DIR}" \
-    /opt/civikitchen-phpstan-config /opt/civikitchen-psalm "${ESLINT_DIR}" \
+    /opt/civikitchen-phpstan-config /opt/civikitchen-psalm "${OXLINT_DIR}" \
     "${OXFMT_DIR}" /opt/civikitchen-mago /usr/local/bin/mago

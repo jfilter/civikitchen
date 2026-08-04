@@ -107,10 +107,10 @@ COPY lib/civikitchen-smarty-compile.php /usr/local/share/civikitchen/cksmarty-co
 # install()-vs-upgrader schema parity (used by the shared CI's schema-parity
 # job; needs the mysql client this image already has).
 COPY lib/ckschemadiff /usr/local/bin/ckschemadiff
-# ESLint: the pinned toolchain (installed by install-dev-tools.sh) plus the
-# CiviKitchen baseline flat config, and the ckeslint runner that picks between
-# it and a repo's own eslint.config.*.
-COPY lib/eslint /opt/civikitchen-eslint
+# JS/TS lint gate: the pinned oxlint toolchain (installed by
+# install-dev-tools.sh) plus the CiviKitchen baseline .oxlintrc.json, and the
+# ckeslint runner that picks between it and a repo's own .oxlintrc.json.
+COPY lib/oxlint /opt/civikitchen-oxlint
 COPY lib/ckeslint /usr/local/bin/ckeslint
 # Formatting (ckfmt): the mago baseline tuned to the bundled phpcs standard,
 # the pinned oxfmt toolchain, and the runner that picks between baseline and a

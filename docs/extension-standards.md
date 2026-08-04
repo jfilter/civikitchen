@@ -363,7 +363,7 @@ civicrm-buildkit clone's own `node_modules`, Joomla's vendor tree, and a Drupal
 test fixture that declares packages whose code is not in the image. What is
 deliberately *not* excused is anything this repo can move: the npm that
 NodeSource's nodejs package ships is upgraded in `install-dev-tools.sh`
-(`NPM_VERSION`) rather than ignored, and the `images/lib/eslint` and
+(`NPM_VERSION`) rather than ignored, and the `images/lib/oxlint` and
 `images/lib/oxfmt` lockfiles are expected to stay clean on their own.
 
 **Recommended, not implemented: secrets.** Neither scanner looks for
@@ -533,20 +533,27 @@ on `extension-ci.yml`, all off by default:
 
 **Linting the JS needs none of them.** `ckeslint` runs in the `ci` job on every
 push, from inside the container, with a toolchain pinned in the image — no Node
-setup step, no `npm install`, and no eslint devDependency in your
-`package.json`. The baseline is deliberately not a style guide: `@eslint/js`
-recommended (mistakes, not fashion), Mozilla's `eslint-plugin-no-unsanitized`
-(`innerHTML` and its family — an XSS in an extension is an XSS on every site
-that installs it), and, *only when the repo has a `tsconfig.json`*,
-`typescript-eslint` recommended-type-checked, which is where
-`no-floating-promises` and `no-misused-promises` come from. CiviCRM's globals
-(`CRM`, `cj`, `ts`, `_`, `angular`) are declared for you; `dist/`, `vendor/`,
-`node_modules/`, the vendored-asset directories and `*.min.js` are ignored.
+setup step, no `npm install`, and no linter devDependency in your
+`package.json`. The engine is [oxlint](https://oxc.rs), and the baseline is
+deliberately not a style guide: oxlint's `correctness` category (mistakes, not
+fashion), Mozilla's `eslint-plugin-no-unsanitized` (`innerHTML` and its family
+— an XSS in an extension is an XSS on every site that installs it), and, *only
+when the repo has a `tsconfig.json`*, the type-aware TypeScript rules, which is
+where `no-floating-promises` and `no-misused-promises` come from. The type-aware
+rules apply to `.ts`/`.tsx` only — plain `.js` is checked by the syntactic rules
+and `no-unsanitized`. CiviCRM's globals (`CRM`, `cj`, `ts`, `_`, `angular`) are
+declared for you; `dist/`, `vendor/`, `node_modules/`, the vendored-asset
+directories and `*.min.js` are ignored.
 
-Ship your own `eslint.config.*` and it wins outright — the baseline is not
+Ship your own `.oxlintrc.json` and it wins outright — the baseline is not
 merged into it, not layered under it, just not used. The cost of owning it is
-owning its plugins too: ESLint resolves that file's imports against *your*
-`node_modules`, so a repo with its own config also turns `npm_ci` on.
+owning its `jsPlugins` too: oxlint resolves those against *your* `node_modules`,
+so a repo with its own config also turns `npm_ci` on.
+
+An `eslint.config.*` on its own is **not** a config the gate can use: ESLint is
+no longer in the image, and `ckeslint` fails with a pointer rather than quietly
+linting your code with rules you did not choose. Translate it to an
+`.oxlintrc.json`, or drop it and take the baseline.
 
 Two scripts, two suites, and the names are the contract:
 

@@ -686,16 +686,16 @@ jobs:
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && cksmarty"
 
-      # JS/TS linting with the image's pinned ESLint toolchain and the bundled
+      # JS/TS linting with the image's pinned oxlint toolchain and the bundled
       # baseline config — the same arrangement as cklint and the bundled phpcs
       # standard, and for the same reason: eleven repos should not each carry
-      # an eslint devDependency block to drift.
+      # a linter devDependency block to drift.
       #
       # In the container, not on the runner, so it needs no Node setup step and
       # no npm install: the toolchain is already installed in the image. Passes
       # with a log line for the many extensions whose frontend is a couple of
       # Angular files or nothing at all.
-      - name: ESLint (ckeslint)
+      - name: JS/TS lint (ckeslint)
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
