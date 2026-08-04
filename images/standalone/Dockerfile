@@ -97,6 +97,9 @@ COPY lib/cktaint /usr/local/bin/cktaint
 # Reset helper for the headless-test scratch DB (reseeds <db>_test, clears
 # the per-DSN boot caches — see the script header for the failure mode).
 COPY lib/cktestreset /usr/local/bin/cktestreset
+# Core phpunit suites against the installed dist core (fetches the export-
+# ignored tests/ tree for the exact installed version on first use).
+COPY lib/ckcoretest /usr/local/bin/ckcoretest
 # Smarty compile smoke: the runtime counterpart to ckconform's static template
 # checks. Needs a booted site, so it drives `cv scr` with the payload below.
 COPY lib/cksmarty /usr/local/bin/cksmarty
@@ -127,6 +130,7 @@ RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
         /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktestreset \
+        /usr/local/bin/ckcoretest \
         /usr/local/bin/cktaint \
         /usr/local/bin/cksmarty /usr/local/bin/ckschemadiff /usr/local/bin/ckeslint \
         /usr/local/bin/ckfmt
