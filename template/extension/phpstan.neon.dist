@@ -39,6 +39,13 @@ parameters:
 	#	# - /var/www/html/core/ext/flexmailer/src
 	bootstrapFiles:
 		- phpstanBootstrap.php
+	civikitchen:
+		# ck.sql.unknownTable checks `civicrm_`-prefixed table names in raw SQL
+		# against core's schema plus this repo's own (schema/, xml/schema/,
+		# sql/). List here the `civicrm_`-prefixed tables of OTHER extensions
+		# this repo queries — they exist on the site but in no catalog:
+		#	- civicrm_someext_thing
+		sqlKnownTables: []
 	# ignoreErrors: only ever narrowly scoped (identifier + path + count) and
 	# carrying a comment that says WHY the report is wrong — never blanket
 	# patterns, never a baseline file.

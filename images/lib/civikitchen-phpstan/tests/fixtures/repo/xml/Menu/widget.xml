@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- A route that exists only here: no .ck-routes.json is generated for
+     this fixture repo, and the rule still has to see it. -->
+<menu>
+  <item>
+    <path>civicrm/greeter/new</path>
+    <page_callback>CiviKitchen\Fixtures\Routes\GreeterEndpoint::handle</page_callback>
+    <title>New Greeter</title>
+    <access_arguments>edit greeter</access_arguments>
+  </item>
+  <item>
+    <path>civicrm/widget</path>
+    <page_callback>CiviKitchen\Fixtures\Routes\WidgetPage</page_callback>
+    <title>Widget</title>
+    <access_arguments>edit widget</access_arguments>
+  </item>
+</menu>

@@ -120,7 +120,9 @@ unless `--force` is explicitly supplied. For an existing extension,
   `mailjet_event` is invisible to the analysis and stays silent. Custom-value
   and temp tables (`civicrm_value_*`, `civicrm_tmp_*`), the tables the repo's
   own `schema/`, `xml/schema/` or `sql/` declares, and anything listed under
-  `parameters.civikitchen.sqlKnownTables` in `phpstan.neon` count as known.
+  `parameters.civikitchen.sqlKnownTables` in `phpstan.neon` count as known
+  (the template seeds that stanza empty; `phpstan.neon.dist` is a seeded
+  file, so an existing repo adds the key itself the day it needs one).
   Non-literal SQL — a `{$table}` interpolation, a `%1` placeholder in table
   position, a statement built in a variable — is skipped without a word.
   That last list is why other extensions' `civicrm_`-prefixed tables are the
@@ -138,11 +140,14 @@ unless `--force` is explicitly supplied. For an existing extension,
   `create()`, and literal INSERT/UPDATE/DELETE in a DAO call). A handler
   that looks at the request method — `$request->getMethod() !== 'POST'` with
   a 405, or `$_SERVER['REQUEST_METHOD']` — is silent, which is the shape
-  every webhook should have. The XML half needs the generated catalog:
-  `php /opt/civikitchen-phpstan-ext/tools/gen-route-catalog.php .` writes
-  `.ck-routes.json`, which belongs in the repo (a diff in it is a routing
-  change); without it only page classes are checked, and the catalog has to
-  be regenerated when `xml/Menu` changes. The remaining legitimate case is a
+  every webhook should have. No configuration is involved: the rule parses
+  `xml/Menu/*.xml` out of the analysed repo itself, so a route added there
+  is covered the moment it exists. (A generated `.ck-routes.json` —
+  `php /opt/civikitchen-phpstan-ext/tools/gen-route-catalog.php .` — is
+  honoured when present, as an override for a repo whose routes are not
+  where the parser looks; it is never a precondition, because a gate that
+  silently stops seeing new routes is worse than no gate.) The one
+  legitimate case left is a
   GET that writes on purpose — a redirect flow whose links are static hrefs
   in a menu or a SearchKit display, so no qfKey is available, mitigated by
   its own `Sec-Fetch-Site: cross-site` refusal. That is a narrow

@@ -19,6 +19,8 @@ final class GetMutationRuleTest extends RuleTestCase
 
     private ?string $catalog = null;
 
+    private ?string $extensionDir = null;
+
     public function testWritesReachableFromAGetRouteAreReported(): void
     {
         $this->catalog = __DIR__ . '/fixtures/route-catalog.json';
@@ -48,10 +50,46 @@ final class GetMutationRuleTest extends RuleTestCase
         );
     }
 
-    /** Without a catalog only the page classes are known to be routes. */
-    public function testTheRuleIsInertWithoutACatalog(): void
+    /**
+     * A route declared only in xml/Menu, with no generated catalog beside
+     * it, must still be seen — otherwise adding a route and forgetting to
+     * regenerate would silently switch the gate off.
+     */
+    public function testRoutesAreReadFromTheMenuXmlWhenNoCatalogExists(): void
     {
         $this->catalog = null;
+        $this->extensionDir = __DIR__ . '/fixtures/repo';
+        $this->analyse(
+            [
+                __DIR__ . '/fixtures/generic-stubs.php',
+                __DIR__ . '/fixtures/route-stubs.php',
+                __DIR__ . '/fixtures/get-mutation.php',
+            ],
+            [
+                [
+                    'Widget::createDraft() writes from CiviKitchen\Fixtures\Routes\GreeterEndpoint::handle(), '
+                    . 'which answers GET civicrm/greeter/new' . self::ADVICE,
+                    35,
+                ],
+                [
+                    "civicrm_api3('Contact', 'delete') writes from CiviKitchen\\Fixtures\\Routes\\GreeterEndpoint::handle(), "
+                    . 'which answers GET civicrm/greeter/new' . self::ADVICE,
+                    36,
+                ],
+                [
+                    'DELETE in CRM_Core_DAO::executeQuery() writes from CiviKitchen\Fixtures\Routes\WidgetPage::run(), '
+                    . 'which answers GET civicrm/widget' . self::ADVICE,
+                    58,
+                ],
+            ],
+        );
+    }
+
+    /** No routes anywhere: only the page class, which is one by inheritance. */
+    public function testPageClassesAreRoutesWithoutAnyDeclaration(): void
+    {
+        $this->catalog = null;
+        $this->extensionDir = null;
         $this->analyse(
             [
                 __DIR__ . '/fixtures/generic-stubs.php',
@@ -70,6 +108,6 @@ final class GetMutationRuleTest extends RuleTestCase
 
     protected function getRule(): Rule
     {
-        return new GetMutationRule(new RouteCatalog($this->catalog));
+        return new GetMutationRule(new RouteCatalog($this->catalog, $this->extensionDir));
     }
 }

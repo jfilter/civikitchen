@@ -3,24 +3,23 @@
 declare(strict_types=1);
 
 /**
- * Generate the GET-reachable route catalog of one extension.
+ * Write the GET-reachable route catalog of one extension.
  *
  * Usage:
  *   php tools/gen-route-catalog.php <extension-dir> [out-file]
  *
- * Reads xml/Menu/*.xml and writes the page_callback targets as JSON. The
- * `ck.route.mutationOnGet` rule reads that file to know which static methods
- * a browser can reach with a plain GET; without it the rule only sees
- * CRM_Core_Page subclasses, whose run() is a route by inheritance.
+ * OPTIONAL. The `ck.route.mutationOnGet` rule reads xml/Menu/*.xml itself
+ * and only prefers this file when it exists — the catalog is an override
+ * for a repo whose routes are not where the parser looks, not a
+ * precondition. Both paths use RouteCatalog::fromMenuXml(), so a generated
+ * file and a live parse see the same routes.
  *
- * Default output is <extension-dir>/.ck-routes.json, which belongs in the
- * repo: it is generated from files in the same repo, so a diff in it is a
- * routing change and worth reviewing.
- *
- * A page_callback is either `Some\Class::method` (a PSR-7 handler or a
- * static callback) or a bare class name (a CRM_Core_Page/Form, entered
- * through run()/buildQuickForm()).
+ * Default output is <extension-dir>/.ck-routes.json.
  */
+
+require_once dirname(__DIR__) . '/src/RouteCatalog.php';
+
+use CiviKitchen\PHPStan\RouteCatalog;
 
 if ($argc < 2) {
     fwrite(STDERR, "usage: gen-route-catalog.php <extension-dir> [out-file]\n");
@@ -28,30 +27,7 @@ if ($argc < 2) {
 }
 
 $extensionDir = rtrim($argv[1], '/');
-$menuDir = $extensionDir . '/xml/Menu';
-
-$routes = [];
-foreach (glob($menuDir . '/*.xml') ?: [] as $file) {
-    $xml = @simplexml_load_string((string) file_get_contents($file));
-    if ($xml === false) {
-        fwrite(STDERR, "could not parse $file\n");
-        exit(65);
-    }
-    foreach ($xml->item as $item) {
-        $callback = trim((string) $item->page_callback);
-        if ($callback === '') {
-            continue;
-        }
-        [$class, $method] = array_pad(explode('::', $callback, 2), 2, null);
-        $routes[] = [
-            'path' => trim((string) $item->path),
-            'class' => ltrim((string) $class, '\\'),
-            'method' => $method === null ? null : trim($method),
-        ];
-    }
-}
-
-usort($routes, static fn (array $a, array $b): int => [$a['class'], (string) $a['method']] <=> [$b['class'], (string) $b['method']]);
+$routes = RouteCatalog::fromMenuXml($extensionDir);
 
 $target = $argv[2] ?? $extensionDir . '/.ck-routes.json';
 $json = json_encode(

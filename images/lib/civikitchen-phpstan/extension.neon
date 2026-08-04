@@ -3,8 +3,8 @@ parameters:
 		# `civicrm_`-prefixed tables of OTHER extensions this repo queries.
 		# Core's tables and the repo's own schema are found automatically.
 		sqlKnownTables: []
-		# The generated xml/Menu route list (tools/gen-route-catalog.php).
-		# Missing file = the GET-mutation rule only sees page classes.
+		# Optional override for the generated route list. Absent, the rule
+		# parses xml/Menu/*.xml itself — a missing file must not blind it.
 		routeCatalog: %currentWorkingDirectory%/.ck-routes.json
 
 parametersSchema:
@@ -79,12 +79,13 @@ services:
 		class: CiviKitchen\PHPStan\SqlTableMethodCallRule
 		tags:
 			- phpstan.rules.rule
-	# GET must not write. The catalog says which static methods xml/Menu
-	# hands a browser; page classes are found through their base class.
+	# GET must not write. xml/Menu says which static methods a browser can
+	# reach; page classes are found through their base class.
 	-
 		class: CiviKitchen\PHPStan\RouteCatalog
 		arguments:
 			- %civikitchen.routeCatalog%
+			- %currentWorkingDirectory%
 	-
 		class: CiviKitchen\PHPStan\GetMutationRule
 		tags:
