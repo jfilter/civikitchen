@@ -34,12 +34,43 @@ CK_ACTIONLINT_VERSION := 1.7.12
 CK_ACTIONLINT_INSTALLER_SHA256 := 72fa3e45ac20f3c3a512d6747b4fcf719e21f890e8c43e78d48a41fdfb900c4e
 CK_ZIZMOR_VERSION := 1.29.0
 
-# Shell trees to check: everything with a .sh suffix, plus the ck* tools, which
-# carry none (they are commands on PATH, not scripts you source) and were the
-# shell in this repo running in the most places while a *.sh-only sweep skipped
-# every one of them.
-SHELL_DIRS := docker toolbelt examples tools tests
-PHP_DIRS := docker toolbelt tools
+# What gets linted is decided by WHAT A FILE IS, never by where it lives.
+#
+# The old selectors were hand-written directory lists — `find docker toolbelt
+# examples tools tests -name '*.sh'` and the same shape for PHP. That kind of
+# selector fails OPEN: a file it does not match is not reported as unchecked,
+# it is simply absent from the run, and the run says "clean". This repo has
+# been bitten by it twice. First when the sweep globbed only *.sh, which
+# silently skipped every ck* tool — the shell here that runs in the most
+# places. Then by the directory list itself, which omitted template/ and so
+# left three files unlinted: tests/e2e/lib.sh, phpstanBootstrap.php and
+# tests/phpunit/bootstrap.php — all three template-MANAGED, i.e. stamped
+# byte-identical into every conforming extension repo, which makes them the
+# worst three files in the repo to leave ungated.
+#
+# Selecting by content also retires two workarounds: the ck* tools no longer
+# need a rule of their own, and `-not -name '*.php'` is gone because a PHP file
+# has no sh shebang, so the convention of naming payloads civikitchen-*.php to
+# keep them out of a glob is no longer load-bearing.
+# `if`, not `cmd && printf`: under .SHELLFLAGS's `set -e` a non-matching grep
+# fails the whole AND-list and kills the loop, so the selector would report the
+# first few files and exit — silently, and short. An `if` condition is exempt.
+SHELL_FILES = git ls-files | while read -r f; do \
+	  case "$$f" in *.sh) printf '%s\n' "$$f"; continue ;; esac ; \
+	  if head -1 "$$f" 2>/dev/null \
+	      | grep -qaE '^\#!.*(\bsh\b|\bbash\b)|^\# shellcheck shell=' ; then \
+	    printf '%s\n' "$$f" ; \
+	  fi ; \
+	done
+PHP_FILES = git ls-files '*.php'
+
+# A selector that matches nothing must be an error, not a pass. Otherwise the
+# fail-open bug just moves up a level: a broken pattern would lint zero files
+# and report success, which is precisely the failure mode these selectors were
+# rewritten to end.
+define require_nonempty
+[ -n "$(1)" ] || { echo "no $(2) files matched — the selector is broken" >&2; exit 1; }
+endef
 
 .DEFAULT_GOAL := help
 .PHONY: help test test-ckconform test-phpstan test-ckinit lint lint-shell \
@@ -82,14 +113,11 @@ test-ckinit: ## ckinit seed/update/check integration checks
 
 lint: lint-shell lint-actions lint-php lint-schema ## Every static check CI runs
 
-lint-shell: ## shellcheck at style level, fails on any finding
-	@find $(SHELL_DIRS) -name '*.sh' -print0 | xargs -0 shellcheck -S style
-	@# -not -name '*.php': a ck* tool may have a PHP payload beside it, and
-	@# shellcheck handed a PHP file reports a hundred findings about a file
-	@# that is not shell at all.
-	@find toolbelt/bin -maxdepth 1 -type f -name 'ck*' -not -name '*.php' -print0 \
-	  | xargs -0 shellcheck -S style
-	@echo "shellcheck clean"
+lint-shell: ## shellcheck at style level over every tracked shell file
+	@files=$$($(SHELL_FILES)) ; \
+	  $(call require_nonempty,$$files,shell) ; \
+	  printf '%s\n' "$$files" | xargs shellcheck -S style ; \
+	  echo "shellcheck clean ($$(printf '%s\n' "$$files" | wc -l) files)"
 
 # actionlint reads workflows as YAML+shell; zizmor reads them as a threat model
 # — unpinned actions, expression injection into run blocks, tokens wider than
@@ -99,10 +127,12 @@ lint-actions: $(CACHE)/actionlint ## actionlint + zizmor over the workflows
 	pipx run zizmor==$(CK_ZIZMOR_VERSION) --no-online-audits --config zizmor.yml \
 	  .github/workflows template/extension/.github/workflows
 
-lint-php: ## php -l over every PHP file that ships
-	@rc=0; while IFS= read -r -d '' f; do php -l "$$f" >/dev/null || rc=1; done \
-	  < <(find $(PHP_DIRS) -name '*.php' -print0); \
-	  [ "$$rc" = 0 ] && echo "php syntax clean"
+lint-php: ## php -l over every tracked PHP file
+	@files=$$($(PHP_FILES)) ; \
+	  $(call require_nonempty,$$files,PHP) ; \
+	  rc=0 ; \
+	  while IFS= read -r f; do php -l "$$f" >/dev/null || rc=1; done <<< "$$files" ; \
+	  [ "$$rc" = 0 ] && echo "php syntax clean ($$(printf '%s\n' "$$files" | wc -l) files)"
 
 # profile.schema.json is the canonical spec for the profile format, published
 # as @jfilter/civicrm-profile-schema.
