@@ -125,6 +125,11 @@ COPY ckconform /opt/civikitchen-ckconform
 COPY lib/ckconform /usr/local/bin/ckconform
 # coverage gate: runs the suite with clover and enforces .ckconform's min_coverage
 COPY lib/ckcoverage /usr/local/bin/ckcoverage
+# Transactional-test gate + lifecycle gate, same pairing as the standalone image.
+COPY lib/ckphpunit /usr/local/bin/ckphpunit
+COPY lib/civikitchen-tx-canary.php /usr/local/share/civikitchen/tx-canary.php
+COPY lib/cklifecycle /usr/local/bin/cklifecycle
+COPY lib/civikitchen-lifecycle-check.php /usr/local/share/civikitchen/lifecycle-check.php
 # release helper: version consistency + the installable dist zip (docs/extension-releases.md)
 COPY lib/ckrelease /usr/local/bin/ckrelease
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
@@ -163,6 +168,7 @@ RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION
         MAGO_SHA256_AARCH64="${MAGO_SHA256_AARCH64}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
+       /usr/local/bin/ckphpunit /usr/local/bin/cklifecycle \
         /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktaint \
         /usr/local/bin/cksmarty /usr/local/bin/ckschemadiff /usr/local/bin/ckeslint \
         /usr/local/bin/ckfmt
