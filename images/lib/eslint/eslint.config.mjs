@@ -110,8 +110,30 @@ export default [
     },
   },
 
+  // ESM-shaped tool configs (vite.config.ts, playwright.config.ts, …) run under
+  // Node too — they need its globals, but not the commonjs sourceType.
+  {
+    files: [
+      '**/*.config.{ts,mts,cts,mjs}',
+      '**/playwright.config.*',
+      '**/global-setup.*',
+    ],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
+
   js.configs.recommended,
   noUnsanitized.configs.recommended,
+
+  // TypeScript SYNTAX needs the TS parser even when no root tsconfig exists to
+  // power type-aware rules — otherwise every .ts file dies with a parse error.
+  ...(hasTsconfig
+    ? []
+    : [{
+      files: ['**/*.ts', '**/*.tsx'],
+      languageOptions: { parser: tseslint.parser },
+    }]),
 
   // Type-aware TypeScript, gated on the tsconfig. `projectService` is
   // typescript-eslint's own project resolution: it finds the nearest tsconfig
