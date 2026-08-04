@@ -115,18 +115,13 @@ final class Context
     public function policy(): array
     {
         if ($this->policy === null) {
-            $this->policy = [];
-            foreach (explode("\n", $this->read('.ckconform') ?? '') as $line) {
-                $line = trim($line);
-                if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
-                    continue;
-                }
-                [$key, $value] = explode('=', $line, 2);
-                $key = trim($key);
-                if ($key !== '' && !isset($this->policy[$key])) {
-                    $this->policy[$key] = trim($value);
-                }
-            }
+            // First occurrence wins, which is the scalar view of Policy::parse.
+            // The parser itself lives there because it has other readers now:
+            // ckinit, and every ck* tool through `ckconform --policy-env`.
+            $this->policy = array_map(
+                static fn (array $values): string => $values[0],
+                Policy::parse($this->read('.ckconform')),
+            );
         }
 
         return $this->policy;

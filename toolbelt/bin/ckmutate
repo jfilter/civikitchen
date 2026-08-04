@@ -46,12 +46,9 @@ set -uo pipefail
 
 ck_require_extension_root
 
-read_key() {
-  [ -f .ckconform ] || return 0
-  sed -n "s/^$1=//p" .ckconform | head -1 | tr -d ' \t'
-}
+ck_policy_load
 
-floor=$(read_key mutation_min_msi)
+floor="${CK_POLICY_MUTATION_MIN_MSI:-}"
 if [ -z "$floor" ]; then
   echo "ckmutate: no mutation_min_msi in .ckconform — nothing to enforce, skipping."
   echo "ckmutate: to adopt this, measure once (ckmutate runs with any floor, e.g. mutation_min_msi=1), then set the floor to what you have."
@@ -75,8 +72,8 @@ php -m | grep -qiE '^(pcov|xdebug)$' || {
   exit 2
 }
 
-covered_floor=$(read_key mutation_min_covered_msi)
-paths=$(read_key mutation_paths)
+covered_floor="${CK_POLICY_MUTATION_MIN_COVERED_MSI:-}"
+paths="${CK_POLICY_MUTATION_PATHS:-}"
 
 # Source dirs for the config: the configured paths, or the conventional
 # extension roots that exist here.

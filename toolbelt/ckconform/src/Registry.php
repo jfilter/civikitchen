@@ -75,6 +75,7 @@ final class Registry
         Check\CrmScopeCheck::class,
         Check\SmartyCompatCheck::class,
         Check\TranslationCatalogCheck::class,
+        Check\PolicyKeyCheck::class,
         Check\SuppressionHygieneCheck::class,
     ];
 

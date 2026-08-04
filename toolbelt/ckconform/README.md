@@ -75,8 +75,31 @@ template_custom=<file>,...  -- <reason>   # read by ckinit --check/--update, not
 ```
 
 `.ckconform` is the one policy file for the whole ck* family — ckconform,
-ckcoverage, ckmutate and ckinit all read it, so a repo's deviations from the standard
-live in one place with their reasons attached.
+ckcoverage, ckmutate, ckrelease, cklifecycle and ckinit all read it, so a repo's
+deviations from the standard live in one place with their reasons attached.
+
+### One file, one parser
+
+They read it *through this tool*, which is the only thing that parses the
+format:
+
+```bash
+eval "$(ckconform --policy-env)"   # CK_POLICY_MIN_COVERAGE='70', … (scalars, reason stripped)
+ckconform --policy lifecycle_log_ignore   # every value of one key, one per line, verbatim
+```
+
+That is not ceremony. The format previously had **seven** readers — two in PHP,
+five in shell — and they disagreed on every edge it has: an indented line was
+honoured by PHP and invisible to `sed -n 's/^min_coverage=//p'`, so a declared
+coverage floor silently stopped being enforced; only one of the five stripped
+the mandatory ` -- <reason>`, so a reason on a numeric key reached a comparison
+as a sentence. `src/Policy.php` is now the only parser, and it also carries
+`KEYS` — the inventory of every key any tool reads. `PolicyKeyCheck` reports a
+key that is in no tool's vocabulary, which is what makes `min_covrage=70` a red
+build instead of a floor that quietly does not apply.
+
+A new key is added in three places, in this order: `Policy::KEYS`, the tool that
+reads it, and the list above.
 
 ## Suppressing a finding
 

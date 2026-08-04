@@ -52,6 +52,38 @@ ck_git() { git -c safe.directory="$PWD" "$@"; }
 
 ck_in_git_repo() { ck_git rev-parse --is-inside-work-tree >/dev/null 2>&1; }
 
+# --- .ckconform ---------------------------------------------------------------
+# The policy file is read through ckconform, which owns the format, and never
+# parsed here. It used to be parsed here five times, in four mutually
+# incompatible ways: `sed -n 's/^key=//p'` (blind to an indented line that the
+# PHP reader accepts, so a declared coverage floor silently vanished), the same
+# plus `tr -d ' \t'` (would mangle any value with meaningful spaces), the same
+# plus stripping the mandatory ` -- <reason>` in exactly one tool, and a
+# multi-line read in a fifth. See toolbelt/ckconform/src/Policy.php.
+
+_ck_conform_bin() {
+    local bin
+    bin=$(command -v ckconform || true)
+    [ -n "$bin" ] || bin="$ck_root/bin/ckconform"
+    [ -x "$bin" ] || ck_die "cannot find ckconform, which reads .ckconform"
+    printf '%s' "$bin"
+}
+
+# Sets CK_POLICY_<KEY> for every scalar key in ./.ckconform, ` -- <reason>`
+# stripped — a caller comparing a number wants 70, not "70 -- measured 2026-01".
+# A missing or empty file sets nothing, so callers test for an empty value
+# exactly as they did before.
+ck_policy_load() {
+    local env
+    env=$("$(_ck_conform_bin)" --policy-env) || ck_die "could not read .ckconform"
+    eval "$env"
+}
+
+# Every value of one repeatable key, one per line, VERBATIM — the reason is
+# still attached, because the callers of this are the ones whose job is to
+# check that it is there.
+ck_policy_all() { "$(_ck_conform_bin)" --policy "$1"; }
+
 # --- file-selection patterns -------------------------------------------------
 # Kept as patterns rather than as one do-everything list_files(): the callers
 # genuinely differ (which ls-files flags, which kinds of generated code count,

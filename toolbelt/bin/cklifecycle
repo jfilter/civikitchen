@@ -150,8 +150,12 @@ hits=$(grep -E -n "$patterns" "$delta" 2>/dev/null)
 
 # Declared exceptions are dropped from the hit list, not from the pattern:
 # a repo should see in the summary what it chose to ignore.
+#
+# ck_policy_all, not sed: lifecycle_log_ignore is one of the two repeatable
+# keys, so every occurrence counts, and the reason has to survive the read
+# because checking that it is there is this loop's job.
 ignored=''
-if [ -n "$hits" ] && [ -f .ckconform ]; then
+if [ -n "$hits" ]; then
   while IFS= read -r rule; do
     [ -z "$rule" ] && continue
     case "$rule" in
@@ -163,7 +167,7 @@ if [ -n "$hits" ] && [ -f .ckconform ]; then
     dropped=$(echo "$hits" | grep -E -c -- "$pat")
     [ "$dropped" -gt 0 ] && ignored="${ignored}  ${dropped}x ignored by: ${rule}"$'\n'
     hits="$kept"
-  done < <(sed -n 's/^lifecycle_log_ignore=//p' .ckconform)
+  done < <(ck_policy_all lifecycle_log_ignore)
 fi
 
 echo

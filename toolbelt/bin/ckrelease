@@ -137,25 +137,18 @@ json_field() {
   ' "$1" "$2"
 }
 
-# First occurrence of a KEY=VALUE from .ckconform, with an optional ' -- reason'
-# stripped — the format ckconform and ckinit already read.
-policy() {
-  local value
-  [ -f .ckconform ] || return 0
-  value=$(sed -n "s/^$1=//p" .ckconform | head -1)
-  value=${value%%$'\r'}
-  case "$value" in
-    *' -- '*) value=${value%% -- *} ;;
-  esac
-  printf '%s' "$value"
-}
-
 # Central list ± the repo's .ckconform, as two global arrays.
+#
+# The .ckconform read is ck_policy_load's, not this tool's own any more: of the
+# five shell readers of that file, this was the only one that stripped the
+# mandatory ' -- <reason>'. The parser now lives in one place, in the language
+# that owns the format — toolbelt/ckconform/src/Policy.php.
 resolve_excludes() {
   local item keep
   local -a extra=() included=()
-  IFS=',' read -ra extra <<< "$(policy dist_exclude)"
-  IFS=',' read -ra included <<< "$(policy dist_include)"
+  ck_policy_load
+  IFS=',' read -ra extra <<< "${CK_POLICY_DIST_EXCLUDE:-}"
+  IFS=',' read -ra included <<< "${CK_POLICY_DIST_INCLUDE:-}"
 
   for item in ${extra[@]+"${extra[@]}"}; do
     item=$(printf '%s' "$item" | tr -d '[:space:]')
