@@ -1,16 +1,12 @@
-# The image build context is the REPO ROOT, so a Dockerfile can COPY from both
-# toolbelt/ (what gets baked into the image) and docker/ (the image's own
-# runtime files) without either of them having to live inside the other. The
-# context is a few MB of text; what is excluded below is excluded because it
-# would be WRONG in the image, not because of size.
+# The build context is the REPO ROOT, so a Dockerfile can COPY from both
+# toolbelt/ and docker/.
 #
-# Rule for adding a line here: exclude a path only if no COPY needs it AND
-# copying it would be actively wrong (host-built artifacts, VCS metadata).
-# Excluding merely-unused trees buys nothing — a COPY layer is invalidated by
-# the files it copies, not by the size of the context.
+# Exclude a path only if no COPY needs it AND copying it would be wrong
+# (host-built artifacts, VCS metadata). Excluding merely-unused trees buys
+# nothing: a COPY layer is invalidated by the files it copies, not by the size
+# of the context.
 
-# Never the VCS metadata: it is the largest thing in the context and no build
-# step reads it (KEEP_GIT operates on the civicrm-core clone, not on this repo).
+# The largest thing in the context, and no build step reads it.
 .git
 
 # oxlint/oxfmt are a package.json + lockfile and a baseline config; the tree

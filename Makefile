@@ -1,16 +1,11 @@
-# The entry point for working on civikitchen locally — and the implementation
-# CI calls, not a second copy of it.
+# The entry point for working on civikitchen locally, and the implementation
+# .github/workflows/lint.yml calls — one implementation, reachable from both
+# sides. Before it, the fast test suites could be run in exactly one place:
+# GitHub Actions.
 #
-# That direction matters. Before this file, the fast test suites (ckconform,
-# the phpstan extension) could be run in exactly one place: GitHub Actions. To
-# run them on a laptop you had to read lint.yml and replay it by hand — check
-# the catalog pins agree, fetch a CiviCRM source tree, fetch a checksum-pinned
-# phpunit phar, set CIVICRM_CORE_DIR. That is why .github/workflows/lint.yml
-# now consists of `make` calls: one implementation, reachable from both sides.
-#
-# Every target is .PHONY. Nothing here is a file built from other files, so
-# Make contributes no dependency graph — what it contributes is being installed
-# everywhere and `make help` being the first thing anyone tries.
+# Every target is .PHONY: nothing here is built from file timestamps, so Make
+# contributes no dependency graph — it contributes being installed everywhere
+# and `make help`.
 
 include toolbelt/versions.env
 
@@ -36,25 +31,14 @@ CK_ZIZMOR_VERSION := 1.29.0
 
 # What gets linted is decided by WHAT A FILE IS, never by where it lives.
 #
-# The old selectors were hand-written directory lists — `find docker toolbelt
-# examples tools tests -name '*.sh'` and the same shape for PHP. That kind of
-# selector fails OPEN: a file it does not match is not reported as unchecked,
-# it is simply absent from the run, and the run says "clean". This repo has
-# been bitten by it twice. First when the sweep globbed only *.sh, which
-# silently skipped every ck* tool — the shell here that runs in the most
-# places. Then by the directory list itself, which omitted template/ and so
-# left three files unlinted: tests/e2e/lib.sh, phpstanBootstrap.php and
-# tests/phpunit/bootstrap.php — all three template-MANAGED, i.e. stamped
-# byte-identical into every conforming extension repo, which makes them the
-# worst three files in the repo to leave ungated.
+# A directory list fails OPEN: a file it does not match is not reported as
+# unchecked, it is simply absent, and the run says "clean". That happened twice
+# here — a *.sh-only glob skipped every ck* tool, and the directory list that
+# replaced it omitted template/, leaving three template-MANAGED files (stamped
+# byte-identical into every extension repo) ungated.
 #
-# Selecting by content also retires two workarounds: the ck* tools no longer
-# need a rule of their own, and `-not -name '*.php'` is gone because a PHP file
-# has no sh shebang, so the convention of naming payloads civikitchen-*.php to
-# keep them out of a glob is no longer load-bearing.
-# `if`, not `cmd && printf`: under .SHELLFLAGS's `set -e` a non-matching grep
-# fails the whole AND-list and kills the loop, so the selector would report the
-# first few files and exit — silently, and short. An `if` condition is exempt.
+# `if`, not `cmd && printf`: under `set -e` a non-matching grep fails the whole
+# AND-list and kills the loop, silently and short. An `if` condition is exempt.
 SHELL_FILES = git ls-files | while read -r f; do \
 	  case "$$f" in *.sh) printf '%s\n' "$$f"; continue ;; esac ; \
 	  if head -1 "$$f" 2>/dev/null \

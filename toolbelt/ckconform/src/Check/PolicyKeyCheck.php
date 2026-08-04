@@ -13,13 +13,10 @@ use CiviKitchen\Ckconform\Reporter;
  * Keeps `.ckconform` itself honest — the policy-file counterpart to
  * SuppressionHygieneCheck.
  *
- * The asymmetry this closes: an inline `// ckconform-ignore FooChekc` has been
- * reported as "a dead ignore never matches" for as long as the tool has
- * existed, while `min_covrage=70` in the policy file disabled a coverage floor
- * in complete silence. Same typo, same consequence — an intended rule that
- * quietly does not apply — and only one of them was caught. Nothing read the
- * key list as a list, because there was no list: ckconform knew nine keys, the
- * ck* tools brought six more of their own, ckinit one.
+ * The asymmetry it closes: a typo'd check name in an inline `ckconform-ignore`
+ * has always been reported as "a dead ignore never matches", while
+ * `min_covrage=70` disabled a coverage floor in silence. Same typo, same
+ * consequence, and only one of them was caught.
  *
  * Three failure modes, all silent by nature:
  *

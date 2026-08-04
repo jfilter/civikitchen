@@ -5,44 +5,23 @@ declare(strict_types=1);
 namespace CiviKitchen\Ckconform;
 
 /**
- * The `.ckconform` policy file: its parser, and the inventory of what may be
- * in it.
+ * The `.ckconform` policy file: its parser, and the inventory of what may be in
+ * it. The only parser — the shell side reads it through
+ * `ckconform --policy-env` / `--policy <key>` (there used to be five sed-based
+ * readers here, which disagreed on indentation, whitespace and the reason
+ * suffix; see README, "One file, one parser").
  *
- * ONE parser, because there were seven. Two in PHP (Context and ckinit) and
- * five in shell, and the shell ones disagreed with each other and with PHP on
- * every edge the format has: ckcoverage matched `^min_coverage=` with sed, so
- * an indented line that PHP accepted was invisible to it and the coverage
- * floor silently disappeared; ckmutate ran `tr -d ' \t'` over the value, which
- * would have mangled any value with meaningful spaces; ckrelease was the only
- * reader that stripped the mandatory ` -- <reason>`, so `min_coverage=70 -- …`
- * reached ckcoverage's numeric comparison as a sentence.
- *
- * The tool already learned this lesson once. ckconform's own shim says so: the
- * checks were rewritten from shell to PHP "after a run of bugs that were all
- * the same bug: parsing structured formats with line-oriented text tools". The
- * policy file was the last place still doing it.
- *
- * The shell side now reads this through `ckconform --policy-env` and
- * `ckconform --policy <key>` and parses nothing.
- *
- * FORMAT: `KEY=VALUE` per line, `#` comments and blank lines ignored, leading
- * and trailing whitespace trimmed, first occurrence of a scalar key wins. The
- * ` -- <reason>` suffix is part of the VALUE — several checks match on it, and
- * the doctrine that an exception without a reason is indistinguishable from a
- * stale one is enforced by the checks that own each key, not here.
+ * FORMAT: `KEY=VALUE` per line, `#` comments and blank lines ignored,
+ * whitespace trimmed, first occurrence of a scalar key wins. The ` -- <reason>`
+ * suffix is part of the VALUE — checks match on it, so whether a reason is
+ * mandatory is decided by the check that owns each key, not here.
  */
 final class Policy
 {
     /**
-     * Every key `.ckconform` may carry, and who reads it.
-     *
-     * This inventory is the point of the class. Before it existed no single
-     * place knew all the keys: ckconform knew nine, the ck* tools brought six
-     * more, ckinit one — so `min_covrage=70` disabled a coverage floor in
-     * silence while a typo'd check name in an inline `ckconform-ignore` was
-     * reported as "a dead ignore never matches". Same class of mistake, and
-     * only one of them was caught. PolicyKeyCheck closes that gap using this
-     * list, which means a new key must be added HERE as well as read.
+     * Every key `.ckconform` may carry, and who reads it. PolicyKeyCheck
+     * reports anything not listed here, so a new key is added HERE as well as
+     * read.
      *
      * @var array<string, string>
      */
@@ -72,30 +51,21 @@ final class Policy
     /**
      * Keys where every occurrence counts, rather than the first one winning.
      *
-     * Only one so far. `template_custom` looks like a member and is not: its
-     * value is a comma-separated list on ONE line, and ckinit stops at the
-     * first occurrence — so a second `template_custom=` line does nothing at
-     * all today. That is exactly the silence this class exists to end, so it
-     * stays scalar and PolicyKeyCheck reports the repeat, rather than the
-     * behaviour changing under repos that may already have one.
+     * `template_custom` is deliberately NOT one: its value is a comma-separated
+     * list on one line and ckinit stops at the first occurrence, so a second
+     * line does nothing today. It stays scalar and PolicyKeyCheck reports the
+     * repeat, rather than behaviour changing under repos that may have one.
      *
      * @var list<string>
      */
     public const REPEATABLE = ['lifecycle_log_ignore'];
 
-    /**
-     * Keys whose value must be a whole percentage. Nothing validated these
-     * before, so `min_coverage=seventy` reached a numeric comparison as a
-     * string and the floor quietly became unenforceable.
-     *
-     * @var list<string>
-     */
+    /** @var list<string> */
     public const PERCENT = ['min_coverage', 'mutation_min_msi', 'mutation_min_covered_msi'];
 
     /**
-     * Parse the file's contents. Unknown keys are returned like any other —
-     * reporting them is PolicyKeyCheck's job, and a parser that dropped them
-     * would leave that check nothing to see.
+     * Unknown keys are returned like any other — reporting them is
+     * PolicyKeyCheck's job, and dropping them here would leave it nothing.
      *
      * @return array<string, list<string>> key => values, in file order
      */
@@ -119,12 +89,10 @@ final class Policy
     }
 
     /**
-     * The value without its ` -- <reason>` suffix.
-     *
-     * For the shell view only. Inside ckconform the reason stays part of the
-     * value, because checks match on it (TestSuiteRequiredCheck accepts
-     * `optional -- <reason>` and nothing else); stripping it there would turn
-     * a mandatory reason into an optional one.
+     * The value without its ` -- <reason>` suffix. For the shell view only:
+     * inside ckconform the reason stays part of the value, because checks match
+     * on it (TestSuiteRequiredCheck accepts `optional -- <reason>` and nothing
+     * else) and stripping it would make a mandatory reason optional.
      */
     public static function stripReason(string $value): string
     {
@@ -134,14 +102,9 @@ final class Policy
     }
 
     /**
-     * `CK_POLICY_<KEY>='<value>'` lines for `eval` in a shell tool.
-     *
-     * Scalar keys only, reason stripped: a shell caller wants `70`, not
-     * `70 -- measured 2026-01`. Repeatable keys are not representable as a
-     * scalar and are fetched one per line with `--policy <key>` instead, which
-     * keeps the reason intact for the callers that must validate it.
-     *
-     * escapeshellarg, not quotes-by-hand: values are free text from a repo.
+     * `CK_POLICY_<KEY>='<value>'` lines for `eval` in a shell tool. Scalar keys
+     * only, reason stripped; repeatable keys go through `--policy <key>`.
+     * escapeshellarg, not quotes by hand: values are free text from a repo.
      */
     public static function toShell(string $raw): string
     {
