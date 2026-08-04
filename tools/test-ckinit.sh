@@ -131,6 +131,19 @@ printf '%s\n' '<!-- local layer -->' >> "$work/drift/phpcs.xml.dist"
 out=$("$root/tools/ckinit.php" --check "$work/drift")
 echo "$out" | grep -q 'up to date'
 
+# phpstan-tests.neon.dist is seeded but OPTIONAL: its absence is not drift,
+# and --update must not reintroduce it (existence is the CI opt-in switch).
+test -f "$work/drift/phpstan-tests.neon.dist"
+/bin/rm "$work/drift/phpstan-tests.neon.dist"
+out=$("$root/tools/ckinit.php" --check "$work/drift")
+echo "$out" | grep -q 'optional  phpstan-tests.neon.dist'
+echo "$out" | grep -q 'up to date'
+"$root/tools/ckinit.php" --update "$work/drift" >/dev/null
+if [ -e "$work/drift/phpstan-tests.neon.dist" ]; then
+  echo "--update recreated the opt-in phpstan-tests.neon.dist" >&2
+  exit 1
+fi
+
 # --force is a seeding flag; refuse the ambiguous combinations.
 if "$root/tools/ckinit.php" --force --update "$work/drift" >/dev/null 2>&1; then
   echo "--force --update was accepted" >&2

@@ -42,7 +42,22 @@ const SEEDED_FILES = [
   // STANDARD stays central (it ships in the image); the layer is the repo's.
   'phpcs.xml.dist',
   'phpstan.neon.dist',
+  // Opt-in test analysis. Seeded, never managed: its mere existence turns a
+  // second CI gate on, so pushing it into existing repos would fail them.
+  'phpstan-tests.neon.dist',
   'phpunit.xml.dist',
+];
+
+/**
+ * Seeded files whose ABSENCE is never drift.
+ *
+ * A new repo gets them; an existing one is not made to. phpstan-tests.neon.dist
+ * is an opt-in gate — its existence is the switch CI reads — so reporting it
+ * missing would turn the drift check into the forced rollout the opt-in was
+ * meant to avoid. --update therefore does not create these either.
+ */
+const OPTIONAL_FILES = [
+  'phpstan-tests.neon.dist',
 ];
 
 function usage(int $status = 2): never {
@@ -232,7 +247,9 @@ $inventory = array_column($files, 1);
 $unclassified = array_diff($inventory, MANAGED_FILES, SEEDED_FILES);
 $stale = array_diff(array_merge(MANAGED_FILES, SEEDED_FILES), $inventory);
 $overlap = array_intersect(MANAGED_FILES, SEEDED_FILES);
-if ($unclassified !== [] || $stale !== [] || $overlap !== []) {
+// An optional file that is not seeded would be a file nothing ever creates.
+$orphanOptional = array_diff(OPTIONAL_FILES, SEEDED_FILES);
+if ($unclassified !== [] || $stale !== [] || $overlap !== [] || $orphanOptional !== []) {
   foreach ($unclassified as $relative) {
     fwrite(STDERR, "ckinit: template file not classified — add to MANAGED_FILES or SEEDED_FILES: {$relative}\n");
   }
@@ -241,6 +258,9 @@ if ($unclassified !== [] || $stale !== [] || $overlap !== []) {
   }
   foreach ($overlap as $relative) {
     fwrite(STDERR, "ckinit: file listed as both managed and seeded: {$relative}\n");
+  }
+  foreach ($orphanOptional as $relative) {
+    fwrite(STDERR, "ckinit: optional file is not in SEEDED_FILES: {$relative}\n");
   }
   exit(2);
 }
@@ -313,6 +333,10 @@ foreach ($files as [$destination, $relative, $perms, $content]) {
   }
   assertRegular($destination, $relative);
   if (!is_file($destination)) {
+    if (in_array($relative, OPTIONAL_FILES, TRUE)) {
+      fwrite(STDOUT, "optional  {$relative} (absent — opt-in)\n");
+      continue;
+    }
     $missing[] = $relative;
     if ($mode === 'update') {
       writeRendered($destination, $relative, $perms, $content);

@@ -608,6 +608,20 @@ jobs:
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && phpstan analyse --no-progress"
 
+      # Second, separate pass over tests/phpunit. The FILE is the switch —
+      # there is no input to set: a repo whose test code is level-10 clean
+      # commits phpstan-tests.neon.dist and the gate exists from that push on.
+      # Until then the test-only rules (ck.test.*ddl*/InTransaction) see no
+      # file at all, which is why the opt-in is worth having.
+      - name: PHPStan (tests, opt-in)
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "cd /var/www/html/ext/$CK_EXT_KEY && \
+             if [ -f phpstan-tests.neon ]; then phpstan analyse -c phpstan-tests.neon --no-progress; \
+             elif [ -f phpstan-tests.neon.dist ]; then phpstan analyse -c phpstan-tests.neon.dist --no-progress; \
+             else echo 'no phpstan-tests.neon.dist — test analysis not enabled'; fi"
+
       # Runs on ONE PHP (the image's), which is exactly why this step exists: it
       # is the only gate that asks whether the code also runs on the LOWER bound
       # the extension promises in composer.json — a matrix of real interpreters
