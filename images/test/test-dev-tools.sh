@@ -997,10 +997,17 @@ if [ -f "${CKPU}/handed.xml" ] \
 else
     fail "canary listener ordering (it must come after CiviTestListener)"
 fi
-if [ -e "${CKPU}/.ckphpunit-canary.xml" ]; then
-    fail "ckphpunit left its generated config behind"
+# The generated config lives in a temp dir, never in the (possibly read-only
+# under CI's uid mismatch) repo — and its paths must survive the move.
+if [ -z "$(find "${CKPU}" -maxdepth 1 -name '.ckphpunit-canary.xml' -o -name 'ckphpunit-canary-*' | head -1)" ]; then
+    ok "ckphpunit writes nothing into the repo directory"
 else
-    ok "ckphpunit removes its generated config"
+    fail "ckphpunit left a generated config in the repo"
+fi
+if [ -f "${CKPU}/handed.xml" ] && grep -q "bootstrap=\"${CKPU}/tests/bootstrap.php\"" "${CKPU}/handed.xml"; then
+    ok "ckphpunit absolutizes the bootstrap path in the temp config"
+else
+    fail "ckphpunit did not absolutize the bootstrap path (config: $(grep -o 'bootstrap="[^"]*"' "${CKPU}/handed.xml" 2>/dev/null))"
 fi
 rm -f "${CKPU}/handed.xml"
 (cd "${CKPU}" && PATH="${CKPU}/fake:${PATH}" CK_TX_CANARY=0 ckphpunit tests >/dev/null 2>&1) || true

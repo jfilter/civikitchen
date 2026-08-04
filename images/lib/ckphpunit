@@ -48,10 +48,10 @@ if [ "${CK_TX_CANARY:-1}" = 0 ] || [ -z "$config" ] || [ ! -f "$CANARY" ]; then
   exec phpunit "$@"
 fi
 
-# Beside the original: phpunit resolves bootstrap, testsuite and coverage paths
-# relative to the CONFIG FILE's directory, so a copy in /tmp would silently
-# measure and load nothing.
-generated="$(dirname "$config")/.ckphpunit-canary.xml"
+# In a writable temp dir, NOT beside the original: under CI's uid mismatch the
+# mounted repo belongs to the runner and www-data cannot write there. phpunit
+# resolves paths relative to the config file, so the copy absolutizes them.
+generated="$(mktemp -t ckphpunit-canary-XXXXXX.xml)"
 trap 'rm -f "$generated"' EXIT
 
 # `--` is load-bearing: a script on stdin makes php read the first bare
@@ -67,6 +67,28 @@ if (!@$dom->load($src)) {
   exit(2);
 }
 $root = $dom->documentElement;
+
+// The generated copy lives in /tmp, so every path the original resolved
+// relative to its own directory has to become absolute.
+$base = dirname(realpath($src));
+$abs = static function (string $p) use ($base): string {
+  if ($p === '' || $p[0] === '/' || str_starts_with($p, 'phar://')) {
+    return $p;
+  }
+  return $base . '/' . $p;
+};
+foreach (['bootstrap', 'cacheResultFile', 'extensionsDirectory', 'cacheDirectory'] as $attr) {
+  if ($root->hasAttribute($attr)) {
+    $root->setAttribute($attr, $abs($root->getAttribute($attr)));
+  }
+}
+$xpath = new DOMXPath($dom);
+foreach ($xpath->query('//testsuite/directory|//testsuite/file|//testsuite/exclude'
+  . '|//coverage//directory|//coverage//file|//source//directory|//source//file'
+  . '|//whitelist//directory|//whitelist//file') as $node) {
+  $node->nodeValue = $abs(trim($node->nodeValue));
+}
+
 $listeners = $root->getElementsByTagName('listeners')->item(0);
 if ($listeners === NULL) {
   $listeners = $dom->createElement('listeners');
