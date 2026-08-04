@@ -58,6 +58,23 @@
     <!-- ckfmt wraps long `implements` lists with a 2-space continuation, this
          sniff wants 4. The formatter owns layout; one gate must yield. -->
     <exclude name="Drupal.Classes.ClassDeclaration.InterfaceWrongIndent"/>
+    <!-- Same sniff, the overlong-declaration cases: ckfmt breaks after
+         `extends` and indents the parent name, which this sniff reads as
+         "3 spaces before the name" and, when an `implements` list follows,
+         as "implements not on the class-name line". -->
+    <exclude name="Drupal.Classes.ClassDeclaration.SpaceBeforeName"/>
+    <exclude name="Drupal.Classes.ClassDeclaration.ImplementsLine"/>
+  </rule>
+
+  <!-- An `echo` whose concatenation exceeds the print width: ckfmt breaks
+       after the keyword and leaves the semicolon on its own line. Both sniffs
+       are pure layout, which the formatter owns; SemicolonSpacing carries a
+       single message code, so excluding it retires that sniff. -->
+  <rule ref="Squiz.WhiteSpace.LanguageConstructSpacing">
+    <exclude name="Squiz.WhiteSpace.LanguageConstructSpacing.IncorrectSingle"/>
+  </rule>
+  <rule ref="Squiz.WhiteSpace.SemicolonSpacing">
+    <exclude name="Squiz.WhiteSpace.SemicolonSpacing.Incorrect"/>
   </rule>
 
   <!-- The test bootstrap's `if (!function_exists('cv')) { function cv() {…} }`

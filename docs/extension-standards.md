@@ -634,6 +634,22 @@ and `no-unsanitized`. CiviCRM's globals (`CRM`, `cj`, `ts`, `_`, `angular`) are
 declared for you; `dist/`, `vendor/`, `node_modules/`, the vendored-asset
 directories and `*.min.js` are ignored.
 
+**Node globals in an e2e suite come from the image.** The type-aware rules are
+type-aware about `process.env` too: without `@types/node` in the *repo's*
+`node_modules` it is an error type, and every expression touching it trips
+`no-unsafe-assignment` / `-member-access` / `-return`. `ckeslint` links the
+image's pinned copy into `node_modules/@types/node` for the run and removes it
+afterwards, so no repo needs the devDependency — but tsgolint does not
+auto-include `@types` the way `tsc` does, so your `tsconfig.json` still has to
+say so:
+
+```json
+{ "compilerOptions": { "types": ["node"] } }
+```
+
+A repo that installs its own `@types/node` keeps it; the link is only created
+when nothing is there.
+
 Ship your own `.oxlintrc.json` and it wins outright — the baseline is not
 merged into it, not layered under it, just not used. The cost of owning it is
 owning its `jsPlugins` too: oxlint resolves those against *your* `node_modules`,

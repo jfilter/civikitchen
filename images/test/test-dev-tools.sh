@@ -530,6 +530,63 @@ else
     fail "ckeslint on a JS-free repo (output: ${NOJS_OUT:0:200})"
 fi
 
+# Node globals: an e2e suite reading process.env must not drown in
+# no-unsafe-* just because the repo does not carry @types/node. The image's
+# copy is linked in for the run — and must be gone again afterwards, because a
+# stray node_modules/ in a checkout is exactly what the gate must not leave.
+ESNODE="${WORKDIR}/eslintnodeext"
+mkdir -p "${ESNODE}/e2e"
+cp "${ESDIR}/info.xml" "${ESNODE}/info.xml"
+cat > "${ESNODE}/tsconfig.json" <<'JSON'
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"]
+  },
+  "include": ["e2e/**/*.ts"]
+}
+JSON
+cat > "${ESNODE}/e2e/env.ts" <<'TS'
+export function baseUrl(): string {
+  const raw = process.env.WIDGET_BASE_URL;
+  return raw ?? 'http://localhost';
+}
+TS
+(cd "${ESNODE}" && git init -q . && git add -A) >/dev/null 2>&1
+NODE_OUT="$( (cd "${ESNODE}" && ckeslint --format=unix) 2>&1 || true)"
+if echo "${NODE_OUT}" | grep -q "no-unsafe"; then
+    fail "ckeslint reports no-unsafe-* on process.env — the image's @types/node did not reach the program (output: ${NODE_OUT:0:400})"
+else
+    ok "ckeslint types process.env from the image's @types/node"
+fi
+if [ -e "${ESNODE}/node_modules" ]; then
+    fail "ckeslint left a node_modules/ behind in the repo"
+else
+    ok "ckeslint removes its @types/node overlay again"
+fi
+
+# A repo that carries its own @types/node keeps it: the overlay must not
+# overwrite it, and two copies in one program is the conflict to avoid.
+ESOWNNODE="${WORKDIR}/eslintownnodeext"
+mkdir -p "${ESOWNNODE}/e2e/../node_modules/@types"
+cp "${ESNODE}/info.xml" "${ESOWNNODE}/info.xml"
+cp "${ESNODE}/tsconfig.json" "${ESOWNNODE}/tsconfig.json"
+cp "${ESNODE}/e2e/env.ts" "${ESOWNNODE}/e2e/env.ts"
+cp -R /opt/civikitchen-oxlint/node_modules/@types/node "${ESOWNNODE}/node_modules/@types/node"
+(cd "${ESOWNNODE}" && git init -q . && git add -A) >/dev/null 2>&1
+OWNNODE_OUT="$( (cd "${ESOWNNODE}" && ckeslint --format=unix) 2>&1 || true)"
+if echo "${OWNNODE_OUT}" | grep -q "no-unsafe"; then
+    fail "ckeslint broke a repo that ships its own @types/node (output: ${OWNNODE_OUT:0:400})"
+elif [ -L "${ESOWNNODE}/node_modules/@types/node" ]; then
+    fail "ckeslint replaced the repo's own @types/node with its overlay"
+else
+    ok "ckeslint leaves a repo's own @types/node alone"
+fi
+
 # ---------------------------------------------------------------------------
 # 3e2. ckfmt: both formatter halves fire, converge, and the mago output agrees
 #      with the phpcs standard cklint enforces — the property the whole gate
@@ -574,6 +631,98 @@ if CKLINT_FMT_OUT="$( (cd "${FMTDIR}" && cklint --all) 2>&1 )"; then
 else
     fail "cklint rejects ckfmt output (output: ${CKLINT_FMT_OUT:0:300})"
 fi
+
+# The same agreement property on the constructs where the two gates have
+# actually collided: whatever ckfmt does with an overlong line, phpcs must
+# accept. Each fixture is its own file so a regression names the construct.
+AGREEDIR="${WORKDIR}/fmtagreeext"
+mkdir -p "${AGREEDIR}"
+cp "${FMTDIR}/info.xml" "${AGREEDIR}/info.xml"
+cat > "${AGREEDIR}/extends.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+namespace Civi\Acme\Widget;
+
+class AcmeWidgetSubscriptionRenewalNotificationDispatchHandler extends AbstractAcmeWidgetSubscriptionRenewalNotificationHandlerBase {
+
+  public function handle(): void {
+  }
+
+}
+PHP
+cat > "${AGREEDIR}/extendsimplements.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+namespace Civi\Acme\Widget;
+
+class AcmeWidgetSubscriptionRenewalDispatchHandler extends AbstractAcmeWidgetSubscriptionRenewalNotificationHandlerBase implements AcmeWidgetNotificationInterface {
+
+  public function handle(): void {
+  }
+
+}
+PHP
+cat > "${AGREEDIR}/implements.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+namespace Civi\Acme\Widget;
+
+class AcmeWidgetRenewalHandler implements AcmeWidgetNotificationInterface, AcmeWidgetSchedulableInterface, AcmeWidgetLoggableInterface {
+
+  public function handle(): void {
+  }
+
+}
+PHP
+cat > "${AGREEDIR}/echoconcat.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+function acme_render(string $alpha, string $beta, string $gamma, string $delta): void {
+  echo 'The widget ' . $alpha . ' has been renewed for ' . $beta . ' until ' . $gamma . ' and dispatched to ' . $delta . '.';
+}
+PHP
+cat > "${AGREEDIR}/nestedarray.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+function acme_rows(): array {
+  return [['id' => 1, 'label' => 'one', 'description' => 'the first widget row'], ['id' => 2, 'label' => 'two', 'description' => 'the second widget row']];
+}
+PHP
+mkdir -p "${AGREEDIR}/tests/phpunit"
+cat > "${AGREEDIR}/tests/phpunit/bootstrap.php" <<'PHP'
+<?php
+
+if (!function_exists('cv')) {
+
+  function cv(string $cmd) {
+    return $cmd;
+  }
+
+}
+PHP
+(cd "${AGREEDIR}" && git init -q . && git add -A) >/dev/null 2>&1
+if AGREE_FMT_OUT="$( (cd "${AGREEDIR}" && ckfmt) 2>&1 )"; then
+    ok "ckfmt formats the overlong-line fixtures"
+else
+    fail "ckfmt failed on the overlong-line fixtures (output: ${AGREE_FMT_OUT:0:300})"
+fi
+for fixture in extends extendsimplements implements echoconcat nestedarray tests/phpunit/bootstrap; do
+    if AGREE_OUT="$( (cd "${AGREEDIR}" && phpcs --standard=CiviKitchen --extensions=php -s "${fixture}.php") 2>&1 )"; then
+        ok "ckfmt output for ${fixture}.php is clean under the CiviKitchen standard"
+    else
+        fail "phpcs rejects ckfmt output for ${fixture}.php (output: ${AGREE_OUT:0:400})"
+    fi
+done
 
 # No formattable files at all must PASS, and say so.
 NOFMT="${WORKDIR}/nofmtext"

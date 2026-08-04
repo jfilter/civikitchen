@@ -147,6 +147,38 @@ if [ -z "${OXLINT_TSGOLINT_PATH:-}" ]; then
   done
 fi
 
+# Node globals (process.env, __dirname) in e2e suites: tsgolint builds its
+# TypeScript program from the REPO, so `process` is an error type unless
+# @types/node resolves there — and every expression touching it then trips
+# no-unsafe-*. The image carries the types so no repo has to install them;
+# they are linked in for the run only and removed again by the trap, because
+# node_modules belongs to the repo, not to the gate. A repo that ships its own
+# copy keeps it — two @types/node in one program is the conflict to avoid.
+overlay_link=""
+cleanup_overlay() {
+  [ -n "${overlay_link}" ] || return 0
+  rm -f "${overlay_link}"
+  rmdir "$(dirname "${overlay_link}")" 2>/dev/null || true
+  rmdir "$(dirname "$(dirname "${overlay_link}")")" 2>/dev/null || true
+}
+trap cleanup_overlay EXIT INT TERM
+if [ -f tsconfig.json ] && [ ! -e node_modules/@types/node ] \
+    && [ -d "$toolchain/node_modules/@types/node" ]; then
+  if mkdir -p node_modules/@types 2>/dev/null \
+      && ln -s "$toolchain/node_modules/@types/node" node_modules/@types/node 2>/dev/null; then
+    overlay_link="$PWD/node_modules/@types/node"
+  fi
+  # Resolvable is only half of it: tsgolint does not auto-include @types the
+  # way tsc does, so the tsconfig has to name them. Said once, with the fix.
+  if [ -n "${overlay_link}" ] && ! grep -q '"types"' tsconfig.json \
+      && git -c safe.directory="$PWD" grep -qI -e 'process\.' -e '__dirname' -e '__filename' -- '*.ts' '*.tsx' >/dev/null 2>&1; then
+    echo "ckeslint: this repo uses Node globals but its tsconfig.json has no \"types\" — add \"types\": [\"node\"], or the type-aware rules see an untyped \`process\`."
+  fi
+fi
+
 # `${args[@]+...}`: an empty array under `set -u` is an unbound variable on
 # bash 3.2 (macOS, where this tool is also developed).
-exec "$toolchain/node_modules/.bin/oxlint" ${args[@]+"${args[@]}"} "${paths[@]}"
+# Not exec: the overlay cleanup trap has to run.
+rc=0
+"$toolchain/node_modules/.bin/oxlint" ${args[@]+"${args[@]}"} "${paths[@]}" || rc=$?
+exit "$rc"

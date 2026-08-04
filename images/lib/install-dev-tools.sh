@@ -339,6 +339,12 @@ npm ci --prefix "${OXLINT_DIR}" --no-audit --no-fund --loglevel=error
 # resolved none of them, ckeslint would silently lose every type-aware rule.
 ls "${OXLINT_DIR}"/node_modules/@oxlint-tsgolint/*/tsgolint >/dev/null
 
+# @types/node is not a linter dependency but the payload ckeslint links into a
+# repo for the run, so an e2e suite's `process.env` is typed without the repo
+# installing anything. Missing, the type-aware rules would bury it in
+# no-unsafe-* findings.
+ls "${OXLINT_DIR}"/node_modules/@types/node/package.json >/dev/null
+
 # oxfmt toolchain (JS half of `ckfmt`) — same shape as the oxlint install:
 # pinned in its package.json, resolved from its committed lockfile. The npm
 # package selects the platform binding itself via optionalDependencies.
