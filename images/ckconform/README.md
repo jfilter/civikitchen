@@ -66,13 +66,16 @@ npm_license=UNLICENSED       # every tracked package.json
 copyright=Example Ltd        # must appear in LICENSE.txt
 tests=optional -- <reason>   # the reason is not optional
 min_coverage=70              # enforced by ckcoverage
+mutation_min_msi=60          # enforced by ckmutate (nightly), absent = no-op
+mutation_min_covered_msi=75  # optional second floor, covered code only
+mutation_paths=Civi          # optional: what ckmutate mutates (default: changed lines)
 known_hooks=acmeConnectors   # third-party hook names HookDispatchNameCheck should trust
 hook_style=listener          # business hooks in scan classes; classic form only for pre-boot/lifecycle/return-value hooks
 template_custom=<file>,...  -- <reason>   # read by ckinit --check/--update, not by ckconform
 ```
 
 `.ckconform` is the one policy file for the whole ck* family — ckconform,
-ckcoverage and ckinit all read it, so a repo's deviations from the standard
+ckcoverage, ckmutate and ckinit all read it, so a repo's deviations from the standard
 live in one place with their reasons attached.
 
 ## Suppressing a finding

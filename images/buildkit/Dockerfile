@@ -107,6 +107,7 @@ ARG MAGO_VERSION
 ARG MAGO_SHA256_X86_64
 ARG MAGO_SHA256_AARCH64
 ARG NPM_VERSION
+ARG INFECTION_VERSION
 COPY lib/install-dev-tools.sh /tmp/install-dev-tools.sh
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
 # install-dev-tools.sh) and the cklint linter that runs it.
@@ -125,6 +126,8 @@ COPY ckconform /opt/civikitchen-ckconform
 COPY lib/ckconform /usr/local/bin/ckconform
 # coverage gate: runs the suite with clover and enforces .ckconform's min_coverage
 COPY lib/ckcoverage /usr/local/bin/ckcoverage
+# mutation testing (infection): coverage's harder question, nightly-only.
+COPY lib/ckmutate /usr/local/bin/ckmutate
 # Transactional-test gate + lifecycle gate, same pairing as the standalone image.
 COPY lib/ckphpunit /usr/local/bin/ckphpunit
 COPY lib/civikitchen-tx-canary.php /usr/local/share/civikitchen/tx-canary.php
@@ -164,6 +167,7 @@ RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION
         PHPSTAN_EXTENSION_INSTALLER_VERSION="${PHPSTAN_EXTENSION_INSTALLER_VERSION}" \
         CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
         PHPUNIT_VERSION="${PHPUNIT_VERSION}" PHPUNIT_SHA256="${PHPUNIT_SHA256}" \
+        INFECTION_VERSION="${INFECTION_VERSION}" \
         MAGO_VERSION="${MAGO_VERSION}" MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64}" \
         MAGO_SHA256_AARCH64="${MAGO_SHA256_AARCH64}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
@@ -171,7 +175,7 @@ RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION
        /usr/local/bin/ckphpunit /usr/local/bin/cklifecycle \
         /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktaint \
         /usr/local/bin/cksmarty /usr/local/bin/ckschemadiff /usr/local/bin/ckeslint \
-        /usr/local/bin/ckfmt
+        /usr/local/bin/ckfmt /usr/local/bin/ckmutate
 
 # PHP runtime tuning — matches what civibuild expects for site builds.
 RUN { \

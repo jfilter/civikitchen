@@ -547,6 +547,25 @@ credential nobody knows is in the history is not.
   teaches people to ignore a red build — and a floor must never be lowered to
   turn one green.
 
+- **Coverage is the cheap half of the question.** A line can be executed by a
+  test that asserts nothing about it. `ckmutate` (infection) rewrites the code
+  under the suite — flips a comparison, drops a return — and reports the
+  mutants no test killed; each survivor is a covered line the suite does not
+  actually check. It reads `mutation_min_msi` from `.ckconform` (optionally
+  `mutation_min_covered_msi`) and is a **no-op that exits 0** without that key,
+  so adopt it the same way as coverage: measure, set the floor to what you
+  have, ratchet.
+
+  **Recommendation: switch it on in the scheduled `compat.yml` caller
+  (`mutation: true`), never in the push run**, and scope it with
+  `mutation_paths` to the domain logic and the exporters — the code where a
+  surviving mutant means something. Without `mutation_paths` it mutates only
+  the lines changed against `CK_MUTATE_BASE` (default `origin/main`), which is
+  the useful mode on a branch but not the one a weekly reading wants. A
+  mutation run costs a suite run per mutant batch and its score moves with
+  refactors that changed no behaviour; as a push gate that is a slow, flappy
+  build.
+
 Licence declarations (`info.xml`, `composer.json`, every `package.json`) must
 agree with each other. *Which* licence is your policy, not this standard's, so
 pin the expected values in an optional `.ckconform` in the extension root and
@@ -1106,6 +1125,10 @@ jobs:
       # Browser tests, for a repo that has a test:e2e script — another stack
       # boot, which is exactly why it lives here and not in ci.yml.
       # playwright: true
+      # Mutation testing (ckmutate): does the suite assert on what it covers.
+      # A no-op until .ckconform sets mutation_min_msi — and set
+      # mutation_paths there too, or a weekly run mutates the whole tree.
+      mutation: true
       # The drift job already runs on every push in ci.yml.
       check_template: false
 ```

@@ -12,6 +12,7 @@
 #              sets plus CiviKitchen's CiviCRM footgun rules)
 #   - psalm    (isolated; powers `cktaint` — used ONLY as a taint engine, with
 #              CiviCRM source/sink/escape stubs)
+#   - infection (isolated; powers `ckmutate` — mutation testing, opt-in floor)
 #   - mago     (Rust binary; PHP half of `ckfmt`, formats to the bundled
 #              phpcs standard's expectations)
 #   - oxlint   (npm toolchain + tsgolint Go binary; powers `ckeslint`)
@@ -86,6 +87,11 @@ PSALM_VERSION="${PSALM_VERSION:-6.16.1}"
 CIVIX_VERSION="${CIVIX_VERSION:-26.02.0}"
 # phpunit 9 is the last line CiviCRM's test base supports; pin the patch too.
 PHPUNIT_VERSION="${PHPUNIT_VERSION:-9.6.35}"
+# infection powers `ckmutate` (nightly mutation testing, never a push gate).
+# Pinned like everything else: a mutation SCORE that moves because the engine
+# gained mutators would push a repo through its .ckconform floor with no code
+# change — the one thing a scheduled quality signal must not do.
+INFECTION_VERSION="${INFECTION_VERSION:-0.34.1}"
 # mago powers the PHP half of `ckfmt`. A formatter that changes its output
 # after an unrelated rebuild would turn every repo's format gate red, so the
 # same drift rule as everything else applies.
@@ -300,6 +306,25 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# infection (isolated install, same shape as rector/psalm) — powers `ckmutate`.
+# Isolated for the same reason psalm is: it brings its own parser and ~30
+# packages, and the phpstan tree is the gate every extension depends on.
+INFECTION_DIR=/opt/civikitchen-infection
+mkdir -p "${INFECTION_DIR}"
+[ -f "${INFECTION_DIR}/composer.json" ] || echo '{}' > "${INFECTION_DIR}/composer.json"
+# infection/extension-installer is a composer plugin, like phpstan's.
+composer config --working-dir="${INFECTION_DIR}" --no-plugins \
+    allow-plugins.infection/extension-installer true
+composer require --working-dir="${INFECTION_DIR}" --no-interaction --no-progress \
+    "infection/infection:${INFECTION_VERSION}"
+
+cat > /usr/local/bin/infection <<EOF
+#!/bin/sh
+exec php ${INFECTION_DIR}/vendor/bin/infection "\$@"
+EOF
+chmod +x /usr/local/bin/infection
+
+# ---------------------------------------------------------------------------
 # npm itself, before the two `npm ci` runs below.
 npm install -g "npm@${NPM_VERSION}" --no-audit --no-fund --loglevel=error
 
@@ -354,5 +379,5 @@ npm ci --prefix "${OXFMT_DIR}" --no-audit --no-fund --loglevel=error
 rm -rf /opt/composer/cache ~/.npm
 chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" \
     /opt/civikitchen-rector "${PHPSTAN_DIR}" "${PHPSTAN_EXT_DIR}" \
-    /opt/civikitchen-phpstan-config /opt/civikitchen-psalm "${OXLINT_DIR}" \
+    /opt/civikitchen-phpstan-config /opt/civikitchen-psalm "${INFECTION_DIR}" "${OXLINT_DIR}" \
     "${OXFMT_DIR}" /opt/civikitchen-mago /usr/local/bin/mago

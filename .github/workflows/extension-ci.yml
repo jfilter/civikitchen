@@ -129,6 +129,14 @@ on:
           installed binaries run on Node. See docs/extension-standards.md.
         type: boolean
         default: false
+      mutation:
+        description: >-
+          Mutation testing (infection via `ckmutate`) as its own job: does the
+          suite ASSERT on what it covers. Slow and its score moves with
+          unrelated refactors, so it is a SCHEDULED signal, never a push gate.
+          A no-op unless the repo sets mutation_min_msi in .ckconform.
+        type: boolean
+        default: false
       playwright:
         description: >-
           Browser tests as their own job: stack with published HTTP port and
@@ -1015,6 +1023,61 @@ jobs:
              cd /var/www/html/ext/$CK_EXT_KEY
              ckschemadiff dump \"\${CIVICRM_DB_NAME:-civicrm}\" /tmp/ck-schema-fresh.sql
              ckschemadiff diff /tmp/ck-schema-fresh.sql /tmp/ck-schema-upgraded.sql"
+
+      - name: App logs on failure
+        if: failure()
+        run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
+
+  # --- Mutation testing (opt-in via mutation) -------------------------------
+  #
+  # ckcoverage asks whether a line ran; this asks whether anything would have
+  # noticed if the line were WRONG. Infection rewrites the code under the suite
+  # and counts the mutants no test killed.
+  #
+  # Its own job, and off by default, for two reasons: a mutation run is a suite
+  # run per mutant batch, and the score drifts with refactors that changed no
+  # behaviour. As a push gate that is a slow, flappy build; as a scheduled one
+  # it is a weekly reading. Belongs in the compat caller — see
+  # docs/extension-standards.md.
+  #
+  # The floor is the repo's own (.ckconform: mutation_min_msi), so there is
+  # nothing to configure here. Without that key ckmutate exits 0 with a line
+  # saying so, which is what makes switching the input on safe before the
+  # number is known.
+  mutation:
+    if: ${{ inputs.mutation }}
+    runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    env:
+      CK_COMPOSE_FILE: ${{ inputs.compose_file }}
+      CK_EXT_KEY: ${{ inputs.key }}
+      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+    steps:
+      # Full history: without mutation_paths ckmutate mutates the lines changed
+      # against CK_MUTATE_BASE, and a shallow clone has no base to diff.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate inputs
+        run: |
+          [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
+            || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
+
+      - name: Start CiviCRM stack
+        id: stack
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" down -v --remove-orphans
+          docker compose -f "$CK_COMPOSE_FILE" up -d --wait --quiet-pull
+
+      # safe.directory first: the mount belongs to the runner user, and the
+      # changed-lines mode (no mutation_paths) shells out to git as www-data.
+      - name: Mutation testing (ckmutate)
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+            "git config --global --add safe.directory /var/www/html/ext/$CK_EXT_KEY
+             cd /var/www/html/ext/$CK_EXT_KEY && ckmutate"
 
       - name: App logs on failure
         if: failure()

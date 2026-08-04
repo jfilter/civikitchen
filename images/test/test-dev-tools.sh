@@ -22,6 +22,7 @@
 #   5. phpunit actually runs a passing assertion
 #   5b. ckphpunit injects the transaction canary listener, after CiviTestListener
 #   5c. cklifecycle's guards (the cycle itself needs a booted site)
+#   5d. ckmutate: red on a surviving mutant with a floor, no-op without one
 #   6. composer can install a real package from packagist
 #   7. civix can render help (signals the phar boots)
 #   8. Xdebug toggle: php -m has no xdebug by default; setting XDEBUG_MODE
@@ -38,7 +39,7 @@ fail() { echo "  ✗ $1"; FAIL=$((FAIL+1)); FAILURES+=("$1"); }
 # ---------------------------------------------------------------------------
 # 1. Binaries respond to --version
 echo "== versions =="
-for bin in composer node npm civix phpunit phpstan phpcs phpcbf cv; do
+for bin in composer node npm civix phpunit phpstan phpcs phpcbf cv infection; do
     if command -v "${bin}" >/dev/null 2>&1 && "${bin}" --version >/dev/null 2>&1; then
         ok "${bin} --version"
     else
@@ -1077,6 +1078,79 @@ else
     fail "XDEBUG_MODE didn't enable xdebug"
 fi
 rm -f "${XDEBUG_INI}"
+
+# ---------------------------------------------------------------------------
+# 5d. ckmutate: the point of mutation testing in one fixture — a test that
+#     COVERS a line without asserting enough to notice it changing. `$n > 10`
+#     asserted only at n = 50 survives the GreaterThanOrEqual mutant, so a 100%
+#     floor must go red. Without the .ckconform key the tool must be a no-op.
+echo "== ckmutate =="
+MUT="${WORKDIR}/ckmutate"
+mkdir -p "${MUT}/Civi" "${MUT}/tests"
+printf '<extension key="org.acme.widget" type="module"><file>widget</file></extension>\n' > "${MUT}/info.xml"
+cat > "${MUT}/Civi/Greeter.php" <<'PHP'
+<?php
+namespace Civi;
+class Greeter {
+    public function level(int $n): string {
+        return $n > 10 ? 'high' : 'low';
+    }
+}
+PHP
+cat > "${MUT}/tests/bootstrap.php" <<'PHP'
+<?php
+spl_autoload_register(function ($class) {
+    $path = __DIR__ . '/../' . str_replace('\\', '/', $class) . '.php';
+    if (file_exists($path)) { require $path; }
+});
+PHP
+cat > "${MUT}/tests/GreeterTest.php" <<'PHP'
+<?php
+use PHPUnit\Framework\TestCase;
+class GreeterTest extends TestCase {
+    public function testHighLevel(): void {
+        $this->assertSame('high', (new Civi\Greeter())->level(50));
+    }
+}
+PHP
+cat > "${MUT}/phpunit.xml.dist" <<'XML'
+<?xml version="1.0"?>
+<phpunit colors="false" bootstrap="tests/bootstrap.php">
+    <testsuites><testsuite name="unit"><directory>tests</directory></testsuite></testsuites>
+</phpunit>
+XML
+MUT_OUT="$( (cd "${MUT}" && ckmutate) 2>&1 || true)"
+if (cd "${MUT}" && ckmutate) >/dev/null 2>&1 && echo "${MUT_OUT}" | grep -q 'no mutation_min_msi'; then
+    ok "ckmutate is a no-op without mutation_min_msi in .ckconform"
+else
+    fail "ckmutate without a floor should pass and say so (output: ${MUT_OUT:0:300})"
+fi
+
+printf 'mutation_min_msi=100\nmutation_paths=Civi\n' > "${MUT}/.ckconform"
+MUT_OUT="$( (cd "${MUT}" && ckmutate) 2>&1 || true)"
+if (cd "${MUT}" && ckmutate) >/dev/null 2>&1; then
+    fail "ckmutate passed a 100% floor although a mutant survives (output: ${MUT_OUT:0:300})"
+else
+    ok "ckmutate fails the floor when a mutant escapes the suite"
+fi
+if echo "${MUT_OUT}" | grep -q 'GreaterThan'; then
+    ok "ckmutate names the escaped mutant"
+else
+    fail "ckmutate did not report the escaped GreaterThan mutant (output: ${MUT_OUT:0:300})"
+fi
+if [ -e "${MUT}/.ckmutate.json" ]; then
+    fail "ckmutate left its generated infection config behind"
+else
+    ok "ckmutate removes its generated config"
+fi
+
+printf 'mutation_min_msi=50\nmutation_paths=Civi\n' > "${MUT}/.ckconform"
+if (cd "${MUT}" && ckmutate) >/dev/null 2>&1; then
+    ok "ckmutate passes a floor the suite meets"
+else
+    MUT_OK_OUT="$( (cd "${MUT}" && ckmutate) 2>&1 || true)"
+    fail "ckmutate failed a floor it should meet (output: ${MUT_OK_OUT:0:300})"
+fi
 
 # ---------------------------------------------------------------------------
 echo
