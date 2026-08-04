@@ -75,7 +75,39 @@ unless `--force` is explicitly supplied. For an existing extension,
   and their aliases, `segment_*` from SearchKit, camelCase BAO pass-through
   params in a write, and every entity whose field list is not table-backed
   (Setting, Afform, ECK, `SK_*`, `Custom_*`). A finding is therefore worth
-  reading rather than baselining.
+  reading rather than baselining. A builder held in a variable
+  (`$q = Contact::get(); $q->addSelect(…)`) is judged through its type, which
+  names the entity exactly; only `orderBy`/`groupBy` are skipped there,
+  because an alias defined by an earlier link is out of sight.
+- **A protected property on a custom APIv4 action is an API parameter.** The
+  kernel fills it from the caller's params, so a non-nullable typed property
+  without a default and without `@required` does not produce an API validation
+  error when the caller omits it — it produces PHP's "must not be accessed
+  before initialization", from inside the kernel, naming no field
+  (`ck.api4.uninitializedActionParam`). The reverse combination, `@required`
+  next to a default or a nullable type, promises a validation that can never
+  fire (`ck.api4.requiredActionParamWithDefault`). The template enables
+  `checkUninitializedProperties`; a `ReadWritePropertiesExtension` in the same
+  package keeps that usable by declaring action parameters
+  kernel-written — the rule above is the precise statement about them.
+- **DDL inside a transactional test is the flake you cannot see.**
+  `Civi\Test\TransactionalInterface` wraps each test in a transaction, and
+  MySQL commits implicitly on any DDL — so `CustomField`/`CustomGroup`
+  create/save, an extension install/enable, or a literal
+  CREATE/ALTER/DROP/TRUNCATE/RENAME in `setUp()` or a test method ends that
+  transaction, and the rows stay behind for the next run to trip over
+  (`ck.test.customFieldInTransaction`, `ck.test.extensionInTransaction`,
+  `ck.test.ddlInTransaction`). The rule follows `$this->…()` helpers, because
+  that is where the schema work usually sits. The fix is `setUpHeadless()`,
+  never a suppression — and the rule only sees this when `tests` is in the
+  repo's analysed `paths`.
+- **A catch around a query must not be a silent fallback.** If the `try`
+  reaches the database directly (`CRM_Core_DAO::executeQuery()`,
+  `singleValueQuery()`, a DAO's `find()`) the catch has to rethrow or
+  `\Civi::log()->error()`; an empty catch, or one that only logs `debug`/
+  `info`, turns a failed query into a substituted value the caller cannot
+  tell from real data (`ck.db.silentCatch`). APIv4 calls are out of scope:
+  their exceptions are legitimate control flow.
 - `E::ts()`, never bare `ts()` (`CiviKitchen.I18n.UseExtensionTs`).
 - Standard mixins for managed entities / menu / settings / Angular — no
   bespoke hooks (`CiviKitchen.Extension.UseMixinsForStandardHooks`).

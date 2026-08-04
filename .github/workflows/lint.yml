@@ -129,7 +129,13 @@ jobs:
       - name: civikitchen-phpstan test suite
         env:
           CIVICRM_CORE_DIR: /tmp/civicrm-core
-        run: php /tmp/phpunit.phar -c images/lib/civikitchen-phpstan/phpunit.xml.dist
+        # The rule fixtures run through phpstan's own test harness, so the
+        # package needs its vendor tree here; the drift gates alone would not.
+        run: |
+          set -euo pipefail
+          composer install --no-interaction --no-progress \
+            --working-dir=images/lib/civikitchen-phpstan
+          php /tmp/phpunit.phar -c images/lib/civikitchen-phpstan/phpunit.xml.dist
 
       - name: profile.json valid against schema
         # packages/civicrm-profile-schema/profile.schema.json is the canonical spec

@@ -103,4 +103,31 @@ final class Api4Fluent
 
         return self::entityFromStaticCall($expr, $scope);
     }
+
+    /**
+     * The entity behind a builder the chain does not start from.
+     *
+     * `$query = Contact::get(); $query->addSelect(...)` is one statement too
+     * many for the AST walk, but the type is exact: core generates one action
+     * class per entity and action, `Civi\Api4\Action\Contact\Get`. Anything
+     * that resolves to a generic action base names no entity and is passed
+     * over.
+     *
+     * The aliases an earlier link defined are invisible from here, so callers
+     * must only use this where an alias would not be a legal name.
+     */
+    public static function entityOfReceiverType(MethodCall $node, Scope $scope): ?string
+    {
+        $classes = $scope->getType($node->var)->getObjectClassNames();
+        if (count($classes) !== 1) {
+            return null;
+        }
+        $parts = explode('\\', $classes[0]);
+        if (count($parts) !== 5 || $parts[0] !== 'Civi' || $parts[1] !== 'Api4' || $parts[2] !== 'Action') {
+            return null;
+        }
+        $entity = Api4Catalog::CLASS_ALIASES[$parts[3]] ?? $parts[3];
+
+        return Api4Catalog::knowsEntity($entity) ? $entity : null;
+    }
 }

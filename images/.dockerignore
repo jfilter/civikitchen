@@ -8,3 +8,9 @@
 # platform rather than the image's.
 lib/oxlint/node_modules
 lib/oxfmt/node_modules
+
+# Same story for the phpstan extension: composer installs it inside the image
+# from this path repo, so a vendor/ tree a local test run left behind is the
+# host's, not the image's.
+lib/civikitchen-phpstan/vendor
+lib/civikitchen-phpstan/composer.lock

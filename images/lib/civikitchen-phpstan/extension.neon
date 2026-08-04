@@ -29,3 +29,23 @@ services:
 		class: CiviKitchen\PHPStan\Api4FluentFieldRule
 		tags:
 			- phpstan.rules.rule
+	# Custom APIv4 actions: parameter properties that would fail as PHP
+	# errors rather than API validation errors.
+	-
+		class: CiviKitchen\PHPStan\Api4ActionPropertyRule
+		tags:
+			- phpstan.rules.rule
+	# The counterpart that keeps checkUninitializedProperties usable: the
+	# kernel writes those properties, no code in the extension does.
+	-
+		class: CiviKitchen\PHPStan\Api4ActionPropertiesExtension
+		tags:
+			- phpstan.properties.readWriteExtension
+	-
+		class: CiviKitchen\PHPStan\TransactionalTestDdlRule
+		tags:
+			- phpstan.rules.rule
+	-
+		class: CiviKitchen\PHPStan\NoSilentDatabaseCatchRule
+		tags:
+			- phpstan.rules.rule

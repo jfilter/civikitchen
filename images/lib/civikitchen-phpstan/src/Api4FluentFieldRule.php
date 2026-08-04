@@ -53,6 +53,15 @@ final class Api4FluentFieldRule implements Rule
         }
 
         $entity = Api4Fluent::entityOfChain($node, $scope);
+        if ($entity === null) {
+            // A builder held in a variable: the type still names the entity,
+            // but the aliases an earlier link defined are out of sight, so
+            // only the clauses where an alias is never legal are judged.
+            if (in_array($method, ['addorderby', 'addgroupby', 'setorderby', 'setgroupby'], true)) {
+                return [];
+            }
+            $entity = Api4Fluent::entityOfReceiverType($node, $scope);
+        }
         if ($entity === null || !Api4Catalog::hasCompleteFields($entity)) {
             return [];
         }
