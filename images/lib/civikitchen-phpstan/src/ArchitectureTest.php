@@ -105,6 +105,12 @@ final class ArchitectureTest
             }
         }
 
+        // civix's declared namespace owns generated classes like
+        // CRM_Acme_ExtensionUtil even when the repo has no CRM/ tree.
+        if (preg_match('~<namespace>\s*CRM/([A-Za-z0-9_]+)\s*</namespace>~', $infoXml, $m)) {
+            $regexes[] = '~^CRM_' . preg_quote($m[1], '~') . '(_|$)~';
+        }
+
         return array_values(array_unique($regexes));
     }
 
