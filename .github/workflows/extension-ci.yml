@@ -158,7 +158,7 @@ on:
           job. Only read when one of them is switched on, and still read under
           `bun`: Bun replaces the package manager, not the Node toolchain the
           installed binaries run on. Tracks the Node the dev images ship
-          (images/*/Dockerfile) — a browser job testing on a different major
+          (docker/*/Dockerfile) — a browser job testing on a different major
           than the image serves is a gap, not a safety margin.
         type: string
         default: '24'
@@ -874,7 +874,7 @@ jobs:
   # not this extension's business and would drown the signal.
   #
   # mysqldump + a normalised text diff rather than Atlas — the reasoning is in
-  # images/lib/ckschemadiff, short version: the CI stack publishes no database
+  # toolbelt/bin/ckschemadiff, short version: the CI stack publishes no database
   # port, so any tool has to run in the app container, and that container
   # already ships a mysql client.
   #

@@ -102,15 +102,15 @@ digest. Two consequences worth knowing:
 - A released image has already been through test-then-promote. There is no
   second, differently-built artifact that only the release path produces.
 - A release can only ship image content that is already live. If the release
-  commit touches `images/**`, let *Build Dev Images* finish and promote first.
+  commit touches `docker/**` or `toolbelt/**`, let *Build Dev Images* finish and promote first.
 
 `release.yml` enforces the second point rather than trusting it: for every
 flavor it recovers the commit the live image was built from (the promoted
 digest still carries its `…-<sha>` candidate tag) and compares that commit's
-`images/` tree with the release commit's. A mismatch fails the release. Re-run
+`docker/` + `toolbelt/` trees with the release commit's. A mismatch fails the release. Re-run
 it from the Actions tab with **allow_image_drift** when the difference is
 genuinely irrelevant to the built image, e.g. a comment-only change under
-`images/`.
+`docker/` or `toolbelt/`.
 
 The flip side: `:v1` does **not** follow the weekly rebuild. Between releases
 the fleet keeps running the CiviCRM the last release blessed, while
@@ -131,7 +131,7 @@ From a clean `main` whose images have been built and promoted:
 ```bash
 git switch main && git pull
 # sanity: the template still stamps and checks cleanly
-bash tools/test-ckinit.sh
+bash tests/ckinit/test-ckinit.sh
 
 git tag -a v1.0.1 -m 'v1.0.1'
 git push origin v1.0.1

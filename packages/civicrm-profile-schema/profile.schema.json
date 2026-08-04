@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/jfilter/civikitchen/main/images/profiles/profile.schema.json",
+  "$id": "https://raw.githubusercontent.com/jfilter/civikitchen/main/docker/profiles/profile.schema.json",
   "title": "civikitchen profile",
-  "description": "Canonical shape of images/profiles/<name>/profile.json — the declarative description of a civikitchen scenario (extensions, authx, API users, and declarative content). This is the single source of truth for the format; any tool that reads or writes these profiles validates against this schema.",
+  "description": "Canonical shape of docker/profiles/<name>/profile.json — the declarative description of a civikitchen scenario (extensions, authx, API users, and declarative content). This is the single source of truth for the format; any tool that reads or writes these profiles validates against this schema.",
   "type": "object",
   "additionalProperties": false,
   "required": ["description", "dependencies"],

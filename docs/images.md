@@ -9,7 +9,7 @@ understands, see the
 
 Official `civicrm/civicrm` image with dev tools added:
 - **composer** — most modern extensions ship vendor deps
-- **node + npm** — for extensions with Angular/JS assets. Node 24 (current LTS) with a pinned npm 12 installed over the distro package's. npm 12 does not run a dependency's install scripts unless the project approved them; the images turn that back on globally, because CiviCRM core, civicrm-buildkit and most frontend toolchains still depend on postinstall doing real work. See the reasoning at `NPM_VERSION` in `images/lib/install-dev-tools.sh`.
+- **node + npm** — for extensions with Angular/JS assets. Node 24 (current LTS) with a pinned npm 12 installed over the distro package's. npm 12 does not run a dependency's install scripts unless the project approved them; the images turn that back on globally, because CiviCRM core, civicrm-buildkit and most frontend toolchains still depend on postinstall doing real work. See the reasoning at `NPM_VERSION` in `toolbelt/install-dev-tools.sh`.
 - **pcov** — fast code coverage (always on)
 - **xdebug** — step debugging, opt-in via `XDEBUG_MODE` (see [IDE step debugging](extension-development.md#ide-step-debugging))
 - **civix** — scaffolding/build tool for extensions
@@ -90,7 +90,7 @@ CiviCRM on Drupal 11 via buildkit. Same runtime model as Drupal 10, for
 extension compatibility checks on current Drupal; requires an external
 MariaDB. civibuild itself ships no `drupal11-demo` site type, so CiviKitchen
 vendors one:
-[`images/buildkit/site-types/drupal11-demo/`](../images/buildkit/site-types/drupal11-demo/)
+[`docker/buildkit/site-types/drupal11-demo/`](../docker/buildkit/site-types/drupal11-demo/)
 — `drupal10-demo`'s recipe adapted for Drupal 11.4 (content types now come
 from core recipes, Navigation replaced Toolbar; details in the file headers).
 `bake.sh` installs it into the buildkit clone, so Drupal 11 gets the same demo
@@ -102,7 +102,7 @@ Ready-to-run: [`examples/drupal11/`](../examples/drupal11/)
 
 CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10. The
 `:wordpress`, `:drupal10`, `:drupal11`, and `:joomla` tags are built from the
-same Dockerfile (`images/buildkit/`) — only the default civibuild site type
+same Dockerfile (`docker/buildkit/`) — only the default civibuild site type
 differs (`wp-demo`, `drupal10-demo`, `drupal11-demo`, or `joomla-demo`). All
 buildkit dev images carry the same dev tools as the standalone image (composer,
 node/npm, phpunit, phpstan, phpcs+coder, cklint, ckconform, ckcoverage, ckmutate,
@@ -125,7 +125,7 @@ image runs `civibuild reinstall` against your external DB and then re-runs the
 same finish the demo image bakes in — registering CiviCRM's Joomla
 component/plugins, enabling the standard component extensions, and the
 `ckjoomlaidentity` identity shim (see
-[`joomla-finish.sh`](../images/buildkit/joomla-finish.sh)). So `option=com_civicrm`
+[`joomla-finish.sh`](../docker/buildkit/joomla-finish.sh)). So `option=com_civicrm`
 (the admin UI and the api_key API) and the demo profiles behave the same as on
 the other dev flavors.
 
@@ -133,7 +133,7 @@ Ready-to-run: [`examples/joomla/`](../examples/joomla/)
 
 > **Scope note.** The buildkit images (`:drupal10`, `:drupal11`, `:wordpress`,
 > `:joomla`) share
-> [`images/lib/provision.sh`](../images/lib/provision.sh) with standalone, so the
+> [`docker/runtime/provision.sh`](../docker/runtime/provision.sh) with standalone, so the
 > same first-boot knobs work: `CIVIKITCHEN_AUTO_COMPOSER`,
 > `CIVIKITCHEN_SMTP_HOST`, `CIVIKITCHEN_EXTRA_EXTENSIONS` /
 > `CIVIKITCHEN_ENABLE_EXTENSIONS`, and `/civikitchen-init.d` hooks (marked
@@ -152,7 +152,7 @@ compose, no external DB. `docker run` and you have a working CiviCRM with demo
 content in a few seconds. For demos, evaluation, and screenshots — **not** for
 development (the DB is inside the container; data resets on `docker rm`).
 
-Five demo flavors, all built from the same `images/buildkit/` `demo` target:
+Five demo flavors, all built from the same `docker/buildkit/` `demo` target:
 
 ```bash
 # Pick a flavor: standalone-demo (CMS-less), drupal10-demo, drupal11-demo,
@@ -187,7 +187,7 @@ civibuild registers no `com_civicrm` ACL asset, so the build creates one and
 grants per-role on it, and a small bundled extension (`ckjoomlaidentity`) loads
 the matching Joomla identity for headless requests so both api_key reads and
 writes enforce those permissions. They live in
-[`images/profiles/`](../images/profiles/) (one dir per profile: `profile.json` +
+[`docker/profiles/`](../docker/profiles/) (one dir per profile: `profile.json` +
 `seeds/*.php`, applied by the shared driver):
 
 | Profile | Extensions | Seed data | API users |
@@ -232,7 +232,7 @@ admin user to seed as, so combine it with `CIVICRM_AUTO_INSTALL=1` and
 
 ## Tags & versions
 
-All images rebuild **weekly** (and on every `images/**` change) against the
+All images rebuild **weekly** (and on every `docker/**` or `toolbelt/**` change) against the
 current CiviCRM stable release, resolved from
 [latest.civicrm.org](https://latest.civicrm.org/stable.php) at build time. The
 pipeline is test-then-promote: a release that breaks the build or the boot
@@ -268,12 +268,12 @@ version — e.g. to mirror a production server — build the image yourself with
 `--build-arg CIVICRM_VERSION=<tag/branch>`. **Which flavor you can build
 matters:**
 
-- **Standalone** (`images/standalone/`) is `FROM civicrm/civicrm:<version>`, so
+- **Standalone** (`docker/standalone/`) is `FROM civicrm/civicrm:<version>`, so
   it only reaches versions the official image publishes (~6.0+) — and
   Standalone itself only exists from ~5.69. `--build-arg CIVICRM_VERSION` on
   this flavor fails for anything older (no such base image).
 - **Buildkit** (`:drupal10` / `:drupal11` / `:wordpress` / `:joomla`,
-  `images/buildkit/`) bakes the site
+  `docker/buildkit/`) bakes the site
   with `civibuild create --civi-ver <version>`, which fetches **any** civicrm
   tag/branch. The Drupal 10 site type is the right path for modern older
   versions such as CiviCRM 5.78.x; for pre-Drupal-10 versions, switch the
@@ -284,11 +284,11 @@ So: **for an older/custom version, build the buildkit (Drupal) flavor**, not
 standalone.
 
 ```bash
-docker build -f images/buildkit/Dockerfile \
+docker build -f docker/buildkit/Dockerfile \
     --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
     --build-arg CIVICRM_VERSION=5.78.2 \
     --build-arg PHP_VERSION=8.1 \
-    -t civikitchen:drupal10-5.78.2 images/
+    -t civikitchen:drupal10-5.78.2 .
 ```
 
 Or let compose build it on demand (no prebuilt image needed) — ready-to-run:

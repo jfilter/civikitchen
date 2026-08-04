@@ -117,11 +117,11 @@ jobs:
           fi
           # dist runs the consistency check itself and refuses to build without
           # it, so there is no way to publish an archive that skipped it.
-          bash .civikitchen-ci/images/lib/ckrelease dist \
+          bash .civikitchen-ci/toolbelt/bin/ckrelease dist \
             --version "$GITHUB_REF_NAME" --ref HEAD --output "$CK_DIST" "${args[@]}"
           {
-            echo "key=$(bash .civikitchen-ci/images/lib/ckrelease info key)"
-            echo "zip=$CK_DIST/$(bash .civikitchen-ci/images/lib/ckrelease info dist-name)"
+            echo "key=$(bash .civikitchen-ci/toolbelt/bin/ckrelease info key)"
+            echo "zip=$CK_DIST/$(bash .civikitchen-ci/toolbelt/bin/ckrelease info dist-name)"
           } >> "$GITHUB_OUTPUT"
 
       # A release archive that has never been installed is a guess. This is the
@@ -169,7 +169,7 @@ jobs:
           docker compose -f smoke-compose.yml up -d --wait --quiet-pull
 
           # Unzip as root: the extension directory is the image's, not ours.
-          # CK_EXT_DIR is where the image puts extensions (images/lib/provision.sh).
+          # CK_EXT_DIR is where the image puts extensions (docker/runtime/provision.sh).
           docker compose -f smoke-compose.yml exec -T app bash -c '
             set -eu
             mkdir -p "${CK_EXT_DIR:-/var/www/html/ext}"

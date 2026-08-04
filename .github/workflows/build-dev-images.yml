@@ -4,7 +4,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'images/**'
+      - 'docker/**'
+      - 'toolbelt/**'
+      - 'tests/images/**'
       - '.github/workflows/build-dev-images.yml'
       # Changes the scan verdict directly, so it must re-run the scan jobs.
       - 'trivyignore.yaml'
@@ -121,8 +123,8 @@ jobs:
       - name: Build and push standalone candidate image
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
-          context: images
-          file: images/standalone/Dockerfile
+          context: .
+          file: docker/standalone/Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
           build-args: |
@@ -192,7 +194,7 @@ jobs:
           IMG=${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}
           docker pull --platform ${{ matrix.platform }} "$IMG"
           docker run --rm --platform ${{ matrix.platform }} \
-            -v "${{ github.workspace }}/images/test:/civikitchen-test:ro" \
+            -v "${{ github.workspace }}/tests/images:/civikitchen-test:ro" \
             --entrypoint='' \
             "$IMG" \
             bash /civikitchen-test/test-dev-tools.sh
@@ -264,7 +266,7 @@ jobs:
               || { echo "FAIL: ${key} not installed" >&2; exit 1; }
           done
 
-      # Same major the images ship (images/*/Dockerfile). A browser job on a
+      # Same major the images ship (docker/*/Dockerfile). A browser job on a
       # different Node than the image serves tests something nobody runs.
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -338,7 +340,7 @@ jobs:
       contents: read
       packages: write
 
-    # Buildkit-backed CMS dev images. They all share images/buildkit; the only
+    # Buildkit-backed CMS dev images. They all share docker/buildkit; the only
     # difference is DEFAULT_SITE_TYPE, which sets the civibuild site type the
     # entrypoint creates on first run.
     strategy:
@@ -382,8 +384,8 @@ jobs:
       - name: Build and push ${{ matrix.variant.name }} candidate image
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
-          context: images
-          file: images/buildkit/Dockerfile
+          context: .
+          file: docker/buildkit/Dockerfile
           target: final
           platforms: ${{ matrix.platform }}
           push: true
@@ -454,7 +456,7 @@ jobs:
           IMG=${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }}
           docker pull --platform ${{ matrix.platform }} "$IMG"
           docker run --rm --platform ${{ matrix.platform }} \
-            -v "${{ github.workspace }}/images/test:/civikitchen-test:ro" \
+            -v "${{ github.workspace }}/tests/images:/civikitchen-test:ro" \
             --entrypoint='' \
             "$IMG" \
             bash /civikitchen-test/test-dev-tools.sh
@@ -467,7 +469,7 @@ jobs:
             wordpress) SITE_TYPE=wp-demo ;;
             joomla)    SITE_TYPE=joomla-demo ;;
           esac
-          bash images/test/boot-test.sh ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }} "$SITE_TYPE"
+          bash tests/images/boot-test.sh ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }} "$SITE_TYPE"
 
   e2e-test-buildkit:
     # Runs each CMS example compose stack with the candidate image and exercises
@@ -536,7 +538,7 @@ jobs:
             app \
             bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv api4 Domain.get +s version'
 
-      # Same major the images ship (images/*/Dockerfile). A browser job on a
+      # Same major the images ship (docker/*/Dockerfile). A browser job on a
       # different Node than the image serves tests something nobody runs.
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -608,7 +610,7 @@ jobs:
       packages: write
 
     # Single-container demo images (embedded MariaDB, baked demo data) from the
-    # same images/buildkit/Dockerfile `demo` target. Profiles (e.g. verein) are
+    # same docker/buildkit/Dockerfile `demo` target. Profiles (e.g. verein) are
     # no longer baked into a separate image — they apply at first boot via
     # CIVIKITCHEN_PROFILE, so there is exactly one demo image per supported
     # demo flavor.
@@ -622,7 +624,7 @@ jobs:
     # exercises the api_key credential only.
     #
     # drupal11-demo uses a site type civibuild doesn't ship: CiviKitchen
-    # vendors it in images/buildkit/site-types/drupal11-demo/ (drupal10-demo's
+    # vendors it in docker/buildkit/site-types/drupal11-demo/ (drupal10-demo's
     # recipe with the Drupal 11.4 adaptations documented there); bake.sh
     # installs it into the buildkit clone before `civibuild create`.
     strategy:
@@ -665,8 +667,8 @@ jobs:
       - name: Build and push ${{ matrix.variant.name }} demo candidate image
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
-          context: images
-          file: images/buildkit/Dockerfile
+          context: .
+          file: docker/buildkit/Dockerfile
           target: demo
           platforms: ${{ matrix.platform }}
           push: true
@@ -763,7 +765,7 @@ jobs:
         run: |
           IMG=${{ env.IMAGE_PREFIX }}:${{ matrix.variant.tag }}-${{ github.sha }}
           docker pull "$IMG"
-          bash images/test/boot-test-demo.sh "$IMG" ${{ matrix.variant.profile }}
+          bash tests/images/boot-test-demo.sh "$IMG" ${{ matrix.variant.profile }}
 
   promote-demo:
     # Stable demo tags only move once the candidates passed the smoke tests

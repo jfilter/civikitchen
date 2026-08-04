@@ -235,7 +235,7 @@ unless `--force` is explicitly supplied. For an existing extension,
   method or the fixture feeding a shim: they are living code, and
   `@deprecated` on them would tell callers to stop using them. Mark the class,
   trait or the single method with `@ck-legacy` instead — CiviKitchen ships a
-  `DeprecatedScopeResolver` (`images/lib/civikitchen-phpstan/`) that treats
+  `DeprecatedScopeResolver` (`toolbelt/phpstan/`) that treats
   such a scope as deprecated, so nothing inside it is reported. Exact tag; put
   it as narrow as possible, and delete it together with the shim or test it
   annotates. It is a scope marker, not a blanket suppression — production code
@@ -311,7 +311,7 @@ unless `--force` is explicitly supplied. For an existing extension,
 - **Rule packs come from the image, not from each repo's `composer.json`.**
   phpcs standards (civicrm/coder, PHPCompatibility, Slevomat) and phpstan
   extensions (deprecation rules, disallowed-calls, strict-rules) are installed
-  and pinned once in `images/lib/install-dev-tools.sh` — an extension carries
+  and pinned once in `toolbelt/install-dev-tools.sh` — an extension carries
   no dev dependencies at all. Third-party rules are cherry-picked, never a
   whole foreign standard, and every pack that would turn the fleet red at once
   (`phpstan-strict-rules`) is installed but left out of the auto-registration
@@ -495,8 +495,8 @@ civicrm-buildkit clone's own `node_modules`, Joomla's vendor tree, and a Drupal
 test fixture that declares packages whose code is not in the image. What is
 deliberately *not* excused is anything this repo can move: the npm that
 NodeSource's nodejs package ships is upgraded in `install-dev-tools.sh`
-(`NPM_VERSION`) rather than ignored, and the `images/lib/oxlint` and
-`images/lib/oxfmt` lockfiles are expected to stay clean on their own.
+(`NPM_VERSION`) rather than ignored, and the `toolbelt/oxlint` and
+`toolbelt/oxfmt` lockfiles are expected to stay clean on their own.
 
 **Recommended, not implemented: secrets.** Neither scanner looks for
 credentials in git history, and the private extension repos are exactly where a
@@ -690,7 +690,7 @@ shape.
    baseline nobody wrote a reason for is just a mute button.
 
 Never "fix" a finding by weakening the stubs. They are held in place by
-fixture pairs in `images/test/test-dev-tools.sh` — for every modelled
+fixture pairs in `tests/images/test-dev-tools.sh` — for every modelled
 source/sink combination one file where the flow must be reported and one with
 the escape in between that must stay silent — so a weakened stub shows up as a
 red image test, not as a quieter report.
@@ -1026,7 +1026,7 @@ publishes no database port, so any tool has to run inside the app container —
 and that container already ships a mysql client, while Atlas would mean a pinned
 binary download per run to diff two whole schemas it has no way to restrict to
 your tables. The normalisation is deliberately small and documented in
-`images/lib/ckschemadiff` (the `AUTO_INCREMENT` counter and mysqldump's version
+`toolbelt/bin/ckschemadiff` (the `AUTO_INCREMENT` counter and mysqldump's version
 wrappers, and nothing else). The trade is that this compares DDL *text*, so a
 semantically empty difference is possible; the fix when it happens is one more
 normalisation rule there.

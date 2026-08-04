@@ -1,0 +1,86 @@
+#!/bin/bash
+#
+# cksmarty — compile every Smarty template the extension ships, in a booted
+# CiviCRM, with the real CRM_Core_Smarty.
+#
+# The runtime half of what static template checks cannot answer. ckconform's
+# TemplateReferenceCheck knows a Page has no .tpl; CrmScopeCheck knows a `{ts}`
+# is unscoped. Neither can tell you whether the file COMPILES, because that
+# depends on the Smarty major core ships, on the two prefilters CRM_Core_Smarty
+# installs (they rewrite the source before the compiler sees it), and on which
+# `{crm*}` plugins are registered — including the ones this extension registers
+# itself. All three are properties of a running site, not of a file.
+#
+# It also reaches the one artifact nothing else in the toolchain can see: an
+# installed managed MessageTemplate body. That is a Smarty string in the
+# database, first compiled when the workflow fires — i.e. in production, when
+# someone donates. See toolbelt/lib/smarty-compile.php for the details.
+#
+# Run from the extension root, inside a civikitchen container with the
+# extension enabled. `cv scr` does the booting; this wrapper only resolves the
+# extension key and hands the payload over.
+#
+set -euo pipefail
+
+# Shared plumbing: tool name, ck_die, ck_git, the extension-root check and the
+# file-exclusion patterns. Resolves in a checkout and in the image alike —
+# toolbelt/lib/ckcommon.sh next to toolbelt/bin, /usr/local/lib/ckcommon.sh
+# next to /usr/local/bin.
+# shellcheck source=../lib/ckcommon.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/ckcommon.sh"
+
+usage() {
+  cat <<'EOF'
+cksmarty — compile the extension's Smarty templates in a booted CiviCRM.
+
+  cksmarty              compile .tpl files + installed managed MessageTemplates
+  cksmarty --key KEY    override the extension key (default: from info.xml)
+
+Compiles, never renders: rendering needs the variables a Page or Form would
+assign, and would fail on every template for reasons that are not the
+template's fault. Exits non-zero with file and compiler message on the first
+template that does not compile (all failures are listed).
+
+Run from the extension root, inside a container where the extension is enabled.
+EOF
+}
+
+key=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --key)     shift; key="${1:-}" ;;
+    -h|--help) usage; exit 0 ;;
+    *)         echo "cksmarty: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+ck_require_extension_root
+
+# Same one-liner the shared CI workflow uses to read a sibling's key: the
+# extension KEY from its own info.xml, not the directory name, because that is
+# the name CiviCRM registered the templates and managed entities under.
+if [ -z "$key" ]; then
+  key=$(tr '\n' ' ' < info.xml \
+    | grep -o '<extension[^>]*key="[^"]*"' | head -1 \
+    | sed 's/.*key="//; s/"$//')
+fi
+[[ "$key" =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]] \
+  || { echo "cksmarty: could not read a usable extension key from info.xml (got: '$key')" >&2; exit 2; }
+
+# PHP payloads live in toolbelt/lib/, never beside the CLIs in toolbelt/bin/:
+# the repo's shellcheck sweep globs the bin directory and would otherwise try
+# to parse a PHP file as shell. That separation is now the directory layout
+# rather than a naming convention (this was civikitchen-smarty-compile.php).
+payload=/usr/local/share/civikitchen/cksmarty-compile.php
+if [ ! -f "$payload" ]; then
+  # Running straight out of a civikitchen checkout (developing the tool
+  # itself), rather than from the image that installs it.
+  payload="$ck_root/lib/smarty-compile.php"
+fi
+[ -f "$payload" ] || ck_die "cannot find the compile payload"
+
+# The payload runs INSIDE cv's booted process, so it reads its arguments from
+# the environment — `cv scr` forwards no argv of its own, and runuser (the cv
+# wrapper's drop to www-data) keeps the environment.
+CK_SMARTY_ROOT="$PWD" CK_SMARTY_KEY="$key" exec cv scr "$payload"

@@ -25,7 +25,7 @@ jobs:
 
       - name: shellcheck (style level, fails on any finding)
         run: |
-          # The ck* tools in images/lib carry no .sh suffix (they are commands on
+          # The ck* tools in toolbelt/bin carry no .sh suffix (they are commands on
           # PATH, not scripts you source), so a *.sh-only sweep silently skipped
           # every one of them — the shell in this repo that runs in the most
           # places. They are all clean; keep them that way.
@@ -36,7 +36,7 @@ jobs:
           # file that is not shell at all. (cksmarty's payload is named
           # civikitchen-smarty-compile.php for the same reason — belt and
           # braces, because the next one will be named cksomething.php.)
-          find images/lib -maxdepth 1 -type f -name 'ck*' -not -name '*.php' -print0 \
+          find toolbelt/bin -maxdepth 1 -type f -name 'ck*' -not -name '*.php' -print0 \
             | xargs -0 shellcheck -S style
           echo "shellcheck clean"
 
@@ -77,7 +77,7 @@ jobs:
       # --check mode gates those repos' CI — a silent regression here would
       # either rewrite files it must not touch or wave drift through.
       - name: ckinit integration checks
-        run: bash tools/test-ckinit.sh
+        run: bash tests/ckinit/test-ckinit.sh
 
       # ckconform is the tool that tells eleven repos what is wrong with them,
       # and its 213 fixture tests ran nowhere but on a laptop. Most of its
@@ -94,13 +94,13 @@ jobs:
       # same release, or the gates would silently test different cores.
       - name: fetch the core release the catalogs were generated from
         run: |
-          ver=$(php -r 'require "images/ckconform/src/HookCatalog.php";
+          ver=$(php -r 'require "toolbelt/ckconform/src/HookCatalog.php";
             echo CiviKitchen\Ckconform\HookCatalog::CORE_VERSION;')
-          nsver=$(php -r 'require "images/lib/civikitchen-phpstan/src/CoreNamespaceCatalog.php";
+          nsver=$(php -r 'require "toolbelt/phpstan/src/CoreNamespaceCatalog.php";
             echo CiviKitchen\PHPStan\CoreNamespaceCatalog::CORE_VERSION;')
-          apiver=$(php -r 'require "images/lib/civikitchen-phpstan/src/Api4Catalog.php";
+          apiver=$(php -r 'require "toolbelt/phpstan/src/Api4Catalog.php";
             echo CiviKitchen\PHPStan\Api4Catalog::CORE_VERSION;')
-          schemaver=$(php -r 'require "images/lib/civikitchen-phpstan/src/SchemaCatalog.php";
+          schemaver=$(php -r 'require "toolbelt/phpstan/src/SchemaCatalog.php";
             echo CiviKitchen\PHPStan\SchemaCatalog::CORE_VERSION;')
           if [ "$ver" != "$nsver" ] || [ "$ver" != "$apiver" ] || [ "$ver" != "$schemaver" ]; then
             echo "catalog pins disagree: hooks=$ver namespaces=$nsver api4=$apiver schema=$schemaver — regenerate them from one release" >&2
@@ -115,7 +115,7 @@ jobs:
       - name: ckconform test suite
         env:
           CIVICRM_CORE_DIR: /tmp/civicrm-core
-          # Same phar and same hash as images/lib/install-dev-tools.sh; bump
+          # Same phar and same hash as toolbelt/install-dev-tools.sh; bump
           # both together. Re-derive with `curl -LsS <url> | sha256sum`.
           PHPUNIT_VERSION: 9.6.35
           PHPUNIT_SHA256: f39d634a5e5bcafd71565b33328ae4fb173703296c12ac94a24550cb8291e964
@@ -123,7 +123,7 @@ jobs:
           set -euo pipefail
           curl -fsSLo /tmp/phpunit.phar "https://phar.phpunit.de/phpunit-${PHPUNIT_VERSION}.phar"
           echo "${PHPUNIT_SHA256}  /tmp/phpunit.phar" | sha256sum -c --strict -
-          php /tmp/phpunit.phar -c images/ckconform/phpunit.xml.dist
+          php /tmp/phpunit.phar -c toolbelt/ckconform/phpunit.xml.dist
 
       # The namespace catalog feeds the phpat boundary rule in every repo's
       # phpstan run — a stale one flags new core components as foreign
@@ -136,8 +136,8 @@ jobs:
         run: |
           set -euo pipefail
           composer install --no-interaction --no-progress \
-            --working-dir=images/lib/civikitchen-phpstan
-          php /tmp/phpunit.phar -c images/lib/civikitchen-phpstan/phpunit.xml.dist
+            --working-dir=toolbelt/phpstan
+          php /tmp/phpunit.phar -c toolbelt/phpstan/phpunit.xml.dist
 
       - name: profile.json valid against schema
         # packages/civicrm-profile-schema/profile.schema.json is the canonical spec
@@ -149,4 +149,4 @@ jobs:
         run: |
           pipx run check-jsonschema \
             --schemafile packages/civicrm-profile-schema/profile.schema.json \
-            images/profiles/*/profile.json
+            docker/profiles/*/profile.json
