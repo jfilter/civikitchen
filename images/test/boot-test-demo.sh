@@ -233,8 +233,15 @@ if [ -z "${PROFILE}" ] && [ "${CK_SKIP_SITE_URL_TEST:-0}" != "1" ]; then
             sleep 5; elapsed=$((elapsed + 5))
         done
         if [ "${health:-}" = "healthy" ]; then
-            check "entrypoint rewrote the base URL" \
-                "docker logs '${APP}-url' 2>&1 | grep -q 'Rewriting site base URL'"
+            # Retry: healthy can precede the log flush by a moment on fast runners.
+            rewrote=1
+            for _ in 1 2 3 4 5 6; do
+                if docker logs "${APP}-url" 2>&1 | grep -q 'Rewriting site base URL'; then
+                    rewrote=0; break
+                fi
+                sleep 5
+            done
+            check "entrypoint rewrote the base URL" "[ '${rewrote}' = 0 ]"
             URLPAGE="$(mktemp)"
             # Healthy != reachable from the host: the published-port forward can
             # lag the container healthcheck by a few seconds (seen on GH
