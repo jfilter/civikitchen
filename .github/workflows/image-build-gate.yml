@@ -1,0 +1,51 @@
+# Does the standalone image still BUILD? On pull requests only — the full
+# pipeline (build-dev-images.yml) triggers on push to main, so without this a
+# broken COPY or Dockerfile lands on main before any CI has tried it.
+#
+# Deliberately less than the pipeline: one image, one arch, no push, no smoke
+# tests. The verdict here is "the Dockerfile and its build context resolve",
+# not "the image works" — test-then-promote after the merge keeps owning that.
+# The buildkit image is not built: same context rules, ~4x the build time.
+name: Image Build Gate
+
+on:
+  pull_request:
+    paths:
+      - 'docker/**'
+      - 'toolbelt/**'
+      - '.dockerignore'
+      - '.github/workflows/image-build-gate.yml'
+
+# A force-push to the PR obsoletes the running build; ~20 cold minutes are
+# worth cancelling.
+concurrency:
+  group: image-build-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-standalone:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
+
+      # Its own cache scope: the pipeline's scopes carry the resolved CiviCRM
+      # version, which this job does not know (it builds the Dockerfile's
+      # default). First run on a PR is cold; pushes to the same PR hit it.
+      - name: Build standalone image (no push)
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        with:
+          context: .
+          file: docker/standalone/Dockerfile
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=image-build-gate
+          cache-to: type=gha,mode=max,scope=image-build-gate
