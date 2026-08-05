@@ -74,6 +74,31 @@ final class PolicyKeyCheckTest extends CheckTestCase
         $this->assertPasses($reporter);
     }
 
+    /** A line without `=` never becomes a key, so the key checks alone cannot see it. */
+    public function testMalformedLineFails(): void
+    {
+        $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
+            '.ckconform' => "min_coverage 70\n",
+        ]));
+        $this->assertFails($reporter, "no KEY=VALUE in 'min_coverage 70'");
+    }
+
+    public function testValuelessKeyFails(): void
+    {
+        $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
+            '.ckconform' => "=70\n",
+        ]));
+        $this->assertFails($reporter, 'no KEY=VALUE');
+    }
+
+    public function testCommentsAndBlankLinesAreNotMalformed(): void
+    {
+        $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
+            '.ckconform' => "# a comment, no equals sign\n\nmin_coverage=70\n",
+        ]));
+        $this->assertPasses($reporter);
+    }
+
     /** A second line of a first-wins key does nothing, and said so to nobody. */
     public function testRepeatedScalarKeyFails(): void
     {

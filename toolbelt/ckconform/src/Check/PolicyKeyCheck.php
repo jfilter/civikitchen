@@ -30,6 +30,9 @@ use CiviKitchen\Ckconform\Reporter;
  *                 second line is not an addition, it is a line that does
  *                 nothing. A repo declaring two `template_custom=` lines gets
  *                 one honoured and one ignored without being told.
+ *   malformed     a non-comment line without `KEY=` never becomes a key, so
+ *                 the three checks above cannot see it — `min_coverage 70`
+ *                 disables a floor as silently as the typo'd name does.
  *
  * What is deliberately NOT here: whether a value means the right thing. The
  * key's owner judges that, one tool per question — TestSuiteRequiredCheck is
@@ -48,6 +51,14 @@ final class PolicyKeyCheck implements Check
         $raw = $context->read('.ckconform');
         if ($raw === null) {
             return;
+        }
+
+        foreach (Policy::malformed($raw) as $lineNo => $line) {
+            $reporter->fail(sprintf(
+                ".ckconform:%d: no KEY=VALUE in '%s' — the line declares nothing",
+                $lineNo,
+                $line,
+            ));
         }
 
         foreach (Policy::parse($raw) as $key => $values) {

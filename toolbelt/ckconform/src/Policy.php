@@ -89,6 +89,29 @@ final class Policy
     }
 
     /**
+     * The lines parse() skips over: not blank, not a comment, but carrying no
+     * `KEY=` either — `min_coverage 70` is one, and it never becomes a key, so
+     * checking parsed keys alone can never see it.
+     *
+     * @return array<int, string> 1-based line number => the offending line
+     */
+    public static function malformed(?string $raw): array
+    {
+        $out = [];
+        foreach (explode("\n", $raw ?? '') as $i => $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#')) {
+                continue;
+            }
+            if (!str_contains($line, '=') || trim(explode('=', $line, 2)[0]) === '') {
+                $out[$i + 1] = $line;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * The value without its ` -- <reason>` suffix. For the shell view only:
      * inside ckconform the reason stays part of the value, because checks match
      * on it (TestSuiteRequiredCheck accepts `optional -- <reason>` and nothing
