@@ -6,13 +6,14 @@
 # second phpstan — and it runs against CiviKitchen's CiviCRM source/sink/escape
 # stubs, because Psalm cannot see CiviCRM core.
 #
-# The gate is ADVISORY: it prints findings and returns Psalm's exit code so a
-# caller can decide, but the shared CI marks the step continue-on-error. A
-# taint engine without the whole framework modelled produces both false
-# positives (a 'Positive'-typed retrieve() is in fact safe) and false negatives
-# (anything that travels through a hook, the API kernel or a Smarty template),
-# so it earns attention, not a red build. docs/extension-standards.md has the
-# reasoning and how to deal with a finding.
+# The gate BLOCKS on the classes where a true positive is an outright
+# vulnerability (TaintedSql/Shell/Include/Unserialize/SSRF — errorLevel="error"
+# in the bundled config); the noisier classes are errorLevel="info": printed
+# via --show-info, never part of the exit code. A taint engine without the
+# whole framework modelled still produces false positives (a 'Positive'-typed
+# retrieve() is in fact safe) and false negatives (anything crossing a hook,
+# the API kernel or a Smarty template) — docs/extension-standards.md has the
+# reasoning and how to deal with a finding (--baseline / @psalm-suppress).
 #
 # A project's own psalm.xml/.dist wins — same rule as phpcs.xml for cklint.
 #
@@ -31,7 +32,7 @@ DEFAULT_CONFIG="${PSALM_DIR}/psalm-taint.xml.dist"
 
 usage() {
   cat <<'EOF'
-cktaint — taint analysis for CiviCRM extensions (Psalm, advisory).
+cktaint — taint analysis for CiviCRM extensions (Psalm).
 
   cktaint                     analyse the whole extension (config scope)
   cktaint path ...            analyse the given files/dirs
@@ -41,8 +42,8 @@ cktaint — taint analysis for CiviCRM extensions (Psalm, advisory).
   cktaint --no-cache          skip Psalm's cache (use after editing stubs)
 
 Run from the extension root. A psalm.xml or psalm.xml.dist in the project is
-used instead of the bundled config. Exit code is Psalm's, but the shared CI
-runs this step as advisory — see docs/extension-standards.md.
+used instead of the bundled config. Exit code is Psalm's: non-zero only for
+the blocking taint classes — see docs/extension-standards.md.
 EOF
 }
 
@@ -84,10 +85,12 @@ if [ ! -f "${config}" ]; then
   exit 2
 fi
 
-echo "== cktaint: taint analysis (ADVISORY — findings are a review prompt, not a build gate) =="
+echo "== cktaint: taint analysis (SQL/shell/include/unserialize/SSRF block; INFO classes are advisory) =="
 echo "cktaint: config ${config}"
 
-args=(--taint-analysis --config="${config}" --no-progress)
+# --show-info: the advisory taint classes are errorLevel="info" in the bundled
+# config — reported here, but they never affect the exit code.
+args=(--taint-analysis --config="${config}" --no-progress --show-info=true)
 if [ "${baseline}" -eq 1 ]; then
   args+=(--set-baseline=psalm-baseline.xml)
 elif [ -f psalm-baseline.xml ]; then
@@ -104,7 +107,7 @@ rc=$?
 
 if [ "${rc}" -ne 0 ] && [ "${baseline}" -eq 0 ]; then
   echo >&2
-  echo "cktaint: findings above are ADVISORY. Fix the flow (parameterize the query, escape via CRM_Utils_Type::escape, validate the path), or — if it is a false positive — record it with 'cktaint --baseline' or a @psalm-suppress on the line, WITH a comment saying why. See docs/extension-standards.md." >&2
+  echo "cktaint: ERROR-level findings above fail the build. Fix the flow (parameterize the query, escape via CRM_Utils_Type::escape, validate the path), or — if it is a false positive — record it with 'cktaint --baseline' or a @psalm-suppress on the line, WITH a comment saying why. See docs/extension-standards.md." >&2
 fi
 
 exit "${rc}"

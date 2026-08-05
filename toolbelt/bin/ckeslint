@@ -160,7 +160,7 @@ fi
 # node_modules belongs to the repo, not to the gate. A repo that ships its own
 # copy keeps it — two @types/node in one program is the conflict to avoid.
 overlay_link=""
-# shellcheck disable=SC2317  # reached through the EXIT/INT/TERM trap below.
+# shellcheck disable=SC2329,SC2317  # reached through the EXIT/INT/TERM trap below.
 cleanup_overlay() {
   [ -n "${overlay_link}" ] || return 0
   rm -f "${overlay_link}"
