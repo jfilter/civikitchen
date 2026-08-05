@@ -30,7 +30,13 @@ SHELL := bash
 # `make clean` has one thing to remove. CI overrides nothing: same paths.
 CACHE := .cache
 PHPUNIT := $(CACHE)/phpunit-$(CK_PHPUNIT_VERSION).phar
-CORE := $(CACHE)/civicrm-core
+
+# The pinned release IN the path: a catalog bump must invalidate the cached
+# tree, or the drift gates keep testing the old core until a `make clean`.
+# The four-pin agreement check stays in the recipe, which still fails loudly
+# when the catalogs disagree among themselves.
+CORE_VERSION := $(shell php -r 'require "toolbelt/ckconform/src/HookCatalog.php"; echo CiviKitchen\Ckconform\HookCatalog::CORE_VERSION;')
+CORE := $(CACHE)/civicrm-core-$(CORE_VERSION)
 
 # Pinned here, not in versions.env: this is their only consumer. actionlint's
 # installer is a shell script piped into bash, so it gets the same treatment as
@@ -39,6 +45,18 @@ CORE := $(CACHE)/civicrm-core
 CK_ACTIONLINT_VERSION := 1.7.12
 CK_ACTIONLINT_INSTALLER_SHA256 := 72fa3e45ac20f3c3a512d6747b4fcf719e21f890e8c43e78d48a41fdfb900c4e
 CK_ZIZMOR_VERSION := 1.29.0
+
+# shellcheck is fetched and pinned like the phars, because the sweep's verdict
+# depends on the version: 0.10 grew checks 0.9 never ran, so a laptop's distro
+# shellcheck and CI's disagreeing turns "one implementation for both" into two.
+# One content hash per supported platform; a new platform adds its pair here.
+CK_SHELLCHECK_VERSION := 0.11.0
+CK_SHELLCHECK_SHA256_linux_x86_64 := 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+CK_SHELLCHECK_SHA256_darwin_aarch64 := 56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79
+# `uname -m` says arm64 on macOS but the release assets say aarch64.
+SHELLCHECK_PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]').$(subst arm64,aarch64,$(shell uname -m))
+SHELLCHECK_SHA256 := $(CK_SHELLCHECK_SHA256_$(subst .,_,$(SHELLCHECK_PLATFORM)))
+SHELLCHECK := $(CACHE)/shellcheck-$(CK_SHELLCHECK_VERSION)
 
 # What gets linted is decided by WHAT A FILE IS, never by where it lives.
 #
@@ -110,10 +128,10 @@ test-ckinit: ## ckinit seed/update/check integration checks
 
 lint: lint-shell lint-actions lint-php lint-schema ## Every static check CI runs
 
-lint-shell: ## shellcheck at style level over every tracked shell file
+lint-shell: $(SHELLCHECK) ## shellcheck (pinned) at style level over every tracked shell file
 	@files=$$($(SHELL_FILES)) ; \
 	  $(call require_nonempty,$$files,shell) ; \
-	  printf '%s\n' "$$files" | xargs shellcheck -S style ; \
+	  printf '%s\n' "$$files" | xargs $(SHELLCHECK) -S style ; \
 	  echo "shellcheck clean ($$(printf '%s\n' "$$files" | wc -l) files)"
 
 # actionlint reads workflows as YAML+shell; zizmor reads them as a threat model
@@ -151,7 +169,18 @@ e2e: ## Playwright smoke tests against a running compose stack
 
 # --- fetched inputs ----------------------------------------------------------
 
-tools: $(PHPUNIT) $(CACHE)/actionlint ## Pre-fetch the pinned tools into .cache/
+tools: $(PHPUNIT) $(CACHE)/actionlint $(SHELLCHECK) ## Pre-fetch the pinned tools into .cache/
+
+$(SHELLCHECK):
+	@mkdir -p $(CACHE)
+	@[ -n "$(SHELLCHECK_SHA256)" ] || { \
+	  echo "no shellcheck hash pinned for $(SHELLCHECK_PLATFORM) — add CK_SHELLCHECK_SHA256_$(subst .,_,$(SHELLCHECK_PLATFORM)) to the Makefile" >&2; exit 1; }
+	curl -fsSLo $@.tar.xz \
+	  "https://github.com/koalaman/shellcheck/releases/download/v$(CK_SHELLCHECK_VERSION)/shellcheck-v$(CK_SHELLCHECK_VERSION).$(SHELLCHECK_PLATFORM).tar.xz"
+	echo "$(SHELLCHECK_SHA256)  $@.tar.xz" | sha256sum -c --strict -
+	tar -xJf $@.tar.xz -C $(CACHE) --strip-components=1 shellcheck-v$(CK_SHELLCHECK_VERSION)/shellcheck
+	mv $(CACHE)/shellcheck $@
+	rm $@.tar.xz
 
 $(PHPUNIT):
 	@mkdir -p $(CACHE)
@@ -171,7 +200,8 @@ $(CACHE)/actionlint:
 # single files.
 $(CORE):
 	@set -eu; \
-	ver=$$(php -r 'require "toolbelt/ckconform/src/HookCatalog.php"; echo CiviKitchen\Ckconform\HookCatalog::CORE_VERSION;'); \
+	ver="$(CORE_VERSION)"; \
+	[ -n "$$ver" ] || { echo "could not read HookCatalog::CORE_VERSION (is php installed?)" >&2; exit 1; }; \
 	nsver=$$(php -r 'require "toolbelt/phpstan/src/CoreNamespaceCatalog.php"; echo CiviKitchen\PHPStan\CoreNamespaceCatalog::CORE_VERSION;'); \
 	apiver=$$(php -r 'require "toolbelt/phpstan/src/Api4Catalog.php"; echo CiviKitchen\PHPStan\Api4Catalog::CORE_VERSION;'); \
 	schemaver=$$(php -r 'require "toolbelt/phpstan/src/SchemaCatalog.php"; echo CiviKitchen\PHPStan\SchemaCatalog::CORE_VERSION;'); \
@@ -181,10 +211,11 @@ $(CORE):
 	fi; \
 	echo "pinned CiviCRM $$ver"; \
 	mkdir -p $(CACHE); \
-	curl -fsSLo $(CACHE)/civicrm-core.tar.gz \
+	curl -fsSLo $(CORE).tar.gz \
 	  "https://github.com/civicrm/civicrm-core/archive/refs/tags/$$ver.tar.gz"; \
 	mkdir -p $(CORE).tmp; \
-	tar -xzf $(CACHE)/civicrm-core.tar.gz -C $(CORE).tmp --strip-components=1; \
+	tar -xzf $(CORE).tar.gz -C $(CORE).tmp --strip-components=1; \
+	rm $(CORE).tar.gz; \
 	mv $(CORE).tmp $(CORE)
 
 clean: ## Remove .cache/ (fetched phars and the CiviCRM source tree)
