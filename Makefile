@@ -12,7 +12,18 @@ include toolbelt/versions.env
 # Strict bash for every recipe: `set -eu -o pipefail` is what the shell in this
 # repo already runs under, and a recipe that swallows a failing stage in a pipe
 # is exactly the kind of green-but-untested that this file exists to end.
-SHELL := /bin/bash
+#
+# A make without .SHELLFLAGS (< 3.82, e.g. Apple's 3.81) IGNORES that line and
+# runs every recipe unguarded — a failing shellcheck then still prints "clean"
+# and exits 0. Refuse loudly instead; `oneshell` arrived in the same release,
+# so its presence in .FEATURES is the exact capability probe.
+ifeq ($(filter oneshell,$(.FEATURES)),)
+$(error GNU Make >= 3.82 required: this make ($(MAKE_VERSION)) ignores .SHELLFLAGS, so recipes would run without 'set -eu -o pipefail')
+endif
+
+# `bash` resolved via PATH, not /bin/bash: macOS ships bash 3.2 frozen at that
+# path, and a modern one is expected to be first in PATH there.
+SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 # Downloads land here rather than in /tmp so a second run reuses them, and so
@@ -39,8 +50,10 @@ CK_ZIZMOR_VERSION := 1.29.0
 #
 # `if`, not `cmd && printf`: under `set -e` a non-matching grep fails the whole
 # AND-list and kills the loop, silently and short. An `if` condition is exempt.
+# `(*.sh)`, balanced: bash 3.2 cannot parse an unbalanced case paren inside
+# `$( )` and dies on the whole substitution.
 SHELL_FILES = git ls-files | while read -r f; do \
-	  case "$$f" in *.sh) printf '%s\n' "$$f"; continue ;; esac ; \
+	  case "$$f" in (*.sh) printf '%s\n' "$$f"; continue ;; esac ; \
 	  if head -1 "$$f" 2>/dev/null \
 	      | grep -qaE '^\#!.*(\bsh\b|\bbash\b)|^\# shellcheck shell=' ; then \
 	    printf '%s\n' "$$f" ; \
