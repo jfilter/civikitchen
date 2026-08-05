@@ -320,7 +320,7 @@ unless `--force` is explicitly supplied. For an existing extension,
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
   ckconform → ckfmt --check → phpunit under ckcoverage → phpstan → phpstan over
   the tests when the repo opted in → ckcompat →
-  ckdeps → cktaint (advisory) → cksmarty → ckeslint → template-drift check →
+  ckdeps → cktaint → cksmarty → ckeslint → template-drift check →
   lockfile vulnerability scan, plus the opt-in schema-parity job), so
   the pipeline is defined once instead of copy-pasted per repo. The caller pins
   the released major (`@v1`) and the CI stack the matching `:v1` image —
@@ -593,13 +593,18 @@ is what makes `npm publish` refuse.
 The tooling section is machine-checked by `ckconform` (run from the extension
 root) — CI should run it alongside cklint.
 
-## Taint analysis: `cktaint` (advisory pilot)
+## Taint analysis: `cktaint`
 
 `cktaint` runs Psalm — and Psalm *only* as a taint engine, never as a second
 phpstan — over the extension, asking one question: **does request input reach a
-dangerous sink without being escaped on the way?** It ships in the image, needs
-no per-repo config, and CI runs it with `continue-on-error: true`. It is the
-only step in the pipeline that cannot fail your build.
+dangerous sink without being escaped on the way?** It ships in the image and
+needs no per-repo config. Since the fleet-wide clean run the gate **blocks** on
+the classes where a true positive is an outright vulnerability — `TaintedSql`,
+`TaintedShell`, `TaintedInclude`, `TaintedUnserialize`, `TaintedSSRF`. The
+noisier classes (file paths, headers, cookies, callables, eval, LDAP, secrets)
+are `errorLevel="info"` in the bundled config: printed in the report, never
+part of the exit code. On an image from before cktaint existed, the CI step
+skips with a log line instead of failing on "command not found".
 
 ```
 cktaint                 # whole extension
@@ -695,16 +700,14 @@ source/sink combination one file where the flow must be reported and one with
 the escape in between that must stay silent — so a weakened stub shows up as a
 red image test, not as a quieter report.
 
-### Where this is going
+### How it became blocking
 
-The pilot is advisory so the signal can be measured before it costs anyone a
-red build. The intended end state is a blocking gate for the taint classes
-where a true positive is an outright vulnerability —
-`TaintedSql`, `TaintedShell`, `TaintedInclude`, `TaintedUnserialize`,
-`TaintedSSRF` — with the noisier classes staying advisory. That switch is one
-`errorLevel` change per issue in the bundled `psalm-taint.xml.dist` plus
-dropping `continue-on-error` from the CI step, and it happens when the fleet's
-findings are demonstrably actionable, not before.
+The gate started as an advisory pilot so the signal could be measured before it
+cost anyone a red build. The switch happened after a fleet-wide run came back
+clean: the blocking five moved to `errorLevel="error"` in the bundled
+`psalm-taint.xml.dist`, everything else to `errorLevel="info"` (visible via
+`--show-info`, exit-code-neutral), and the CI step dropped
+`continue-on-error`.
 
 A repo that wants its own rules ships a `psalm.xml`/`psalm.xml.dist`; `cktaint`
 uses it instead of the bundled config, same as `phpcs.xml` for `cklint`.

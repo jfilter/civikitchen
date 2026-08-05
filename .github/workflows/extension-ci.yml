@@ -33,7 +33,8 @@
 # Everything runs inside the extension's own CiviCRM stack: the standalone image
 # auto-installs, enables the mounted extension and seeds the civicrm_test scratch
 # DB, and cklint / ckconform / phpstan / ckcoverage / cktaint all ship in that
-# image (cktaint is advisory — it can never fail the run). The
+# image (cktaint blocks on SQL/shell/include/unserialize/SSRF taint; its other
+# classes are advisory). The
 # coverage floor comes from the repo's .ckconform, so it needs no input here.
 # The two exceptions run on the bare runner because they have nothing to ask a
 # CiviCRM about: the template-drift check, and the lockfile vulnerability scan
@@ -647,40 +648,49 @@ jobs:
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && ckdeps"
 
-      # Taint analysis (psalm, CiviCRM stubs) — an ADVISORY pilot, and the only
-      # step in this workflow that cannot fail the run. Psalm sees the
-      # extension but not CiviCRM core, so it both over-reports (a
-      # 'Positive'-typed CRM_Utils_Request::retrieve is validated in reality)
-      # and under-reports (anything crossing a hook, the API kernel or a Smarty
-      # template). A finding is a prompt to look, not a verdict — the day the
-      # signal proves itself, TaintedSql/Shell/Include/Unserialize/SSRF move
-      # into the blocking set. docs/extension-standards.md has the details.
-      # On an image older than cktaint the step reports "command not found" and
-      # stays advisory, so the fleet needs no lockstep image bump.
-      - name: Taint analysis (cktaint, advisory)
+      # Taint analysis (psalm, CiviCRM stubs) — BLOCKING for the classes where
+      # a true positive is an outright vulnerability (TaintedSql/Shell/Include/
+      # Unserialize/SSRF); the noisier classes are errorLevel="info" in the
+      # bundled config: printed, never part of the exit code. Switched from
+      # advisory after a clean fleet-wide run. Psalm still cannot see CiviCRM
+      # core, so a blocking finding can be a false positive — the escape hatch
+      # is `cktaint --baseline` or `@psalm-suppress` with a reason, see
+      # docs/extension-standards.md.
+      # Old-image guard: a repo may pin an image from before cktaint existed.
+      # That is a stale pin, not a taint finding, so the step skips with a log
+      # line instead of failing on "command not found" — no lockstep image
+      # bump needed.
+      - name: Taint analysis (cktaint)
         id: cktaint
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
-        continue-on-error: true
         run: |
+          if ! docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+              'command -v cktaint' >/dev/null 2>&1; then
+            echo "guard=no-cktaint" >> "$GITHUB_OUTPUT"
+            echo "cktaint is not in this image (pinned from before the taint gate) — skipping."
+            exit 0
+          fi
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && cktaint"
 
       - name: Taint analysis summary
         if: ${{ !cancelled() && steps.cktaint.outcome != 'skipped' }}
         run: |
-          if [ "${{ steps.cktaint.outcome }}" = success ]; then
-            echo "### Taint analysis (advisory): clean" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.cktaint.outputs.guard }}" = no-cktaint ]; then
+            echo "### Taint analysis: inactive (image predates cktaint)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.cktaint.outcome }}" = success ]; then
+            echo "### Taint analysis: no blocking findings" >> "$GITHUB_STEP_SUMMARY"
           else
             {
-              # A non-zero exit is not necessarily a finding: an image without
-              # cktaint, a broken config or an analyzer crash land here too, so
-              # the summary must not claim taint flows were found.
-              echo "### Taint analysis (advisory): findings or analysis failure"
+              # A non-zero exit is not necessarily a finding: a broken config
+              # or an analyzer crash lands here too, so the summary must not
+              # claim taint flows were found.
+              echo "### Taint analysis: blocking findings or analysis failure"
               echo
-              echo "\`cktaint\` exited non-zero — see the **Taint analysis (cktaint, advisory)** step log for"
+              echo "\`cktaint\` exited non-zero — see the **Taint analysis (cktaint)** step log for"
               echo "whether it reported tainted data flows or failed to run at all."
-              echo "**This did not fail the build.** The gate is an advisory pilot: Psalm cannot see CiviCRM core,"
-              echo "so it over- and under-reports. For real findings, fix the flow or record a justified exception"
+              echo "SQL/shell/include/unserialize/SSRF taint fails the build; INFO-level findings do not."
+              echo "For a real finding, fix the flow; for a false positive, record a justified exception"
               echo "(\`cktaint --baseline\` / \`@psalm-suppress\` with a reason)."
               echo "See docs/extension-standards.md, section \"Taint analysis\"."
             } >> "$GITHUB_STEP_SUMMARY"

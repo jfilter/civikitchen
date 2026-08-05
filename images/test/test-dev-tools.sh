@@ -1366,7 +1366,26 @@ PHP
 # One run over the whole fixture set — Psalm reports one flow per source/sink
 # pair, and every pair here is distinct, so all twelve findings show up
 # together. --no-cache because the fixtures live in a fresh temp dir.
-TAINT_OUT="$( (cd "${TAINT}" && cktaint --no-cache) 2>&1 | sed -E 's/\x1b\[[0-9;]*m//g' || true)"
+TAINT_RC=0
+TAINT_OUT_RAW="$( (cd "${TAINT}" && cktaint --no-cache) 2>&1 )" || TAINT_RC=$?
+TAINT_OUT="$(printf '%s' "${TAINT_OUT_RAW}" | sed -E 's/\x1b\[[0-9;]*m//g')"
+
+# Blocking fixtures (TaintedSql & co.) are present, so the run must fail.
+if [[ "${TAINT_RC}" -ne 0 ]]; then
+    ok "cktaint exits non-zero with blocking findings present"
+else
+    fail "cktaint exited 0 despite blocking TaintedSql/Shell/SSRF fixtures"
+fi
+
+# A run restricted to an advisory-only fixture (header taint = INFO) must
+# report the finding but keep exit 0 — that is the blocking/advisory split.
+ADV_RC=0
+ADV_OUT="$( (cd "${TAINT}" && cktaint --no-cache 03_uri_header_bad.php) 2>&1 )" || ADV_RC=$?
+if [[ "${ADV_RC}" -eq 0 ]] && printf '%s' "${ADV_OUT}" | grep -q 'TaintedHeader'; then
+    ok "cktaint reports advisory TaintedHeader without failing (exit 0)"
+else
+    fail "advisory-only run: expected TaintedHeader + exit 0, got exit ${ADV_RC}"
+fi
 
 # case-file -> the issue that must be reported for it
 TAINT_CASES=(

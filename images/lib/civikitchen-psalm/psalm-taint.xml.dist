@@ -61,22 +61,27 @@
   </stubs>
 
   <issueHandlers>
-    <!-- The taint issues we mean. Explicit rather than implied, so switching
-         one from advisory to blocking later is a one-line change here. -->
+    <!-- BLOCKING: a true positive here is an outright vulnerability. These
+         are the classes that fail cktaint (Psalm exits non-zero on "error"),
+         and since the fleet-wide clean run the CI step is no longer
+         continue-on-error. docs/extension-standards.md, "Where this is going". -->
     <TaintedSql errorLevel="error" />
     <TaintedShell errorLevel="error" />
     <TaintedInclude errorLevel="error" />
-    <TaintedFile errorLevel="error" />
     <TaintedUnserialize errorLevel="error" />
-    <TaintedEval errorLevel="error" />
     <TaintedSSRF errorLevel="error" />
-    <TaintedLdap errorLevel="error" />
-    <TaintedCallable errorLevel="error" />
-    <TaintedHeader errorLevel="error" />
-    <TaintedCookie errorLevel="error" />
-    <TaintedSystemSecret errorLevel="error" />
-    <TaintedUserSecret errorLevel="error" />
-    <TaintedCustom errorLevel="error" />
+
+    <!-- ADVISORY: reported ("info" prints but keeps exit 0) without failing
+         the build — noisier classes where context decides severity. -->
+    <TaintedFile errorLevel="info" />
+    <TaintedEval errorLevel="info" />
+    <TaintedLdap errorLevel="info" />
+    <TaintedCallable errorLevel="info" />
+    <TaintedHeader errorLevel="info" />
+    <TaintedCookie errorLevel="info" />
+    <TaintedSystemSecret errorLevel="info" />
+    <TaintedUserSecret errorLevel="info" />
+    <TaintedCustom errorLevel="info" />
 
     <!-- HTML/text taint is off, not advisory-off: CiviCRM output goes through
          Smarty templates Psalm never sees, so what remains here is the escaping
