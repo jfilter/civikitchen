@@ -77,6 +77,13 @@
     <exclude name="Squiz.WhiteSpace.SemicolonSpacing.Incorrect"/>
   </rule>
 
+  <!-- An array literal whose first element is itself an array literal: ckfmt
+       keeps `[[` / `]]` on shared lines, this sniff wants the closing bracket
+       alone on its line. Bracket placement belongs to the formatter. -->
+  <rule ref="Squiz.Arrays.ArrayDeclaration">
+    <exclude name="Squiz.Arrays.ArrayDeclaration.CloseBraceNewLine"/>
+  </rule>
+
   <!-- The test bootstrap's `if (!function_exists('cv')) { function cv() {…} }`
        idiom: ckfmt strips the blank lines at the block edges, this sniff wants
        them. Scoped to that one file, not disabled fleet-wide. -->

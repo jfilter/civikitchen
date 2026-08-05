@@ -701,6 +701,23 @@ function acme_rows(): array {
   return [['id' => 1, 'label' => 'one', 'description' => 'the first widget row'], ['id' => 2, 'label' => 'two', 'description' => 'the second widget row']];
 }
 PHP
+# The conflict case: a multi-line inner array literal opening as `[[` — ckfmt
+# keeps the shared brackets, Squiz's CloseBraceNewLine used to reject the `]]`.
+cat > "${AGREEDIR}/nestedarrayliteral.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+function acme_grouped(): array {
+  return [
+    'groups' => [[
+      'group_id' => 7,
+      'group_title' => 'Newsletter',
+      'candidates' => 12,
+    ]],
+  ];
+}
+PHP
 mkdir -p "${AGREEDIR}/tests/phpunit"
 cat > "${AGREEDIR}/tests/phpunit/bootstrap.php" <<'PHP'
 <?php
