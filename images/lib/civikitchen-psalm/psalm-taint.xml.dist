@@ -41,6 +41,9 @@
       <!-- A sibling extension the shared CI checks out beside this one; its
            own pipeline analyses it. Same exclusion cklint makes. -->
       <directory name=".civikitchen-siblings" />
+      <!-- Local dev harness (compose stacks, vendored proxies): not shipped
+           extension code, and third-party PHP in there is not ours to gate. -->
+      <directory name=".docker" />
     </ignoreFiles>
   </projectFiles>
 
