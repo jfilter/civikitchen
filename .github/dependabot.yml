@@ -12,8 +12,8 @@ updates:
   # Base images in the Dockerfiles (php:*-apache, mariadb in builder, ...).
   - package-ecosystem: docker
     directories:
-      - /images/standalone
-      - /images/buildkit
+      - /docker/standalone
+      - /docker/buildkit
     schedule:
       interval: weekly
       day: monday

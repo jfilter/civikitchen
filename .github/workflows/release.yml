@@ -7,7 +7,7 @@
 # test-then-promote. In exchange it insists that those artifacts actually
 # belong to the release commit: a promoted digest still carries its
 # `…-<sha>` candidate tag, so the build commit is recoverable, and its
-# `images/` tree must match the one being released.
+# `docker/` + `toolbelt/` trees must match the ones being released.
 name: Release
 
 on:
@@ -23,8 +23,8 @@ on:
       allow_image_drift:
         description: >-
           Release although the live images were built from a commit whose
-          images/ tree differs from this tag. Only for changes that provably
-          cannot affect the built image (comments, docs under images/).
+          docker/ or toolbelt/ tree differs from this tag. Only for changes that
+          provably cannot affect the built image (comments, docs).
         type: boolean
         default: false
 
@@ -113,7 +113,20 @@ jobs:
               | map(select(test("-[0-9a-f]{40}$"))) | .[0] // ""' versions.json
           }
 
-          RELEASE_TREE=$(git rev-parse "${RELEASE_SHA}:images")
+          # What decides whether a built image belongs to this release. TWO
+          # trees since the toolbelt moved out of the image directories:
+          # docker/ (the image definitions, entrypoints, provisioning and demo
+          # profiles) and toolbelt/ (the ck* tools and analysers baked into
+          # them). Both are build inputs, so both are part of the identity.
+          # 2>/dev/null: a build commit from before that split carries neither
+          # path, and an empty result compares unequal — which is the right
+          # verdict for it anyway.
+          image_tree_of() { # $1 = commit-ish
+            printf '%s %s' \
+              "$(git rev-parse "$1:docker" 2>/dev/null)" \
+              "$(git rev-parse "$1:toolbelt" 2>/dev/null)"
+          }
+          RELEASE_TREE=$(image_tree_of "${RELEASE_SHA}")
           drift=()
           fatal=()
           : > digests.txt
@@ -131,16 +144,16 @@ jobs:
             fi
             printf '%s\t%s\n' "${flavor}" "${digest}" >> digests.txt
 
-            # Provenance: which commit was this digest built from, and does its
-            # images/ tree match the release?
+            # Provenance: which commit was this digest built from, and do its
+            # docker/ + toolbelt/ trees match the release?
             candidate=$(candidate_of "${flavor}")
             build_sha="${candidate##*-}"
             if [ -z "${candidate}" ]; then
               echo "::warning::cannot tell which commit :${flavor} was built from (candidate tag already pruned)"
             elif ! git cat-file -e "${build_sha}^{commit}" 2>/dev/null; then
               echo "::warning::build commit ${build_sha} of :${flavor} is not in this checkout"
-            elif [ "$(git rev-parse "${build_sha}:images")" != "${RELEASE_TREE}" ]; then
-              drift+=(":${flavor} was built from ${build_sha:0:12}, whose images/ differs from ${TAG}")
+            elif [ "$(image_tree_of "${build_sha}")" != "${RELEASE_TREE}" ]; then
+              drift+=(":${flavor} was built from ${build_sha:0:12}, whose docker/ or toolbelt/ tree differs from ${TAG}")
             fi
 
             # Released patch tags are immutable. Re-running the same release is

@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+# ckconform — thin shim onto the PHP implementation in /opt/civikitchen-ckconform.
+#
+# The checks used to live in this file as shell. They were rewritten in PHP after
+# a run of bugs that were all the same bug: parsing structured formats with
+# line-oriented text tools. A `<license>` spanning two lines read as empty, an
+# `<ext version="3.32">` was invisible to a tag-shaped regex, a nested `"license"`
+# key in composer.json won over the real one, `ang/afform/*.aff.html` fell through
+# a fixed-depth glob, and an @since parse using sed's \+ silently returned nothing
+# on BSD sed — so that check passed on everything instead of failing.
+#
+# The port is verified byte-identical against the shell version across all
+# consuming repos, and every check now carries fixture tests, which the shell
+# version never had.
+set -uo pipefail
+
+# Shared plumbing: tool name, ck_die, ck_git, the extension-root check and the
+# file-exclusion patterns. Resolves in a checkout and in the image alike —
+# toolbelt/lib/ckcommon.sh next to toolbelt/bin, /usr/local/lib/ckcommon.sh
+# next to /usr/local/bin.
+# shellcheck source=../lib/ckcommon.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/ckcommon.sh"
+
+for candidate in /opt/civikitchen-ckconform "$ck_root/ckconform"; do
+  if [ -x "$candidate/bin/ckconform" ]; then
+    exec php "$candidate/bin/ckconform" "$@"
+  fi
+done
+
+ck_die "cannot find the implementation (expected /opt/civikitchen-ckconform)"

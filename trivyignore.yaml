@@ -21,7 +21,7 @@
 #
 # `paths` scopes an entry to where the vulnerable copy actually lives (glob,
 # matched against the finding's package path). Use it wherever a CVE could also
-# appear in a tree this repo controls — images/lib/oxlint, images/lib/oxfmt —
+# appear in a tree this repo controls — toolbelt/oxlint, toolbelt/oxfmt —
 # so that excusing upstream's vulnerable copy does not silently excuse ours.
 # The compensating check for everything still suppressed image-wide is
 # `npm audit` on those two lockfiles, which trivy is not the only reader of.
@@ -36,7 +36,7 @@
 # /usr/lib/node_modules/npm. That tree is npm's own bundled dependencies
 # (tar, glob, minimatch, sigstore, cross-spawn), it was the bulk of the
 # findings, and it is fixed by installing a newer npm over the one NodeSource's
-# nodejs 20 package ships — see NPM_VERSION in images/lib/install-dev-tools.sh.
+# nodejs 20 package ships — see NPM_VERSION in toolbelt/install-dev-tools.sh.
 # An exception there would have been an exception for a thing we could fix.
 
 vulnerabilities:
@@ -58,7 +58,7 @@ vulnerabilities:
       own CLI and buildkit's hand-run JS tooling call it, on the glob and
       workspace patterns of whatever project the developer runs them in.
       Nothing the images serve reaches it, and no npm release bundles the fix
-      yet. Scoped to those two trees on purpose: images/lib/oxlint resolves
+      yet. Scoped to those two trees on purpose: toolbelt/oxlint resolves
       brace-expansion 5.0.9, and a regression there must NOT be hidden.
       On expiry re-read the bundled version
       (node -p 'require("/usr/lib/node_modules/npm/node_modules/brace-expansion/package.json").version')
@@ -188,7 +188,7 @@ vulnerabilities:
       brace-expansion 1.1.11 via jshint@2.13.4 -> minimatch@3.0.8. Exponential
       expand() on a crafted pattern, and the patterns are the file globs a
       developer hands jshint. Scoped to buildkit's clone: the same ID in a tree
-      this repo controls (images/lib/oxlint, images/lib/oxfmt) is a real
+      this repo controls (toolbelt/oxlint, toolbelt/oxfmt) is a real
       finding. Recheck after a buildkit rebuild.
     expired_at: 2026-11-01
 
@@ -199,7 +199,7 @@ vulnerabilities:
       minimatch 3.0.8 via jshint@2.13.4 and karma@6.4.4 (both directly and
       through glob@7.x). ReDoS on a crafted glob pattern — again the
       developer's own pattern, in tooling that never sees a request. Scoped:
-      images/lib/oxlint resolves minimatch 10.2.6 and npm 12 bundles a fixed
+      toolbelt/oxlint resolves minimatch 10.2.6 and npm 12 bundles a fixed
       one, so a regression in either surfaces instead of being hidden.
       Recheck after a buildkit rebuild.
     expired_at: 2026-11-01

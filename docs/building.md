@@ -1,43 +1,58 @@
 # Building locally
 
-The build context is the `images/` dir for both the standalone and buildkit-based images, so the Dockerfiles can `COPY lib/install-dev-tools.sh` (the shared phars + phpcs/coder install).
+`make help` lists everything below as a target. The fast loop needs no Docker
+at all:
+
+```bash
+make test     # ckconform's fixtures, the phpstan extension's rule tests, ckinit
+make lint     # shellcheck, actionlint, zizmor, php -l, the profile.json schema
+make build    # the standalone image, as civikitchen:standalone
+```
+
+These are the same commands `.github/workflows/lint.yml` runs — the workflow
+consists of `make lint` and `make test`, so what runs in CI and what runs on a
+laptop cannot drift. `make` fetches the pinned phpunit phar and the CiviCRM
+source tree the catalog drift gates need into `.cache/` on first use;
+`make clean` removes it.
+
+The build context is the repo root for both the standalone and buildkit-based images. The Dockerfiles copy from two trees: `toolbelt/` (the `ck*` tools, the phpcs standard, the phpstan/psalm/rector packages — everything baked into the image) and `docker/` (the image's own entrypoints, provisioning and demo profiles). Neither has to live inside the other, and `.dockerignore` keeps `.git` and host-built artifacts out.
 
 ```bash
 # Standalone (tracks civicrm/civicrm:latest)
-docker build -f images/standalone/Dockerfile -t civikitchen:standalone images/
+docker build -f docker/standalone/Dockerfile -t civikitchen:standalone .
 
 # Standalone pinned to a specific CiviCRM minor (or any tag civicrm/civicrm publishes)
-docker build -f images/standalone/Dockerfile \
+docker build -f docker/standalone/Dockerfile \
     --build-arg CIVICRM_VERSION=6.15 \
-    -t civikitchen:standalone-6.15 images/
+    -t civikitchen:standalone-6.15 .
 
 # Buildkit-based images. The :drupal10, :drupal11, :wordpress, and :joomla
-# tags are built from the same Dockerfile (images/buildkit/) —
+# tags are built from the same Dockerfile (docker/buildkit/) —
 # DEFAULT_SITE_TYPE picks which civibuild site type the entrypoint creates
 # on first run. CIVICRM_VERSION pins the baked CiviCRM (any civicrm-core
 # tag/branch civibuild can fetch). CIVICRM_BUILD_VERSION can override only
 # the civibuild input; CI uses it to pass the stable minor branch (e.g.
 # 6.15) while keeping the resolved patch version in the image metadata.
-docker build -f images/buildkit/Dockerfile \
+docker build -f docker/buildkit/Dockerfile \
     --build-arg PHP_VERSION=8.3 \
     --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
     --build-arg CIVICRM_VERSION=6.15.1 \
-    -t civikitchen:drupal10 images/
+    -t civikitchen:drupal10 .
 
-docker build -f images/buildkit/Dockerfile \
+docker build -f docker/buildkit/Dockerfile \
     --build-arg PHP_VERSION=8.3 \
     --build-arg DEFAULT_SITE_TYPE=drupal11-demo \
-    -t civikitchen:drupal11 images/
+    -t civikitchen:drupal11 .
 
-docker build -f images/buildkit/Dockerfile \
+docker build -f docker/buildkit/Dockerfile \
     --build-arg PHP_VERSION=8.3 \
     --build-arg DEFAULT_SITE_TYPE=wp-demo \
-    -t civikitchen:wordpress images/
+    -t civikitchen:wordpress .
 
-docker build -f images/buildkit/Dockerfile \
+docker build -f docker/buildkit/Dockerfile \
     --build-arg PHP_VERSION=8.3 \
     --build-arg DEFAULT_SITE_TYPE=joomla-demo \
-    -t civikitchen:joomla images/
+    -t civikitchen:joomla .
 ```
 
 ## Keeping the CiviCRM git history (`KEEP_GIT=1`)
@@ -49,22 +64,22 @@ site (working on core, `civibuild update`, `git log` archaeology), build your
 own image with the history kept:
 
 ```bash
-docker build -f images/buildkit/Dockerfile \
+docker build -f docker/buildkit/Dockerfile \
     --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
     --build-arg KEEP_GIT=1 \
-    -t civikitchen:drupal10-git images/
+    -t civikitchen:drupal10-git .
 ```
 
 ## Running the test suite locally
 
-`images/test/run-local.sh` runs the same test scripts CI runs — on a laptop or
+`tests/images/run-local.sh` runs the same test scripts CI runs — on a laptop or
 in a throwaway VM. It needs only bash and docker (no gh, no node):
 
 ```bash
-bash images/test/run-local.sh                          # everything, published images
-bash images/test/run-local.sh drupal11 drupal11-demo   # a subset
-bash images/test/run-local.sh -p civikitchen drupal11-demo   # your locally built tags
-CK_PROFILE=verein bash images/test/run-local.sh drupal10-demo # + a profile leg
+bash tests/images/run-local.sh                          # everything, published images
+bash tests/images/run-local.sh drupal11 drupal11-demo   # a subset
+bash tests/images/run-local.sh -p civikitchen drupal11-demo   # your locally built tags
+CK_PROFILE=verein bash tests/images/run-local.sh drupal10-demo # + a profile leg
 ```
 
 Per dev flavor it runs the dev-tools functional check and (buildkit flavors)
@@ -76,10 +91,10 @@ Budget roughly an hour for the full default run; profile legs add up to
 
 ## Verifying a built image
 
-`images/test/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through phpcs, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, and verifies the xdebug toggle. The same script runs in CI against both `:standalone` and the buildkit images. CI also boots each dev flavor's compose example and runs Playwright browser smoke tests before promoting stable tags.
+`tests/images/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through phpcs, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, and verifies the xdebug toggle. The same script runs in CI against both `:standalone` and the buildkit images. CI also boots each dev flavor's compose example and runs Playwright browser smoke tests before promoting stable tags.
 
 ```bash
-docker run --rm -v "$(pwd)/images/test:/civikitchen-test:ro" \
+docker run --rm -v "$(pwd)/tests/images:/civikitchen-test:ro" \
     --entrypoint='' \
     ghcr.io/jfilter/civikitchen:standalone \
     bash /civikitchen-test/test-dev-tools.sh

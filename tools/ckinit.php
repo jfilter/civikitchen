@@ -170,19 +170,22 @@ if (preg_match('/^[a-z0-9]([a-z0-9_.-]*[a-z0-9])?$/', $vendor) !== 1) {
 // has no business carrying a phpunit.xml.dist, and --update must not keep
 // reseeding one). Names are validated against the full template inventory, so
 // a typo still fails loudly instead of disabling nothing.
+//
+// The parser is ckconform's, required straight out of the checkout this script
+// runs from: a private copy of the same loop is how .ckconform came to have
+// seven readers that disagreed on whitespace, comments and the reason suffix.
+// ckinit runs on a bare runner with no image, so it cannot shell out to
+// `ckconform --policy-env` the way the ck* tools do — but it is PHP, so it can
+// use the very class that command uses.
+require_once dirname(__DIR__) . '/toolbelt/ckconform/src/Policy.php';
+
 $custom = [];
 $policyRaw = is_file($target . '/.ckconform') ? file_get_contents($target . '/.ckconform') : FALSE;
 if (is_string($policyRaw)) {
-  foreach (explode("\n", $policyRaw) as $line) {
-    $line = trim($line);
-    if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
-      continue;
-    }
-    [$key, $value] = explode('=', $line, 2);
-    if (trim($key) !== 'template_custom') {
-      continue;
-    }
-    $value = trim($value);
+  $declared = \CiviKitchen\Ckconform\Policy::parse($policyRaw)['template_custom'] ?? [];
+  // First occurrence wins, as before; ckconform's policy-key check is what
+  // reports a second line that would silently do nothing.
+  foreach (array_slice($declared, 0, 1) as $value) {
     if (preg_match('/\s--\s\S/', $value) !== 1) {
       fwrite(STDERR, "ckinit: template_custom in .ckconform needs a reason: template_custom=<file>,... -- <reason>\n");
       exit(2);
@@ -200,7 +203,6 @@ if (is_string($policyRaw)) {
       }
       $custom[$item] = TRUE;
     }
-    break;
   }
 }
 

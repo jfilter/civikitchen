@@ -18,7 +18,7 @@
   // decision (docs/releases.md), not a stale pin — keep the bot off it.
   ignoreDeps: ['jfilter/civikitchen'],
 
-  // Base images in images/*/Dockerfile: pin to the digest as well, and keep
+  // Base images in docker/*/Dockerfile: pin to the digest as well, and keep
   // the human-readable tag next to it.
   docker: {
     pinDigests: true,
@@ -40,7 +40,7 @@
   ],
 
   // Renovate cannot see the phar/binary hashes in
-  // images/lib/install-dev-tools.sh (civix, phpunit, mago) or
+  // toolbelt/install-dev-tools.sh (civix, phpunit, mago) or
   // .github/workflows/lint.yml — those are bumped by hand, hash included, per
   // the instructions in those files.
 }

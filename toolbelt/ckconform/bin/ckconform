@@ -1,0 +1,104 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * ckconform — repo-conformance check for CiviCRM extensions against the
+ * civikitchen template. Complements cklint (style) and phpstan (types): this
+ * checks the repo structure, the gaps every extension audit turned up.
+ *
+ * Run from the extension root. Deliberately dependency-free — no composer
+ * install in the image, no vendor/ to keep current.
+ */
+
+use CiviKitchen\Ckconform\Autoloader;
+use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\Policy;
+use CiviKitchen\Ckconform\Registry;
+use CiviKitchen\Ckconform\Reporter;
+
+require_once __DIR__ . '/../src/Autoloader.php';
+Autoloader::register();
+
+$root = getcwd();
+
+/**
+ * Read-out modes for `.ckconform`, and the only way the ck* shell tools get at
+ * it — so that Policy stays the one parser of this format instead of the
+ * seventh.
+ *
+ *   eval "$(ckconform --policy-env)"   # CK_POLICY_MIN_COVERAGE='70', …
+ *   ckconform --policy <key>           # every value of one key, one per line
+ *
+ * --policy-env gives the scalar view with the ` -- <reason>` stripped, which is
+ * what a shell caller comparing a number wants. --policy keeps the value
+ * verbatim, for the repeatable keys and for the callers whose job is to check
+ * that the reason is there (cklifecycle).
+ *
+ * Before the info.xml gate and before a single check is constructed, on
+ * purpose: this is a config read, its callers have already asserted they are at
+ * the extension root, and a read-out that cost a full conformance run is a
+ * read-out those callers would go back to writing in sed.
+ */
+$policyRaw = static function () use ($root): string {
+    $file = ($root === false ? '.' : $root) . '/.ckconform';
+
+    return is_file($file) ? (string) file_get_contents($file) : '';
+};
+switch ($argv[1] ?? '') {
+    case '--policy-env':
+        echo Policy::toShell($policyRaw());
+        exit(0);
+    case '--policy':
+        $key = $argv[2] ?? '';
+        if ($key === '') {
+            fwrite(STDERR, "ckconform: --policy needs a key, e.g. --policy min_coverage\n");
+            exit(2);
+        }
+        foreach (Policy::parse($policyRaw())[$key] ?? [] as $value) {
+            echo $value, "\n";
+        }
+        exit(0);
+}
+
+if ($root === false || !is_file($root . '/info.xml')) {
+    fwrite(STDERR, "ckconform: no info.xml here — run from the extension root.\n");
+    exit(2);
+}
+
+$coreDir = getenv('CIVICRM_CORE_DIR') ?: '/var/www/html/core';
+$context = new Context($root, is_dir($coreDir . '/Civi/Api4') ? $coreDir : null);
+$reporter = new Reporter();
+
+// The repo-wide escape level: ignore_checks=<name>,<name> -- <reason> in
+// .ckconform skips whole checks. The reason is not optional, and a name no
+// check carries is a dead ignore — both fail rather than silently narrowing.
+$ignored = [];
+$ignoreRaw = $context->policyValue('ignore_checks');
+if ($ignoreRaw !== null) {
+    $parts = array_map('trim', explode('--', $ignoreRaw, 2));
+    if (count($parts) < 2 || $parts[1] === '') {
+        $reporter->fail('.ckconform: ignore_checks needs a reason — ignore_checks=<name>,... -- <reason>');
+    } else {
+        $ignored = array_filter(array_map('trim', explode(',', $parts[0])));
+        $known = array_map(static fn ($c) => $c->name(), Registry::all());
+        foreach (array_diff($ignored, $known) as $unknown) {
+            $reporter->fail(".ckconform: ignore_checks names an unknown check '{$unknown}'");
+        }
+    }
+}
+// Hand the skip list on: an inline ignore for a check that never ran is not an
+// unused ignore, and only this loop knows which checks were skipped.
+$context->skipChecks(array_values($ignored));
+
+foreach (Registry::all() as $check) {
+    if (in_array($check->name(), $ignored, true)) {
+        continue;
+    }
+    $check->run($context, $reporter);
+}
+
+echo $reporter->render();
+
+exit($reporter->failures() === 0 ? 0 : 1);
