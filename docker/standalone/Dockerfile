@@ -151,7 +151,7 @@ RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION
         INFECTION_VERSION="${INFECTION_VERSION}" \
         MAGO_VERSION="${MAGO_VERSION}" MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64}" \
         MAGO_SHA256_AARCH64="${MAGO_SHA256_AARCH64}" \
-        bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh \
+        bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh /tmp/versions.env \
     && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
         /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktestreset \
         /usr/local/bin/ckcoretest \
