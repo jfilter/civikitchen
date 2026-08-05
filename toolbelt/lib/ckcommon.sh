@@ -80,6 +80,7 @@ ck_xml_field() {
 # $1 = file, $2 = top-level key. A missing file or key prints nothing.
 ck_json_field() {
     php -r '
+      if (!is_file($argv[1])) { exit(0); }
       $raw = file_get_contents($argv[1]);
       if ($raw === FALSE) { exit(0); }
       $data = json_decode($raw, TRUE);
