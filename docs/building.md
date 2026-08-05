@@ -11,9 +11,16 @@ make build    # the standalone image, as civikitchen:standalone
 
 These are the same commands `.github/workflows/lint.yml` runs — the workflow
 consists of `make lint` and `make test`, so what runs in CI and what runs on a
-laptop cannot drift. `make` fetches the pinned phpunit phar and the CiviCRM
-source tree the catalog drift gates need into `.cache/` on first use;
-`make clean` removes it.
+laptop cannot drift. `make` fetches the pinned tools (phpunit phar, actionlint,
+shellcheck) and the CiviCRM source tree the catalog drift gates need into
+`.cache/` on first use; `make clean` removes it.
+
+The fast loop needs, besides `git` and `curl`: **GNU Make ≥ 3.82** (the
+Makefile refuses older ones — Apple ships 3.81, which silently drops the
+strict-shell flags), a `bash` on PATH, `php`, `composer` (only `make
+test-phpstan`), and `pipx` (zizmor and the schema check). Everything else is
+fetched pinned. The slow loop (`make build`, `make test-images`, `make e2e`)
+additionally needs Docker and Node.
 
 The build context is the repo root for both the standalone and buildkit-based images. The Dockerfiles copy from two trees: `toolbelt/` (the `ck*` tools, the phpcs standard, the phpstan/psalm/rector packages — everything baked into the image) and `docker/` (the image's own entrypoints, provisioning and demo profiles). Neither has to live inside the other, and `.dockerignore` keeps `.git` and host-built artifacts out.
 
