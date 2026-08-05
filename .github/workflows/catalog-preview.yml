@@ -1,0 +1,84 @@
+# Early warning for the generated catalogs: regenerate them against the LATEST
+# CiviCRM release and diff. The drift gates in `make test` only prove the
+# committed catalogs match their PINNED release — core moving on (new hooks,
+# namespaces, API entities, schema) is invisible until someone bumps the pin
+# and gets surprised. This run fails when the latest release would change a
+# catalog beyond its version line, which is the moment to schedule the bump.
+#
+# A newer release that changes NOTHING but the version line is a pass: bumping
+# for it would churn four files for no behavioural difference.
+name: Catalog Preview
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      # Stable releases only — X.Y.Z, no alpha/beta/RC tags. `sort -V` puts the
+      # newest last.
+      - name: Resolve the latest stable core release
+        id: latest
+        run: |
+          set -euo pipefail
+          latest=$(git ls-remote --tags https://github.com/civicrm/civicrm-core.git \
+            | sed -n 's|.*refs/tags/\([0-9][0-9.]*\)$|\1|p' \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V | tail -1)
+          [ -n "$latest" ] || { echo "could not resolve a latest release" >&2; exit 1; }
+          pinned=$(php -r 'require "toolbelt/ckconform/src/HookCatalog.php";
+            echo CiviKitchen\Ckconform\HookCatalog::CORE_VERSION;')
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          echo "pinned $pinned, latest $latest"
+
+      - name: Regenerate all four catalogs against the latest release
+        env:
+          LATEST: ${{ steps.latest.outputs.latest }}
+        run: |
+          set -euo pipefail
+          curl -fsSLo /tmp/core.tar.gz \
+            "https://github.com/civicrm/civicrm-core/archive/refs/tags/${LATEST}.tar.gz"
+          mkdir -p /tmp/core
+          tar -xzf /tmp/core.tar.gz -C /tmp/core --strip-components=1
+          php toolbelt/ckconform/tools/gen-hook-catalog.php /tmp/core
+          php toolbelt/phpstan/tools/gen-core-namespace-catalog.php /tmp/core
+          php toolbelt/phpstan/tools/gen-api4-catalog.php /tmp/core
+          php toolbelt/phpstan/tools/gen-schema-catalog.php /tmp/core
+
+      # -I twice: the version is embedded as the CORE_VERSION constant and in three
+      # "Generated from" headers. A diff of only those lines is a release with
+      # nothing catalog-relevant in it — not worth a bump.
+      - name: Diff beyond the version line
+        env:
+          LATEST: ${{ steps.latest.outputs.latest }}
+          PINNED: ${{ steps.latest.outputs.pinned }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -I "CORE_VERSION = '" -I 'Generated from CiviCRM ' ; then
+            echo "### Catalog preview: no catalog-relevant changes up to ${LATEST} (pinned: ${PINNED})" \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "### Catalog preview: ${LATEST} would change the catalogs (pinned: ${PINNED})"
+            echo
+            echo '```'
+            git diff --stat -I "CORE_VERSION = '" -I 'Generated from CiviCRM '
+            echo '```'
+            echo
+            echo "Time to regenerate from one release and bump the pins — see the drift gates in \`make test\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+          git diff --stat -I "CORE_VERSION = '" -I 'Generated from CiviCRM '
+          exit 1
