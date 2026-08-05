@@ -69,8 +69,10 @@ fi
 # The <file> value is civix's short name, and the prefix every hand-named
 # table, option group and scheduled job in the extension is built from.
 prefix=$(echo "$info" | grep -o '<file>[^<]*</file>' | head -1 | sed 's/<file>//; s|</file>||')
-[ -n "$key" ] && [ -n "$prefix" ] \
-  || { echo "cklifecycle: could not read the extension key and <file> from info.xml." >&2; exit 2; }
+if [ -z "$key" ] || [ -z "$prefix" ]; then
+  echo "cklifecycle: could not read the extension key and <file> from info.xml." >&2
+  exit 2
+fi
 
 extdir=$(pwd)
 work=$(mktemp -d /tmp/cklifecycle-XXXXXX)

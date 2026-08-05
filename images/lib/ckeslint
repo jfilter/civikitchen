@@ -65,7 +65,7 @@ toolchain=/opt/civikitchen-oxlint
 if [ ! -x "$toolchain/node_modules/.bin/oxlint" ]; then
   # Running out of a civikitchen checkout (developing the tool itself) rather
   # than from the image that installs the toolchain.
-  candidate="$(cd "$(dirname "${BASH_SOURCE[0]}")/oxlint" 2>/dev/null && pwd || true)"
+  candidate="$(cd "$(dirname "${BASH_SOURCE[0]}")/oxlint" 2>/dev/null && pwd)" || candidate=""
   if [ -n "$candidate" ] && [ -x "$candidate/node_modules/.bin/oxlint" ]; then
     toolchain="$candidate"
   else
@@ -155,6 +155,7 @@ fi
 # node_modules belongs to the repo, not to the gate. A repo that ships its own
 # copy keeps it — two @types/node in one program is the conflict to avoid.
 overlay_link=""
+# shellcheck disable=SC2329,SC2317  # invoked via the EXIT/INT/TERM trap below
 cleanup_overlay() {
   [ -n "${overlay_link}" ] || return 0
   rm -f "${overlay_link}"
