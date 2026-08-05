@@ -61,7 +61,7 @@ jobs:
           MINOR=${STABLE%.*}
           # Requested extra minors flow through the whole standalone chain
           # (build → merge → smoke → e2e → promote) via this one array.
-          VERSIONS="[\"latest\",\"${MINOR}\""
+          CANDIDATES=("latest" "${MINOR}")
           IFS=',' read -ra EXTRAS <<< "${EXTRA_MINORS}"
           for v in "${EXTRAS[@]}"; do
             v="${v// /}"
@@ -71,9 +71,28 @@ jobs:
               exit 1
             fi
             [ "${v}" = "${MINOR}" ] && continue
-            VERSIONS="${VERSIONS},\"${v}\""
+            CANDIDATES+=("${v}")
           done
-          VERSIONS="${VERSIONS}]"
+          # Docker Hub is the FROM of the standalone image and lags the
+          # release announcement: stable.php said 6.17.0 while
+          # civicrm/civicrm:6.17 did not exist yet, and every standalone build
+          # died on the FROM line. Build the tags that exist; a dropped minor
+          # is at most a weekly schedule run away once upstream publishes it.
+          KEPT=()
+          for v in "${CANDIDATES[@]}"; do
+            if curl -fsS --retry 2 -o /dev/null \
+                "https://hub.docker.com/v2/repositories/civicrm/civicrm/tags/${v}"; then
+              KEPT+=("${v}")
+            else
+              echo "::warning::civicrm/civicrm:${v} is not on Docker Hub (yet) — skipping this standalone version"
+            fi
+          done
+          if [ "${#KEPT[@]}" -eq 0 ]; then
+            echo "none of the standalone base tags exist on Docker Hub: ${CANDIDATES[*]}" >&2
+            exit 1
+          fi
+          VERSIONS=$(printf '"%s",' "${KEPT[@]}")
+          VERSIONS="[${VERSIONS%,}]"
           echo "standalone versions: ${VERSIONS}"
           {
             echo "stable=${STABLE}"
