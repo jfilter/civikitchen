@@ -675,8 +675,10 @@ jobs:
 
       - name: Taint analysis summary
         if: ${{ !cancelled() && steps.cktaint.outcome != 'skipped' }}
+        env:
+          CKTAINT_GUARD: ${{ steps.cktaint.outputs.guard }}
         run: |
-          if [ "${{ steps.cktaint.outputs.guard }}" = no-cktaint ]; then
+          if [ "$CKTAINT_GUARD" = no-cktaint ]; then
             echo "### Taint analysis: inactive (image predates cktaint)" >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ steps.cktaint.outcome }}" = success ]; then
             echo "### Taint analysis: no blocking findings" >> "$GITHUB_STEP_SUMMARY"
