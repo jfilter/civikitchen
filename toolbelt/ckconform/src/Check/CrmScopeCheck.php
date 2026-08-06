@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
+use CiviKitchen\Ckconform\SmartySource;
 
 /**
  * `{ts}` in an extension template that no `{crmScope extensionKey='…'}` covers.
@@ -50,7 +51,7 @@ final class CrmScopeCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        $key = $this->extensionKey($context);
+        $key = $context->extensionKey();
         if ($key === null) {
             // No info.xml key: nothing to compare a wrapper against.
             return;
@@ -81,36 +82,12 @@ final class CrmScopeCheck implements Check
      */
     private function sources(Context $context): array
     {
-        $files = $context->isGitRepo()
-            ? $context->trackedUnder('', ['.tpl', '.mgd.php'])
-            : $context->findFiles('', ['.tpl', '.mgd.php']);
-
-        return array_values(array_filter($files, static function (string $file): bool {
-            if (str_starts_with($file, 'tests/')
-                || str_starts_with($file, 'vendor/')
-                || str_starts_with($file, 'node_modules/')
-            ) {
-                return false;
-            }
-
-            return str_ends_with($file, '.mgd.php') || str_starts_with($file, 'templates/');
-        }));
-    }
-
-    private function extensionKey(Context $context): ?string
-    {
-        $info = $context->infoXml();
-        if ($info === null) {
-            return null;
-        }
-        foreach ([(string) $info['key'], (string) ($info->file ?? '')] as $candidate) {
-            $candidate = trim($candidate);
-            if ($candidate !== '') {
-                return $candidate;
-            }
-        }
-
-        return null;
+        return $context->sourceFiles(
+            '',
+            ['.tpl', '.mgd.php'],
+            static fn (string $file): bool => str_ends_with($file, '.mgd.php')
+                || str_starts_with($file, 'templates/'),
+        );
     }
 
     /**
@@ -121,7 +98,7 @@ final class CrmScopeCheck implements Check
      */
     private function findings(string $source, string $key): array
     {
-        $source = $this->blankOutInertRegions($source);
+        $source = SmartySource::blankOutInertRegions($source);
 
         /** @var list<array{offset: int, kind: string, key: string|null, dynamic: bool}> $events */
         $events = [];
@@ -232,21 +209,6 @@ final class CrmScopeCheck implements Check
         $quoted = ($match[1] ?? '') !== '' ? $match[1] : ($match[2] ?? '');
 
         return str_contains($quoted, '$') ? [null, true] : [$quoted, false];
-    }
-
-    /**
-     * Smarty comments and `{literal}` blocks, replaced by spaces of the same
-     * length: their contents are never parsed as tags, and blanking rather than
-     * deleting keeps every remaining offset — and so every reported line number
-     * — correct.
-     */
-    private function blankOutInertRegions(string $source): string
-    {
-        return (string) preg_replace_callback(
-            ['/\{\*.*?\*\}/s', '#\{literal\}.*?\{/literal\}#si'],
-            static fn (array $m): string => preg_replace('/[^\n]/', ' ', $m[0]) ?? $m[0],
-            $source,
-        );
     }
 
     /**

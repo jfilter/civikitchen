@@ -6,6 +6,7 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\ExtensionUtilStub;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -61,14 +62,10 @@ final class AfformContractCheck implements Check
             $metaFile = $base . '.aff.json';
             $phpMetaFile = $base . '.aff.php';
             $type = null;
-            $ships = fn (string $file): bool => $context->isGitRepo()
-                ? $context->isTracked($file)
-                : $context->exists($file);
-
-            if ($ships($phpMetaFile)) {
+            if ($context->ships($phpMetaFile)) {
                 // The PHP metadata variant is just as valid as .aff.json.
                 // Evaluating it needs the ExtensionUtil stub for E::ts().
-                self::registerExtensionUtilStub();
+                ExtensionUtilStub::register();
                 try {
                     $meta = require $context->path($phpMetaFile);
                     if (is_array($meta)) {
@@ -82,7 +79,7 @@ final class AfformContractCheck implements Check
                 } catch (\Throwable $e) {
                     $reporter->warn("$phpMetaFile: could not evaluate outside CiviCRM ({$e->getMessage()}) — metadata unchecked");
                 }
-            } elseif (!$ships($metaFile)) {
+            } elseif (!$context->ships($metaFile)) {
                 $reporter->warn("$relative: no $metaFile (or .aff.php) beside it — the form's metadata then comes from database defaults, which is usually a forgotten file");
             } else {
                 $raw = $context->read($metaFile) ?? '';
@@ -229,32 +226,5 @@ final class AfformContractCheck implements Check
         }
 
         return $ranges;
-    }
-
-    private static function registerExtensionUtilStub(): void
-    {
-        static $registered = false;
-        if ($registered) {
-            return;
-        }
-        $registered = true;
-
-        if (!function_exists('ts')) {
-            // Bare ts() calls appear in .aff.php metadata too.
-            eval('function ts($text, $params = []) { return $text; }');
-        }
-
-        spl_autoload_register(static function (string $class): void {
-            if (preg_match('/^CRM_\\w+_ExtensionUtil$/', $class) !== 1) {
-                return;
-            }
-            eval(sprintf(
-                'class %s {
-                    public static function ts($text, $params = []) { return $text; }
-                    public static function __callStatic($name, $args) { return $args[0] ?? \'\'; }
-                }',
-                $class,
-            ));
-        });
     }
 }

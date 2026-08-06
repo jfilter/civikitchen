@@ -95,7 +95,7 @@ final class TranslationCatalogCheck implements Check
         array $entries,
     ): void {
         $compiled = substr($catalog, 0, -3) . '.mo';
-        if (!$this->ships($context, $compiled)) {
+        if (!$context->ships($compiled)) {
             $reporter->fail(
                 "$catalog: no compiled $compiled beside it — CiviCRM reads only the .mo at runtime, "
                 . 'so every translation in this .po is inert'
@@ -202,13 +202,7 @@ final class TranslationCatalogCheck implements Check
      */
     private function sourceFiles(Context $context): array
     {
-        $files = $context->isGitRepo()
-            ? $context->trackedUnder('', ['.php', '.tpl'])
-            : $context->findFiles('', ['.php', '.tpl']);
-
-        return array_values(array_filter($files, static fn (string $f): bool => !str_starts_with($f, 'tests/')
-            && !str_starts_with($f, 'vendor/')
-            && !str_starts_with($f, 'node_modules/')));
+        return $context->sourceFiles('', ['.php', '.tpl']);
     }
 
     /**
@@ -461,8 +455,4 @@ final class TranslationCatalogCheck implements Check
         return implode(', ', $quoted) . ($rest > 0 ? ", +$rest more" : '');
     }
 
-    private function ships(Context $context, string $relative): bool
-    {
-        return $context->isGitRepo() ? $context->isTracked($relative) : $context->exists($relative);
-    }
 }

@@ -70,7 +70,7 @@ final class Api4SelfEntityCheck implements Check
                 continue;
             }
             foreach ($this->candidates($source) as $name) {
-                if ($this->definedLocally($context, $name) || $this->existsInCore($context, $name)) {
+                if ($context->shipsApi4Entity($name) || $this->existsInCore($context, $name)) {
                     continue;
                 }
                 $dangling[$name][$file] = true;
@@ -111,17 +111,6 @@ final class Api4SelfEntityCheck implements Check
         preg_match_all($pattern, $source, $matches);
 
         return array_values(array_unique($matches[1]));
-    }
-
-    private function definedLocally(Context $context, string $entity): bool
-    {
-        foreach ($context->trackedFiles() as $file) {
-            if (str_ends_with($file, 'Civi/Api4/' . $entity . '.php')) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

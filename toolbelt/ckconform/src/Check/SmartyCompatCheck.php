@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
+use CiviKitchen\Ckconform\SmartySource;
 
 /**
  * Smarty tags in shipped templates that Smarty 5 refuses to compile.
@@ -91,7 +92,7 @@ final class SmartyCompatCheck implements Check
             if ($source === null) {
                 continue;
             }
-            $scannable = $this->blankOutInertRegions($source);
+            $scannable = SmartySource::blankOutInertRegions($source);
             $lines = explode("\n", $source);
 
             foreach (self::REMOVED_TAGS as $tag => $advice) {
@@ -195,30 +196,6 @@ final class SmartyCompatCheck implements Check
      */
     private function sources(Context $context): array
     {
-        $files = $context->isGitRepo()
-            ? $context->trackedUnder('', ['.tpl'])
-            : $context->findFiles('', ['.tpl']);
-
-        return array_values(array_filter(
-            $files,
-            static fn (string $file): bool => !str_starts_with($file, 'tests/')
-                && !str_starts_with($file, 'vendor/')
-                && !str_starts_with($file, 'node_modules/'),
-        ));
-    }
-
-    /**
-     * Smarty comments and `{literal}` blocks, replaced by spaces of the same
-     * length: their contents are never parsed as tags, and blanking rather than
-     * deleting keeps every remaining offset — and so every reported line number
-     * — correct.
-     */
-    private function blankOutInertRegions(string $source): string
-    {
-        return (string) preg_replace_callback(
-            ['/\{\*.*?\*\}/s', '#\{literal\}.*?\{/literal\}#si'],
-            static fn (array $m): string => preg_replace('/[^\n]/', ' ', $m[0]) ?? $m[0],
-            $source,
-        );
+        return $context->sourceFiles('', ['.tpl']);
     }
 }

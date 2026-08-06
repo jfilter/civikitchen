@@ -48,7 +48,7 @@ final class EntitySchemaFormatCheck implements Check
             ));
         }
 
-        foreach ($this->declaredMixins($context) as $mixin) {
+        foreach ($context->declaredMixins() as $mixin) {
             if (str_starts_with($mixin, 'entity-types-php@1')) {
                 $reporter->warn(
                     "info.xml declares {$mixin} — entity-types-php@2 loads the canonical schema/*.entityType.php format; part of the same civix migration"
@@ -76,23 +76,5 @@ final class EntitySchemaFormatCheck implements Check
         }
 
         return $floor;
-    }
-
-    /** @return list<string> */
-    private function declaredMixins(Context $context): array
-    {
-        $info = $context->infoXml();
-        if ($info === null) {
-            return [];
-        }
-        $mixins = [];
-        foreach ($info->xpath('//mixins/mixin') ?: [] as $mixin) {
-            $value = trim((string) $mixin);
-            if ($value !== '') {
-                $mixins[] = $value;
-            }
-        }
-
-        return $mixins;
     }
 }

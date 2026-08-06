@@ -101,20 +101,10 @@ final class MixinDeclarationCheck implements Check
      */
     private function declaredMixins(Context $context): array
     {
-        $info = $context->infoXml();
-        if ($info === null) {
-            return [];
-        }
-        $names = [];
-        foreach ($info->xpath('//mixins/mixin') ?: [] as $mixin) {
-            $value = trim((string) $mixin);
-            if ($value === '') {
-                continue;
-            }
-            $names[] = explode('@', $value)[0];
-        }
-
-        return $names;
+        return array_map(
+            static fn (string $mixin): string => explode('@', $mixin)[0],
+            $context->declaredMixins(),
+        );
     }
 
     private function hasArtefact(Context $context, string $dir, string $suffix, bool $direct = false): bool

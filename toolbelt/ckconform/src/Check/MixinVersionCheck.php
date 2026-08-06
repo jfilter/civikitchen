@@ -32,7 +32,7 @@ final class MixinVersionCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        foreach ($this->declaredMixins($context) as $mixin) {
+        foreach ($context->declaredMixins() as $mixin) {
             [$name] = explode('@', $mixin) + [''];
 
             if ($name === 'smarty-v2') {
@@ -49,24 +49,6 @@ final class MixinVersionCheck implements Check
                 );
             }
         }
-    }
-
-    /** @return list<string> raw mixin declarations, e.g. 'smarty-v2@1.0.2' */
-    private function declaredMixins(Context $context): array
-    {
-        $info = $context->infoXml();
-        if ($info === null) {
-            return [];
-        }
-        $mixins = [];
-        foreach ($info->xpath('//mixins/mixin') ?: [] as $mixin) {
-            $value = trim((string) $mixin);
-            if ($value !== '') {
-                $mixins[] = $value;
-            }
-        }
-
-        return $mixins;
     }
 
     private function allMgdFilesInV2Paths(Context $context): bool

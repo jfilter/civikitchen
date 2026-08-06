@@ -33,7 +33,7 @@ final class ComposeFloatingTagCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        $files = $this->composeFiles($context);
+        $files = $context->composeFiles();
         if ($files === []) {
             return;
         }
@@ -91,22 +91,5 @@ final class ComposeFloatingTagCheck implements Check
         }
 
         return null;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function composeFiles(Context $context): array
-    {
-        $files = [];
-        foreach ($context->trackedFiles() as $file) {
-            $name = basename($file);
-            if (preg_match('/^(docker-)?compose.*\.ya?ml$/', $name) === 1) {
-                $files[] = $file;
-            }
-        }
-        sort($files);
-
-        return $files;
     }
 }

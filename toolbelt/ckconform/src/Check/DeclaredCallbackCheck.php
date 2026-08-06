@@ -72,7 +72,7 @@ final class DeclaredCallbackCheck implements Check
                 }
 
                 $expected = str_replace('_', '/', $callback) . '.php';
-                if (!$this->shipsFile($context, $expected)) {
+                if (!$context->ships($expected)) {
                     $reporter->fail(
                         "$relative: page_callback $callback has no file $expected — the route 500s on first visit"
                     );
@@ -90,8 +90,4 @@ final class DeclaredCallbackCheck implements Check
         }
     }
 
-    private function shipsFile(Context $context, string $relative): bool
-    {
-        return $context->isGitRepo() ? $context->isTracked($relative) : $context->exists($relative);
-    }
 }

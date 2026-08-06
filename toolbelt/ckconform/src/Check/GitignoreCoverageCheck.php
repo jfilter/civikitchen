@@ -108,8 +108,7 @@ final class GitignoreCoverageCheck implements Check
                 return $context->exists('composer.json') ? ['vendor/autoload.php'] : [];
 
             case 'node_modules/':
-                $manifests = $context->tracked('package.json', static fn (string $f): bool
-                    => !str_contains($f, 'node_modules'));
+                $manifests = $context->tracked('package.json', Context::outsideNodeModules(...));
 
                 return array_map(
                     static fn (string $d): string => $d . 'node_modules/left-pad/package.json',

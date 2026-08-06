@@ -6,7 +6,9 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\ExtensionUtilStub;
 use CiviKitchen\Ckconform\Reporter;
+use CiviKitchen\Ckconform\Scalar;
 use CiviKitchen\Ckconform\Suppressions;
 
 /**
@@ -68,9 +70,9 @@ final class ManagedEntityMetadataCheck implements Check
             return;
         }
 
-        self::registerExtensionUtilStub();
+        ExtensionUtilStub::register();
 
-        $extensionKey = self::extensionKey($context);
+        $extensionKey = $context->extensionKey();
         $seen = [];
 
         foreach ($files as $relative) {
@@ -113,7 +115,7 @@ final class ManagedEntityMetadataCheck implements Check
                     if (!isset($params['version'])) {
                         $reporter->fail("$label: params has no 'version' — the API version is not optional");
                     } elseif (!in_array($version, self::VERSIONS, true)) {
-                        $reporter->fail("$label: params version '" . self::scalar($version) . "' is not 3 or 4");
+                        $reporter->fail("$label: params version '" . Scalar::describe($version) . "' is not 3 or 4");
                     } elseif ((int) $version === 4 && !isset($params['values'])) {
                         $reporter->fail("$label: APIv4 params without 'values' — nothing would be written");
                     } elseif ((int) $version === 4 && !is_array($params['values'])) {
@@ -127,17 +129,17 @@ final class ManagedEntityMetadataCheck implements Check
                 }
 
                 if (isset($record['cleanup']) && !in_array($record['cleanup'], self::CLEANUP, true)) {
-                    $reporter->fail("$label: cleanup '" . self::scalar($record['cleanup']) . "' is not one of always|never|unused");
+                    $reporter->fail("$label: cleanup '" . Scalar::describe($record['cleanup']) . "' is not one of always|never|unused");
                 }
                 if (isset($record['update']) && !in_array($record['update'], self::UPDATE, true)) {
-                    $reporter->fail("$label: update '" . self::scalar($record['update']) . "' is not one of always|never|unmodified");
+                    $reporter->fail("$label: update '" . Scalar::describe($record['update']) . "' is not one of always|never|unmodified");
                 }
 
                 // A missing module is filled in by the mgd-php mixin; a wrong
                 // one makes the next reconcile delete the record as orphaned.
                 $module = $record['module'] ?? null;
                 if (isset($record['module']) && $extensionKey !== null && $module !== $extensionKey) {
-                    $reporter->fail("$label: module '" . self::scalar($module) . "' is not this extension's key '$extensionKey' — reconciliation will treat the record as orphaned and delete it");
+                    $reporter->fail("$label: module '" . Scalar::describe($module) . "' is not this extension's key '$extensionKey' — reconciliation will treat the record as orphaned and delete it");
                 }
 
                 if (!isset($record['cleanup'])
@@ -169,46 +171,4 @@ final class ManagedEntityMetadataCheck implements Check
         )->suppressed($this->name(), 0);
     }
 
-    private static function extensionKey(Context $context): ?string
-    {
-        $info = $context->infoXml();
-        if ($info === null) {
-            return null;
-        }
-        $key = (string) ($info['key'] ?? '');
-
-        return $key === '' ? null : $key;
-    }
-
-    private static function scalar(mixed $value): string
-    {
-        return is_scalar($value) ? (string) $value : get_debug_type($value);
-    }
-
-    /**
-     * Autoload stub for any CRM_*_ExtensionUtil so `use ... as E; E::ts()`
-     * works outside a CiviCRM boot. ts() returns the literal; every other
-     * static returns the first argument or ''.
-     */
-    private static function registerExtensionUtilStub(): void
-    {
-        static $registered = false;
-        if ($registered) {
-            return;
-        }
-        $registered = true;
-
-        spl_autoload_register(static function (string $class): void {
-            if (preg_match('/^CRM_\w+_ExtensionUtil$/', $class) !== 1) {
-                return;
-            }
-            eval(sprintf(
-                'class %s {
-                    public static function ts($text, $params = []) { return $text; }
-                    public static function __callStatic($name, $args) { return $args[0] ?? \'\'; }
-                }',
-                $class,
-            ));
-        });
-    }
 }

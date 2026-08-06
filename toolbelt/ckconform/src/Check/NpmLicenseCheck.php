@@ -31,10 +31,7 @@ final class NpmLicenseCheck implements Check
             return;
         }
 
-        $manifests = $context->tracked(
-            'package.json',
-            static fn (string $file): bool => !str_contains($file, 'node_modules'),
-        );
+        $manifests = $context->tracked('package.json', Context::outsideNodeModules(...));
 
         foreach ($manifests as $manifest) {
             $have = $this->license($context, $manifest, $want);

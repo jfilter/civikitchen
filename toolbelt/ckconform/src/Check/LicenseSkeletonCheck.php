@@ -33,7 +33,7 @@ final class LicenseSkeletonCheck implements Check
 
         $license = $context->read('LICENSE.txt') ?? '';
         $package = $this->packageLine($license);
-        $key = $this->extensionKey($context);
+        $key = ($context->extensionKey() ?? '');
 
         if ($package !== '' && $key !== '' && $package !== $key) {
             $reporter->fail(
@@ -56,12 +56,5 @@ final class LicenseSkeletonCheck implements Check
         }
 
         return '';
-    }
-
-    private function extensionKey(Context $context): string
-    {
-        $info = $context->infoXml();
-
-        return $info === null ? '' : (string) ($info['key'] ?? '');
     }
 }

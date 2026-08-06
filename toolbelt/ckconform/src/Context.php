@@ -92,6 +92,71 @@ final class Context
     }
 
     /**
+     * The extension key from info.xml's key attribute (`org.example.myext`),
+     * or null when there is no info.xml or no key.
+     */
+    public function extensionKey(): ?string
+    {
+        $info = $this->infoXml();
+        if ($info === null) {
+            return null;
+        }
+        $key = trim((string) ($info['key'] ?? ''));
+
+        return $key === '' ? null : $key;
+    }
+
+    /**
+     * The extension's own CamelCase-ish name: the last dot-segment of the key
+     * (`org.example.myext` -> `myext`), used only as an "is this ours" hint.
+     */
+    public function shortName(): ?string
+    {
+        $key = $this->extensionKey();
+        if ($key === null) {
+            return null;
+        }
+        $parts = explode('.', $key);
+        $last = (string) end($parts);
+
+        return $last === '' ? null : $last;
+    }
+
+    /** The `<license>` declared in info.xml, '' when absent. */
+    public function infoLicense(): string
+    {
+        $info = $this->infoXml();
+        if ($info === null || !isset($info->license)) {
+            return '';
+        }
+
+        return (string) $info->license;
+    }
+
+    /**
+     * Raw mixin declarations from info.xml, e.g. 'mgd-php@1.0.0'. Callers that
+     * want bare names strip the '@' suffix themselves.
+     *
+     * @return list<string>
+     */
+    public function declaredMixins(): array
+    {
+        $info = $this->infoXml();
+        if ($info === null) {
+            return [];
+        }
+        $mixins = [];
+        foreach ($info->xpath('//mixins/mixin') ?: [] as $mixin) {
+            $value = trim((string) $mixin);
+            if ($value !== '') {
+                $mixins[] = $value;
+            }
+        }
+
+        return $mixins;
+    }
+
+    /**
      * @return array<mixed>|null
      */
     public function json(string $relative): ?array
@@ -274,6 +339,78 @@ final class Context
     public function isTracked(string $relative): bool
     {
         return in_array(ltrim($relative, '/'), $this->trackedFiles(), true);
+    }
+
+    /**
+     * Does the repo ship this file? Tracked when in git (repo principle: an
+     * uncommitted local file must not sway a verdict), on disk otherwise.
+     */
+    public function ships(string $relative): bool
+    {
+        return $this->isGitRepo() ? $this->isTracked($relative) : $this->exists($relative);
+    }
+
+    /** Does the repo ship an own APIv4 entity class Civi/Api4/<Entity>.php? */
+    public function shipsApi4Entity(string $entity): bool
+    {
+        foreach ($this->trackedFiles() as $file) {
+            if (str_ends_with($file, 'Civi/Api4/' . $entity . '.php')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Shipped source files: tracked (or, outside git, on-disk) files under a
+     * directory, by suffix, minus tests/, vendor/ and node_modules/ at any
+     * depth — code that never runs on an install must not decide a check.
+     *
+     * @param  list<string>                $extensions
+     * @param  callable(string): bool|null $filter
+     * @return list<string>
+     */
+    public function sourceFiles(string $directory = '', array $extensions = [], ?callable $filter = null): array
+    {
+        $files = $this->isGitRepo()
+            ? $this->trackedUnder($directory, $extensions)
+            : $this->findFiles($directory, $extensions);
+
+        return array_values(array_filter($files, static function (string $file) use ($filter): bool {
+            foreach (['tests/', 'vendor/', 'node_modules/'] as $skip) {
+                if (str_starts_with($file, $skip) || str_contains($file, '/' . $skip)) {
+                    return false;
+                }
+            }
+
+            return $filter === null || $filter($file);
+        }));
+    }
+
+    /** tracked() filter for manifests outside any node_modules install. */
+    public static function outsideNodeModules(string $file): bool
+    {
+        return !str_contains($file, 'node_modules');
+    }
+
+    /**
+     * The compose stacks the repo ships, tracked only: an untracked local
+     * override is nobody else's problem.
+     *
+     * @return list<string>
+     */
+    public function composeFiles(): array
+    {
+        $files = [];
+        foreach ($this->trackedFiles() as $file) {
+            if (preg_match('/^(docker-)?compose.*\.ya?ml$/', basename($file)) === 1) {
+                $files[] = $file;
+            }
+        }
+        sort($files);
+
+        return $files;
     }
 
     /**

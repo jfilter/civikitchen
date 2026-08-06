@@ -136,4 +136,13 @@ final class TemplateReferenceCheckTest extends CheckTestCase
         ], git: true);
         $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
     }
+
+    public function testAPageClassUnderNodeModulesIsNotJudged(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'node_modules/dep/render.php' => "<?php\n\$smarty->fetch('CRM/Greeter/Page/Gone.tpl');\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new TemplateReferenceCheck(), $context));
+    }
 }

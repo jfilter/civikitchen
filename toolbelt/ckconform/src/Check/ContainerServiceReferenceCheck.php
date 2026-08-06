@@ -36,7 +36,7 @@ final class ContainerServiceReferenceCheck implements Check
     {
         $namespaces = ExtensionNamespace::all($context);
 
-        foreach ($this->sources($context, ['.php']) as $relative) {
+        foreach ($context->sourceFiles('', ['.php']) as $relative) {
             $source = $context->read($relative);
             if ($source === null) {
                 continue;
@@ -46,7 +46,7 @@ final class ContainerServiceReferenceCheck implements Check
             }
         }
 
-        foreach ($this->sources($context, ['services.yml', 'services.yaml']) as $relative) {
+        foreach ($context->sourceFiles('', ['services.yml', 'services.yaml']) as $relative) {
             $source = $context->read($relative);
             if ($source === null) {
                 continue;
@@ -55,22 +55,6 @@ final class ContainerServiceReferenceCheck implements Check
                 $this->judge($context, $reporter, $namespaces, $relative, $class);
             }
         }
-    }
-
-    /**
-     * @param  list<string> $extensions
-     * @return list<string>
-     */
-    private function sources(Context $context, array $extensions): array
-    {
-        $files = $context->isGitRepo()
-            ? $context->trackedUnder('', $extensions)
-            : $context->findFiles('', $extensions);
-
-        return array_values(array_filter(
-            $files,
-            static fn (string $f): bool => !str_starts_with($f, 'tests/') && !str_starts_with($f, 'vendor/'),
-        ));
     }
 
     /**
@@ -145,8 +129,7 @@ final class ContainerServiceReferenceCheck implements Check
         if ($expected === null) {
             return;
         }
-        $ships = $context->isGitRepo() ? $context->isTracked($expected) : $context->exists($expected);
-        if (!$ships) {
+        if (!$context->ships($expected)) {
             $reporter->fail(
                 "$relative: service class " . ltrim(str_replace('\\\\', '\\', $class), '\\')
                 . " has no file $expected — the container rebuild throws and the whole site is down"

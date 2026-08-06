@@ -284,4 +284,21 @@ final class CrmScopeCheckTest extends CheckTestCase
         ], git: true);
         $this->assertSilent($this->run_(new CrmScopeCheck(), $context));
     }
+
+    public function testWithoutAKeyAttributeThereIsNothingToCompareAgainst(): void
+    {
+        // Only info.xml's key attribute names the extension; <file> is the
+        // main-file base name and would demand a wrong wrapper value.
+        $context = $this->repo([
+            'info.xml' => <<<'XML'
+                <?xml version="1.0"?>
+                <extension type="module">
+                  <file>greeter</file>
+                  <name>Fixture</name>
+                </extension>
+                XML,
+            'templates/CRM/Greeter/Page/Foo.tpl' => "<h1>{ts}Hello{/ts}</h1>\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new CrmScopeCheck(), $context));
+    }
 }

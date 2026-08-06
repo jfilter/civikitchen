@@ -31,7 +31,7 @@ final class LicenseCoherenceCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        $xml = $this->infoLicense($context);
+        $xml = $context->infoLicense();
         $composerLicenses = $this->composerLicenses($context);
         $composer = $this->describe($composerLicenses);
         $want = $context->policyValue('license');
@@ -58,16 +58,6 @@ final class LicenseCoherenceCheck implements Check
                 "licence declarations disagree: info.xml '{$xml}' vs composer.json '{$composer}'"
             );
         }
-    }
-
-    private function infoLicense(Context $context): string
-    {
-        $info = $context->infoXml();
-        if ($info === null || !isset($info->license)) {
-            return '';
-        }
-
-        return (string) $info->license;
     }
 
     /**

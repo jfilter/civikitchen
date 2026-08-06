@@ -6,6 +6,7 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\PhpSource;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -118,7 +119,7 @@ final class Api4LiteralEntityCheck implements Check
      */
     private function calledEntities(string $source): array
     {
-        $code = $this->withoutComments($source);
+        $code = PhpSource::withoutComments($source);
         preg_match_all(
             '/civicrm_api4\s*\(\s*[\'"]([A-Z][A-Za-z0-9_]*)[\'"]/',
             $code,
@@ -131,19 +132,6 @@ final class Api4LiteralEntityCheck implements Check
     private function leadingWord(string $name): string
     {
         return preg_match('/^[A-Z][a-z0-9]*/', $name, $match) === 1 ? $match[0] : $name;
-    }
-
-    private function withoutComments(string $source): string
-    {
-        $out = '';
-        foreach (token_get_all($source) as $token) {
-            if (is_array($token) && ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT)) {
-                continue;
-            }
-            $out .= is_array($token) ? $token[1] : $token;
-        }
-
-        return $out;
     }
 
     private function skipped(string $file): bool

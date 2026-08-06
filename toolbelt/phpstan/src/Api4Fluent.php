@@ -53,31 +53,7 @@ final class Api4Fluent
      */
     public static function aliasesOfChain(MethodCall $node, Scope $scope): array
     {
-        $aliases = [];
-        $expr = $node->var;
-        while ($expr instanceof MethodCall) {
-            if ($expr->name instanceof Identifier && in_array($expr->name->toLowerString(), ['addselect', 'setselect'], true)) {
-                foreach ($expr->getArgs() as $arg) {
-                    $type = $scope->getType($arg->value);
-                    $strings = array_merge(
-                        $type->getConstantStrings(),
-                        ...array_map(
-                            static fn ($array) => $array->getValuesArray()->getConstantStrings(),
-                            $type->getConstantArrays(),
-                        ),
-                    );
-                    foreach ($strings as $string) {
-                        $alias = self::aliasOf($string->getValue());
-                        if ($alias !== null) {
-                            $aliases[] = $alias;
-                        }
-                    }
-                }
-            }
-            $expr = $expr->var;
-        }
-
-        return $aliases;
+        return self::chainStrings($node, $scope, ['addselect', 'setselect'], self::aliasOf(...));
     }
 
     /**
@@ -92,10 +68,24 @@ final class Api4Fluent
      */
     public static function joinAliasesOfChain(MethodCall $node, Scope $scope): array
     {
-        $aliases = [];
+        return self::chainStrings($node, $scope, ['addjoin', 'setjoin'], self::joinAliasOf(...));
+    }
+
+    /**
+     * String arguments the earlier links of the chain passed to any of the
+     * named methods, mapped through $map; nulls are dropped. Only the links
+     * below $node are visible, by construction of the AST.
+     *
+     * @param  list<string>                  $methods lowercased method names
+     * @param  callable(string): ?string     $map
+     * @return list<string>
+     */
+    private static function chainStrings(MethodCall $node, Scope $scope, array $methods, callable $map): array
+    {
+        $mapped = [];
         $expr = $node->var;
         while ($expr instanceof MethodCall) {
-            if ($expr->name instanceof Identifier && in_array($expr->name->toLowerString(), ['addjoin', 'setjoin'], true)) {
+            if ($expr->name instanceof Identifier && in_array($expr->name->toLowerString(), $methods, true)) {
                 foreach ($expr->getArgs() as $arg) {
                     $type = $scope->getType($arg->value);
                     $strings = array_merge(
@@ -106,9 +96,9 @@ final class Api4Fluent
                         ),
                     );
                     foreach ($strings as $string) {
-                        $alias = self::joinAliasOf($string->getValue());
-                        if ($alias !== null) {
-                            $aliases[] = $alias;
+                        $value = $map($string->getValue());
+                        if ($value !== null) {
+                            $mapped[] = $value;
                         }
                     }
                 }
@@ -116,7 +106,7 @@ final class Api4Fluent
             $expr = $expr->var;
         }
 
-        return $aliases;
+        return $mapped;
     }
 
     /** The name `Address AS addr` binds — `Address` when it binds none. */

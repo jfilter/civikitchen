@@ -65,20 +65,16 @@ final class TestSuiteRequiredCheck implements Check
     /** @return list<string> */
     private function sourceFiles(Context $context): array
     {
-        // Outside a git checkout (tarball, exported build) trackedUnder()
-        // returns nothing and a source-heavy repo would silently pass —
-        // fall back to the filesystem there.
-        $candidates = $context->isGitRepo()
-            ? array_merge(
-                $context->trackedUnder('Civi', ['.php']),
-                $context->trackedUnder('CRM', ['.php']),
-                $this->rootFiles($context),
-            )
-            : array_merge(
-                $context->findFiles('Civi', ['.php']),
-                $context->findFiles('CRM', ['.php']),
-                glob($context->path('*.php')) ?: [],
-            );
+        // sourceFiles() falls back to the filesystem outside a git checkout
+        // (tarball, exported build), where a source-heavy repo would otherwise
+        // silently pass; the root files need their own non-recursive fallback.
+        $candidates = array_merge(
+            $context->sourceFiles('Civi', ['.php']),
+            $context->sourceFiles('CRM', ['.php']),
+            $context->isGitRepo()
+                ? $this->rootFiles($context)
+                : (glob($context->path('*.php')) ?: []),
+        );
 
         return array_values(array_filter(
             $candidates,

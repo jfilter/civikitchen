@@ -102,4 +102,13 @@ final class ContainerServiceReferenceCheckTest extends CheckTestCase
     {
         return "<?php\n\nfunction greeter_civicrm_container(\$container) {\n  \$definition = $expression;\n}\n";
     }
+
+    public function testVendoredCodeUnderNodeModulesIsNotJudged(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'node_modules/dep/container.php' => $this->container("new Definition('Civi\\Greeter\\Gone')"),
+        ], git: true);
+        $this->assertSilent($this->run_(new ContainerServiceReferenceCheck(), $context));
+    }
 }

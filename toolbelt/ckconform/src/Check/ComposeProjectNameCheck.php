@@ -39,7 +39,7 @@ final class ComposeProjectNameCheck implements Check
         }
 
         $unnamed = [];
-        foreach ($this->composeFiles($context) as $file) {
+        foreach ($context->composeFiles() as $file) {
             // A file in the repo root derives the repo's own directory name,
             // which is already unique — only the ones tucked into a shared
             // subdirectory (.docker/) collide with their siblings.
@@ -63,21 +63,5 @@ final class ComposeProjectNameCheck implements Check
             . ' — compose falls back to the directory name, so every stack kept in .docker/'
             . ' shares one project'
         );
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function composeFiles(Context $context): array
-    {
-        $files = [];
-        foreach ($context->trackedFiles() as $file) {
-            if (preg_match('/^(docker-)?compose.*\.ya?ml$/', basename($file)) === 1) {
-                $files[] = $file;
-            }
-        }
-        sort($files);
-
-        return $files;
     }
 }

@@ -56,10 +56,7 @@ final class LockfileCheck implements Check
     /** @return list<string> */
     private function manifests(Context $context): array
     {
-        return $context->tracked(
-            'package.json',
-            static fn (string $file): bool => !str_contains($file, 'node_modules'),
-        );
+        return $context->tracked('package.json', Context::outsideNodeModules(...));
     }
 
     private function hasLockfile(Context $context, string $manifest): bool

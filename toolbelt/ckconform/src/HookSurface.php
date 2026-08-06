@@ -65,16 +65,11 @@ final class HookSurface
      */
     public static function candidates(Context $context): array
     {
-        $files = $context->isGitRepo()
-            ? $context->trackedUnder('', ['.php'])
-            : $context->findFiles('', ['.php']);
-
-        return array_values(array_filter($files, static function (string $file): bool {
-            return !str_starts_with($file, 'tests/')
-                && !str_starts_with($file, 'vendor/')
-                && !str_contains($file, '/vendor/')
-                && !str_ends_with($file, '.civix.php');
-        }));
+        return $context->sourceFiles(
+            '',
+            ['.php'],
+            static fn (string $file): bool => !str_ends_with($file, '.civix.php'),
+        );
     }
 
     /**

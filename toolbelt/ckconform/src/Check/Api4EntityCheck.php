@@ -6,6 +6,7 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\PhpSource;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -51,7 +52,7 @@ final class Api4EntityCheck implements Check
 
         foreach ($this->referencedEntities($context) as $entity) {
             // Entities the extension defines itself are its own business.
-            if ($this->definedLocally($context, $entity)) {
+            if ($context->shipsApi4Entity($entity)) {
                 continue;
             }
 
@@ -138,7 +139,7 @@ final class Api4EntityCheck implements Check
             // name the pattern in prose ("rather than the concrete \Civi\Api4\Xxx
             // classes") is not a reference to an entity, and Xxx does not exist.
             // A check tripped by prose is the mirror of one satisfied by it.
-            $source = $this->withoutComments($source);
+            $source = PhpSource::withoutComments($source);
             // Fully qualified (\Civi\Api4\Foo) or imported (use Civi\Api4\Foo).
             // A bare `Civi\Api4\Foo` without the leading backslash is NOT a
             // reference to the entity — inside a namespaced file it resolves
@@ -155,38 +156,6 @@ final class Api4EntityCheck implements Check
         sort($names);
 
         return $names;
-    }
-
-    /**
-     * PHP source with comment bodies blanked, so an entity named only in prose
-     * is not read as a reference. Through the tokenizer, since a regex cannot
-     * tell a `//` inside a string from one that starts a comment.
-     */
-    private function withoutComments(string $source): string
-    {
-        $out = '';
-        foreach (token_get_all($source) as $token) {
-            if (is_array($token) && ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT)) {
-                // Keep newlines so line-based tooling and @since parsing elsewhere
-                // still line up; drop everything else in the comment.
-                $out .= str_repeat("\n", substr_count($token[1], "\n"));
-                continue;
-            }
-            $out .= is_array($token) ? $token[1] : $token;
-        }
-
-        return $out;
-    }
-
-    private function definedLocally(Context $context, string $entity): bool
-    {
-        foreach ($context->trackedFiles() as $file) {
-            if (str_ends_with($file, 'Civi/Api4/' . $entity . '.php')) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
