@@ -1,0 +1,8 @@
+{
+  "minTokens": 70,
+  "minLines": 8,
+  "reporters": ["consoleFull"],
+  "format": ["php", "yaml", "typescript", "javascript", "bash"],
+  "path": [".github", "docker", "toolbelt", "tools", "tests", "template", "packages"],
+  "ignore": ["**/node_modules/**", "**/vendor/**", "**/.cache/**"]
+}

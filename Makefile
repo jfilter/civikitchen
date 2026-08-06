@@ -45,6 +45,7 @@ CORE := $(CACHE)/civicrm-core-$(CORE_VERSION)
 CK_ACTIONLINT_VERSION := 1.7.12
 CK_ACTIONLINT_INSTALLER_SHA256 := 72fa3e45ac20f3c3a512d6747b4fcf719e21f890e8c43e78d48a41fdfb900c4e
 CK_ZIZMOR_VERSION := 1.29.0
+CK_JSCPD_VERSION := 5.0.14
 
 # shellcheck is fetched and pinned like the phars, because the sweep's verdict
 # depends on the version: 0.10 grew checks 0.9 never ran, so a laptop's distro
@@ -141,6 +142,11 @@ lint-actions: $(CACHE)/actionlint ## actionlint + zizmor over the workflows
 	$(CACHE)/actionlint -color
 	pipx run zizmor==$(CK_ZIZMOR_VERSION) --no-online-audits --config zizmor.yml \
 	  .github/workflows template/extension/.github/workflows
+
+# Informational, not part of `lint`: reports token-level clones so duplication
+# gets noticed, without hard-failing on the existing backlog.
+dupcheck: ## Copy-paste clone report (jscpd), advisory
+	bunx jscpd@$(CK_JSCPD_VERSION) --config .jscpd.json
 
 lint-php: ## php -l over every tracked PHP file
 	@files=$$($(PHP_FILES)) ; \
