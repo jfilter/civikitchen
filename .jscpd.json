@@ -3,6 +3,6 @@
   "minLines": 8,
   "reporters": ["consoleFull"],
   "format": ["php", "yaml", "typescript", "javascript", "bash"],
-  "path": [".github", "docker", "toolbelt", "tools", "tests", "template", "packages"],
+  "path": [".github", "docker", "toolbelt", "scaffold", "tests", "packages"],
   "ignore": ["**/node_modules/**", "**/vendor/**", "**/.cache/**"]
 }

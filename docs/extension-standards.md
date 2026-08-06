@@ -5,8 +5,8 @@ ckmodernize, phpstan, the extension template) enforces or expects. Use it for
 audits and as the target state when modernizing an existing extension.
 
 For a new civix extension, run
-`/path/to/civikitchen/tools/ckinit.php <extension-directory>` to apply the
-versioned `template/extension/` tooling layer. Existing files remain untouched
+`/path/to/civikitchen/scaffold/ckinit.php <extension-directory>` to apply the
+versioned `scaffold/template/extension/` tooling layer. Existing files remain untouched
 unless `--force` is explicitly supplied. For an existing extension,
 `ckinit.php --check` reports where template-managed files have drifted and
 `ckinit.php --update` refreshes them (seeded files like `composer.json` and
@@ -135,7 +135,7 @@ unless `--force` is explicitly supplied. For an existing extension,
 - **Analysing the test suite is opt-in, and the switch is a file.** The main
   `phpstan.neon.dist` covers production code only, because test code is where
   the fleet's remaining level-10 debt sits and a fleet-wide flip would have
-  turned green repos red. `template/extension/phpstan-tests.neon.dist` is a
+  turned green repos red. `scaffold/template/extension/phpstan-tests.neon.dist` is a
   second, seeded config that includes the first one, overrides `paths` to
   `tests/phpunit` and keeps **level 10** — a lower level for test code is a
   test suite that will not catch what it was written for; the honest lever is
@@ -265,7 +265,7 @@ unless `--force` is explicitly supplied. For an existing extension,
   `// @mago-expect lint:<rule>` line in the code, visible in the diff; a
   committed `mago.toml` replaces the baseline outright.
 - `phpunit.xml.dist` + headless tests per the template
-  (`template/extension/`), incl. the `TEST_DB_DSN` bootstrap guard.
+  (`scaffold/template/extension/`), incl. the `TEST_DB_DSN` bootstrap guard.
 - `phpstan.neon.dist` (level 10, no baseline, `phpVersion` at the declared
   floor, and the `includes:` line for the CiviCRM ban list).
 - **Architecture rules belong in phpstan, not in review.** `phpat` runs inside
@@ -316,7 +316,7 @@ unless `--force` is explicitly supplied. For an existing extension,
   whole foreign standard, and every pack that would turn the fleet red at once
   (`phpstan-strict-rules`) is installed but left out of the auto-registration
   so a repo opts in with one `includes:` line when it is ready.
-- CI per `template/extension/.github/workflows/ci.yml` — a thin caller of the
+- CI per `scaffold/template/extension/.github/workflows/ci.yml` — a thin caller of the
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
   ckconform → ckfmt --check → phpunit under ckcoverage → phpstan → phpstan over
   the tests when the repo opted in → ckcompat →

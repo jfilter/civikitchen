@@ -146,7 +146,7 @@ lint-shell: $(SHELLCHECK) ## shellcheck (pinned) at style level over every track
 lint-actions: $(CACHE)/actionlint ## actionlint + zizmor over the workflows
 	$(CACHE)/actionlint -color
 	pipx run zizmor==$(CK_ZIZMOR_VERSION) --no-online-audits --config zizmor.yml \
-	  .github/workflows template/extension/.github/workflows
+	  .github/workflows scaffold/template/extension/.github/workflows
 
 # Informational, not part of `lint`: reports token-level clones so duplication
 # gets noticed, without hard-failing on the existing backlog.

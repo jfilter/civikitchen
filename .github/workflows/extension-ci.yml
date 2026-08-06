@@ -183,7 +183,7 @@ jobs:
   # eleven repos quietly diverge again — the exact state the shared workflow
   # exists to end. Deliberate deviations are declared in the repo's .ckconform
   # (template_custom=<file> -- <reason>); the fix for everything else is one
-  # `tools/ckinit.php --update` away.
+  # `scaffold/ckinit.php --update` away.
   template:
     if: ${{ inputs.check_template }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -203,7 +203,7 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
       - name: Check template drift (ckinit --check)
-        run: php .civikitchen-ci/tools/ckinit.php --check .
+        run: php .civikitchen-ci/scaffold/ckinit.php --check .
 
   # Known vulnerabilities in the dependencies the repo actually ships. Read from
   # the committed lockfiles, not from the ranges in composer.json/package.json:

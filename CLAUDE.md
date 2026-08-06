@@ -6,10 +6,14 @@ release workflows eleven extension repos call. User-facing: `README.md`, `docs/`
 ## Layout
 
 - `docker/` — image definitions, entrypoints, first-boot runtime, demo profiles
-- `toolbelt/` — everything baked INTO an image: `bin/` (the ck* CLIs), `lib/`
-  (shared shell + PHP payloads), ckconform, phpcs, phpstan, psalm, rector,
-  mago, oxlint, oxfmt
-- `tests/`, `template/` (the scaffold ckinit stamps into consuming repos)
+- `toolbelt/` — everything baked INTO an image (the image boundary): `bin/`
+  (the ck* CLIs), `lib/` (shared shell + PHP payloads), ckconform, phpcs,
+  phpstan, psalm, rector, mago, oxlint, oxfmt
+- `scaffold/` — host-side extension scaffolding, never in an image:
+  `ckinit.php` and the `template/extension/` tree it stamps into consuming
+  repos
+- `tests/` — this repo's own suites (ckinit, toolbelt/Dockerfile parity,
+  image boot tests, e2e)
 
 Build context is the repo root, so a Dockerfile can COPY from both trees.
 

@@ -130,11 +130,11 @@ After generating a module, apply the versioned CiviKitchen tooling layer:
 
 ```bash
 civix generate:module org.example.myext
-/path/to/civikitchen/tools/ckinit.php org.example.myext
+/path/to/civikitchen/scaffold/ckinit.php org.example.myext
 ```
 
 `ckinit.php` reads the extension `<file>` value from `info.xml`, renders
-`template/extension/`, and refuses to overwrite existing files. Use `--force`
+`scaffold/template/extension/`, and refuses to overwrite existing files. Use `--force`
 only after reviewing conflicts. This makes the template an executable
 interface rather than a checklist to copy by hand.
 
@@ -147,8 +147,8 @@ files the repo takes ownership of after the first copy (`composer.json`,
 Two more modes work with that split:
 
 ```bash
-/path/to/civikitchen/tools/ckinit.php --check  org.example.myext   # report drift, exit 1 on any
-/path/to/civikitchen/tools/ckinit.php --update org.example.myext   # rewrite managed files, create missing ones
+/path/to/civikitchen/scaffold/ckinit.php --check  org.example.myext   # report drift, exit 1 on any
+/path/to/civikitchen/scaffold/ckinit.php --update org.example.myext   # rewrite managed files, create missing ones
 ```
 
 `--update` never touches an existing seeded file; review its output with
@@ -175,7 +175,7 @@ managed bootstrap requires it when present), not in edits to the managed
 
 ## PHPStan
 
-PHPStan needs to know about CiviCRM's autoloader to resolve `CRM_*` and `Civi\*` symbols. Each extension typically ships its own `phpstanBootstrap.php` that boots civi enough for static analysis ([`template/extension/phpstanBootstrap.php`](../template/extension/phpstanBootstrap.php) is a working reference). Run:
+PHPStan needs to know about CiviCRM's autoloader to resolve `CRM_*` and `Civi\*` symbols. Each extension typically ships its own `phpstanBootstrap.php` that boots civi enough for static analysis ([`scaffold/template/extension/phpstanBootstrap.php`](../scaffold/template/extension/phpstanBootstrap.php) is a working reference). Run:
 
 ```bash
 docker compose exec app bash -c \
@@ -201,7 +201,7 @@ docker compose exec app bash -c "cd /var/www/html/ext/myextension && cklint"
 docker compose exec app bash -c "cd /var/www/html/ext/myextension && cklint --all"
 ```
 
-Most extensions ship a `phpcs.xml.dist` that scopes the run to the right files and excludes generated DAOs — see [`template/extension/phpcs.xml.dist`](../template/extension/phpcs.xml.dist) for a working reference.
+Most extensions ship a `phpcs.xml.dist` that scopes the run to the right files and excludes generated DAOs — see [`scaffold/template/extension/phpcs.xml.dist`](../scaffold/template/extension/phpcs.xml.dist) for a working reference.
 
 `ckconform` checks the repo STRUCTURE against the extension template — the
 gaps that show up in every audit: missing `phpcs.xml.dist`/`phpstan.neon.dist`

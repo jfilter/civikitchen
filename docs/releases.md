@@ -8,9 +8,9 @@ Extension repos depend on four things from this repo, and they only work as a
 set:
 
 - the reusable workflow `.github/workflows/extension-ci.yml`,
-- the extension template `template/extension/` (its managed files are compared
+- the extension template `scaffold/template/extension/` (its managed files are compared
   in every repo's CI),
-- `tools/ckinit.php`, which stamps that template,
+- `scaffold/ckinit.php`, which stamps that template,
 - the images the pipeline runs in — `cklint`, `ckconform`, `ckcoverage`,
   `phpstan` and the CiviCRM stack itself all live there.
 
@@ -200,7 +200,7 @@ release does. So the first time through, the order is not negotiable:
    still on `@main` see template drift (their caller says `@main`, the new
    template says `@v1`), which shows up as a red drift job — the one check
    whose whole purpose is to notice exactly this.
-3. Only now update the repos: `tools/ckinit.php --update <repo>` rewrites the
+3. Only now update the repos: `scaffold/ckinit.php --update <repo>` rewrites the
    caller and the CI compose stack to the released refs.
 4. Leave the canary on `@main` with the `template_custom` line above.
 

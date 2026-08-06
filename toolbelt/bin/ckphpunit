@@ -11,7 +11,7 @@
 # for what it proves and why it has to be a listener.
 #
 # Generated rather than template-managed for one reason: a listener added to
-# template/extension/phpunit.xml.dist would be drift in every repo until each
+# scaffold/template/extension/phpunit.xml.dist would be drift in every repo until each
 # one ran `ckinit --update`, i.e. a gate that arrives one commit per repo
 # later. This way an image bump is the whole rollout.
 #

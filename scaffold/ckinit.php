@@ -2,7 +2,7 @@
 <?php
 declare(strict_types=1);
 
-$templateDir = dirname(__DIR__) . '/template/extension';
+$templateDir = __DIR__ . '/template/extension';
 
 /**
  * Template files civikitchen OWNS: identical in every conforming repo, safe to
@@ -66,11 +66,11 @@ function usage(int $status = 2): never {
 ckinit — add or refresh the CiviKitchen development standard in a civix extension.
 
 Usage:
-  tools/ckinit.php [--force] <extension-directory>    seed the template
-  tools/ckinit.php --update <extension-directory>     refresh managed files
-  tools/ckinit.php --check <extension-directory>      report drift, exit 1 on any
+  scaffold/ckinit.php [--force] <extension-directory>    seed the template
+  scaffold/ckinit.php --update <extension-directory>     refresh managed files
+  scaffold/ckinit.php --check <extension-directory>      report drift, exit 1 on any
 
-The target must contain info.xml. Files from template/extension are copied
+The target must contain info.xml. Files from scaffold/template/extension are copied
 recursively; __EXTKEY__ is replaced with info.xml's <file> value and
 __VENDOR__ with the vendor segment of the extension key.
 
@@ -86,7 +86,7 @@ A repo that must deviate on a managed file lists it in .ckconform:
 
 Typical flow:
   civix generate:module org.example.myext
-  /path/to/civikitchen/tools/ckinit.php org.example.myext
+  /path/to/civikitchen/scaffold/ckinit.php org.example.myext
 TXT);
   exit($status);
 }
@@ -381,6 +381,6 @@ if ($drifted === [] && $missing === []) {
   exit(0);
 }
 fwrite(STDERR, "\nckinit: " . count($drifted) . " drifted / " . count($missing)
-  . " missing template file(s). Run tools/ckinit.php --update <dir> to refresh,\n"
+  . " missing template file(s). Run scaffold/ckinit.php --update <dir> to refresh,\n"
   . "or declare a deliberate deviation in .ckconform: template_custom=<file> -- <reason>\n");
 exit(1);
