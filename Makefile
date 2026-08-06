@@ -89,7 +89,7 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help test test-ckconform test-phpstan test-ckinit lint lint-shell \
+.PHONY: help test test-ckconform test-phpstan test-ckinit test-parity lint lint-shell \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
 help: ## Show this help
@@ -102,7 +102,7 @@ help: ## Show this help
 
 # --- the fast loop -----------------------------------------------------------
 
-test: test-ckconform test-phpstan test-ckinit ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-parity ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -124,6 +124,11 @@ test-phpstan: $(PHPUNIT) $(CORE) ## The phpstan extension's rule tests + catalog
 # must not touch or waves drift through.
 test-ckinit: ## ckinit seed/update/check integration checks
 	bash tests/ckinit/test-ckinit.sh
+
+# The Dockerfiles COPY the toolbelt selectively; without this gate a new tool
+# lands in git and silently never reaches the images the fleet's CI runs on.
+test-parity: ## Toolbelt components vs. Dockerfile COPY parity
+	bash tests/parity/test-toolbelt-parity.sh
 
 # --- static checks -----------------------------------------------------------
 

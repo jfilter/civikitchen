@@ -1,0 +1,35 @@
+# Parity fixture: the standalone toolbelt COPY set minus bin/ckfmt — the
+# suite asserts the checker flags exactly that omission.
+FROM scratch
+COPY toolbelt/install-dev-tools.sh /tmp/install-dev-tools.sh
+COPY toolbelt/versions.env /tmp/versions.env
+COPY toolbelt/lib/ckcommon.sh /usr/local/lib/ckcommon.sh
+COPY toolbelt/phpcs/CiviKitchen /opt/civikitchen-coder/CiviKitchen
+COPY toolbelt/bin/cklint /usr/local/bin/cklint
+COPY toolbelt/bin/ckcompat /usr/local/bin/ckcompat
+COPY toolbelt/bin/ckdeps /usr/local/bin/ckdeps
+COPY toolbelt/lib/composer-deps.php /opt/civikitchen-composer-deps.php
+COPY toolbelt/ckconform /opt/civikitchen-ckconform
+COPY toolbelt/bin/ckconform /usr/local/bin/ckconform
+COPY toolbelt/bin/ckcoverage /usr/local/bin/ckcoverage
+COPY toolbelt/bin/ckmutate /usr/local/bin/ckmutate
+COPY toolbelt/bin/ckphpunit /usr/local/bin/ckphpunit
+COPY toolbelt/lib/tx-canary.php /usr/local/share/civikitchen/tx-canary.php
+COPY toolbelt/bin/cklifecycle /usr/local/bin/cklifecycle
+COPY toolbelt/lib/lifecycle-check.php /usr/local/share/civikitchen/lifecycle-check.php
+COPY toolbelt/bin/ckrelease /usr/local/bin/ckrelease
+COPY toolbelt/rector /opt/civikitchen-rector
+COPY toolbelt/bin/ckmodernize /usr/local/bin/ckmodernize
+COPY toolbelt/phpstan /opt/civikitchen-phpstan-ext
+COPY toolbelt/phpstan-config /opt/civikitchen-phpstan-config
+COPY toolbelt/psalm /opt/civikitchen-psalm
+COPY toolbelt/bin/cktaint /usr/local/bin/cktaint
+COPY toolbelt/bin/cktestreset /usr/local/bin/cktestreset
+COPY toolbelt/bin/ckcoretest /usr/local/bin/ckcoretest
+COPY toolbelt/bin/cksmarty /usr/local/bin/cksmarty
+COPY toolbelt/lib/smarty-compile.php /usr/local/share/civikitchen/cksmarty-compile.php
+COPY toolbelt/bin/ckschemadiff /usr/local/bin/ckschemadiff
+COPY toolbelt/oxlint /opt/civikitchen-oxlint
+COPY toolbelt/bin/ckeslint /usr/local/bin/ckeslint
+COPY toolbelt/mago /opt/civikitchen-mago
+COPY toolbelt/oxfmt /opt/civikitchen-oxfmt
