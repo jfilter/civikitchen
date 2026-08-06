@@ -143,15 +143,8 @@ final class TransactionalTestDdlRule implements Rule
         // \Civi\Api4\CustomField::create()
         if (str_starts_with($class, 'Civi\\Api4\\')) {
             $entity = substr($class, strlen('Civi\\Api4\\'));
-            if (in_array($entity, self::DDL_ENTITIES, true) && in_array($method, self::WRITE_ACTIONS, true)) {
-                return [self::error(
-                    sprintf('%s::%s() in a transactional test', $entity, $method),
-                    'ck.test.customFieldInTransaction',
-                    $expr,
-                )];
-            }
 
-            return [];
+            return self::customFieldWrite($entity, $method, sprintf('%s::%s()', $entity, $method), $expr);
         }
 
         // CRM_Extension_System::singleton()->getManager()->install(...) starts here.
@@ -180,12 +173,9 @@ final class TransactionalTestDdlRule implements Rule
         if ($entity === null || $action === null) {
             return [];
         }
-        if (in_array($entity, self::DDL_ENTITIES, true) && in_array($action, self::WRITE_ACTIONS, true)) {
-            return [self::error(
-                sprintf("%s('%s', '%s') in a transactional test", $function, $entity, $action),
-                'ck.test.customFieldInTransaction',
-                $expr,
-            )];
+        $write = self::customFieldWrite($entity, $action, sprintf("%s('%s', '%s')", $function, $entity, $action), $expr);
+        if ($write !== []) {
+            return $write;
         }
         if ($entity === 'Extension' && in_array($action, self::EXTENSION_ACTIONS, true)) {
             return [self::error(
@@ -196,6 +186,22 @@ final class TransactionalTestDdlRule implements Rule
         }
 
         return [];
+    }
+
+    /**
+     * @return list<\PHPStan\Rules\IdentifierRuleError>
+     */
+    private static function customFieldWrite(string $entity, string $action, string $call, Node $expr): array
+    {
+        if (!in_array($entity, self::DDL_ENTITIES, true) || !in_array($action, self::WRITE_ACTIONS, true)) {
+            return [];
+        }
+
+        return [self::error(
+            $call . ' in a transactional test',
+            'ck.test.customFieldInTransaction',
+            $expr,
+        )];
     }
 
     /**

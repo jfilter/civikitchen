@@ -21,6 +21,8 @@ declare(strict_types=1);
  * templates/CRM/ (Smarty trees, not classes) out of the catalog.
  */
 
+require_once __DIR__ . '/catalog-common.php';
+
 if ($argc < 2) {
     fwrite(STDERR, "usage: gen-core-namespace-catalog.php <core-dir> [out-file]\n");
     exit(64);
@@ -31,27 +33,6 @@ $coreDir = rtrim($argv[1], '/');
 if (!is_file($coreDir . '/Civi.php') || !is_dir($coreDir . '/CRM')) {
     fwrite(STDERR, "not a CiviCRM core checkout: $coreDir has no Civi.php/CRM\n");
     exit(66);
-}
-
-/** Classloader roots: core itself plus every ext dir carrying an info.xml. */
-function classloaderRoots(string $coreDir): array
-{
-    $roots = [$coreDir];
-    if (!is_dir($coreDir . '/ext')) {
-        return $roots;
-    }
-    $it = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($coreDir . '/ext', FilesystemIterator::SKIP_DOTS),
-        RecursiveIteratorIterator::SELF_FIRST,
-    );
-    $it->setMaxDepth(2);
-    foreach ($it as $entry) {
-        if ($entry->isFile() && $entry->getFilename() === 'info.xml') {
-            $roots[] = $entry->getPath();
-        }
-    }
-
-    return $roots;
 }
 
 /**
@@ -114,20 +95,9 @@ $civi = array_values(array_unique($civi));
 sort($crm);
 sort($civi);
 
-$version = 'unknown';
-$versionXml = $coreDir . '/xml/version.xml';
-if (is_file($versionXml) && preg_match('#<version_no>([^<]+)</version_no>#', (string) file_get_contents($versionXml), $m)) {
-    $version = trim($m[1]);
-}
-
-$renderList = static function (array $names): string {
-    $out = '';
-    foreach (array_chunk($names, 5) as $chunk) {
-        $out .= '        ' . implode(', ', array_map(static fn ($n) => var_export($n, true), $chunk)) . ",\n";
-    }
-
-    return $out;
-};
+$version = coreVersion($coreDir);
+$crmList = renderCatalogList($crm, 5);
+$civiList = renderCatalogList($civi, 5);
 
 $out = <<<PHP
 <?php
@@ -163,7 +133,7 @@ final class CoreNamespaceCatalog
      * @var list<string>
      */
     public const CRM_COMPONENTS = [
-{$renderList($crm)}    ];
+{$crmList}    ];
 
     /**
      * X in Civi\\X\\* / Civi\\X owned by core.
@@ -171,7 +141,7 @@ final class CoreNamespaceCatalog
      * @var list<string>
      */
     public const CIVI_NAMESPACES = [
-{$renderList($civi)}    ];
+{$civiList}    ];
 }
 
 PHP;

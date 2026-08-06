@@ -9,14 +9,12 @@ use PhpParser\Node\Arg;
 use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\ConstFetch;
-use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Scalar\String_;
-use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 
@@ -32,27 +30,15 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  * bail-outs (non-get, operators, chaining, options beyond limit/offset,
  * non-literal params). Preview only.
  */
-final class Api3ToApi4OopAssistRector extends AbstractRector {
-
-  public function getNodeTypes(): array {
-    return [FuncCall::class];
-  }
+final class Api3ToApi4OopAssistRector extends AbstractApiCallAssistRector {
 
   public function refactor(Node $node): ?Node {
-    if (!$node instanceof FuncCall || !$this->isName($node, 'civicrm_api3')) {
+    $match = $this->matchLiteralApiCall($node, 'civicrm_api3');
+    if ($match === NULL) {
       return NULL;
     }
-    $args = $node->getArgs();
-    if (count($args) < 2) {
-      return NULL;
-    }
-    $entity = $args[0]->value;
-    $action = $args[1]->value;
-    if (!$entity instanceof String_ || !$action instanceof String_ || strtolower($action->value) !== 'get') {
-      return NULL;
-    }
-    $params = $args[2]->value ?? new Array_([]);
-    if (!$params instanceof Array_) {
+    [$entity, $action, $params] = $match;
+    if (strtolower($action->value) !== 'get') {
       return NULL;
     }
 
@@ -81,23 +67,12 @@ final class Api3ToApi4OopAssistRector extends AbstractRector {
         continue;
       }
       if ($key === 'options') {
-        if (!$value instanceof Array_) {
+        $options = $this->limitOffsetOptions($value);
+        if ($options === NULL) {
           return NULL;
         }
-        foreach ($value->items as $opt) {
-          if (!$opt instanceof ArrayItem || !$opt->key instanceof String_) {
-            return NULL;
-          }
-          if ($opt->key->value === 'limit') {
-            $limit = $opt->value;
-          }
-          elseif ($opt->key->value === 'offset') {
-            $offset = $opt->value;
-          }
-          else {
-            return NULL;
-          }
-        }
+        $limit = $options['limit'];
+        $offset = $options['offset'];
         continue;
       }
       if (str_starts_with($key, 'api.') || $value instanceof Array_) {

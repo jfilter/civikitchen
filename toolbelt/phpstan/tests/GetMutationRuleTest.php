@@ -24,30 +24,7 @@ final class GetMutationRuleTest extends RuleTestCase
     public function testWritesReachableFromAGetRouteAreReported(): void
     {
         $this->catalog = __DIR__ . '/fixtures/route-catalog.json';
-        $this->analyse(
-            [
-                __DIR__ . '/fixtures/generic-stubs.php',
-                __DIR__ . '/fixtures/route-stubs.php',
-                __DIR__ . '/fixtures/get-mutation.php',
-            ],
-            [
-                [
-                    'Widget::createDraft() writes from CiviKitchen\Fixtures\Routes\GreeterEndpoint::handle(), '
-                    . 'which answers GET civicrm/greeter/new' . self::ADVICE,
-                    35,
-                ],
-                [
-                    "civicrm_api3('Contact', 'delete') writes from CiviKitchen\\Fixtures\\Routes\\GreeterEndpoint::handle(), "
-                    . 'which answers GET civicrm/greeter/new' . self::ADVICE,
-                    36,
-                ],
-                [
-                    'DELETE in CRM_Core_DAO::executeQuery() writes from CiviKitchen\Fixtures\Routes\WidgetPage::run(), '
-                    . 'which answers GET civicrm/widget' . self::ADVICE,
-                    58,
-                ],
-            ],
-        );
+        $this->analyseFixtures(self::declaredRouteErrors());
     }
 
     /**
@@ -59,30 +36,7 @@ final class GetMutationRuleTest extends RuleTestCase
     {
         $this->catalog = null;
         $this->extensionDir = __DIR__ . '/fixtures/repo';
-        $this->analyse(
-            [
-                __DIR__ . '/fixtures/generic-stubs.php',
-                __DIR__ . '/fixtures/route-stubs.php',
-                __DIR__ . '/fixtures/get-mutation.php',
-            ],
-            [
-                [
-                    'Widget::createDraft() writes from CiviKitchen\Fixtures\Routes\GreeterEndpoint::handle(), '
-                    . 'which answers GET civicrm/greeter/new' . self::ADVICE,
-                    35,
-                ],
-                [
-                    "civicrm_api3('Contact', 'delete') writes from CiviKitchen\\Fixtures\\Routes\\GreeterEndpoint::handle(), "
-                    . 'which answers GET civicrm/greeter/new' . self::ADVICE,
-                    36,
-                ],
-                [
-                    'DELETE in CRM_Core_DAO::executeQuery() writes from CiviKitchen\Fixtures\Routes\WidgetPage::run(), '
-                    . 'which answers GET civicrm/widget' . self::ADVICE,
-                    58,
-                ],
-            ],
-        );
+        $this->analyseFixtures(self::declaredRouteErrors());
     }
 
     /** No routes anywhere: only the page class, which is one by inheritance. */
@@ -90,19 +44,54 @@ final class GetMutationRuleTest extends RuleTestCase
     {
         $this->catalog = null;
         $this->extensionDir = null;
+        $this->analyseFixtures([
+            [
+                'DELETE in CRM_Core_DAO::executeQuery() writes from CiviKitchen\Fixtures\Routes\WidgetPage::run(), '
+                . 'which is reachable by GET' . self::ADVICE,
+                58,
+            ],
+        ]);
+    }
+
+    /**
+     * The same writes, attributed to their declared routes — the catalog and
+     * the xml/Menu path must report identically.
+     *
+     * @return list<array{string, int}>
+     */
+    private static function declaredRouteErrors(): array
+    {
+        return [
+            [
+                'Widget::createDraft() writes from CiviKitchen\Fixtures\Routes\GreeterEndpoint::handle(), '
+                . 'which answers GET civicrm/greeter/new' . self::ADVICE,
+                35,
+            ],
+            [
+                "civicrm_api3('Contact', 'delete') writes from CiviKitchen\\Fixtures\\Routes\\GreeterEndpoint::handle(), "
+                . 'which answers GET civicrm/greeter/new' . self::ADVICE,
+                36,
+            ],
+            [
+                'DELETE in CRM_Core_DAO::executeQuery() writes from CiviKitchen\Fixtures\Routes\WidgetPage::run(), '
+                . 'which answers GET civicrm/widget' . self::ADVICE,
+                58,
+            ],
+        ];
+    }
+
+    /**
+     * @param list<array{string, int}> $errors
+     */
+    private function analyseFixtures(array $errors): void
+    {
         $this->analyse(
             [
                 __DIR__ . '/fixtures/generic-stubs.php',
                 __DIR__ . '/fixtures/route-stubs.php',
                 __DIR__ . '/fixtures/get-mutation.php',
             ],
-            [
-                [
-                    'DELETE in CRM_Core_DAO::executeQuery() writes from CiviKitchen\Fixtures\Routes\WidgetPage::run(), '
-                    . 'which is reachable by GET' . self::ADVICE,
-                    58,
-                ],
-            ],
+            $errors,
         );
     }
 

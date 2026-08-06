@@ -25,6 +25,8 @@ declare(strict_types=1);
  * the rule then checks their actions but never their field names.
  */
 
+require_once __DIR__ . '/catalog-common.php';
+
 if ($argc < 2) {
     fwrite(STDERR, "usage: gen-api4-catalog.php <core-dir> [out-file]\n");
     exit(64);
@@ -117,27 +119,6 @@ const IMPLICIT_JOINS = [
         'im_primary' => 'IM', 'im_billing' => 'IM',
     ],
 ];
-
-/** Classloader roots: core itself plus every ext dir carrying an info.xml. */
-function classloaderRoots(string $coreDir): array
-{
-    $roots = [$coreDir];
-    if (!is_dir($coreDir . '/ext')) {
-        return $roots;
-    }
-    $it = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($coreDir . '/ext', FilesystemIterator::SKIP_DOTS),
-        RecursiveIteratorIterator::SELF_FIRST,
-    );
-    $it->setMaxDepth(2);
-    foreach ($it as $entry) {
-        if ($entry->isFile() && $entry->getFilename() === 'info.xml') {
-            $roots[] = $entry->getPath();
-        }
-    }
-
-    return $roots;
-}
 
 /** Tokens without whitespace and comments, reindexed. */
 function significantTokens(string $source): array
@@ -317,76 +298,31 @@ function isActionFactory(string $name, string $body): bool
 }
 
 /**
- * Field names in an entityType definition: the keys of the getFields array.
+ * Field names and implicit-join targets of an entityType definition.
  *
  * Parsed rather than executed — the closures call ts() and reach into
- * CRM_Core_DAO, which needs a booted core. Depth-1 keys of the array literal
- * are the field names; nested arrays (usage lists, pseudoconstants) sit
- * deeper and are skipped by the bracket count.
+ * CRM_Core_DAO, which needs a booted core. Depth-1 keys of the getFields
+ * array literal are the field names; nested arrays (usage lists,
+ * pseudoconstants) sit deeper and are skipped by the bracket count, except
+ * a depth-2 `entity_reference`, whose target entity SchemaMapBuilder::
+ * addJoins() turns into a joinable named after the field — what makes
+ * `contact_id.display_name` a legal select. The reference `key` is
+ * irrelevant here, only the name and its target entity.
  *
- * @return list<string>
+ * @return array{list<string>, array<string, string>} [fields, join name => target]
  */
-function entityTypeFields(string $source): array
+function entityTypeSchema(string $source): array
 {
     $tokens = significantTokens($source);
     $count = count($tokens);
     $fields = [];
-
-    for ($i = 0; $i < $count; $i++) {
-        if (!tokenIs($tokens, $i, T_CONSTANT_ENCAPSED_STRING) || trim(tokenText($tokens, $i), "'\"") !== 'getFields') {
-            continue;
-        }
-        // 'getFields' => fn() => [
-        $open = null;
-        for ($j = $i + 1; $j < min($i + 12, $count); $j++) {
-            if (tokenIs($tokens, $j, '[')) {
-                $open = $j;
-                break;
-            }
-        }
-        if ($open === null) {
-            continue;
-        }
-        $depth = 1;
-        for ($j = $open + 1; $j < $count && $depth > 0; $j++) {
-            if (tokenIs($tokens, $j, '[')) {
-                $depth++;
-                continue;
-            }
-            if (tokenIs($tokens, $j, ']')) {
-                $depth--;
-                continue;
-            }
-            if ($depth === 1 && tokenIs($tokens, $j, T_CONSTANT_ENCAPSED_STRING) && tokenIs($tokens, $j + 1, T_DOUBLE_ARROW)) {
-                $fields[] = trim(tokenText($tokens, $j), "'\"");
-            }
-        }
-        break;
-    }
-
-    return $fields;
-}
-
-/**
- * Implicit joins field name => target entity, from the entityType source.
- *
- * SchemaMapBuilder::addJoins() turns every field carrying an
- * `entity_reference` into a joinable named after the field, which is what
- * makes `contact_id.display_name` a legal select. The `key` is irrelevant
- * here — only the name and its target entity.
- *
- * @return array<string, string>
- */
-function entityTypeReferences(string $source): array
-{
-    $tokens = significantTokens($source);
-    $count = count($tokens);
     $references = [];
 
     for ($i = 0; $i < $count; $i++) {
         if (!tokenIs($tokens, $i, T_CONSTANT_ENCAPSED_STRING) || trim(tokenText($tokens, $i), "'\"") !== 'getFields') {
             continue;
         }
+        // 'getFields' => fn() => [
         $open = null;
         for ($j = $i + 1; $j < min($i + 12, $count); $j++) {
             if (tokenIs($tokens, $j, '[')) {
@@ -413,6 +349,7 @@ function entityTypeReferences(string $source): array
             }
             $key = trim(tokenText($tokens, $j), "'\"");
             if ($depth === 1) {
+                $fields[] = $key;
                 $field = $key;
                 continue;
             }
@@ -438,7 +375,7 @@ function entityTypeReferences(string $source): array
         break;
     }
 
-    return $references;
+    return [$fields, $references];
 }
 
 /** The entity name a class declares, when it differs from the class name. */
@@ -535,10 +472,10 @@ foreach ($roots as $root) {
         if (preg_match('/[\'"]name[\'"]\s*=>\s*[\'"]([A-Za-z0-9_]+)[\'"]/', $source, $m) !== 1) {
             continue;
         }
-        $fields = entityTypeFields($source);
+        [$fields, $joins] = entityTypeSchema($source);
         if ($fields !== []) {
             $entityTypeFields[$m[1]] = $fields;
-            $entityTypeJoins[$m[1]] = entityTypeReferences($source);
+            $entityTypeJoins[$m[1]] = $joins;
         }
     }
 }
@@ -781,11 +718,7 @@ ksort($aliases);
 $anyEntityFields = array_values(array_unique($anyEntityFields));
 sort($anyEntityFields);
 
-$version = 'unknown';
-$versionXml = $coreDir . '/xml/version.xml';
-if (is_file($versionXml) && preg_match('#<version_no>([^<]+)</version_no>#', (string) file_get_contents($versionXml), $m)) {
-    $version = trim($m[1]);
-}
+$version = coreVersion($coreDir);
 
 // ---------------------------------------------------------------------------
 // Render.
@@ -822,18 +755,9 @@ foreach ($aliases as $class => $entity) {
     $aliasLines .= sprintf("        %s => %s,\n", $export((string) $class), $export($entity));
 }
 
-$renderList = static function (array $names) use ($export): string {
-    $out = '';
-    foreach (array_chunk($names, 6) as $chunk) {
-        $out .= '        ' . implode(', ', array_map($export, $chunk)) . ",\n";
-    }
-
-    return $out;
-};
-
-$prefixes = $renderList(DYNAMIC_PREFIXES);
-$fieldPrefixes = $renderList(DYNAMIC_FIELD_PREFIXES);
-$anyFields = $renderList($anyEntityFields);
+$prefixes = renderCatalogList(DYNAMIC_PREFIXES, 6);
+$fieldPrefixes = renderCatalogList(DYNAMIC_FIELD_PREFIXES, 6);
+$anyFields = renderCatalogList($anyEntityFields, 6);
 
 $out = <<<PHP
 <?php

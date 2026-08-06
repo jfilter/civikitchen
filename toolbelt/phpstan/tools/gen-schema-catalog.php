@@ -20,6 +20,8 @@ declare(strict_types=1);
  * non-core extension installs. See SqlSchema for how those are excluded.
  */
 
+require_once __DIR__ . '/catalog-common.php';
+
 if ($argc < 2) {
     fwrite(STDERR, "usage: gen-schema-catalog.php <core-dir> [out-file]\n");
     exit(64);
@@ -71,20 +73,8 @@ if (count($tables) < 100) {
     exit(65);
 }
 
-$version = 'unknown';
-$versionXml = $coreDir . '/xml/version.xml';
-if (is_file($versionXml) && preg_match('#<version_no>([^<]+)</version_no>#', (string) file_get_contents($versionXml), $m)) {
-    $version = trim($m[1]);
-}
-
-$renderList = static function (array $names): string {
-    $out = '';
-    foreach (array_chunk($names, 3) as $chunk) {
-        $out .= '        ' . implode(', ', array_map(static fn ($n) => var_export($n, true), $chunk)) . ",\n";
-    }
-
-    return $out;
-};
+$version = coreVersion($coreDir);
+$tableList = renderCatalogList($tables, 3);
 
 $out = <<<PHP
 <?php
@@ -120,7 +110,7 @@ final class SchemaCatalog
      * @var list<string>
      */
     public const TABLES = [
-{$renderList($tables)}    ];
+{$tableList}    ];
 }
 
 PHP;

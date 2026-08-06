@@ -13,7 +13,6 @@ use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Scalar\String_;
-use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 
@@ -31,27 +30,18 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  * unsafe (non-get actions, operator/array filter values, `api.*` chaining,
  * options beyond limit/offset, non-literal entity/action/params). Preview only.
  */
-final class Api3ToApi4AssistRector extends AbstractRector {
-
-  public function getNodeTypes(): array {
-    return [FuncCall::class];
-  }
+final class Api3ToApi4AssistRector extends AbstractApiCallAssistRector {
 
   public function refactor(Node $node): ?Node {
-    if (!$node instanceof FuncCall || !$this->isName($node, 'civicrm_api3')) {
+    if (!$node instanceof FuncCall) {
       return NULL;
     }
-    $args = $node->getArgs();
-    if (count($args) < 2) {
+    $match = $this->matchLiteralApiCall($node, 'civicrm_api3');
+    if ($match === NULL) {
       return NULL;
     }
-    $entity = $args[0]->value;
-    $action = $args[1]->value;
-    if (!$entity instanceof String_ || !$action instanceof String_ || strtolower($action->value) !== 'get') {
-      return NULL;
-    }
-    $params = $args[2]->value ?? new Array_([]);
-    if (!$params instanceof Array_) {
+    [, $action, $params] = $match;
+    if (strtolower($action->value) !== 'get') {
       return NULL;
     }
 
@@ -80,23 +70,16 @@ final class Api3ToApi4AssistRector extends AbstractRector {
         continue;
       }
       if ($key === 'options') {
-        if (!$value instanceof Array_) {
+        $options = $this->limitOffsetOptions($value);
+        if ($options === NULL) {
           return NULL;
         }
-        foreach ($value->items as $opt) {
-          if (!$opt instanceof ArrayItem || !$opt->key instanceof String_) {
-            return NULL;
-          }
-          if ($opt->key->value === 'limit') {
-            $top[] = new ArrayItem($opt->value, new String_('limit'));
-            $hasLimit = TRUE;
-          }
-          elseif ($opt->key->value === 'offset') {
-            $top[] = new ArrayItem($opt->value, new String_('offset'));
-          }
-          else {
-            return NULL;
-          }
+        if ($options['limit'] !== NULL) {
+          $top[] = new ArrayItem($options['limit'], new String_('limit'));
+          $hasLimit = TRUE;
+        }
+        if ($options['offset'] !== NULL) {
+          $top[] = new ArrayItem($options['offset'], new String_('offset'));
         }
         continue;
       }
