@@ -7,7 +7,9 @@ understands, see the
 
 ## Standalone (dev)
 
-Official `civicrm/civicrm` image with dev tools added:
+CiviCRM Standalone, installed from the release tarball onto a `php:apache`
+base (the base mirrors what the official `civicrm/civicrm` image provided,
+without depending on its Docker Hub publishing), with dev tools added:
 - **composer** — most modern extensions ship vendor deps
 - **node + npm** — for extensions with Angular/JS assets. Node 24 (current LTS) with a pinned npm 12 installed over the distro package's. npm 12 does not run a dependency's install scripts unless the project approved them; the images turn that back on globally, because CiviCRM core, civicrm-buildkit and most frontend toolchains still depend on postinstall doing real work. See the reasoning at `NPM_VERSION` in `toolbelt/install-dev-tools.sh`.
 - **pcov** — fast code coverage (always on)
@@ -268,10 +270,10 @@ version — e.g. to mirror a production server — build the image yourself with
 `--build-arg CIVICRM_VERSION=<tag/branch>`. **Which flavor you can build
 matters:**
 
-- **Standalone** (`docker/standalone/`) is `FROM civicrm/civicrm:<version>`, so
-  it only reaches versions the official image publishes (~6.0+) — and
-  Standalone itself only exists from ~5.69. `--build-arg CIVICRM_VERSION` on
-  this flavor fails for anything older (no such base image).
+- **Standalone** (`docker/standalone/`) installs the
+  `civicrm-<version>-standalone.tar.gz` release tarball, so it reaches any
+  release download.civicrm.org has one for — Standalone itself exists from
+  ~5.69. The version must be EXACT (`6.15.1`, not `6.15`): it names a tarball.
 - **Buildkit** (`:drupal10` / `:drupal11` / `:wordpress` / `:joomla`,
   `docker/buildkit/`) bakes the site
   with `civibuild create --civi-ver <version>`, which fetches **any** civicrm

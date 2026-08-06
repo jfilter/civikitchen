@@ -1,40 +1,97 @@
 # CiviCRM Standalone Development Image
-# Adds dev tools (coverage, debug, testing, static analysis, linting) to the
-# official CiviCRM image.
+# CiviCRM Standalone from the release tarball plus the dev tools (coverage,
+# debug, testing, static analysis, linting).
+#
+# Self-built base, not FROM civicrm/civicrm: the Docker Hub image lags the
+# release (stable.php said 6.17.0 while civicrm/civicrm:6.17 did not exist,
+# and every build died on the FROM line), while the tarball this installs is
+# published with the release itself. The base block below mirrors what the
+# official image provides (github.com/civicrm/civicrm-docker), so consumers
+# see the same PHP extensions, Apache vhost and ini values as before the
+# switch — test-dev-tools.sh asserts the parity points.
 #
 # Build context: the repo root, so this can COPY from both toolbelt/ (what gets
 # baked in) and docker/ (this image's own runtime files) without either having
 # to live inside the other. See docs/building.md.
 #
-#   docker build -f docker/standalone/Dockerfile .
+#   docker build -f docker/standalone/Dockerfile --build-arg CIVICRM_VERSION=<exact> .
 #
 # In your extension's .docker/compose.yaml:
 #   services:
 #     app:
 #       image: ghcr.io/jfilter/civikitchen:standalone
 
-ARG CIVICRM_VERSION=latest
-FROM civicrm/civicrm:${CIVICRM_VERSION}
+# Same PHP the official image published (civicrm/civicrm:6.16 ships 8.4).
+ARG PHP_VERSION=8.4
+# Exact release, never a minor: this names a tarball. CI passes the resolved
+# stable; the default here only serves a bare local `docker build` and rots.
+ARG CIVICRM_VERSION=6.17.0
+
+# --- fetch stage: the CiviCRM Standalone release tarball ---------------------
+FROM php:${PHP_VERSION}-apache-bookworm AS download
+ARG CIVICRM_VERSION
+ARG CIVICRM_DOWNLOAD_URL="https://download.civicrm.org/civicrm-${CIVICRM_VERSION}-standalone.tar.gz"
+RUN curl -fsSL "${CIVICRM_DOWNLOAD_URL}" -o /tmp/civicrm-standalone.tar.gz \
+    && mkdir /tmp/civicrm \
+    && tar -xzf /tmp/civicrm-standalone.tar.gz -C /tmp/civicrm \
+    && test -f /tmp/civicrm/civicrm-standalone/civicrm.standalone.php
+
+FROM php:${PHP_VERSION}-apache-bookworm
 
 # OS-level deps:
+# - libfreetype/libjpeg62-turbo/libpng/libwebp-dev: the PHP gd extension
+# - libicu-dev: intl; libzip-dev: zip
+# - imagemagick + libmagickwand-dev: the imagick extension (e.g. Mosaico)
+# - mariadb-client: cv, ckschemadiff and poking the DB from inside the container
 # - unzip/git: composer needs them for dist/source installs
-# - default-mysql-client: for poking the DB from inside the container
 # - nodejs/npm: required by extensions with Angular/JS assets. 24.x is the
 #   current LTS line (Node 20 went end-of-life 2026-04-30); npm is upgraded
 #   past what the distro package ships in install-dev-tools.sh (NPM_VERSION),
 #   which is what keeps npm's own bundled dependency tree out of the image scan.
 # - jq: the profile driver (CIVIKITCHEN_PROFILE) parses profile.json with it
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl git unzip zip default-mysql-client jq \
+        ca-certificates curl git unzip zip jq \
+        libfreetype-dev libicu-dev libjpeg62-turbo-dev libpng-dev libwebp-dev \
+        libzip-dev imagemagick libmagickwand-dev mariadb-client \
     && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# The extension set the official image shipped, plus soap and opcache to stay
+# in lockstep with the buildkit base. gd with webp: Mosaico.
 # pcov: fast code-coverage driver (PHPUnit's default coverage path).
 # xdebug: installed but NOT enabled — entrypoint activates it when XDEBUG_MODE is set.
-RUN pecl install pcov xdebug \
-    && docker-php-ext-enable pcov
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install -j"$(nproc)" gd bcmath intl mysqli pdo_mysql zip soap opcache \
+    && pecl install imagick pcov xdebug \
+    && docker-php-ext-enable imagick pcov
+
+# cv, pinned phar + checksum (the official image took a floating cv.phar).
+# Re-derive the hash on a bump from the release's SHA256SUMS file.
+ARG CV_VERSION=0.3.71
+ARG CV_SHA256=06794d7ea5ea7dc901ae9b2a1c14acd79c63979b73a00be9303990688e6f6e46
+RUN curl -fsSLo /usr/local/bin/cv \
+        "https://github.com/civicrm/cv/releases/download/v${CV_VERSION}/cv-${CV_VERSION}.phar" \
+    && echo "${CV_SHA256}  /usr/local/bin/cv" | sha256sum -c --strict - \
+    && chmod +x /usr/local/bin/cv
+
+# Apache: same modules, vhost and ServerName the official image configured.
+# civikitchen's own extras stay in civikitchen.conf further down.
+RUN a2enmod rewrite remoteip
+COPY docker/standalone/apache/civicrm.conf /etc/apache2/conf-available/civicrm.conf
+COPY docker/standalone/apache/000-default.conf /etc/apache2/sites-available/000-default.conf
+RUN a2enconf civicrm
+
+# php.ini values 1:1 with the official image, so the switch changes no
+# behavior for the repos running CI in here.
+COPY docker/standalone/php/civicrm.ini ${PHP_INI_DIR}/conf.d/civicrm.ini
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php-cli.ini" \
+    && echo 'memory_limit = ${PHP_MEMORY_LIMIT:-"256M"}\n' >> "$PHP_INI_DIR/php.ini" \
+    && echo 'memory_limit = -1\n' >> "$PHP_INI_DIR/php-cli.ini"
+
+ENV CIVICRM_UF=Standalone
 
 # composer: required by most modern extensions to install vendor deps.
 RUN curl -sS https://getcomposer.org/installer \
@@ -160,9 +217,17 @@ RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION
         /usr/local/bin/ckfmt /usr/local/bin/ckphpunit /usr/local/bin/cklifecycle \
         /usr/local/bin/ckmutate
 
+# CiviCRM itself, AFTER the dev tools: this is the layer a version bump
+# invalidates, and everything above it is version-independent. The tarball's
+# own layout provides every container path consumers rely on
+# (/var/www/html/{ext,private,public}, civicrm.standalone.php).
+ARG CIVICRM_VERSION
+COPY --from=download --chown=www-data:www-data /tmp/civicrm/civicrm-standalone /var/www/html
+RUN chown www-data:www-data /var/www
+LABEL org.opencontainers.image.version="${CIVICRM_VERSION}"
+
 # Add our vhost extras (e.g. the bare-/ → /civicrm/login redirect) via the
-# standard apache conf-available + a2enconf flow rather than editing the
-# upstream image's civicrm.conf.
+# standard apache conf-available + a2enconf flow.
 COPY docker/standalone/apache/civikitchen.conf /etc/apache2/conf-available/civikitchen.conf
 RUN a2enconf civikitchen
 

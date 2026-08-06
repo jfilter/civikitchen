@@ -50,6 +50,39 @@ for bin in composer node npm civix phpunit phpstan phpcs phpcbf cv infection; do
 done
 
 # ---------------------------------------------------------------------------
+# 1b. Standalone base parity. The image stopped building FROM civicrm/civicrm
+#     and mirrors its base itself; these pin the parity points a consumer
+#     would notice — PHP extensions, gd's WebP support, the ini values, and
+#     the boot stub patch-test-db-boot.php anchors on.
+if [ "${CIVICRM_UF:-}" = "Standalone" ]; then
+    echo "== standalone base parity =="
+    for ext in imagick soap opcache gd intl mysqli pdo_mysql zip bcmath pcov; do
+        name="${ext}"
+        [ "${ext}" = opcache ] && name="Zend OPcache"
+        if php -m | grep -qix -- "${name}"; then
+            ok "php extension ${ext} loaded"
+        else
+            fail "php extension ${ext} loaded"
+        fi
+    done
+    if php -r 'exit(empty(gd_info()["WebP Support"]) ? 1 : 0);'; then
+        ok "gd built with WebP support"
+    else
+        fail "gd built with WebP support"
+    fi
+    if [ "$(php -r 'echo ini_get("upload_max_filesize"), " ", ini_get("max_input_vars");')" = "64M 10000" ]; then
+        ok "civicrm.ini values apply (upload_max_filesize, max_input_vars)"
+    else
+        fail "civicrm.ini values apply — got '$(php -r 'echo ini_get("upload_max_filesize"), " ", ini_get("max_input_vars");')'"
+    fi
+    if grep -q 'bootSettings' /var/www/html/civicrm.standalone.php; then
+        ok "civicrm.standalone.php carries the bootSettings anchor (patch-test-db-boot)"
+    else
+        fail "civicrm.standalone.php carries the bootSettings anchor (patch-test-db-boot)"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # 2. phpcs has Drupal + DrupalPractice + the bundled CiviKitchen standard
 echo "== phpcs standards =="
 STANDARDS="$(phpcs -i 2>&1)"

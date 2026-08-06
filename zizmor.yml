@@ -28,9 +28,10 @@ rules:
   template-injection:
     ignore:
       # `matrix.version` / `matrix.variant` come from resolve-civicrm, which
-      # accepts only ^[0-9]+\.[0-9]+(\.[0-9]+)?$ or the literal "latest" and
-      # exits non-zero otherwise — the values cannot carry shell syntax. The
-      # matrix is dynamic, so zizmor cannot see that check.
+      # emits only exact ^[0-9]+\.[0-9]+\.[0-9]+$ versions (validated, or
+      # resolved from versions.json and re-validated) and exits non-zero
+      # otherwise — the values cannot carry shell syntax. The matrix is
+      # dynamic, so zizmor cannot see that check.
       - build-dev-images.yml
 
   cache-poisoning:

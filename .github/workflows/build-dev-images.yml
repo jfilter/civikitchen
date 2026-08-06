@@ -22,9 +22,10 @@ on:
       extra_standalone_minors:
         description: >-
           Extra standalone minors to build alongside the current stable
-          (comma-separated, e.g. "6.12"). For downstreams pinned to an older
-          minor: its :standalone-<minor> tag freezes once upstream moves on,
-          so image/tooling changes never reach it without an explicit rebuild.
+          (comma-separated, e.g. "6.12"); each resolves to its newest patch
+          release. For downstreams pinned to an older minor: its
+          :standalone-<minor> tag freezes once upstream moves on, so
+          image/tooling changes never reach it without an explicit rebuild.
         required: false
         default: ''
 
@@ -39,7 +40,8 @@ jobs:
   resolve-civicrm:
     # Single source of truth for the CiviCRM version every image bakes.
     # latest.civicrm.org/stable.php returns the current stable (e.g. 6.15.1);
-    # buildkit/demo pin that exact version, standalone tracks its minor.
+    # every image pins an exact version — standalone installs the matching
+    # release tarball, buildkit/demo civibuild it.
     runs-on: ubuntu-24.04
     outputs:
       stable: ${{ steps.resolve.outputs.stable }}
@@ -59,9 +61,13 @@ jobs:
             exit 1
           fi
           MINOR=${STABLE%.*}
+          # EXACT versions, because each one names a release tarball — the
+          # standalone image installs CiviCRM itself since it stopped building
+          # FROM civicrm/civicrm (whose Docker Hub tags lagged the release).
           # Requested extra minors flow through the whole standalone chain
-          # (build → merge → smoke → e2e → promote) via this one array.
-          CANDIDATES=("latest" "${MINOR}")
+          # (build → merge → smoke → e2e → promote) via this one array,
+          # resolved to their newest patch release here.
+          VERSIONS_ARR=("${STABLE}")
           IFS=',' read -ra EXTRAS <<< "${EXTRA_MINORS}"
           for v in "${EXTRAS[@]}"; do
             v="${v// /}"
@@ -71,27 +77,22 @@ jobs:
               exit 1
             fi
             [ "${v}" = "${MINOR}" ] && continue
-            CANDIDATES+=("${v}")
-          done
-          # Docker Hub is the FROM of the standalone image and lags the
-          # release announcement: stable.php said 6.17.0 while
-          # civicrm/civicrm:6.17 did not exist yet, and every standalone build
-          # died on the FROM line. Build the tags that exist; a dropped minor
-          # is at most a weekly schedule run away once upstream publishes it.
-          KEPT=()
-          for v in "${CANDIDATES[@]}"; do
-            if curl -fsS --retry 2 -o /dev/null \
-                "https://hub.docker.com/v2/repositories/civicrm/civicrm/tags/${v}"; then
-              KEPT+=("${v}")
-            else
-              echo "::warning::civicrm/civicrm:${v} is not on Docker Hub (yet) — skipping this standalone version"
+            exact=$(curl -fsS https://latest.civicrm.org/versions.json \
+              | jq -re --arg m "${v}" '.[$m].releases[-1].version')
+            if ! [[ "${exact}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "could not resolve minor ${v} to a release via versions.json" >&2
+              exit 1
             fi
+            VERSIONS_ARR+=("${exact}")
           done
-          if [ "${#KEPT[@]}" -eq 0 ]; then
-            echo "none of the standalone base tags exist on Docker Hub: ${CANDIDATES[*]}" >&2
-            exit 1
-          fi
-          VERSIONS=$(printf '"%s",' "${KEPT[@]}")
+          # The tarball is the build input; a version without one should fail
+          # HERE with a message, not twelve minutes later on a Dockerfile curl.
+          for v in "${VERSIONS_ARR[@]}"; do
+            curl -fsIL --retry 2 -o /dev/null \
+                "https://download.civicrm.org/civicrm-${v}-standalone.tar.gz" \
+              || { echo "no standalone tarball for ${v} on download.civicrm.org" >&2; exit 1; }
+          done
+          VERSIONS=$(printf '"%s",' "${VERSIONS_ARR[@]}")
           VERSIONS="[${VERSIONS%,}]"
           echo "standalone versions: ${VERSIONS}"
           {
@@ -210,7 +211,7 @@ jobs:
     # Runs the example compose stack and exercises the auto-installed site
     # with Playwright (real Chromium). Catches install/Apache/SITE_URL bugs
     # the in-image functional test can't see.
-    needs: smoke-test-standalone
+    needs: [resolve-civicrm, smoke-test-standalone]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -233,7 +234,7 @@ jobs:
       # at this run's candidate tag (stable tags don't exist yet at this point).
       - name: Boot the example stack
         env:
-          IMAGE: ${{ env.IMAGE_PREFIX }}:standalone-latest-${{ github.sha }}
+          IMAGE: ${{ env.IMAGE_PREFIX }}:standalone-${{ needs.resolve-civicrm.outputs.stable }}-${{ github.sha }}
           # Exercise the CIVIKITCHEN_EXTRA_EXTENSIONS entrypoint hook with both
           # supported syntaxes:
           # - bare key (mjwshared): pulled from the public registry, exercises
@@ -329,16 +330,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The consumer contract is the MINOR tag (:standalone-6.17); the exact
+      # tag (:standalone-6.17.0) is new with the tarball-based image and
+      # freezes a patch release for whoever needs that.
       - name: Promote tested candidate to stable tags
         run: |
-          docker buildx imagetools create -t ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }} \
+          v="${{ matrix.version }}"
+          docker buildx imagetools create \
+            -t ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }} \
+            -t "${{ env.IMAGE_PREFIX }}:standalone-${v%.*}" \
             ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}
 
-      - name: Alias :standalone -> :standalone-latest
-        if: matrix.version == 'latest'
+      - name: Alias :standalone and :standalone-latest onto the current stable
+        if: matrix.version == needs.resolve-civicrm.outputs.stable
         run: |
-          docker buildx imagetools create -t ${{ env.IMAGE_PREFIX }}:standalone \
-            ${{ env.IMAGE_PREFIX }}:standalone-latest-${{ github.sha }}
+          docker buildx imagetools create \
+            -t ${{ env.IMAGE_PREFIX }}:standalone \
+            -t ${{ env.IMAGE_PREFIX }}:standalone-latest \
+            ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}
 
   build-buildkit:
     needs: resolve-civicrm

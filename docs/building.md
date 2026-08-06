@@ -25,13 +25,14 @@ additionally needs Docker and Node.
 The build context is the repo root for both the standalone and buildkit-based images. The Dockerfiles copy from two trees: `toolbelt/` (the `ck*` tools, the phpcs standard, the phpstan/psalm/rector packages — everything baked into the image) and `docker/` (the image's own entrypoints, provisioning and demo profiles). Neither has to live inside the other, and `.dockerignore` keeps `.git` and host-built artifacts out.
 
 ```bash
-# Standalone (tracks civicrm/civicrm:latest)
+# Standalone (the Dockerfile's default CIVICRM_VERSION — pass the current one)
 docker build -f docker/standalone/Dockerfile -t civikitchen:standalone .
 
-# Standalone pinned to a specific CiviCRM minor (or any tag civicrm/civicrm publishes)
+# Standalone pinned to an EXACT CiviCRM release (names a tarball on
+# download.civicrm.org; a bare minor like 6.15 is not a tarball)
 docker build -f docker/standalone/Dockerfile \
-    --build-arg CIVICRM_VERSION=6.15 \
-    -t civikitchen:standalone-6.15 .
+    --build-arg CIVICRM_VERSION=6.15.1 \
+    -t civikitchen:standalone-6.15.1 .
 
 # Buildkit-based images. The :drupal10, :drupal11, :wordpress, and :joomla
 # tags are built from the same Dockerfile (docker/buildkit/) —

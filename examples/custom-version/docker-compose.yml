@@ -2,10 +2,8 @@
 # from Docker Hub.
 #
 # Use this when you need a CiviCRM version the published images don't offer:
-#  - the official civicrm/civicrm image only goes back to ~6.0, and
-#  - Standalone only exists from ~5.69,
-# so to mirror an older production server (e.g. CiviCRM 5.78.2 on
-# Drupal 10 / PHP 8.1) you build the image yourself.
+# Standalone only exists from ~5.69, so to mirror an older production server
+# (e.g. CiviCRM 5.78.2 on Drupal 10 / PHP 8.1) you build the image yourself.
 #
 # This stack builds civikitchen's buildkit image with `civibuild --civi-ver`,
 # using the Drupal 10 civibuild site type — the right fit for modern older

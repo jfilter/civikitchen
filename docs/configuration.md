@@ -1,6 +1,6 @@
 # Configuration
 
-Two prefixes, by ownership: `CIVIKITCHEN_*` vars are this project's own behavior knobs; `CIVICRM_*` is reserved for the upstream image contract (`CIVICRM_AUTO_INSTALL`, `CIVICRM_DB_*`), for describing the CiviCRM/civibuild target (`CIVICRM_VERSION`, `CIVICRM_SITE_TYPE`) and for CiviCRM's own variables (e.g. `CIVICRM_UF`). Legacy `CIVICRM_`-spelled kitchen vars (and `SITE_URL`) keep working with a deprecation warning. Where a var only makes sense for one image family, the **Image** column flags it.
+Two prefixes, by ownership: `CIVIKITCHEN_*` vars are this project's own behavior knobs; `CIVICRM_*` is reserved for the CiviCRM-side contract (`CIVICRM_AUTO_INSTALL`, and `CIVICRM_DB_*` — core composes its DSN from these at boot), for describing the CiviCRM/civibuild target (`CIVICRM_VERSION`, `CIVICRM_SITE_TYPE`) and for CiviCRM's own variables (e.g. `CIVICRM_UF`). Legacy `CIVICRM_`-spelled kitchen vars (and `SITE_URL`) keep working with a deprecation warning. Where a var only makes sense for one image family, the **Image** column flags it.
 
 | Env var | Default | Image | Purpose |
 |---------|---------|-------|---------|

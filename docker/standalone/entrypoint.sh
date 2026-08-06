@@ -7,7 +7,7 @@ set -e
 # 2. If CIVICRM_AUTO_INSTALL=1 and CiviCRM is not yet installed, wait for the
 #    database and run `cv core:install`.
 # 3. Run the shared first-boot provisioning (docker/runtime/provision.sh).
-# 4. Hand off to the upstream civicrm-docker-entrypoint.
+# 4. Hand off to docker-php-entrypoint (the php-apache base's own).
 #
 # Why runtime install (not a build-time bake like the buildkit demo images)?
 # The demo images bake an embedded MariaDB into the same container as CiviCRM,
@@ -177,4 +177,4 @@ fi
 # can write caches/locks/uploads. Cheap no-op when ownership is already correct.
 ck_heal_perms
 
-exec civicrm-docker-entrypoint "$@"
+exec docker-php-entrypoint "$@"

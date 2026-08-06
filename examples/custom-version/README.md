@@ -5,10 +5,8 @@ Run a CiviCRM version the published images don't provide — built locally via
 
 Why this exists:
 
-- The official `civicrm/civicrm` image (which the `:standalone` flavor builds
-  `FROM`) only publishes back to ~6.0, so `--build-arg CIVICRM_VERSION=` on the
-  standalone flavor can't reach older versions.
-- **Standalone** itself only exists from ~5.69.
+- **Standalone** only exists from ~5.69, so the `:standalone` flavor (built
+  from the release tarballs) cannot mirror anything older.
 - **Drupal/civibuild** site types have been used across a much wider CiviCRM
   range. This example uses Drupal 10, which is the right fit for modern older
   installs such as CiviCRM 5.78.x. It also matches a real Drupal production
