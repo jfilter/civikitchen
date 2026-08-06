@@ -52,6 +52,62 @@ abstract class AbstractApiCallAssistRector extends AbstractRector {
   }
 
   /**
+   * Classify a literal api3 get() params array into where rows and top-level
+   * clauses, or NULL to bail on anything outside the safe subset (non-string
+   * keys, `api.*` chaining, array filter values, options beyond limit/offset).
+   *
+   * `where` is a list of [field, value expr]; `top` is an ordered list of
+   * [clause, value expr] with clause one of select|checkPermissions|limit|
+   * offset, in source order so the array rule can reproduce it verbatim.
+   * `sequential` is dropped: api4 results are always sequential.
+   *
+   * @return array{where: list<array{string, Expr}>, top: list<array{string, Expr}>}|null
+   */
+  protected function classifyApi3GetParams(Array_ $params): ?array {
+    $where = [];
+    $top = [];
+
+    foreach ($params->items as $item) {
+      if (!$item instanceof ArrayItem || !$item->key instanceof String_) {
+        return NULL;
+      }
+      $key = $item->key->value;
+      $value = $item->value;
+
+      if ($key === 'sequential') {
+        continue;
+      }
+      if ($key === 'return') {
+        $top[] = ['select', $value];
+        continue;
+      }
+      if ($key === 'check_permissions') {
+        $top[] = ['checkPermissions', $value];
+        continue;
+      }
+      if ($key === 'options') {
+        $options = $this->limitOffsetOptions($value);
+        if ($options === NULL) {
+          return NULL;
+        }
+        if ($options['limit'] !== NULL) {
+          $top[] = ['limit', $options['limit']];
+        }
+        if ($options['offset'] !== NULL) {
+          $top[] = ['offset', $options['offset']];
+        }
+        continue;
+      }
+      if (str_starts_with($key, 'api.') || $value instanceof Array_) {
+        return NULL;
+      }
+      $where[] = [$key, $value];
+    }
+
+    return ['where' => $where, 'top' => $top];
+  }
+
+  /**
    * limit/offset of an api3 `options` array; NULL bails on any other option.
    *
    * @return array{limit: ?Expr, offset: ?Expr}|null

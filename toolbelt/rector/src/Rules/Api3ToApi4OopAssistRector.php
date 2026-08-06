@@ -42,43 +42,24 @@ final class Api3ToApi4OopAssistRector extends AbstractApiCallAssistRector {
       return NULL;
     }
 
-    $whereRows = [];
+    $parts = $this->classifyApi3GetParams($params);
+    if ($parts === NULL) {
+      return NULL;
+    }
+
+    // The builder emits clauses in a fixed order, so only the value of each
+    // top-level clause matters here, not its position in the source array.
     $select = NULL;
     $limit = NULL;
     $offset = NULL;
     $checkPermissions = NULL;
-
-    foreach ($params->items as $item) {
-      if (!$item instanceof ArrayItem || !$item->key instanceof String_) {
-        return NULL;
-      }
-      $key = $item->key->value;
-      $value = $item->value;
-
-      if ($key === 'sequential') {
-        continue;
-      }
-      if ($key === 'return') {
-        $select = $value;
-        continue;
-      }
-      if ($key === 'check_permissions') {
-        $checkPermissions = $value;
-        continue;
-      }
-      if ($key === 'options') {
-        $options = $this->limitOffsetOptions($value);
-        if ($options === NULL) {
-          return NULL;
-        }
-        $limit = $options['limit'];
-        $offset = $options['offset'];
-        continue;
-      }
-      if (str_starts_with($key, 'api.') || $value instanceof Array_) {
-        return NULL;
-      }
-      $whereRows[] = [$key, $value];
+    foreach ($parts['top'] as [$clause, $value]) {
+      match ($clause) {
+        'select' => $select = $value,
+        'limit' => $limit = $value,
+        'offset' => $offset = $value,
+        'checkPermissions' => $checkPermissions = $value,
+      };
     }
 
     // checkPermissions -> the get() argument. Absent => FALSE (api3 default).
@@ -93,7 +74,7 @@ final class Api3ToApi4OopAssistRector extends AbstractApiCallAssistRector {
     }
 
     $expr = new StaticCall(new FullyQualified('Civi\\Api4\\' . $entity->value), 'get', [new Arg($permArg)]);
-    foreach ($whereRows as [$field, $value]) {
+    foreach ($parts['where'] as [$field, $value]) {
       $expr = new MethodCall($expr, 'addWhere', [new Arg(new String_($field)), new Arg(new String_('=')), new Arg($value)]);
     }
     if ($select !== NULL) {

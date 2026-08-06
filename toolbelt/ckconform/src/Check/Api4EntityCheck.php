@@ -63,7 +63,7 @@ final class Api4EntityCheck implements Check
             }
 
             $provider = $this->providingExtension($classFile);
-            if ($provider !== null && !in_array($provider, $this->declaredRequires($context), true)) {
+            if ($provider !== null && !in_array($provider, $context->requiredExtensions(), true)) {
                 $undeclared[$provider] = $entity;
             }
 
@@ -252,20 +252,5 @@ final class Api4EntityCheck implements Check
         $key = trim((string) ($info['key'] ?? ''));
 
         return $key === '' ? null : $key;
-    }
-
-    /** @return list<string> */
-    private function declaredRequires(Context $context): array
-    {
-        $info = $context->infoXml();
-        if ($info === null) {
-            return [];
-        }
-        $keys = [];
-        foreach ($info->xpath('//requires/ext') ?: [] as $ext) {
-            $keys[] = trim((string) $ext);
-        }
-
-        return $keys;
     }
 }

@@ -6,7 +6,6 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
-use CiviKitchen\Ckconform\ExtensionUtilStub;
 use CiviKitchen\Ckconform\Reporter;
 use CiviKitchen\Ckconform\Scalar;
 use CiviKitchen\Ckconform\Suppressions;
@@ -61,33 +60,13 @@ final class ManagedEntityMetadataCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        // Tracked files only (repo principle); mgd files live under managed/ by
-        // convention but nothing enforces that, so scan the whole tree.
-        $files = $context->isGitRepo()
-            ? $context->trackedUnder('', ['.mgd.php'])
-            : $context->findFiles('', ['.mgd.php']);
-        if ($files === []) {
-            return;
-        }
-
-        ExtensionUtilStub::register();
-
         $extensionKey = $context->extensionKey();
         $seen = [];
 
-        foreach ($files as $relative) {
-            try {
-                $records = require $context->path($relative);
-            } catch (\Throwable $e) {
-                $reporter->warn("$relative: could not evaluate managed file outside CiviCRM ({$e->getMessage()}) — managed metadata unchecked");
-                continue;
-            }
-
-            if (!is_array($records)) {
-                $reporter->fail("$relative: does not return a list of managed records");
-                continue;
-            }
-
+        $notAList = static function (string $relative) use ($reporter): void {
+            $reporter->fail("$relative: does not return a list of managed records");
+        };
+        foreach (ManagedFiles::records($context, $reporter, 'managed metadata unchecked', $notAList) as [$relative, $records]) {
             foreach ($records as $index => $record) {
                 $label = "$relative record #$index";
                 if (!is_array($record)) {

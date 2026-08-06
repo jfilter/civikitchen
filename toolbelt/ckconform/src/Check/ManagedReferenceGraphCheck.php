@@ -6,7 +6,6 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
-use CiviKitchen\Ckconform\ExtensionUtilStub;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -38,17 +37,9 @@ final class ManagedReferenceGraphCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        $mgdFiles = $context->isGitRepo()
-            ? $context->trackedUnder('', ['.mgd.php'])
-            : $context->findFiles('', ['.mgd.php']);
         $afformFiles = $context->isGitRepo()
             ? $context->trackedUnder('ang', ['.aff.html'])
             : $context->findFiles('ang', ['.aff.html']);
-        if ($mgdFiles === [] && $afformFiles === []) {
-            return;
-        }
-
-        ExtensionUtilStub::register();
 
         $prefix = $context->shortName();
         /** @var array<string, list<string>> $names entity => defined names */
@@ -56,17 +47,7 @@ final class ManagedReferenceGraphCheck implements Check
         /** @var list<array{file: string, label: string, target: string}> $displayRefs */
         $displayRefs = [];
 
-        foreach ($mgdFiles as $relative) {
-            try {
-                $records = require $context->path($relative);
-            } catch (\Throwable $e) {
-                $reporter->warn("$relative: could not evaluate managed file outside CiviCRM ({$e->getMessage()}) — reference graph unchecked");
-                continue;
-            }
-            if (!is_array($records)) {
-                continue;
-            }
-
+        foreach (ManagedFiles::records($context, $reporter, 'reference graph unchecked') as [$relative, $records]) {
             foreach ($records as $index => $record) {
                 if (!is_array($record)) {
                     continue;

@@ -7,32 +7,18 @@ namespace CiviKitchen\Ckconform\Tests\Check;
 use CiviKitchen\Ckconform\Check\Api4SelfEntityCheck;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Tests\CheckTestCase;
+use CiviKitchen\Ckconform\Tests\FakeCoreTrait;
 
 final class Api4SelfEntityCheckTest extends CheckTestCase
 {
-    private ?string $core = null;
-
-    protected function tearDown(): void
-    {
-        if ($this->core !== null && is_dir($this->core)) {
-            exec('rm -rf ' . escapeshellarg($this->core));
-        }
-        $this->core = null;
-        parent::tearDown();
-    }
-
-    protected function coreDir(): ?string
-    {
-        return $this->core;
-    }
+    use FakeCoreTrait;
 
     /**
      * @param list<string> $entities
      */
     private function core(array $entities = ['Contact', 'Email', 'MailingJob']): void
     {
-        $this->core = sys_get_temp_dir() . '/ckconform-core-' . bin2hex(random_bytes(6));
-        mkdir($this->core . '/Civi/Api4', 0777, true);
+        $this->makeCore();
         foreach ($entities as $name) {
             file_put_contents(
                 $this->core . '/Civi/Api4/' . $name . '.php',

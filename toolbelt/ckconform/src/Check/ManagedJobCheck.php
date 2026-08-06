@@ -6,7 +6,6 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
-use CiviKitchen\Ckconform\ExtensionUtilStub;
 use CiviKitchen\Ckconform\Reporter;
 use CiviKitchen\Ckconform\Scalar;
 
@@ -42,29 +41,10 @@ final class ManagedJobCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        $files = $context->isGitRepo()
-            ? $context->trackedUnder('', ['.mgd.php'])
-            : $context->findFiles('', ['.mgd.php']);
-        if ($files === []) {
-            return;
-        }
-
-        ExtensionUtilStub::register();
-
         $repoFiles = $context->isGitRepo() ? $context->trackedFiles() : $context->findFiles('');
         $prefix = $context->shortName();
 
-        foreach ($files as $relative) {
-            try {
-                $records = require $context->path($relative);
-            } catch (\Throwable $e) {
-                $reporter->warn("$relative: could not evaluate managed file outside CiviCRM ({$e->getMessage()}) — managed jobs unchecked");
-                continue;
-            }
-            if (!is_array($records)) {
-                continue;
-            }
-
+        foreach (ManagedFiles::records($context, $reporter, 'managed jobs unchecked') as [$relative, $records]) {
             foreach ($records as $index => $record) {
                 if (!is_array($record) || ($record['entity'] ?? null) !== 'Job') {
                     continue;

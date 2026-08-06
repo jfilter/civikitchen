@@ -157,6 +157,32 @@ final class Context
     }
 
     /**
+     * The <ext> children of info.xml's <requires>, as trimmed extension keys.
+     * Read via SimpleXML because attributes are legal on the element — a regex
+     * once missed `<ext version="3.32">org.civicoop.civirules</ext>` — and
+     * empty/whitespace-only elements are dropped: '' is not a key, and letting
+     * it through makes an in_array() dependency test silently unmatchable.
+     *
+     * @return list<string>
+     */
+    public function requiredExtensions(): array
+    {
+        $info = $this->infoXml();
+        if ($info === null) {
+            return [];
+        }
+        $keys = [];
+        foreach ($info->xpath('//requires/ext') ?: [] as $ext) {
+            $key = trim((string) $ext);
+            if ($key !== '') {
+                $keys[] = $key;
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
      * @return array<mixed>|null
      */
     public function json(string $relative): ?array

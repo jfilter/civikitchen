@@ -45,60 +45,29 @@ final class Api3ToApi4AssistRector extends AbstractApiCallAssistRector {
       return NULL;
     }
 
-    $where = [];
-    $top = [];
-    $hasCheckPermissions = FALSE;
-    $hasLimit = FALSE;
-
-    foreach ($params->items as $item) {
-      if (!$item instanceof ArrayItem || !$item->key instanceof String_) {
-        return NULL;
-      }
-      $key = $item->key->value;
-      $value = $item->value;
-
-      if ($key === 'sequential') {
-        continue;
-      }
-      if ($key === 'return') {
-        $top[] = new ArrayItem($value, new String_('select'));
-        continue;
-      }
-      if ($key === 'check_permissions') {
-        $top[] = new ArrayItem($value, new String_('checkPermissions'));
-        $hasCheckPermissions = TRUE;
-        continue;
-      }
-      if ($key === 'options') {
-        $options = $this->limitOffsetOptions($value);
-        if ($options === NULL) {
-          return NULL;
-        }
-        if ($options['limit'] !== NULL) {
-          $top[] = new ArrayItem($options['limit'], new String_('limit'));
-          $hasLimit = TRUE;
-        }
-        if ($options['offset'] !== NULL) {
-          $top[] = new ArrayItem($options['offset'], new String_('offset'));
-        }
-        continue;
-      }
-      if (str_starts_with($key, 'api.') || $value instanceof Array_) {
-        return NULL;
-      }
-      $where[] = new ArrayItem(new Array_([
-        new ArrayItem(new String_($key)),
-        new ArrayItem(new String_('=')),
-        new ArrayItem($value),
-      ]));
+    $parts = $this->classifyApi3GetParams($params);
+    if ($parts === NULL) {
+      return NULL;
     }
 
     $newItems = [];
-    if ($where !== []) {
-      $newItems[] = new ArrayItem(new Array_($where), new String_('where'));
+    if ($parts['where'] !== []) {
+      $whereItems = [];
+      foreach ($parts['where'] as [$field, $value]) {
+        $whereItems[] = new ArrayItem(new Array_([
+          new ArrayItem(new String_($field)),
+          new ArrayItem(new String_('=')),
+          new ArrayItem($value),
+        ]));
+      }
+      $newItems[] = new ArrayItem(new Array_($whereItems), new String_('where'));
     }
-    foreach ($top as $topItem) {
-      $newItems[] = $topItem;
+    $hasCheckPermissions = FALSE;
+    $hasLimit = FALSE;
+    foreach ($parts['top'] as [$clause, $value]) {
+      $newItems[] = new ArrayItem($value, new String_($clause));
+      $hasLimit = $hasLimit || $clause === 'limit';
+      $hasCheckPermissions = $hasCheckPermissions || $clause === 'checkPermissions';
     }
     if (!$hasLimit) {
       $newItems[] = new ArrayItem(new Int_(25), new String_('limit'));

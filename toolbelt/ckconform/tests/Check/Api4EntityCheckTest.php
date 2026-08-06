@@ -6,6 +6,7 @@ namespace CiviKitchen\Ckconform\Tests\Check;
 
 use CiviKitchen\Ckconform\Check\Api4EntityCheck;
 use CiviKitchen\Ckconform\Tests\CheckTestCase;
+use CiviKitchen\Ckconform\Tests\FakeCoreTrait;
 
 /**
  * The regression this check exists for: an api3->v4 migration moved two pages
@@ -14,21 +15,7 @@ use CiviKitchen\Ckconform\Tests\CheckTestCase;
  */
 final class Api4EntityCheckTest extends CheckTestCase
 {
-    private ?string $core = null;
-
-    protected function tearDown(): void
-    {
-        if ($this->core !== null && is_dir($this->core)) {
-            exec('rm -rf ' . escapeshellarg($this->core));
-        }
-        $this->core = null;
-        parent::tearDown();
-    }
-
-    protected function coreDir(): ?string
-    {
-        return $this->core;
-    }
+    use FakeCoreTrait;
 
     /**
      * @param array<string, string|null> $entities Entity name => @since, or null
@@ -37,8 +24,7 @@ final class Api4EntityCheckTest extends CheckTestCase
      */
     private function core(array $entities, array $bundled = []): void
     {
-        $this->core = sys_get_temp_dir() . '/ckconform-core-' . bin2hex(random_bytes(6));
-        mkdir($this->core . '/Civi/Api4', 0777, true);
+        $this->makeCore();
         foreach ($entities as $name => $since) {
             file_put_contents($this->core . '/Civi/Api4/' . $name . '.php', $this->entitySource($name, $since));
         }

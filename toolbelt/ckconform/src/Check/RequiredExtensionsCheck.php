@@ -33,7 +33,7 @@ final class RequiredExtensionsCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        $required = $this->requiredExtensions($context);
+        $required = $context->requiredExtensions();
 
         if ($this->shipsSearchKitEntities($context)) {
             $this->needsExt(
@@ -66,30 +66,6 @@ final class RequiredExtensionsCheck implements Check
         if (!in_array($key, $required, true)) {
             $reporter->fail("info.xml does not <requires> {$key} — {$reason}");
         }
-    }
-
-    /**
-     * The <ext> children of <requires>, trimmed. Attributes on the element are
-     * irrelevant to its text content, which is exactly what the regex got wrong.
-     *
-     * @return list<string>
-     */
-    private function requiredExtensions(Context $context): array
-    {
-        $info = $context->infoXml();
-        if ($info === null) {
-            return [];
-        }
-
-        $keys = [];
-        foreach ($info->xpath('//requires/ext') ?: [] as $ext) {
-            $key = trim((string) $ext);
-            if ($key !== '') {
-                $keys[] = $key;
-            }
-        }
-
-        return $keys;
     }
 
     /**

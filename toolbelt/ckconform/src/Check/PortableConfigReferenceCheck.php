@@ -6,7 +6,6 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
-use CiviKitchen\Ckconform\ExtensionUtilStub;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -54,27 +53,7 @@ final class PortableConfigReferenceCheck implements Check
 
     private function checkManaged(Context $context, Reporter $reporter): void
     {
-        // Tracked files only (repo principle): an uncommitted local export must
-        // not sway the verdict. Outside git, fall back to the tree.
-        $files = $context->isGitRepo()
-            ? $context->trackedUnder('', ['.mgd.php'])
-            : $context->findFiles('', ['.mgd.php']);
-        if ($files === []) {
-            return;
-        }
-
-        ExtensionUtilStub::register();
-
-        foreach ($files as $relative) {
-            try {
-                $records = require $context->path($relative);
-            } catch (\Throwable $e) {
-                $reporter->warn("$relative: could not evaluate managed file outside CiviCRM ({$e->getMessage()}) — portable-reference check skipped");
-                continue;
-            }
-            if (!is_array($records)) {
-                continue;
-            }
+        foreach (ManagedFiles::records($context, $reporter, 'portable-reference check skipped') as [$relative, $records]) {
             $this->walk($records, $relative, '', false, $reporter);
         }
     }
