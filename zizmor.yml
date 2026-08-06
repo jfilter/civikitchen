@@ -57,4 +57,4 @@ rules:
       # go stale: any edit ABOVE that step in release.yml shifts the line and
       # the finding comes back. Re-pin it rather than widening this to the
       # whole file.
-      - release.yml:216:9
+      - release.yml:100:9

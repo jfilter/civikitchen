@@ -8,6 +8,7 @@ on:
       - 'toolbelt/**'
       - 'tests/images/**'
       - '.github/workflows/build-dev-images.yml'
+      - '.github/scripts/**'
       # Changes the scan verdict directly, so it must re-run the scan jobs.
       - 'trivyignore.yaml'
   schedule:
@@ -48,58 +49,17 @@ jobs:
       minor: ${{ steps.resolve.outputs.minor }}
       standalone_versions: ${{ steps.resolve.outputs.standalone_versions }}
     steps:
+      - name: Checkout (for the resolve script)
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
       - name: Resolve current CiviCRM stable
         id: resolve
         env:
           # Empty on push/schedule; only workflow_dispatch can request extras.
           EXTRA_MINORS: ${{ inputs.extra_standalone_minors }}
-        run: |
-          STABLE=$(curl -fsS https://latest.civicrm.org/stable.php)
-          echo "upstream stable: ${STABLE}"
-          if ! [[ "${STABLE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "unexpected version string from stable.php: '${STABLE}'" >&2
-            exit 1
-          fi
-          MINOR=${STABLE%.*}
-          # EXACT versions, because each one names a release tarball — the
-          # standalone image installs CiviCRM itself since it stopped building
-          # FROM civicrm/civicrm (whose Docker Hub tags lagged the release).
-          # Requested extra minors flow through the whole standalone chain
-          # (build → merge → smoke → e2e → promote) via this one array,
-          # resolved to their newest patch release here.
-          VERSIONS_ARR=("${STABLE}")
-          IFS=',' read -ra EXTRAS <<< "${EXTRA_MINORS}"
-          for v in "${EXTRAS[@]}"; do
-            v="${v// /}"
-            [ -z "${v}" ] && continue
-            if ! [[ "${v}" =~ ^[0-9]+\.[0-9]+$ ]]; then
-              echo "invalid extra standalone minor: '${v}'" >&2
-              exit 1
-            fi
-            [ "${v}" = "${MINOR}" ] && continue
-            exact=$(curl -fsS https://latest.civicrm.org/versions.json \
-              | jq -re --arg m "${v}" '.[$m].releases[-1].version')
-            if ! [[ "${exact}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "could not resolve minor ${v} to a release via versions.json" >&2
-              exit 1
-            fi
-            VERSIONS_ARR+=("${exact}")
-          done
-          # The tarball is the build input; a version without one should fail
-          # HERE with a message, not twelve minutes later on a Dockerfile curl.
-          for v in "${VERSIONS_ARR[@]}"; do
-            curl -fsIL --retry 2 -o /dev/null \
-                "https://download.civicrm.org/civicrm-${v}-standalone.tar.gz" \
-              || { echo "no standalone tarball for ${v} on download.civicrm.org" >&2; exit 1; }
-          done
-          VERSIONS=$(printf '"%s",' "${VERSIONS_ARR[@]}")
-          VERSIONS="[${VERSIONS%,}]"
-          echo "standalone versions: ${VERSIONS}"
-          {
-            echo "stable=${STABLE}"
-            echo "minor=${MINOR}"
-            echo "standalone_versions=${VERSIONS}"
-          } >> "$GITHUB_OUTPUT"
+        run: .github/scripts/resolve-civicrm-stable.sh
 
   build-standalone:
     needs: resolve-civicrm
@@ -198,14 +158,10 @@ jobs:
           persist-credentials: false
 
       - name: Functional test of bundled dev tools
-        run: |
-          IMG=${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}
-          docker pull --platform ${{ matrix.platform }} "$IMG"
-          docker run --rm --platform ${{ matrix.platform }} \
-            -v "${{ github.workspace }}/tests/images:/civikitchen-test:ro" \
-            --entrypoint='' \
-            "$IMG" \
-            bash /civikitchen-test/test-dev-tools.sh
+        env:
+          IMG: ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}
+          PLATFORM: ${{ matrix.platform }}
+        run: .github/scripts/run-dev-tools-test.sh
 
   e2e-test-standalone:
     # Runs the example compose stack and exercises the auto-installed site
@@ -248,31 +204,17 @@ jobs:
           docker compose -f examples/standalone/docker-compose.yml up -d --pull always
 
       - name: Wait for CiviCRM to install + boot
-        run: |
-          for _ in $(seq 1 60); do
-            if curl -fs http://localhost:8080/civicrm/login >/dev/null; then
-              echo "ready"
-              exit 0
-            fi
-            sleep 3
-          done
-          echo "site never became reachable" >&2
-          docker compose -f examples/standalone/docker-compose.yml logs app
-          exit 1
+        env:
+          COMPOSE_FILE: examples/standalone/docker-compose.yml
+        run: .github/scripts/wait-standalone-ready.sh
 
+      # Both the bare-key (mjwshared) and key@URL (de.systopia.xcm) entries
+      # from CIVIKITCHEN_EXTRA_EXTENSIONS must end up installed.
       - name: Verify CIVIKITCHEN_EXTRA_EXTENSIONS got installed
-        run: |
-          # Both the bare-key (mjwshared) and key@URL (de.systopia.xcm)
-          # entries from CIVIKITCHEN_EXTRA_EXTENSIONS must end up installed.
-          for key in mjwshared de.systopia.xcm; do
-            status=$(docker compose -f examples/standalone/docker-compose.yml exec -T app \
-              runuser -u www-data -- cv api4 Extension.get \
-              "{\"where\":[[\"key\",\"=\",\"${key}\"]],\"select\":[\"status\"]}" \
-              --out=json)
-            echo "${key}: ${status}"
-            echo "$status" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"installed"' \
-              || { echo "FAIL: ${key} not installed" >&2; exit 1; }
-          done
+        env:
+          COMPOSE_FILE: examples/standalone/docker-compose.yml
+          EXT_KEYS: mjwshared de.systopia.xcm
+        run: .github/scripts/verify-extra-extensions.sh
 
       # Same major the images ship (docker/*/Dockerfile). A browser job on a
       # different Node than the image serves tests something nobody runs.
@@ -452,24 +394,16 @@ jobs:
           persist-credentials: false
 
       - name: Functional test of bundled dev tools
-        run: |
-          IMG=${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }}
-          docker pull --platform ${{ matrix.platform }} "$IMG"
-          docker run --rm --platform ${{ matrix.platform }} \
-            -v "${{ github.workspace }}/tests/images:/civikitchen-test:ro" \
-            --entrypoint='' \
-            "$IMG" \
-            bash /civikitchen-test/test-dev-tools.sh
+        env:
+          IMG: ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }}
+          PLATFORM: ${{ matrix.platform }}
+        run: .github/scripts/run-dev-tools-test.sh
 
       - name: Boot test (real first-boot path against an external DB)
-        run: |
-          case "${{ matrix.variant }}" in
-            drupal10)  SITE_TYPE=drupal10-demo ;;
-            drupal11)  SITE_TYPE=drupal11-demo ;;
-            wordpress) SITE_TYPE=wp-demo ;;
-            joomla)    SITE_TYPE=joomla-demo ;;
-          esac
-          bash tests/images/boot-test.sh ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }} "$SITE_TYPE"
+        env:
+          IMG: ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }}
+          VARIANT: ${{ matrix.variant }}
+        run: .github/scripts/buildkit-boot-test.sh
 
   e2e-test-buildkit:
     # Runs each CMS example compose stack with the candidate image and exercises
@@ -509,24 +443,9 @@ jobs:
           docker compose -f ${{ matrix.variant.compose }} up -d --pull always
 
       - name: Wait for the app healthcheck
-        run: |
-          for _ in $(seq 1 120); do
-            cid=$(docker compose -f ${{ matrix.variant.compose }} ps -q app)
-            health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || echo starting)
-            if [ "$health" = healthy ]; then
-              echo "ready"
-              exit 0
-            fi
-            if [ "$health" = exited ] || [ "$health" = unhealthy ]; then
-              echo "container became ${health}" >&2
-              docker compose -f ${{ matrix.variant.compose }} logs app
-              exit 1
-            fi
-            sleep 5
-          done
-          echo "site never became healthy" >&2
-          docker compose -f ${{ matrix.variant.compose }} logs app
-          exit 1
+        env:
+          COMPOSE_FILE: ${{ matrix.variant.compose }}
+        run: .github/scripts/wait-compose-healthy.sh
 
       - name: Verify CiviCRM responds
         # cv works on every flavor including Joomla (the buildkit image ships the
@@ -798,21 +717,17 @@ jobs:
     outputs:
       images: ${{ steps.list.outputs.images }}
     steps:
+      - name: Checkout (for the assemble script)
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
       - name: Assemble the candidate tag list
         id: list
         env:
           STANDALONE_VERSIONS: ${{ needs.resolve-civicrm.outputs.standalone_versions }}
           SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          images=$(jq -nc --arg sha "$SHA" --argjson standalone "$STANDALONE_VERSIONS" '
-            ($standalone | map("standalone-" + .))
-            + ["drupal10", "drupal11", "wordpress", "joomla"]
-            + ["standalone-demo", "drupal10-demo", "drupal11-demo", "wordpress-demo", "joomla-demo"]
-            | map(. + "-" + $sha)
-          ')
-          echo "images=$images" >> "$GITHUB_OUTPUT"
-          echo "scanning: $images"
+        run: .github/scripts/assemble-scan-list.sh
 
   scan-images:
     # Reports, does not gate: the promote jobs do not wait for this one. A CVE
@@ -859,14 +774,7 @@ jobs:
         env:
           CK_TRIVY_VERSION: 0.72.0
           CK_TRIVY_SHA256: bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea
-        run: |
-          set -euo pipefail
-          tarball="$RUNNER_TEMP/trivy.tar.gz"
-          curl -fsSL -o "$tarball" \
-            "https://github.com/aquasecurity/trivy/releases/download/v${CK_TRIVY_VERSION}/trivy_${CK_TRIVY_VERSION}_Linux-64bit.tar.gz"
-          echo "$CK_TRIVY_SHA256  $tarball" | sha256sum -c -
-          tar -xzf "$tarball" -C "$RUNNER_TEMP" trivy
-          "$RUNNER_TEMP/trivy" --version
+        run: .github/scripts/install-trivy.sh
 
       # The scan target is the DIGEST, resolved from the registry — the point of
       # the whole job. Scanning a tag re-resolves it at scan time and scanning
@@ -876,14 +784,7 @@ jobs:
         id: digest
         env:
           IMAGE: ${{ matrix.image }}
-        run: |
-          set -euo pipefail
-          ref="${IMAGE_PREFIX}:${IMAGE}"
-          digest=$(docker buildx imagetools inspect "$ref" --format '{{.Manifest.Digest}}')
-          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] \
-            || { echo "could not resolve a digest for $ref (got: '$digest')" >&2; exit 1; }
-          echo "$ref -> $digest"
-          echo "ref=${IMAGE_PREFIX}@${digest}" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/resolve-image-digest.sh
 
       # The gate, and the only run whose exit code matters:
       #   --ignore-unfixed  nothing upstream has patched yet is not something a
@@ -908,18 +809,7 @@ jobs:
         env:
           IMAGE_REF: ${{ steps.digest.outputs.ref }}
           PLATFORM: ${{ matrix.platform }}
-        run: |
-          set -euo pipefail
-          "$RUNNER_TEMP/trivy" image \
-            --image-src remote \
-            --platform "$PLATFORM" \
-            --scanners vuln \
-            --ignore-unfixed \
-            --severity HIGH,CRITICAL \
-            --ignorefile trivyignore.yaml \
-            --exit-code 1 \
-            --no-progress \
-            "$IMAGE_REF"
+        run: .github/scripts/trivy-scan-gate.sh
 
       # The same image without any of the filters, exit code 0, into the job
       # summary. The gate above answers "is there anything to do?"; this answers
@@ -934,40 +824,7 @@ jobs:
           IMAGE_REF: ${{ steps.digest.outputs.ref }}
           IMAGE: ${{ matrix.image }}
           PLATFORM: ${{ matrix.platform }}
-        run: |
-          set -euo pipefail
-          report="$RUNNER_TEMP/trivy-report.txt"
-          "$RUNNER_TEMP/trivy" image \
-            --image-src remote \
-            --platform "$PLATFORM" \
-            --scanners vuln \
-            --exit-code 0 \
-            --skip-db-update \
-            --skip-java-db-update \
-            --no-progress \
-            --quiet \
-            --output "$report" \
-            "$IMAGE_REF"
-          # GitHub drops the WHOLE summary over 1 MiB, so an untruncated report
-          # made this step silently produce nothing. Cut it and say so.
-          budget=900000
-          total=$(wc -l < "$report")
-          head -c "$budget" "$report" > "$report.cut"
-          kept=$(wc -l < "$report.cut")
-          {
-            echo "## trivy: $IMAGE ($PLATFORM)"
-            echo
-            echo "\`$IMAGE_REF\` — all severities, unfixed included."
-            if [ "$kept" -lt "$total" ]; then
-              echo
-              echo "**Truncated to fit GitHub's 1 MiB summary limit: $kept of $total lines.**"
-              echo "Re-run the scan locally for the rest: \`trivy image $IMAGE_REF\`"
-            fi
-            echo
-            echo '```'
-            cat "$report.cut"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: .github/scripts/trivy-report-summary.sh
 
   notify-scheduled-failure:
     # The weekly cron rebuild fails SILENTLY otherwise: test-then-promote
@@ -987,21 +844,14 @@ jobs:
       issues: write
 
     steps:
+      - name: Checkout (for the notify script)
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
       - name: Open or bump the scheduled-build-failure issue
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-        run: |
-          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          gh label create ci-scheduled-failure --repo "$REPO" \
-            --description "Weekly image rebuild failed" --color B60205 2>/dev/null || true
-          existing=$(gh issue list --repo "$REPO" --label ci-scheduled-failure \
-            --state open --json number --jq '.[0].number // empty')
-          if [ -n "$existing" ]; then
-            gh issue comment "$existing" --repo "$REPO" \
-              --body "The scheduled image build failed again: $run_url"
-          else
-            gh issue create --repo "$REPO" --label ci-scheduled-failure \
-              --title "Scheduled image build is failing" \
-              --body "$(printf 'The weekly image rebuild failed: %s\n\nThe stable tags keep serving the last good images (test-then-promote), but no new CiviCRM release reaches users until this is fixed.' "$run_url")"
-          fi
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: .github/scripts/notify-scheduled-failure.sh
