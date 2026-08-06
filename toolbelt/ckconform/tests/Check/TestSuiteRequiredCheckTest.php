@@ -18,6 +18,15 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new TestSuiteRequiredCheck(), $context));
     }
 
+    /** An untracked tests/phpunit is a suite nobody else can run — it must not count. */
+    public function testAnUntrackedSuiteDoesNotCount(): void
+    {
+        $context = $this->repo(['Civi/Thing.php' => '<?php class Thing {}'], git: true);
+        mkdir($context->root . '/tests/phpunit', 0777, true);
+        file_put_contents($context->root . '/tests/phpunit/bootstrap.php', '<?php');
+        $this->assertFails($this->run_(new TestSuiteRequiredCheck(), $context), 'no test suite');
+    }
+
     public function testFailsWhenThereIsSourceButNoSuite(): void
     {
         $context = $this->repo([

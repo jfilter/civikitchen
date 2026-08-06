@@ -39,6 +39,16 @@ final class Api4SelfEntityCheckTest extends CheckTestCase
         ] + $files, git: true);
     }
 
+    /** A fake entity under tests/fixtures is not shipped and must not vouch for a call. */
+    public function testAFixtureEntityDoesNotCountAsShipped(): void
+    {
+        $context = $this->ext([
+            'tests/fixtures/Civi/Api4/LedgerAdapter.php' => "<?php\n",
+            'frontend/src/PipelineEditor.tsx' => "const a = await getEntities('LedgerAdapter', []);\n",
+        ]);
+        $this->assertFails($this->run_(new Api4SelfEntityCheck(), $context), 'LedgerAdapter');
+    }
+
     public function testSilentWithoutJavaScript(): void
     {
         $this->assertSilent($this->run_(new Api4SelfEntityCheck(), $this->ext([])));

@@ -376,16 +376,54 @@ final class Context
         return $this->isGitRepo() ? $this->isTracked($relative) : $this->exists($relative);
     }
 
-    /** Does the repo ship an own APIv4 entity class Civi/Api4/<Entity>.php? */
+    /**
+     * Does the repo ship an own APIv4 entity class Civi/Api4/<Entity>.php?
+     * Source files only: a fixture under tests/fixtures/Civi/Api4 is not shipped.
+     */
     public function shipsApi4Entity(string $entity): bool
     {
-        foreach ($this->trackedFiles() as $file) {
+        foreach ($this->sourceFiles('', ['.php']) as $file) {
             if (str_ends_with($file, 'Civi/Api4/' . $entity . '.php')) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * Does the repo ship anything under this directory? Tracked files when in
+     * git; outside git (tarball, exported build) whatever is on disk.
+     */
+    public function hasShippedUnder(string $directory): bool
+    {
+        return $this->isGitRepo()
+            ? $this->trackedUnder($directory) !== []
+            : $this->findFiles($directory) !== [];
+    }
+
+    /** read(), but only for files the repo ships — see ships(). */
+    public function readShipped(string $relative): ?string
+    {
+        return $this->ships($relative) ? $this->read($relative) : null;
+    }
+
+    /**
+     * Whether git would ignore this path — asked of git, not guessed from
+     * .gitignore. git resolves patterns, precedence, negation and nested
+     * .gitignore files; nothing else does. Outside a git repo (exit 128) the
+     * answer is "not ignored".
+     */
+    public function isIgnored(string $relative): bool
+    {
+        // Same safe.directory as git(): under CI's uid mismatch a bare call
+        // fails with "dubious ownership", which would read as "not ignored".
+        $command = 'git -c ' . escapeshellarg('safe.directory=' . rtrim($this->root, '/'))
+            . ' -C ' . escapeshellarg($this->root)
+            . ' check-ignore -q ' . escapeshellarg($relative) . ' 2>/dev/null';
+        exec($command, $output, $status);
+
+        return $status === 0;
     }
 
     /**

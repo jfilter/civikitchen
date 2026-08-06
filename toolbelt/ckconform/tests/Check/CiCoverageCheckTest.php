@@ -21,6 +21,17 @@ final class CiCoverageCheckTest extends CheckTestCase
         );
     }
 
+    /** An untracked local tests/phpunit is not a suite CI could ever run. */
+    public function testAnUntrackedSuiteDirectoryIsIgnored(): void
+    {
+        $context = $this->repo([
+            '.github/workflows/ci.yml' => "jobs:\n  test:\n    steps:\n      - run: cktest\n",
+        ], git: true);
+        mkdir($context->root . '/tests/phpunit', 0777, true);
+        file_put_contents($context->root . '/tests/phpunit/SomeTest.php', '<?php');
+        $this->assertSilent($this->run_(new CiCoverageCheck(), $context));
+    }
+
     public function testSilentWhenCkcoverageIsWired(): void
     {
         $context = $this->repo([

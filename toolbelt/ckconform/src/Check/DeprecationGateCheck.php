@@ -36,13 +36,13 @@ final class DeprecationGateCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        if (!is_dir($context->path('tests/phpunit'))) {
+        if (!$context->hasShippedUnder('tests/phpunit')) {
             return;
         }
 
         $config = null;
         foreach (self::CONFIGS as $candidate) {
-            if ($context->exists($candidate)) {
+            if ($context->ships($candidate)) {
                 $config = $candidate;
                 break;
             }
@@ -52,7 +52,7 @@ final class DeprecationGateCheck implements Check
             return;
         }
 
-        $xml = $context->read($config) ?? '';
+        $xml = $context->readShipped($config) ?? '';
         if (!$this->convertsDeprecations($xml)) {
             $reporter->warn(
                 $config . ' does not set convertDeprecationsToExceptions="true"'
@@ -60,7 +60,7 @@ final class DeprecationGateCheck implements Check
             );
         }
 
-        if (!$this->widensErrorReporting($xml, $context->read('tests/phpunit/bootstrap.php'))) {
+        if (!$this->widensErrorReporting($xml, $context->readShipped('tests/phpunit/bootstrap.php'))) {
             $reporter->warn(
                 'no error_reporting(E_ALL) in tests/phpunit/bootstrap.php'
                 . ' — the CLI default masks E_DEPRECATED outside Civi\\Test tests'

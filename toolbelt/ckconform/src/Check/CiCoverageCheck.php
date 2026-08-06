@@ -26,7 +26,7 @@ final class CiCoverageCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        if (!is_dir($context->path('tests/phpunit'))) {
+        if (!$context->hasShippedUnder('tests/phpunit')) {
             return;
         }
 

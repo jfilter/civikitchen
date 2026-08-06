@@ -75,6 +75,35 @@ final class Api4LiteralEntityCheckTest extends CheckTestCase
         $this->assertPasses($this->run_(new Api4LiteralEntityCheck(), $context));
     }
 
+    /** A fixture entity under tests/ is not shipped and must not seed the family. */
+    public function testAFixtureEntityDoesNotSeedTheFamily(): void
+    {
+        $context = $this->repo([
+            'tests/fixtures/Civi/Api4/Widget.php' => "<?php\n",
+            'Civi/Ext/Runner.php' => "<?php\ncivicrm_api4('WidgetGhost', 'get', []);\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new Api4LiteralEntityCheck(), $context));
+    }
+
+    /** A shipped call resolved only by a tests/fixtures entity fatals on an install. */
+    public function testAnEntityDefinedOnlyAsAFixtureFails(): void
+    {
+        $context = $this->widget([
+            'tests/fixtures/Civi/Api4/WidgetFixture.php' => "<?php\n",
+            'Civi/Widget/Runner.php' => "<?php\ncivicrm_api4('WidgetFixture', 'get', []);\n",
+        ]);
+        $this->assertFails($this->run_(new Api4LiteralEntityCheck(), $context), 'WidgetFixture');
+    }
+
+    /** A dangling call inside tests/ fails that test run itself, not the site. */
+    public function testACallInTestsIsNotScanned(): void
+    {
+        $context = $this->widget([
+            'tests/phpunit/RunnerTest.php' => "<?php\ncivicrm_api4('WidgetStatee', 'get', []);\n",
+        ]);
+        $this->assertPasses($this->run_(new Api4LiteralEntityCheck(), $context));
+    }
+
     /**
      * A local CiviRulesRule-style entity puts 'Civi' in the family — which
      * would flag every core CiviCase/CiviMail call. That family is skipped.

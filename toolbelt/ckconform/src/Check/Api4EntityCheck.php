@@ -120,14 +120,18 @@ final class Api4EntityCheck implements Check
     }
 
     /**
-     * Entity names referenced as \Civi\Api4\Foo anywhere in the extension's PHP.
+     * Entity names referenced as \Civi\Api4\Foo in the extension's shipped PHP.
+     *
+     * Shipped source only: tests never run on a customer's site, so a test-only
+     * reference cannot fatal there, and test fixtures may name fake entities on
+     * purpose. A broken reference in a test fails that test in CI on its own.
      *
      * @return list<string>
      */
     private function referencedEntities(Context $context): array
     {
         $entities = [];
-        foreach ($context->tracked('*.php') as $file) {
+        foreach ($context->sourceFiles('', ['.php']) as $file) {
             if (str_contains($file, '.civix.php') || str_contains($file, '/DAO/')) {
                 continue;
             }

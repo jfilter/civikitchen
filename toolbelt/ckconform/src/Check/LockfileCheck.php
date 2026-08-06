@@ -23,7 +23,7 @@ final class LockfileCheck implements Check
 {
     private const JS_LOCKFILES = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lock', 'bun.lockb'];
 
-    private const IGNORABLE_LOCKFILES = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lock', 'composer.lock'];
+    private const IGNORABLE_LOCKFILES = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lock', 'bun.lockb', 'composer.lock'];
 
     public function name(): string
     {
@@ -46,11 +46,45 @@ final class LockfileCheck implements Check
             $reporter->fail('composer.json declares dependencies but composer.lock is not tracked');
         }
 
-        foreach (self::IGNORABLE_LOCKFILES as $name) {
-            if ($this->gitignoreExcludes($context, $name)) {
-                $reporter->fail(".gitignore excludes {$name} — lockfiles belong in the repo");
+        foreach ($this->ignoredLockfiles($context) as $path) {
+            $reporter->fail(".gitignore excludes {$path} — lockfiles belong in the repo");
+        }
+    }
+
+    /**
+     * Lockfile paths git would ignore, asked per location a lockfile can be
+     * required: next to each tracked manifest and at the root. Git answers via
+     * check-ignore (Context::isIgnored), so `*.lock`, negations and nested
+     * .gitignore files are resolved the way git resolves them — the first cut
+     * matched lines by suffix and read `!build/composer.lock` as an ignore.
+     *
+     * @return list<string>
+     */
+    private function ignoredLockfiles(Context $context): array
+    {
+        $dirs = [''];
+        $manifests = array_merge(
+            $this->manifests($context),
+            $context->tracked('composer.json', Context::outsideNodeModules(...)),
+        );
+        foreach ($manifests as $manifest) {
+            $dir = dirname($manifest);
+            if ($dir !== '.') {
+                $dirs[] = $dir . '/';
             }
         }
+
+        $ignored = [];
+        foreach (self::IGNORABLE_LOCKFILES as $name) {
+            foreach (array_unique($dirs) as $dir) {
+                if ($context->isIgnored($dir . $name)) {
+                    $ignored[] = $dir . $name;
+                    break;
+                }
+            }
+        }
+
+        return $ignored;
     }
 
     /** @return list<string> */
@@ -87,30 +121,4 @@ final class LockfileCheck implements Check
         return $require !== [] && !$context->isTracked('composer.lock');
     }
 
-    /**
-     * Matches a .gitignore line that is exactly the name, or ends with
-     * "/{$name}" — the same two shapes the bash predecessor's regex matched.
-     * Comment lines are skipped, which the bash regex did not do: a `#`-led
-     * line ending in "/composer.lock" satisfied its unanchored alternative
-     * too. See PORTING NOTES for details.
-     */
-    private function gitignoreExcludes(Context $context, string $name): bool
-    {
-        $contents = $context->read('.gitignore');
-        if ($contents === null) {
-            return false;
-        }
-
-        foreach (explode("\n", $contents) as $line) {
-            $line = trim($line);
-            if ($line === '' || str_starts_with($line, '#')) {
-                continue;
-            }
-            if ($line === $name || str_ends_with($line, "/{$name}")) {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

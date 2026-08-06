@@ -58,7 +58,7 @@ final class GitignoreCoverageCheck implements Check
                 continue;
             }
             foreach ($samples as $sample) {
-                if (!$this->isIgnored($context, $sample)) {
+                if (!$context->isIgnored($sample)) {
                     $missing[] = $pattern;
                     break;
                 }
@@ -125,26 +125,4 @@ final class GitignoreCoverageCheck implements Check
         return [];
     }
 
-    /**
-     * Whether git would ignore this path — asked of git, not guessed from the
-     * file.
-     *
-     * The first cut looked for a substring in .gitignore. It therefore accepted
-     * 'frontend/.tsbuildinfo', the exact broken pattern that let a repo track a
-     * build cache and that this check was written to catch — and it accepted a
-     * '!' negation, which does the opposite of ignoring. git resolves patterns,
-     * precedence, negation and nested .gitignore files; nothing else does.
-     */
-    private function isIgnored(Context $context, string $path): bool
-    {
-        // Same safe.directory as Context::git(): under CI's uid mismatch a
-        // bare git call fails with "dubious ownership" (exit 128), which read
-        // as "not ignored" here — the one direct git call outside Context.
-        $command = 'git -c ' . escapeshellarg('safe.directory=' . rtrim($context->root, '/'))
-            . ' -C ' . escapeshellarg($context->root)
-            . ' check-ignore -q ' . escapeshellarg($path) . ' 2>/dev/null';
-        exec($command, $output, $status);
-
-        return $status === 0;
-    }
 }

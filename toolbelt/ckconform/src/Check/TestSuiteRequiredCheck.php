@@ -35,7 +35,9 @@ final class TestSuiteRequiredCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        if (is_dir($context->path('tests/phpunit'))) {
+        // Shipped, not merely on disk: an untracked local tests/phpunit is not
+        // a suite anyone else can run.
+        if ($context->hasShippedUnder('tests/phpunit')) {
             return;
         }
 

@@ -53,6 +53,17 @@ final class CoverageSectionCheckTest extends CheckTestCase
         $this->assertFails($this->run_(new CoverageSectionCheck(), $context));
     }
 
+    /** An untracked config ships to nobody, so its <coverage> section proves nothing. */
+    public function testAnUntrackedConfigDoesNotCount(): void
+    {
+        $context = $this->repo(['tests/phpunit/SomeTest.php' => '<?php'], git: true);
+        file_put_contents(
+            $context->root . '/phpunit.xml.dist',
+            '<?xml version="1.0"?><phpunit><coverage/></phpunit>'
+        );
+        $this->assertFails($this->run_(new CoverageSectionCheck(), $context));
+    }
+
     public function testSilentWithoutATestDirectory(): void
     {
         $this->assertSilent($this->run_(new CoverageSectionCheck(), $this->repo([])));

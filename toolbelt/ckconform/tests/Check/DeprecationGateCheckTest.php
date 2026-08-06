@@ -112,6 +112,17 @@ final class DeprecationGateCheckTest extends CheckTestCase
         self::assertCount(2, $this->run_(new DeprecationGateCheck(), $context)->messages('warn'));
     }
 
+    /** An untracked local tests/phpunit is not a suite the repo ships. */
+    public function testAnUntrackedSuiteDirectoryIsIgnored(): void
+    {
+        $context = $this->repo([
+            'phpunit.xml.dist' => '<?xml version="1.0"?><phpunit/>',
+        ], git: true);
+        mkdir($context->root . '/tests/phpunit', 0777, true);
+        file_put_contents($context->root . '/tests/phpunit/bootstrap.php', '<?php');
+        $this->assertSilent($this->run_(new DeprecationGateCheck(), $context));
+    }
+
     /** phpunit.xml is checked too — a repo may keep the non-dist form. */
     public function testThePlainPhpunitXmlIsChecked(): void
     {

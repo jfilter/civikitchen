@@ -55,6 +55,30 @@ final class Api4EntityCheckTest extends CheckTestCase
         );
     }
 
+    /** A test-only reference cannot fatal on a customer's site and fails its own CI run. */
+    public function testAReferenceInTestsIsNotScanned(): void
+    {
+        $this->core(['Contact' => null]);
+        $context = $this->repo([
+            'tests/phpunit/Civi/XTest.php' => '<?php $x = \Civi\Api4\Nonsense::get();',
+        ], git: true);
+        $this->assertPasses($this->run_(new Api4EntityCheck(), $context));
+    }
+
+    /** A fake entity under tests/fixtures is not shipped and must not vouch for a reference. */
+    public function testAFixtureEntityDoesNotCountAsShipped(): void
+    {
+        $this->core(['Contact' => null]);
+        $context = $this->repo([
+            'tests/fixtures/Civi/Api4/Nonsense.php' => "<?php\n",
+            'CRM/X.php' => '<?php $x = \Civi\Api4\Nonsense::get();',
+        ], git: true);
+        $this->assertFails(
+            $this->run_(new Api4EntityCheck(), $context),
+            'APIv4 entities referenced but not found in core or this extension: Nonsense'
+        );
+    }
+
     public function testPassesOnAnEntityCoreShips(): void
     {
         $this->core(['Contact' => null]);

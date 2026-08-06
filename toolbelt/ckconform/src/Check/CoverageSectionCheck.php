@@ -27,12 +27,12 @@ final class CoverageSectionCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        if (!is_dir($context->path('tests/phpunit'))) {
+        if (!$context->hasShippedUnder('tests/phpunit')) {
             return;
         }
 
         foreach (['phpunit.xml.dist', 'phpunit.xml'] as $candidate) {
-            if ($this->declaresCoverage($context->read($candidate))) {
+            if ($this->declaresCoverage($context->readShipped($candidate))) {
                 $reporter->ok('phpunit config declares coverage sources');
 
                 return;

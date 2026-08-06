@@ -30,7 +30,8 @@ use CiviKitchen\Ckconform\Reporter;
  */
 final class Api4LiteralEntityCheck implements Check
 {
-    private const SKIP = ['vendor/', 'node_modules/', 'dist/', 'build/'];
+    /** Built artefacts restate the source; sourceFiles() already drops tests/vendor. */
+    private const SKIP = ['dist/', 'build/'];
 
     public function name(): string
     {
@@ -60,7 +61,7 @@ final class Api4LiteralEntityCheck implements Check
         }
 
         $dangling = [];
-        foreach ($context->tracked('*.php') as $file) {
+        foreach ($context->sourceFiles('', ['.php']) as $file) {
             if ($this->skipped($file)) {
                 continue;
             }
@@ -95,14 +96,15 @@ final class Api4LiteralEntityCheck implements Check
     }
 
     /**
-     * Entity names this extension defines, from Civi/Api4/<Name>.php.
+     * Entity names this extension defines, from a shipped Civi/Api4/<Name>.php —
+     * a fixture entity under tests/ must not seed the family.
      *
      * @return list<string>
      */
     private function localEntities(Context $context): array
     {
         $entities = [];
-        foreach ($context->trackedFiles() as $file) {
+        foreach ($context->sourceFiles('', ['.php']) as $file) {
             if (preg_match('#(?:^|/)Civi/Api4/([A-Z][A-Za-z0-9_]*)\.php$#', $file, $match) === 1) {
                 $entities[] = $match[1];
             }

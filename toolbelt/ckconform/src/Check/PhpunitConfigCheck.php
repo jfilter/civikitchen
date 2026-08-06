@@ -22,11 +22,11 @@ final class PhpunitConfigCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        if (!is_dir($context->path('tests/phpunit'))) {
+        if (!$context->hasShippedUnder('tests/phpunit')) {
             return;
         }
 
-        if (!$context->exists('phpunit.xml.dist')) {
+        if (!$context->ships('phpunit.xml.dist')) {
             $reporter->fail('tests/phpunit exists but no phpunit.xml.dist');
         }
     }

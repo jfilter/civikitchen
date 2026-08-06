@@ -104,12 +104,58 @@ final class LockfileCheckTest extends CheckTestCase
         );
     }
 
-    public function testGitignoreExcludingALockfileInASubdirectoryFails(): void
+    public function testGitignoreExcludingALockfileNextToAManifestFails(): void
     {
-        $context = $this->repo(['.gitignore' => "/build/composer.lock\n"], git: true);
+        $context = $this->repo([
+            '.gitignore' => "/build/composer.lock\n",
+            'build/composer.json' => '{"name": "acme/build"}',
+        ], git: true);
         $this->assertFails(
             $this->run_(new LockfileCheck(), $context),
-            '.gitignore excludes composer.lock — lockfiles belong in the repo',
+            '.gitignore excludes build/composer.lock — lockfiles belong in the repo',
+        );
+    }
+
+    /** Where no manifest lives, no lockfile is required — the pattern is inert. */
+    public function testAnIgnorePatternAwayFromAnyManifestIsSilent(): void
+    {
+        $context = $this->repo(['.gitignore' => "/build/composer.lock\n"], git: true);
+        $this->assertSilent($this->run_(new LockfileCheck(), $context));
+    }
+
+    /** The old line parser compared literal names, so `*.lock` slipped through. */
+    public function testAWildcardPatternCoveringLockfilesFails(): void
+    {
+        $context = $this->repo(['.gitignore' => "*.lock\n"], git: true);
+        $this->assertFails(
+            $this->run_(new LockfileCheck(), $context),
+            '.gitignore excludes yarn.lock — lockfiles belong in the repo',
+        );
+    }
+
+    /**
+     * The old parser read `!build/composer.lock` as an ignore rule because the
+     * line ends in "/composer.lock" — a negation is the opposite of one.
+     */
+    public function testANegationLineIsNotAnIgnoreRule(): void
+    {
+        $context = $this->repo(['.gitignore' => "!build/composer.lock\n"], git: true);
+        $this->assertSilent($this->run_(new LockfileCheck(), $context));
+    }
+
+    public function testANegationReinstatingTheLockfilePasses(): void
+    {
+        $context = $this->repo(['.gitignore' => "composer.lock\n!composer.lock\n"], git: true);
+        $this->assertSilent($this->run_(new LockfileCheck(), $context));
+    }
+
+    /** bun.lockb counts as a JS lockfile, so ignoring it is just as fatal. */
+    public function testGitignoreExcludingBunLockbFails(): void
+    {
+        $context = $this->repo(['.gitignore' => "bun.lockb\n"], git: true);
+        $this->assertFails(
+            $this->run_(new LockfileCheck(), $context),
+            '.gitignore excludes bun.lockb — lockfiles belong in the repo',
         );
     }
 
