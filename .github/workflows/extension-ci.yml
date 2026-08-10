@@ -315,6 +315,14 @@ jobs:
       # Read by the compose file's ${CIVIKITCHEN_IMAGE:-<default>}; `:-` treats
       # the empty default as unset, so not passing `image` changes nothing.
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      # One compose project PER JOB. The extension's compose file names its
+      # project after the extension, so two jobs of the same run booting the
+      # same stack share it — and the second one's `down -v --remove-orphans`
+      # SIGKILLs the first one's containers (exit 137). Invisible on
+      # ubuntu-latest, where every job gets its own VM; a self-hosted runner
+      # with several job slots on one host hits it. The env var outranks the
+      # file's `name:`, so consuming repos need no change.
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-ci
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -767,6 +775,8 @@ jobs:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ inputs.key }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      # One compose project per job — see the note in `ci`.
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-upgrade
     steps:
       # See the note on the same step in `compat`. Extra reason here: this job
       # moves the working tree between two commits, and a vendor/ tree built on
@@ -885,6 +895,8 @@ jobs:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ inputs.key }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      # One compose project per job — see the note in `ci`.
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-schema-parity
     steps:
       # Same reasoning as in `upgrade`: this job moves the working tree between
       # two commits, so a vendor/ built once on the runner would belong to the
@@ -1049,6 +1061,8 @@ jobs:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ inputs.key }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      # One compose project per job — see the note in `ci`.
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-mutation
     steps:
       # Full history: without mutation_paths ckmutate mutates the lines changed
       # against CK_MUTATE_BASE, and a shallow clone has no base to diff.
@@ -1109,6 +1123,8 @@ jobs:
       # it — at the step — so everything after the swap already runs against the
       # image this pipeline actually tests on.
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      # One compose project per job — see the note in `ci`.
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-core-upgrade
     steps:
       # See the note on the same step in `compat`. Extra reason here: this job's
       # override slot is taken by the two volumes that make the swap work.
@@ -1362,6 +1378,8 @@ jobs:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ inputs.key }}
       CIVIKITCHEN_IMAGE: ${{ matrix.image }}
+      # One compose project per job — see the note in `ci`.
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-compat-${{ strategy.job-index }}
     steps:
       # The private-dependency inputs are wired into the `ci` job only, and
       # this job boots the same stack from a plain checkout: without vendor/ or
@@ -1439,6 +1457,8 @@ jobs:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ inputs.key }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      # One compose project per job — see the note in `ci`.
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-playwright
     steps:
       # See the note on the same step in `compat`: this job boots its own stack
       # from a plain checkout too, and its override slot is already taken by

@@ -89,7 +89,8 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help test test-ckconform test-phpstan test-ckinit test-parity lint lint-shell \
+.PHONY: help test test-ckconform test-phpstan test-ckinit test-parity \
+	test-compose-isolation lint lint-shell \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
 help: ## Show this help
@@ -102,7 +103,7 @@ help: ## Show this help
 
 # --- the fast loop -----------------------------------------------------------
 
-test: test-ckconform test-phpstan test-ckinit test-parity ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-parity test-compose-isolation ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -129,6 +130,12 @@ test-ckinit: ## ckinit seed/update/check integration checks
 # lands in git and silently never reaches the images the fleet's CI runs on.
 test-parity: ## Toolbelt components vs. Dockerfile COPY parity
 	bash tests/parity/test-toolbelt-parity.sh
+
+# Two jobs of one run sharing a compose project means the second one's
+# `down -v` kills the first one's containers. Only reproducible where jobs
+# share a Docker daemon, i.e. never on the runner this suite runs on.
+test-compose-isolation: ## Per-job compose project names in the workflows
+	bash tests/parity/test-compose-project-isolation.sh
 
 # --- static checks -----------------------------------------------------------
 

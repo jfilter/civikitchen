@@ -1,0 +1,25 @@
+# The regression the isolation check exists for: two jobs of one run boot the
+# same compose project on a configurable (i.e. possibly self-hosted) runner, so
+# whichever starts second tears the first one's containers down mid-run.
+name: fixture
+
+on: workflow_dispatch
+
+jobs:
+  ci:
+    runs-on: ${{ inputs.runs_on || 'ubuntu-latest' }}
+    steps:
+      - run: docker compose -f .docker/docker-compose.ci.yml up -d --wait
+
+  compat:
+    runs-on: ${{ inputs.runs_on || 'ubuntu-latest' }}
+    steps:
+      - run: |
+          docker compose -f .docker/docker-compose.ci.yml down -v --remove-orphans
+          docker compose -f .docker/docker-compose.ci.yml up -d --wait
+
+  # Pinned to a GitHub-hosted label: its own VM, nothing to collide over.
+  hosted:
+    runs-on: ubuntu-latest
+    steps:
+      - run: docker compose -f .docker/docker-compose.ci.yml up -d --wait
