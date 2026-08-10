@@ -13,7 +13,7 @@
  * is off by policy (see psalm-taint.xml.dist) — deliberately not annotated,
  * so the config stays the single place that decision is made.
  *
- * Signatures verified against CiviCRM 6.16.2 (CRM/Utils/System.php).
+ * Signatures verified against CiviCRM 6.17.2 (CRM/Utils/System.php).
  */
 class CRM_Utils_System {
 

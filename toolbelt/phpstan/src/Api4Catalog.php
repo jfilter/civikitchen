@@ -25,7 +25,7 @@ final class Api4Catalog
      * CI reads this to fetch the matching source tree, so the drift gate
      * compares against the exact release rather than a moving branch.
      */
-    public const CORE_VERSION = '6.16.2';
+    public const CORE_VERSION = '6.17.2';
 
     /**
      * Entity name => actions, fields, field-list completeness.
@@ -42,7 +42,7 @@ final class Api4Catalog
         'Activity' => ['a' => 'autocomplete checkAccess create delete get getActions getFields getLinks replace save update', 'f' => 'activity_date_time activity_type_id all_contact_id assignee_contact_count assignee_contact_id campaign_id case_id created_date details duration engagement_level id is_auto is_current_revision is_deleted is_star is_test location medium_id modified_date original_id parent_id phone_id phone_number priority_id relationship_id result source_contact_id source_record_id status_id subject target_contact_count target_contact_id weight', 'c' => true],
         'ActivityContact' => ['a' => 'autocomplete checkAccess create delete get getActions getFields getLinks replace save update', 'f' => 'activity_id contact_id id record_type_id', 'c' => true],
         'Address' => ['a' => 'autocomplete checkAccess create delete get getActions getCoordinates getFields getLinks replace save update', 'f' => 'city contact_id country_id county_id geo_code_1 geo_code_2 id is_billing is_primary location_type_id manual_geo_code master_id name postal_code postal_code_suffix proximity state_province_id street_address street_name street_number street_number_postdirectional street_number_predirectional street_number_suffix street_type street_unit supplemental_address_1 supplemental_address_2 supplemental_address_3 timezone usps_adc', 'c' => true],
-        'Afform' => ['a' => 'autocomplete checkAccess convert create get getActions getFields getLinks getOptions loadAdminData prefill process revert save submit submitDraft submitFile translate update', 'f' => '', 'c' => false],
+        'Afform' => ['a' => 'autocomplete checkAccess convert create get getActions getFields getLinks getOptions loadAdminData prefill process revert save submit submitDraft submitFile translate update validate', 'f' => '', 'c' => false],
         'AfformBehavior' => ['a' => 'checkAccess get getActions getFields getLinks', 'f' => '', 'c' => false],
         'AfformSubmission' => ['a' => 'autocomplete checkAccess create delete get getActions getFields getLinks replace save update', 'f' => 'afform_name contact_id data id status_id submission_date', 'c' => true],
         'AuthxCredential' => ['a' => 'checkAccess create getActions getFields getLinks validate', 'f' => '', 'c' => false],

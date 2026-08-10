@@ -10,7 +10,7 @@ namespace CiviKitchen\Ckconform;
  * Regenerate with:
  *   php tools/gen-hook-catalog.php <core-dir>
  *
- * Generated from CiviCRM 6.16.2. Deprecated entries carry the core line they
+ * Generated from CiviCRM 6.17.2. Deprecated entries carry the core line they
  * were derived from, so a surprising one can be audited without rerunning the
  * generator. Hooks that no longer exist, and hooks deprecated only in the dev
  * docs, are NOT here — see HookDispatchNameCheck for those and for why.
@@ -24,7 +24,7 @@ final class HookCatalog
      * always compares against the exact release rather than a moving branch.
      * Bumping core is therefore deliberate: regenerate, and this moves with it.
      */
-    public const CORE_VERSION = '6.16.2';
+    public const CORE_VERSION = '6.17.2';
 
     /**
      * Hook suffixes CiviCRM core currently dispatches.

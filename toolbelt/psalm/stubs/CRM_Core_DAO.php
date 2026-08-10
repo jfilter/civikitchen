@@ -11,7 +11,7 @@
  * is per taint type, so a value laundered through it still counts as tainted
  * for shell/html/file sinks. That is intended.
  *
- * Signatures verified against CiviCRM 6.16.2 (CRM/Core/DAO.php).
+ * Signatures verified against CiviCRM 6.17.2 (CRM/Core/DAO.php).
  */
 class CRM_Core_DAO {
 

@@ -12,7 +12,7 @@
  * (`where('id = #1', [1 => $id])`), the safe path, exactly like the $params
  * of CRM_Core_DAO::executeQuery. param() is the same story.
  *
- * Signatures verified against CiviCRM 6.16.2 (CRM/Utils/SQL/Select.php).
+ * Signatures verified against CiviCRM 6.17.2 (CRM/Utils/SQL/Select.php).
  */
 class CRM_Utils_SQL_Select {
 

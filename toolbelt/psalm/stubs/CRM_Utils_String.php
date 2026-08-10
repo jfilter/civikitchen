@@ -17,7 +17,7 @@
  * shell metacharacters, but leaves `/`, `.` and `..` untouched, so a path
  * traversal walks straight through it. Left as a pass-through flow.
  *
- * Signatures verified against CiviCRM 6.16.2 (CRM/Utils/String.php).
+ * Signatures verified against CiviCRM 6.17.2 (CRM/Utils/String.php).
  */
 class CRM_Utils_String {
 

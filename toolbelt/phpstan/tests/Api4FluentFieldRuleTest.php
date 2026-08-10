@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CiviKitchen\PHPStan\Tests;
 
+use CiviKitchen\PHPStan\Api4Catalog;
 use CiviKitchen\PHPStan\Api4Contract;
 use CiviKitchen\PHPStan\Api4FluentFieldRule;
 use PHPStan\Rules\Rule;
@@ -31,13 +32,13 @@ final class Api4FluentFieldRuleTest extends RuleTestCase
         $this->analyse(
             [__DIR__ . '/fixtures/api4-stubs.php', __DIR__ . '/fixtures/generic-stubs.php', __DIR__ . '/fixtures/api4-fluent-fields.php'],
             [
-                ['APIv4 field Contact.street_address does not exist in CiviCRM 6.16.2 — addSelect()', 14],
-                ['APIv4 field Contact.postal_code does not exist in CiviCRM 6.16.2 — addSelect()', 14],
-                ['APIv4 field Contact.city does not exist in CiviCRM 6.16.2 — addSelect()', 14],
-                ['APIv4 field Contact.country_id does not exist in CiviCRM 6.16.2 — addSelect()', 14],
-                ['APIv4 field Address.no_such_field does not exist in CiviCRM 6.16.2 — address_primary.no_such_field in addSelect()', 47],
-                ['APIv4 field Email.nope does not exist in CiviCRM 6.16.2 — email_primary.nope in addWhere()', 47],
-                ['APIv4 field Contact.street_address does not exist in CiviCRM 6.16.2 — addSelect()', 83],
+                ['APIv4 field Contact.street_address does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addSelect()', 14],
+                ['APIv4 field Contact.postal_code does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addSelect()', 14],
+                ['APIv4 field Contact.city does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addSelect()', 14],
+                ['APIv4 field Contact.country_id does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addSelect()', 14],
+                ['APIv4 field Address.no_such_field does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — address_primary.no_such_field in addSelect()', 47],
+                ['APIv4 field Email.nope does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — email_primary.nope in addWhere()', 47],
+                ['APIv4 field Contact.street_address does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addSelect()', 83],
             ],
         );
     }

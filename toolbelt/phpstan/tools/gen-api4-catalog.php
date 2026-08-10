@@ -109,7 +109,8 @@ const DYNAMIC_SPEC_FIELDS = [
  * DYNAMIC_SPEC_FIELDS already lists as fields, here with their target so the
  * right-hand side of `address_primary.street_address` becomes checkable. Any
  * other subscriber to `api.schema_map.build` would have to be added here;
- * core 6.16.2 has this one plus the custom-group joins, which are site data.
+ * core 6.17.2 has this one, the alias-less MessageTemplate master link, and
+ * the custom-group joins, which are site data.
  */
 const IMPLICIT_JOINS = [
     'Contact' => [

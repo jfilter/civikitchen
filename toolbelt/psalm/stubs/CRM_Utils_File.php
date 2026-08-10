@@ -12,7 +12,7 @@
  * runSqlQuery() is not a path sink at all — it hands a raw string to the
  * database, so it is an SQL sink like the DAO methods.
  *
- * Signatures verified against CiviCRM 6.16.2 (CRM/Utils/File.php).
+ * Signatures verified against CiviCRM 6.17.2 (CRM/Utils/File.php).
  */
 class CRM_Utils_File {
 

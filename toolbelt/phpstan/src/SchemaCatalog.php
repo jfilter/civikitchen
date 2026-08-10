@@ -10,7 +10,7 @@ namespace CiviKitchen\PHPStan;
  * Regenerate with:
  *   php tools/gen-schema-catalog.php <core-dir>
  *
- * Generated from CiviCRM 6.16.2 out of the schema/*.entityType.php
+ * Generated from CiviCRM 6.17.2 out of the schema/*.entityType.php
  * declarations of core and its core-shipped extensions. The SQL rule uses
  * this to reject a `civicrm_`-prefixed table name that no core release and
  * no repo-local schema knows.
@@ -23,7 +23,7 @@ final class SchemaCatalog
      * CI reads this to fetch the matching source tree, so the drift gate
      * compares against the exact release rather than a moving branch.
      */
-    public const CORE_VERSION = '6.16.2';
+    public const CORE_VERSION = '6.17.2';
 
     /**
      * Table names core creates.
