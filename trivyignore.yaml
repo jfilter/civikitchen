@@ -114,6 +114,15 @@ vulnerabilities:
       bower_components on expiry.
     expired_at: 2027-02-01
 
+  - id: GHSA-5p4m-2wfm-xmqj
+    statement: >-
+      The follow-up to CVE-2026-59869 (CVE-2026-59870): quadratic CPU in
+      js-yaml's !!omap/!!pairs resolution, same js-yaml 3.13.1 in
+      core/bower_components, same single consumer — the APIv4 Explorer parsing
+      the YAML the logged-in developer typed into it. Same core-asset argument
+      as jquery above; recheck against core's bower_components on expiry.
+    expired_at: 2027-02-01
+
   # -------------------------------------------------------------------------
   # civicrm-buildkit's own node_modules (buildkit-based flavors only)
   #
