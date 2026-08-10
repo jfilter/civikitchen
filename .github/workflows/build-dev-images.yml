@@ -24,9 +24,9 @@ on:
         description: >-
           Extra standalone minors to build alongside the current stable
           (comma-separated, e.g. "6.12"); each resolves to its newest patch
-          release. For downstreams pinned to an older minor: its
-          :standalone-<minor> tag freezes once upstream moves on, so
-          image/tooling changes never reach it without an explicit rebuild.
+          release. Non-empty REPLACES the supported list in
+          toolbelt/versions.env (CK_STANDALONE_EXTRA_MINORS) for this run —
+          a one-off rebuild of an unsupported minor does not need a commit.
         required: false
         default: ''
 
@@ -57,7 +57,8 @@ jobs:
       - name: Resolve current CiviCRM stable
         id: resolve
         env:
-          # Empty on push/schedule; only workflow_dispatch can request extras.
+          # Empty on push/schedule — the script then falls back to the
+          # supported list in toolbelt/versions.env.
           EXTRA_MINORS: ${{ inputs.extra_standalone_minors }}
         run: .github/scripts/resolve-civicrm-stable.sh
 

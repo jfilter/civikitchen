@@ -959,10 +959,11 @@ that sets none of them gets exactly the run it has today.
 Pick the ends of your claimed range, not everything in between: the oldest
 minor you support and current stable. The image tags are `:standalone-<minor>`
 (e.g. `:standalone-6.12`) and the moving `:standalone`; see
-[images.md](images.md#tags--versions). A `<minor>` tag freezes when upstream
-moves on, and it freezes with the `ck*` tooling it was last built with — if you
-keep an old minor in a matrix for long, have *Build Dev Images* rebuild it
-(`workflow_dispatch` → `extra_standalone_minors`) so it carries current tooling.
+[images.md](images.md#tags--versions). A `<minor>` tag keeps being rebuilt
+(newest patch, current `ck*` tooling) only while it is on the supported list —
+`CK_STANDALONE_EXTRA_MINORS` in `toolbelt/versions.env`. If your matrix pins a
+minor, make sure it is listed there; a one-off rebuild of anything else is
+*Build Dev Images* → `workflow_dispatch` → `extra_standalone_minors`.
 
 The matrix jobs run the **suite**, not the full `ci` pass: `cklint`,
 `ckconform`, `phpstan` and the coverage floor are enforced by the tools inside
@@ -1113,9 +1114,9 @@ Two things to know before you rely on it:
 
 - It is the **slowest single check** in the pipeline: two boots plus a full core
   schema upgrade. Scheduled caller only.
-- A `:standalone-<minor>` tag freezes with the tooling it was last built with,
-  so a from→to pair is only meaningful while both tags exist — the same caveat
-  the matrix carries. And like the browser job, this one runs once, on `image`;
+- A `:standalone-<minor>` tag off the supported list freezes with the tooling
+  it was last built with, so a from→to pair is only meaningful while both tags
+  exist — the same caveat the matrix carries. And like the browser job, this one runs once, on `image`;
   it is not multiplied by `matrix_images`. A multi-hop upgrade matrix is a
   separate feature, not a flag.
 

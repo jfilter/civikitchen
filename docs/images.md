@@ -252,7 +252,7 @@ extension repos pin. See [Releases](releases.md).
 |-----|-------------------|
 | `:standalone` | The most recent CiviCRM `latest` build. |
 | `:standalone-latest` | Same as `:standalone`. |
-| `:standalone-<minor>` | Latest patch of the **current** stable minor (e.g. `:standalone-6.15` while 6.15.x is current). When upstream moves to the next minor, a new tag appears and the old one freezes at its last patch — handy as a known-good fallback right after a minor bump. |
+| `:standalone-<minor>` | Latest patch of that minor (e.g. `:standalone-6.16`). The current stable minor always gets one; older minors keep being rebuilt (newest patch, current tooling) as long as they are listed in `CK_STANDALONE_EXTRA_MINORS` in `toolbelt/versions.env` — the supported-versions list. A minor dropped from the list freezes at its last built patch. |
 | `:drupal10`, `:drupal11`, `:wordpress`, `:joomla`, `:*-demo` | Bake the current stable at image-build time. Check what a pulled image contains without booting it: `docker inspect <image> --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`. |
 | `:<flavor>-php<version>` | The buildkit dev flavors also publish a PHP-suffixed tag (e.g. `:drupal10-php8.3`) — same image, explicit about the PHP it carries. |
 | `:v1` | **Release tag.** The standalone image of the newest `v1.x.y` release — the contract image the extension template's compose stacks use. Moves only when a release is cut. |

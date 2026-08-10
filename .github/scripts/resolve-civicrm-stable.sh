@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 # Resolve the CiviCRM version every image bakes: current upstream stable plus
-# any extra standalone minors ($EXTRA_MINORS, comma-separated), each resolved
-# to its newest patch release. Emits stable/minor/standalone_versions outputs.
+# the supported extra standalone minors, each resolved to its newest patch
+# release. Emits stable/minor/standalone_versions outputs. The extras come
+# from CK_STANDALONE_EXTRA_MINORS in toolbelt/versions.env; a non-empty
+# $EXTRA_MINORS (the workflow_dispatch input) replaces the list for one run.
 set -euo pipefail
+
+if [ -z "${EXTRA_MINORS:-}" ]; then
+  # shellcheck source=/dev/null
+  source toolbelt/versions.env
+  EXTRA_MINORS="${CK_STANDALONE_EXTRA_MINORS:-}"
+fi
 
 STABLE=$(curl -fsS https://latest.civicrm.org/stable.php)
 echo "upstream stable: ${STABLE}"
