@@ -238,15 +238,18 @@ CiviKitchen rules for CiviCRM-specific footguns such as
 
 `cktaint` runs Psalm as a taint engine only: it follows request input
 (`CRM_Utils_Request::retrieve`, `$_GET`/`$_POST`) into SQL, shell, path and
-redirect sinks, using CiviKitchen's CiviCRM stubs. It is **advisory** — CI
-never fails on it.
+redirect sinks, using CiviKitchen's CiviCRM stubs. The gate **blocks** on the
+classes where a true positive is an outright vulnerability — `TaintedSql`,
+`TaintedShell`, `TaintedInclude`, `TaintedUnserialize`, `TaintedSSRF`. The
+noisier classes (file paths, headers, cookies, callables, eval, LDAP, secrets)
+are reported but never part of the exit code.
 
 ```bash
 docker compose exec app bash -c "cd /var/www/html/ext/myextension && cktaint"
 ```
 
 What is modelled, what it cannot see, and how to handle a finding:
-[extension-standards.md](extension-standards.md#taint-analysis-cktaint-advisory-pilot).
+[extension-standards.md](extension-standards.md#taint-analysis-cktaint).
 
 ## IDE step debugging
 
