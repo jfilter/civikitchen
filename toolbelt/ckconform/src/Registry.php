@@ -35,6 +35,7 @@ final class Registry
         Check\MixinDeclarationCheck::class,
         Check\MixinVersionCheck::class,
         Check\EntitySchemaFormatCheck::class,
+        Check\EntityDaoStubCheck::class,
         Check\LicenseSkeletonCheck::class,
         Check\LicenseCoherenceCheck::class,
         Check\CopyrightCheck::class,

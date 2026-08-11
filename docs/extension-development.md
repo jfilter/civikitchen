@@ -124,6 +124,14 @@ docker compose exec app civix upgrade                             # re-run perio
                                                                   # generated stubs to current civix
 ```
 
+Use `generate:entity` rather than writing `schema/*.entityType.php` by hand: the
+schema names a DAO class under `class`, and the matching `CRM/<Ns>/DAO/<Entity>.php`
+stub is generated alongside it. A schema without its stub looks complete and
+passes every static check, then fatals at install time with `Class "…" not found`
+— after earlier entities' tables exist, so the retry hits `DB Error: already
+exists`. `ckconform`'s `entity-dao-stub` catches both that and a stub whose
+`$_tableName` has drifted from the schema.
+
 Modern extensions configure features in `info.xml` via [standard mixins](https://docs.civicrm.org/dev/en/latest/framework/mixin/standard/) (`mgd-php@2`, `menu-xml`, `setting-php`, `entity-types-php@2.0.0`, `smarty@1`, `ang-php`, …) instead of bespoke hooks — `civix upgrade` keeps the mixin block current. (`smarty-v2` is a deprecated alias of the version-independent `smarty@1` — same behaviour, misleading name.)
 
 After generating a module, apply the versioned CiviKitchen tooling layer:
