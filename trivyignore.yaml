@@ -243,6 +243,20 @@ vulnerabilities:
       buildkit rebuild; upstream re-locking guzzle >= 7.15.2 drops this.
     expired_at: 2026-11-01
 
+  - id: CVE-2026-67434
+    paths:
+      - "home/buildkit/buildkit/**"
+    statement: >-
+      php_codesniffer 3.13.5 in civicrm-buildkit's own vendor tree, pinned by
+      upstream's composer.lock. The OS command injection is in phpcs's own
+      argument handling, reached only when a developer runs buildkit's phpcs by
+      hand on a tree they mounted; nothing the images serve loads it. Scoped to
+      buildkit's clone on purpose: the toolbelt copy resolves >= 3.13.6 (floor
+      in install-dev-tools.sh) and a regression there must NOT be hidden — the
+      standalone flavors, which carry only that copy, scan clean for this ID.
+      Recheck after a buildkit rebuild; upstream re-locking >= 3.13.6 drops it.
+    expired_at: 2026-11-01
+
   - id: CVE-2026-69192
     statement: >-
       ip-address 10.2.0. Measured in the published images it is npm's own
