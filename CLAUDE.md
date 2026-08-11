@@ -12,6 +12,8 @@ release workflows eleven extension repos call. User-facing: `README.md`, `docs/`
 - `scaffold/` — host-side extension scaffolding, never in an image:
   `ckinit.php` and the `template/extension/` tree it stamps into consuming
   repos
+- `scripts/` — host-side helpers for working on THIS repo, never in an image
+  (`doctor.sh`, the host-prerequisite report `make doctor` runs)
 - `tests/` — this repo's own suites (ckinit, toolbelt/Dockerfile parity,
   image boot tests, e2e)
 

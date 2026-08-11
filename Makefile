@@ -18,7 +18,7 @@ include toolbelt/versions.env
 # and exits 0. Refuse loudly instead; `oneshell` arrived in the same release,
 # so its presence in .FEATURES is the exact capability probe.
 ifeq ($(filter oneshell,$(.FEATURES)),)
-$(error GNU Make >= 3.82 required: this make ($(MAKE_VERSION)) ignores .SHELLFLAGS, so recipes would run without 'set -eu -o pipefail')
+$(error GNU Make >= 3.82 required: this make ($(MAKE_VERSION)) ignores .SHELLFLAGS, so recipes would run without 'set -eu -o pipefail'. Run `bash scripts/doctor.sh` for this and every other host prerequisite at once)
 endif
 
 # `bash` resolved via PATH, not /bin/bash: macOS ships bash 3.2 frozen at that
@@ -46,6 +46,19 @@ CK_ACTIONLINT_VERSION := 1.7.12
 CK_ACTIONLINT_INSTALLER_SHA256 := 72fa3e45ac20f3c3a512d6747b4fcf719e21f890e8c43e78d48a41fdfb900c4e
 CK_ZIZMOR_VERSION := 1.29.0
 CK_JSCPD_VERSION := 5.0.14
+
+# zizmor and check-jsonschema are Python CLIs fetched on demand rather than
+# installed. uv and pipx both do that, so demanding one specific runner would
+# invent a prerequisite this repo does not have — GitHub's runners ship pipx,
+# a laptop is as likely to have uv. Same pinned versions either way; only the
+# pin syntax differs.
+ifeq ($(shell command -v uvx >/dev/null 2>&1 && echo yes),yes)
+pyrun_pinned = uvx $(1)@$(2)
+pyrun = uvx $(1)
+else
+pyrun_pinned = pipx run $(1)==$(2)
+pyrun = pipx run $(1)
+endif
 
 # shellcheck is fetched and pinned like the phars, because the sweep's verdict
 # depends on the version: 0.10 grew checks 0.9 never ran, so a laptop's distro
@@ -89,8 +102,8 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help test test-ckconform test-phpstan test-ckinit test-parity \
-	test-compose-isolation test-vendored-paths lint lint-shell \
+.PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-parity \
+	test-compose-isolation test-vendored-paths test-doctor lint lint-shell \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
 help: ## Show this help
@@ -103,7 +116,13 @@ help: ## Show this help
 
 # --- the fast loop -----------------------------------------------------------
 
-test: test-ckconform test-phpstan test-ckinit test-parity test-compose-isolation test-vendored-paths ## Run every fast test suite (no Docker)
+# Every host prerequisite in one pass, before a recipe fails on the first of
+# them. Deliberately not a prerequisite of lint/test: those must stay usable on
+# a host that is missing only what they do not touch.
+doctor: ## Report every missing host prerequisite in one pass
+	bash scripts/doctor.sh
+
+test: test-ckconform test-phpstan test-ckinit test-parity test-compose-isolation test-vendored-paths test-doctor ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -137,6 +156,12 @@ test-parity: ## Toolbelt components vs. Dockerfile COPY parity
 test-vendored-paths: ## .ckconform vendored_paths file-list exclusion
 	bash tests/toolbelt/test-vendored-paths.sh
 
+# A doctor that cannot fail is worse than none: it reports a healthy host while
+# the prerequisite it was written for is absent. The fixtures shadow PATH so
+# every verdict is exercised against a host that really lacks the tool.
+test-doctor: ## doctor verdicts against synthesised hosts
+	bash tests/toolbelt/test-doctor.sh
+
 # Two jobs of one run sharing a compose project means the second one's
 # `down -v` kills the first one's containers. Only reproducible where jobs
 # share a Docker daemon, i.e. never on the runner this suite runs on.
@@ -158,7 +183,7 @@ lint-shell: $(SHELLCHECK) ## shellcheck (pinned) at style level over every track
 # the job needs. Exemptions and their reasons live in zizmor.yml.
 lint-actions: $(CACHE)/actionlint ## actionlint + zizmor over the workflows
 	$(CACHE)/actionlint -color
-	pipx run zizmor==$(CK_ZIZMOR_VERSION) --no-online-audits --config zizmor.yml \
+	$(call pyrun_pinned,zizmor,$(CK_ZIZMOR_VERSION)) --no-online-audits --config zizmor.yml \
 	  .github/workflows scaffold/template/extension/.github/workflows
 
 # Informational, not part of `lint`: reports token-level clones so duplication
@@ -176,7 +201,7 @@ lint-php: ## php -l over every tracked PHP file
 # profile.schema.json is the canonical spec for the profile format, published
 # as @jfilter/civicrm-profile-schema.
 lint-schema: ## Validate every profile.json against the published schema
-	pipx run check-jsonschema \
+	$(call pyrun,check-jsonschema) \
 	  --schemafile packages/civicrm-profile-schema/profile.schema.json \
 	  docker/profiles/*/profile.json
 
