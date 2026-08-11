@@ -205,8 +205,11 @@ composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-co
 # floor — the question phpstan's phpVersion does not answer). Pinned to an
 # alpha deliberately: the last stable is 9.3.5 from 2019, which predates every
 # PHP version these extensions target. 10.x is the line that knows PHP 8.
+#
+# phpcs stays on the 3 line (civicrm/coder needs it, see SLEVOMAT_VERSION), but
+# below 3.13.6 the image scan fails on CVE-2026-67434 (OS command injection).
 composer global require --no-interaction --no-progress \
-    "squizlabs/php_codesniffer:^3" \
+    "squizlabs/php_codesniffer:^3.13.6" \
     "dealerdirect/phpcodesniffer-composer-installer:^1" \
     "phpcompatibility/php-compatibility:${PHPCOMPATIBILITY_VERSION}" \
     "slevomat/coding-standard:${SLEVOMAT_VERSION}" \
