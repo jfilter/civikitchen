@@ -82,7 +82,8 @@ list_files() { # $1 = php|js
     | grep -Ev "$ck_re_vendored" \
     | grep -Ev "$ck_re_minified" \
     | grep -Ev "$ck_re_civix" \
-    | grep -Ev "$ck_re_dao" || true; }
+    | grep -Ev "$ck_re_dao" \
+    | ck_drop_repo_vendored || true; }
 }
 
 # In paths mode, git ls-files scoped to those paths keeps every exclusion

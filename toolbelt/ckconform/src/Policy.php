@@ -36,6 +36,8 @@ final class Policy
         'hook_style' => 'ckconform: which hook declaration style this repo uses',
         'known_hooks' => 'ckconform: hook names this repo defines itself',
         'bundles' => 'ckconform: vendored front-end bundles that are not repo source',
+        'vendored_paths' => 'cklint + ckfmt + ckeslint: third-party source this repo carries verbatim, reason mandatory',
+        'smarty_skip_templates' => 'cksmarty: managed MessageTemplates this repo renders without Smarty, reason mandatory',
         'npm_license' => 'ckconform: accepted npm licence identifiers',
         // read by the ck* tools
         'mutation_min_msi' => 'ckmutate: mutation score floor (--min-msi)',
@@ -58,7 +60,7 @@ final class Policy
      *
      * @var list<string>
      */
-    public const REPEATABLE = ['lifecycle_log_ignore'];
+    public const REPEATABLE = ['lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates'];
 
     /** @var list<string> */
     public const PERCENT = ['min_coverage', 'mutation_min_msi', 'mutation_min_covered_msi'];

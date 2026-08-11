@@ -78,4 +78,14 @@ fi
 # The payload runs INSIDE cv's booted process, so it reads its arguments from
 # the environment — `cv scr` forwards no argv of its own, and runuser (the cv
 # wrapper's drop to www-data) keeps the environment.
-CK_SMARTY_ROOT="$PWD" CK_SMARTY_KEY="$key" exec cv scr "$payload"
+# MessageTemplates the repo renders itself (token substitution, not a Smarty
+# pass) are declared in .ckconform with a reason; compiling them proves nothing.
+ck_smarty_skip=''
+while IFS= read -r ck_line; do
+  [ -n "$ck_line" ] || continue
+  ck_line=${ck_line%% -- *}
+  [ -n "$ck_line" ] && ck_smarty_skip="${ck_smarty_skip:+$ck_smarty_skip,}$ck_line"
+done < <(ck_policy_all smarty_skip_templates 2>/dev/null || true)
+
+CK_SMARTY_ROOT="$PWD" CK_SMARTY_KEY="$key" CK_SMARTY_SKIP="$ck_smarty_skip" \
+  exec cv scr "$payload"

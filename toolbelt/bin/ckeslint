@@ -95,7 +95,8 @@ if [ "${#paths[@]}" -eq 0 ]; then
   # ls-files reports NOTHING — which this check would misread as "no JS".
   count=$({ ck_git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' 2>/dev/null \
     | grep -Ev "$ck_re_vendored" \
-    | grep -Ev "$ck_re_minified" || true; } | wc -l | tr -d ' ')
+    | grep -Ev "$ck_re_minified" \
+    | ck_drop_repo_vendored || true; } | wc -l | tr -d ' ')
   if [ "$count" = 0 ]; then
     echo "ckeslint: no JavaScript or TypeScript in this repo — nothing to lint."
     exit 0

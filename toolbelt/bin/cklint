@@ -92,6 +92,15 @@ fi
 # standard's deliberate warning tier (a call site only a human can judge) as
 # blocking as an error. The warnings stay in the report, they just don't fail.
 args=(-q --ignore='*/.civikitchen-siblings/*' --runtime-set ignore_warnings_on_exit 1)
+# Same idea for third-party source the repo carries verbatim (`vendored_paths`
+# in .ckconform): phpcs must not style-check code that has to stay identical to
+# its upstream.
+while IFS= read -r ck_vendored; do
+  [ -n "$ck_vendored" ] || continue
+  ck_vendored=${ck_vendored%% -- *}
+  ck_vendored=${ck_vendored%/}
+  [ -n "$ck_vendored" ] && args+=(--ignore="*/${ck_vendored}/*")
+done < <(ck_policy_all vendored_paths 2>/dev/null || true)
 if [ ! -f phpcs.xml ] && [ ! -f phpcs.xml.dist ]; then
   args+=(--standard=CiviKitchen --extensions=php)
 fi
@@ -135,7 +144,8 @@ else
       | grep -Ev "$ck_re_vendored" \
       | grep -Ev "$ck_re_civix" \
       | grep -Ev "$ck_re_dao" \
-      | grep -Ev '^tests/phpunit/bootstrap\.php$' || true; }
+      | grep -Ev '^tests/phpunit/bootstrap\.php$' \
+      | ck_drop_repo_vendored || true; }
   }
   mago_files=()
   if [ "$all" -eq 1 ]; then

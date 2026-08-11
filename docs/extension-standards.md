@@ -363,6 +363,28 @@ unless `--force` is explicitly supplied. For an existing extension,
   a lint job does not need to be able to push. Set it per job where a step
   genuinely writes (`packages: write` to push an image).
 
+### Third-party source a repo carries verbatim
+
+An extension sometimes ships someone else's code inside its own tree — a
+vendored upstream service in `.docker/`, say, kept byte-identical to the version
+that runs in production. The conventional `vendor/` and `node_modules/`
+directories are skipped by every ck* file list already; a path like
+`.docker/civiproxy/proxy/` is not, and linting it leaves exactly two bad
+options: a permanently red gate, or a formatter run that destroys the property
+that made the copy worth having.
+
+Declare it instead, with a reason, in `.ckconform`:
+
+```ini
+vendored_paths=.docker/civiproxy/proxy -- unmodified SYSTOPIA CiviProxy 1.0.0-beta, must stay byte-identical to production
+```
+
+`cklint` (both engines), `ckfmt` and `ckeslint` then skip it. The key is
+repeatable, one path per line, and each prefix is anchored at the repo root — it
+names one directory, not every directory that happens to share its name. It is
+not an escape hatch for the repo's own code: `phpstan` keeps its own `paths:`,
+and everything you actually wrote stays in scope.
+
 ### Known formatter/phpcs stand-offs
 
 `ckfmt` and `cklint` are tuned to agree, and where they cannot the ruleset

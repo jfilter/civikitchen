@@ -145,6 +145,16 @@ if ($key === '') {
   echo "cksmarty: no extension key — skipping the managed MessageTemplate bodies.\n";
 }
 else {
+  // A repo may render some of its own MessageTemplates itself — token
+  // substitution over `{placeholder}` rather than a Smarty pass — in which case
+  // the body is not Smarty source and compiling it proves nothing. Declared in
+  // .ckconform (CK_SMARTY_SKIP holds the managed NAMES, comma-separated) so the
+  // exception is written down with its reason, next to the code.
+  $skip = array_filter(array_map('trim', explode(',', (string) getenv('CK_SMARTY_SKIP'))));
+  if ($skip) {
+    echo 'cksmarty: skipping ' . count($skip) . " MessageTemplate(s) the repo renders without Smarty.\n";
+  }
+
   $managed = \Civi\Api4\Managed::get(FALSE)
     ->addSelect('entity_id', 'name')
     ->addWhere('module', '=', $key)
@@ -158,6 +168,9 @@ else {
   else {
     echo "cksmarty: compiling " . count($managed) . " managed MessageTemplate body/bodies ...\n";
     foreach ($managed as $record) {
+      if (in_array($record['name'], $skip, TRUE)) {
+        continue;
+      }
       $tpl = \Civi\Api4\MessageTemplate::get(FALSE)
         ->addSelect('msg_subject', 'msg_text', 'msg_html')
         ->addWhere('id', '=', $record['entity_id'])

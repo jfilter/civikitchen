@@ -95,8 +95,42 @@ ck_json_field() {
 # flags and in which generated code counts. What drifted between the three
 # copies was the patterns.
 ck_re_vendored='(^|/)(node_modules|vendor|dist|build|bower_components|packages|\.civikitchen-siblings)/'
+
+# Third-party source a repo carries verbatim outside those conventional
+# directories (a vendored upstream service in .docker/, say). Linting it means
+# either a permanently red gate or "fixing" code that has to stay byte-identical
+# to its upstream — so the repo declares it in .ckconform:
+#
+#   vendored_paths=.docker/civiproxy/proxy -- unmodified SYSTOPIA CiviProxy
+#
+# Echoes an alternation of the declared prefixes, or nothing when none are
+# declared; a caller greps with `grep -Ev "$(ck_re_repo_vendored)"` only when
+# the result is non-empty, because an empty pattern matches every line.
+ck_re_repo_vendored() {
+    local line path out=''
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        # The reason is mandatory; strip it the way the other policy readers do.
+        path=${line%% -- *}
+        path=${path%/}
+        [ -n "$path" ] || continue
+        # Anchored at the repo root: a declared prefix names one place, not
+        # every directory that happens to share its name.
+        out="${out:+$out|}^$(printf '%s' "$path" | sed 's/[.[\*^$()+?{|]/\\&/g')/"
+    done < <(ck_policy_all vendored_paths 2>/dev/null || true)
+    [ -n "$out" ] && printf '(%s)' "$out"
+}
 ck_re_minified='\.(min|bundle)\.(js|ts)$'
 # civix regenerates these verbatim; linting them puts every `civix upgrade` in a
 # fight with the gate.
 ck_re_civix='\.civix\.php$'
 ck_re_dao='(^|/)DAO/'
+
+# Filter for a file list on stdin: drops everything under a declared
+# vendored_paths prefix. A no-op when the repo declares none — an empty
+# `grep -Ev` pattern would otherwise drop every line.
+ck_drop_repo_vendored() {
+    local re
+    re=$(ck_re_repo_vendored)
+    if [ -n "$re" ]; then grep -Ev "$re" || true; else cat; fi
+}

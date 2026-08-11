@@ -90,7 +90,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: help test test-ckconform test-phpstan test-ckinit test-parity \
-	test-compose-isolation lint lint-shell \
+	test-compose-isolation test-vendored-paths lint lint-shell \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
 help: ## Show this help
@@ -103,7 +103,7 @@ help: ## Show this help
 
 # --- the fast loop -----------------------------------------------------------
 
-test: test-ckconform test-phpstan test-ckinit test-parity test-compose-isolation ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-parity test-compose-isolation test-vendored-paths ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -130,6 +130,12 @@ test-ckinit: ## ckinit seed/update/check integration checks
 # lands in git and silently never reaches the images the fleet's CI runs on.
 test-parity: ## Toolbelt components vs. Dockerfile COPY parity
 	bash tests/parity/test-toolbelt-parity.sh
+
+# `vendored_paths` decides what the linters never see; a regression there is
+# silent by construction — the run says "clean" about files it skipped, or
+# reformats third-party source that must stay byte-identical.
+test-vendored-paths: ## .ckconform vendored_paths file-list exclusion
+	bash tests/toolbelt/test-vendored-paths.sh
 
 # Two jobs of one run sharing a compose project means the second one's
 # `down -v` kills the first one's containers. Only reproducible where jobs
