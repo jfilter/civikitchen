@@ -758,6 +758,15 @@ jobs:
         if: failure()
         run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
 
+      # Job-scoped project names mean no later run's `down -v` ever finds this
+      # stack; leaked networks exhaust Docker's address pools on self-hosted runners.
+      - name: Tear down the stack
+        if: always()
+        run: |
+          docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker rm -f -v
+          docker network ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker network rm
+          docker volume ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker volume rm
+
   # --- Upgrade from the last release (opt-in via upgrade_from_last_release) --
   #
   # A fresh install runs install(); an existing site runs upgrade_NNNN(). CI
@@ -863,6 +872,15 @@ jobs:
       - name: App logs on failure
         if: failure()
         run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
+
+      # Job-scoped project names mean no later run's `down -v` ever finds this
+      # stack; leaked networks exhaust Docker's address pools on self-hosted runners.
+      - name: Tear down the stack
+        if: always()
+        run: |
+          docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker rm -f -v
+          docker network ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker network rm
+          docker volume ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker volume rm
 
   # --- Schema parity (opt-in via schema_parity) -----------------------------
   #
@@ -1038,6 +1056,15 @@ jobs:
         if: failure()
         run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
 
+      # Job-scoped project names mean no later run's `down -v` ever finds this
+      # stack; leaked networks exhaust Docker's address pools on self-hosted runners.
+      - name: Tear down the stack
+        if: always()
+        run: |
+          docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker rm -f -v
+          docker network ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker network rm
+          docker volume ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker volume rm
+
   # --- Mutation testing (opt-in via mutation) -------------------------------
   #
   # ckcoverage asks whether a line ran; this asks whether anything would have
@@ -1094,6 +1121,15 @@ jobs:
       - name: App logs on failure
         if: failure()
         run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
+
+      # Job-scoped project names mean no later run's `down -v` ever finds this
+      # stack; leaked networks exhaust Docker's address pools on self-hosted runners.
+      - name: Tear down the stack
+        if: always()
+        run: |
+          docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker rm -f -v
+          docker network ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker network rm
+          docker volume ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker volume rm
 
   # --- Core upgrade persistence (opt-in via core_upgrade_from) --------------
   #
@@ -1329,6 +1365,15 @@ jobs:
         if: failure()
         run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
 
+      # Job-scoped project names mean no later run's `down -v` ever finds this
+      # stack; leaked networks exhaust Docker's address pools on self-hosted runners.
+      - name: Tear down the stack
+        if: always()
+        run: |
+          docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker rm -f -v
+          docker network ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker network rm
+          docker volume ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker volume rm
+
   # --- Compatibility matrix (opt-in via matrix_images) ----------------------
   #
   # Skipped entirely when matrix_images is empty: a skipped job costs no
@@ -1435,6 +1480,15 @@ jobs:
       - name: App logs on failure
         if: failure()
         run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
+
+      # Job-scoped project names mean no later run's `down -v` ever finds this
+      # stack; leaked networks exhaust Docker's address pools on self-hosted runners.
+      - name: Tear down the stack
+        if: always()
+        run: |
+          docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker rm -f -v
+          docker network ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker network rm
+          docker volume ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker volume rm
 
   # --- Browser tests (opt-in via playwright) --------------------------------
   #
@@ -1591,3 +1645,12 @@ jobs:
       - name: App logs on failure
         if: failure()
         run: docker compose -f "$CK_COMPOSE_FILE" logs app | tail -200
+
+      # Job-scoped project names mean no later run's `down -v` ever finds this
+      # stack; leaked networks exhaust Docker's address pools on self-hosted runners.
+      - name: Tear down the stack
+        if: always()
+        run: |
+          docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker rm -f -v
+          docker network ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker network rm
+          docker volume ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker volume rm
