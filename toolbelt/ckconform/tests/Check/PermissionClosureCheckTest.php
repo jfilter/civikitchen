@@ -94,6 +94,18 @@ final class PermissionClosureCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
     }
 
+    public function testCommaSeparatedPhpPermissionExpressionIsSplit(): void
+    {
+        $context = $this->repo([
+            'myext.php' => self::HOOK,
+            'managed/Thing.mgd.php' => <<<'PHP'
+                <?php
+                return [['permission' => 'administer MyExt,view all contacts']];
+                PHP,
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
     public function testNonLiteralPermissionsAreIgnored(): void
     {
         $context = $this->repo([

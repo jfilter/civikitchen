@@ -60,6 +60,13 @@ ck_policy_load() {
 # job is to check that the reason is there.
 ck_policy_all() { "$(_ck_conform_bin)" --policy "$1"; }
 
+# What a release archive leaves out, `dir <name>` / `file <name>` per line: the
+# central list ± this repo's dist_exclude/dist_include, already resolved. Read
+# through ckconform for the reason .ckconform is — one owner, in the language
+# that owns the list (toolbelt/ckconform/src/DistPaths.php). Non-zero when a
+# declared value is not a repo-relative path.
+ck_dist_paths() { "$(_ck_conform_bin)" --dist-paths; }
+
 # --- info.xml and composer.json ----------------------------------------------
 # XML is parsed as XML and JSON as JSON. The line-oriented shortcuts that
 # ckconform was rewritten in PHP to get rid of — a <license> spanning two lines

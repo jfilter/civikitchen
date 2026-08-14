@@ -54,6 +54,8 @@ final class HookStyleCheck implements Check
         'config',
         // Hooks whose return value is the contract; a listener can only
         // approximate that through event mutation.
+        'permission',
+        'check',
         'validateForm',
         'dashboard',
         'summary',

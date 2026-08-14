@@ -145,12 +145,57 @@ abstract class CheckTestCase extends TestCase
      * no global config, stays green — which is the worst version of a flaky
      * test. Point both the global and system config at nowhere instead.
      */
-    protected function git(string $args): void
+    protected function git(string $args, string $env = ''): void
     {
         exec(
-            'GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null git -C '
+            'GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null ' . $env . 'git -C '
             . escapeshellarg((string) $this->dir) . ' ' . $args . ' 2>/dev/null'
         );
+    }
+
+    /**
+     * Stage everything and commit it, optionally dated. The identity is passed
+     * per call because the fixture has no config to read one from, and the date
+     * because the age-based rules need history a test cannot wait for.
+     *
+     * @param string $date an ISO 8601 timestamp — git rejects approxidate
+     *                     ('5 days ago') in the date environment variables
+     */
+    protected function gitCommit(string $message, string $date = ''): void
+    {
+        $env = $date === ''
+            ? ''
+            : 'GIT_AUTHOR_DATE=' . escapeshellarg($date) . ' GIT_COMMITTER_DATE=' . escapeshellarg($date) . ' ';
+        $this->git('add -A');
+        $this->git(
+            '-c user.name=ckconform -c user.email=ckconform@example.invalid commit -q -m '
+            . escapeshellarg($message),
+            $env,
+        );
+    }
+
+    protected function gitTag(string $tag): void
+    {
+        $this->git('tag ' . escapeshellarg($tag));
+    }
+
+    /**
+     * Make the fixture look like a truncated clone — what `.git/shallow` means
+     * to git, and the state a default actions/checkout leaves behind.
+     */
+    protected function gitShallow(): void
+    {
+        file_put_contents($this->dir . '/.git/shallow', '');
+    }
+
+    /** Write a file into the fixture after repo() built it. */
+    protected function write(string $path, string $contents): void
+    {
+        $full = $this->dir . '/' . $path;
+        if (!is_dir(dirname($full))) {
+            mkdir(dirname($full), 0777, true);
+        }
+        file_put_contents($full, $contents);
     }
 
     private function deleteTree(string $dir): void

@@ -296,9 +296,18 @@ final class PermissionClosureCheck implements Check
             }
 
             foreach ($permissions as $permission) {
-                $used[$permission] ??= [];
-                if (!in_array($file, $used[$permission], true)) {
-                    $used[$permission][] = $file;
+                // CiviCRM accepts comma/semicolon permission expressions in
+                // more than menu XML (notably API action metadata). Closure is
+                // about every leaf permission, independent of AND/OR shape.
+                foreach (preg_split('/[;,]/', $permission) ?: [] as $part) {
+                    $part = trim($part);
+                    if ($part === '') {
+                        continue;
+                    }
+                    $used[$part] ??= [];
+                    if (!in_array($file, $used[$part], true)) {
+                        $used[$part][] = $file;
+                    }
                 }
             }
         }

@@ -122,6 +122,17 @@ final class Context
         return $last === '' ? null : $last;
     }
 
+    /** The `<version>` declared in info.xml, '' when absent. */
+    public function infoVersion(): string
+    {
+        $info = $this->infoXml();
+        if ($info === null || !isset($info->version)) {
+            return '';
+        }
+
+        return trim((string) $info->version);
+    }
+
     /** The `<license>` declared in info.xml, '' when absent. */
     public function infoLicense(): string
     {
@@ -360,6 +371,96 @@ final class Context
         }
 
         return false;
+    }
+
+    /**
+     * The shared reusable release workflow, by the filename repos name in
+     * `uses:` — the release-side counterpart to SHARED_CI.
+     */
+    public const SHARED_RELEASE = 'extension-release.yml';
+
+    /**
+     * Does any workflow hand releasing off to the shared pipeline? A repo that
+     * calls it produces a tagged, verified archive; one that does not offers a
+     * consumer nothing but a branch.
+     */
+    public function callsSharedRelease(): bool
+    {
+        foreach ($this->workflows() as $workflow) {
+            if (str_contains($this->read($workflow) ?? '', self::SHARED_RELEASE)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The newest `v*` tag reachable from HEAD, null when there is none.
+     *
+     * Reachable, not "newest by version": what the release checks compare
+     * against is the last release cut on this line of history. A checkout made
+     * without tags answers null too, so callers ask isShallowClone() and treat
+     * a bare null as "cannot tell" rather than "never released".
+     */
+    public function newestTag(): ?string
+    {
+        $tag = trim((string) $this->git(['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*']));
+
+        return $tag === '' ? null : $tag;
+    }
+
+    /**
+     * A clone whose history is truncated — `actions/checkout` makes one by
+     * default (depth 1). Anything reasoning about commits since a tag reports
+     * itself unevaluated here instead of finding nothing.
+     */
+    public function isShallowClone(): bool
+    {
+        return trim((string) $this->git(['rev-parse', '--is-shallow-repository'])) === 'true';
+    }
+
+    /**
+     * Commits in `<ref>..HEAD`, newest first, with committer date and the files
+     * each touched. Null when git could not answer at all — an unreadable
+     * history is not an empty one.
+     *
+     * Merge commits carry no file list (`--name-only` shows no diff for them),
+     * which is right: the commits they merge are listed in their own right.
+     *
+     * @return list<array{hash: string, date: string, files: list<string>}>|null
+     */
+    public function commitsSince(string $ref): ?array
+    {
+        // Record-separated rather than one commit per line: a commit's file
+        // list is lines too, and \x1e occurs in neither.
+        $output = $this->git([
+            '-c', 'core.quotePath=false',
+            'log', '--format=%x1e%H %cI', '--name-only', $ref . '..HEAD',
+        ]);
+        if ($output === null) {
+            return null;
+        }
+
+        $commits = [];
+        foreach (explode("\x1e", $output) as $record) {
+            $lines = explode("\n", trim($record, "\n"));
+            $header = trim((string) array_shift($lines));
+            if ($header === '') {
+                continue;
+            }
+            [$hash, $date] = array_pad(explode(' ', $header, 2), 2, '');
+            $commits[] = [
+                'hash' => $hash,
+                'date' => trim($date),
+                'files' => array_values(array_filter(
+                    array_map('trim', $lines),
+                    static fn (string $file): bool => $file !== '',
+                )),
+            ];
+        }
+
+        return $commits;
     }
 
     public function isTracked(string $relative): bool

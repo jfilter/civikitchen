@@ -25,13 +25,15 @@
 # actually work against a real CiviCRM. Notes and tags are the easy half, and
 # `gh release --generate-notes` already does them — see docs/extension-releases.md.
 #
-# WHAT IS EXCLUDED, AND WHERE THAT LIVES. The exclude list below is central, not
-# per-repo .gitattributes `export-ignore`: .gitattributes is a template-MANAGED
-# file, so editing it turns every conforming repo's drift job red until someone
-# runs `ckinit --update` there — a fleet round to ship packaging. It would also
-# put the list in as many copies as there are repos, which is the state the
-# shared tooling exists to end. A repo that needs more (or less) declares it
-# where every other per-repo policy is declared, in .ckconform:
+# WHAT IS EXCLUDED, AND WHERE THAT LIVES. The exclude list is central and lives
+# in ckconform (src/DistPaths.php, read here through `ckconform --dist-paths`),
+# not in per-repo .gitattributes `export-ignore`: .gitattributes is a
+# template-MANAGED file, so editing it turns every conforming repo's drift job
+# red until someone runs `ckinit --update` there — a fleet round to ship
+# packaging. It would also put the list in as many copies as there are repos,
+# which is the state the shared tooling exists to end. A repo that needs more
+# (or less) declares it where every other per-repo policy is declared, in
+# .ckconform:
 #
 #     dist_exclude=build,docs/internal   # additionally kept out of the zip
 #     dist_include=tests                 # kept IN despite the central list
@@ -83,73 +85,29 @@ die() {
 # --- what a release archive must not contain --------------------------------
 # Directory-shaped entries are matched as a whole path segment by `verify`, so
 # a nested copy is caught too; the build only excludes them at the root, which
-# is where the template puts them. Deliberately NOT here: vendor/ (a repo that
-# commits it does so because the site needs it at runtime) and dist/ (a frontend
-# build IS the shipped artifact).
-DIST_EXCLUDE_DIRS=(
-  .github
-  .docker
-  .claude
-  tests
-  node_modules
-)
-DIST_EXCLUDE_FILES=(
-  .gitattributes
-  .gitignore
-  .editorconfig
-  .ckconform
-  .phpunit.result.cache
-  phpcs.xml
-  phpcs.xml.dist
-  phpstan.neon
-  phpstan.neon.dist
-  phpstanBootstrap.php
-  phpunit.xml
-  phpunit.xml.dist
-  playwright.config.ts
-  package-lock.json
-  bun.lock
-  bun.lockb
-  tsconfig.json
-)
+# is where the template puts them.
+DIST_EXCLUDE_DIRS=()
+DIST_EXCLUDE_FILES=()
 
 # Central list ± the repo's .ckconform, as two global arrays.
 #
-# The .ckconform read is ck_policy_load's, not this tool's own any more: of the
-# five shell readers of that file, this was the only one that stripped the
-# mandatory ' -- <reason>'. The parser now lives in one place, in the language
-# that owns the format — toolbelt/ckconform/src/Policy.php.
+# Neither the list nor the .ckconform read is this tool's own: both come from
+# ckconform, which owns them in the language that owns them —
+# toolbelt/ckconform/src/DistPaths.php, next to the Policy parser that ended the
+# five disagreeing shell readers of .ckconform. A second copy of the exclusion
+# list here would drift, and its drift ships dev files to production sites.
 resolve_excludes() {
-  local item keep
-  local -a extra=() included=()
-  ck_policy_load
-  IFS=',' read -ra extra <<< "${CK_POLICY_DIST_EXCLUDE:-}"
-  IFS=',' read -ra included <<< "${CK_POLICY_DIST_INCLUDE:-}"
+  local line paths
+  paths=$(ck_dist_paths) || die "could not read the release exclusion list"
 
-  for item in ${extra[@]+"${extra[@]}"}; do
-    item=$(printf '%s' "$item" | tr -d '[:space:]')
-    case "$item" in
-      '') continue ;;
-      /*|*..*) die "dist_exclude must be a repo-relative path: $item" ;;
-      */) DIST_EXCLUDE_DIRS+=("${item%/}") ;;
-      *) DIST_EXCLUDE_FILES+=("$item") ;;
+  while IFS= read -r line; do
+    case "$line" in
+      'dir '*) DIST_EXCLUDE_DIRS+=("${line#dir }") ;;
+      'file '*) DIST_EXCLUDE_FILES+=("${line#file }") ;;
     esac
-  done
+  done <<< "$paths"
 
-  for keep in ${included[@]+"${included[@]}"}; do
-    keep=$(printf '%s' "$keep" | tr -d '[:space:]')
-    [ -n "$keep" ] || continue
-    keep=${keep%/}
-    local -a kept_dirs=() kept_files=()
-    for item in ${DIST_EXCLUDE_DIRS[@]+"${DIST_EXCLUDE_DIRS[@]}"}; do
-      [ "$item" = "$keep" ] || kept_dirs+=("$item")
-    done
-    for item in ${DIST_EXCLUDE_FILES[@]+"${DIST_EXCLUDE_FILES[@]}"}; do
-      [ "$item" = "$keep" ] || kept_files+=("$item")
-    done
-    DIST_EXCLUDE_DIRS=(${kept_dirs[@]+"${kept_dirs[@]}"})
-    DIST_EXCLUDE_FILES=(${kept_files[@]+"${kept_files[@]}"})
-  done
+  [ "${#DIST_EXCLUDE_DIRS[@]}" -gt 0 ] || die "the release exclusion list came back empty"
 }
 
 # --- context ----------------------------------------------------------------

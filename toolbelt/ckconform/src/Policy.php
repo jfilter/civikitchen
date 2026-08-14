@@ -39,12 +39,14 @@ final class Policy
         'vendored_paths' => 'cklint + ckfmt + ckeslint: third-party source this repo carries verbatim, reason mandatory',
         'smarty_skip_templates' => 'cksmarty: managed MessageTemplates this repo renders without Smarty, reason mandatory',
         'npm_license' => 'ckconform: accepted npm licence identifiers',
+        'release' => "ckconform: 'none -- <reason>' for a repo that deliberately cuts no releases",
+        'max_unreleased_days' => 'ckconform: days of unreleased shipped changes before it is reported',
         // read by the ck* tools
         'mutation_min_msi' => 'ckmutate: mutation score floor (--min-msi)',
         'mutation_min_covered_msi' => 'ckmutate: covered-code mutation floor (--min-covered-msi)',
         'mutation_paths' => 'ckmutate: what to mutate, comma-separated',
-        'dist_exclude' => 'ckrelease: additionally kept out of the release zip',
-        'dist_include' => 'ckrelease: kept IN the zip despite the central exclude list',
+        'dist_exclude' => 'ckrelease + ckconform: additionally kept out of the release zip',
+        'dist_include' => 'ckrelease + ckconform: kept IN the zip despite the central exclude list',
         'lifecycle_log_ignore' => 'cklifecycle: log patterns to ignore, reason mandatory',
         // read by ckinit
         'template_custom' => 'ckinit: template-managed files this repo owns instead',

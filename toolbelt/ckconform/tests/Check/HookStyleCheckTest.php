@@ -64,6 +64,10 @@ final class HookStyleCheckTest extends CheckTestCase
                 }
                 function fixture_civicrm_container($container) {
                 }
+                function fixture_civicrm_permission(&$permissions) {
+                }
+                function fixture_civicrm_check(&$messages) {
+                }
                 function fixture_civicrm_validateForm($formName, &$fields, &$files, &$form, &$errors) {
                 }
                 PHP,
