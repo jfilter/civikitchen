@@ -82,7 +82,7 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
         $context = $this->repo([
             'CRM/Fixture/Action/Optional.php' => <<<'PHP'
 <?php
-// ckconform-ignore optional-civirules -- adapter is inert when CiviRules is absent
+// ckconform-optional civirules -- adapter is inert when CiviRules is absent
 if (class_exists('CRM_Civirules_Action')) {
     /** Optional adapter. */
     final class CRM_Fixture_Action_Optional extends CRM_Civirules_Action {}
@@ -105,7 +105,7 @@ PHP,
         $context = $this->repo([
             'CRM/Fixture/Action/Unsafe.php' => <<<'PHP'
 <?php
-// ckconform-ignore optional-civirules -- unrelated availability probe
+// ckconform-optional civirules -- unrelated availability probe
 if (class_exists('CRM_Civirules_Action')) {}
 class CRM_Fixture_Action_Unsafe extends CRM_Civirules_Action {}
 PHP,

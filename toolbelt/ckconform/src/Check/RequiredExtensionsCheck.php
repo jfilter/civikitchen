@@ -112,7 +112,7 @@ final class RequiredExtensionsCheck implements Check
                 continue;
             }
             $optionalAdapter = preg_match(
-                '/^[ \t]*\/\/ ckconform-ignore optional-civirules -- [^\r\n]+\R'
+                '/^[ \t]*\/\/ ckconform-optional civirules -- [^\r\n]+\R'
                 . '[ \t]*if\s*\(\s*class_exists\(\s*[\'\"]CRM_Civirules(?:Actions)?_[^\'\"]*[\'\"]\s*\)\s*\)\s*\{'
                 . '\s*(?:\/\*\*[\s\S]*?\*\/\s*)?(?:final\s+)?class\s+\S+\s+extends\s+CRM_Civirules(?:Actions)?_/m',
                 $contents,
