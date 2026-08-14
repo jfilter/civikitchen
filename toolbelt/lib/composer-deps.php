@@ -16,9 +16,24 @@ use ShipMonk\ComposerDependencyAnalyser\Config\Configuration;
  *
  * A repo with more to say ships its own composer-dependency-analyser.php.
  */
-return (new Configuration())
-  ->ignoreUnknownClassesRegex('~^(CRM_|Civi\\\\|CiviCRM)~')
-  ->ignoreUnknownFunctionsRegex('~^(civicrm_|civi)~')
+$configuration = (new Configuration())
+  ->ignoreUnknownClassesRegex('~^(CRM_|Civi(?:\\\\|$)|CiviCRM|CiviMix\\\\|GuzzleHttp\\\\|Psr\\\\)~')
+  ->ignoreUnknownFunctionsRegex('~^(civicrm_|civi|CiviMix\\\\)~')
   // Paths are validated against the CWD, so a shared config cannot name
   // directories (node_modules) that only some repos have.
   ->disableReportingUnmatchedIgnores();
+
+// A CiviCRM extension commonly maps the legacy PSR-0 `CRM_` prefix to `.`.
+// ComposerDependencyAnalyser expands that autoload root recursively; after
+// `composer install` this otherwise classifies vendor/ (including PHPUnit) as
+// the extension's production code and reports every dev package as used in
+// production. The directory is optional on a dependency-free checkout, and
+// Configuration validates exclusions eagerly, hence the existence guard.
+if (is_dir('vendor')) {
+  $configuration->addPathToExclude('vendor');
+}
+if (is_dir('tests')) {
+  $configuration->addPathToScan('tests', true);
+}
+
+return $configuration;
