@@ -101,13 +101,28 @@ final class RequiredExtensionsCheck implements Check
     private function extendsCiviRules(Context $context): bool
     {
         foreach ($context->trackedUnder('', ['.php']) as $file) {
+            // Static-analysis stubs describe optional symbols but are never
+            // loaded by CiviCRM and therefore cannot create a runtime
+            // dependency.
+            if (str_starts_with($file, 'phpstan-stubs/')) {
+                continue;
+            }
             $contents = $context->read($file);
             if ($contents === null) {
                 continue;
             }
+            $optionalAdapter = preg_match(
+                '/^[ \t]*\/\/ ckconform-ignore optional-civirules -- [^\r\n]+\R'
+                . '[ \t]*if\s*\(\s*class_exists\(\s*[\'\"]CRM_Civirules(?:Actions)?_[^\'\"]*[\'\"]\s*\)\s*\)\s*\{'
+                . '\s*(?:\/\*\*[\s\S]*?\*\/\s*)?(?:final\s+)?class\s+\S+\s+extends\s+CRM_Civirules(?:Actions)?_/m',
+                $contents,
+            ) === 1;
             if (
-                str_contains($contents, 'extends CRM_Civirules_')
-                || str_contains($contents, 'extends CRM_CivirulesActions_')
+                !$optionalAdapter
+                && (
+                    str_contains($contents, 'extends CRM_Civirules_')
+                    || str_contains($contents, 'extends CRM_CivirulesActions_')
+                )
             ) {
                 return true;
             }

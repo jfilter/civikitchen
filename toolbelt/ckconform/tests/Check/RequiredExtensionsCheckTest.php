@@ -77,6 +77,50 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
         $this->assertFails($this->run_(new RequiredExtensionsCheck(), $context), 'org.civicoop.civirules');
     }
 
+    public function testAllowsAnExplicitlyAnnotatedAndGuardedOptionalCiviRulesAdapter(): void
+    {
+        $context = $this->repo([
+            'CRM/Fixture/Action/Optional.php' => <<<'PHP'
+<?php
+// ckconform-ignore optional-civirules -- adapter is inert when CiviRules is absent
+if (class_exists('CRM_Civirules_Action')) {
+    /** Optional adapter. */
+    final class CRM_Fixture_Action_Optional extends CRM_Civirules_Action {}
+}
+PHP,
+        ], git: true);
+        $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $context));
+    }
+
+    public function testGuardWithoutExplicitAnnotationStillRequiresCiviRules(): void
+    {
+        $context = $this->repo([
+            'CRM/Fixture/Action/Optional.php' => "<?php\nif (class_exists('CRM_Civirules_Action')) {\nclass X extends CRM_Civirules_Action {}\n}\n",
+        ], git: true);
+        $this->assertFails($this->run_(new RequiredExtensionsCheck(), $context), 'org.civicoop.civirules');
+    }
+
+    public function testAnnotationWithoutAnImmediateGuardStillRequiresCiviRules(): void
+    {
+        $context = $this->repo([
+            'CRM/Fixture/Action/Unsafe.php' => <<<'PHP'
+<?php
+// ckconform-ignore optional-civirules -- unrelated availability probe
+if (class_exists('CRM_Civirules_Action')) {}
+class CRM_Fixture_Action_Unsafe extends CRM_Civirules_Action {}
+PHP,
+        ], git: true);
+        $this->assertFails($this->run_(new RequiredExtensionsCheck(), $context), 'org.civicoop.civirules');
+    }
+
+    public function testPhpstanStubsDoNotCreateRuntimeDependencies(): void
+    {
+        $context = $this->repo([
+            'phpstan-stubs/CRM_Civirules_Action.php' => "<?php\nabstract class Stub extends CRM_Civirules_Action {}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $context));
+    }
+
     /**
      * The regression this port exists for: an `<ext>[^<]+</ext>` regex could not
      * see a declaration whose element carries an attribute, so a correctly
