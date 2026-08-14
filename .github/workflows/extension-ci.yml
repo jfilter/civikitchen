@@ -1456,22 +1456,33 @@ jobs:
       # One compose project per job — see the note in `ci`.
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-compat-${{ strategy.job-index }}
     steps:
-      # The private-dependency inputs are wired into the `ci` job only, and
-      # this job boots the same stack from a plain checkout: without vendor/ or
-      # the sibling it fails during the boot, in a way that reads like a broken
-      # extension rather than a missing prerequisite. Say so instead — and say
-      # it rather than skipping the job, because an opt-in check that quietly
-      # tests nothing is the failure mode this file argues against everywhere
-      # else. Wiring the extras up is a later step, not a reason to wait.
-      - name: Reject the unsupported private-dependency combination
-        if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
+      # A sibling needs an additional mount/enable override which this lean
+      # compatibility job does not own. Composer dependencies do not: install
+      # them into the checkout before the ordinary bind-mounted stack boots.
+      - name: Reject the unsupported sibling dependency
+        if: ${{ inputs.sibling_repo != '' }}
         run: |
-          echo "composer_install / sibling_repo are wired into the ci job only — this job would boot the extension without them. Turn this job off, or open an issue to have it wired up too." >&2
+          echo "sibling_repo is wired into the ci job only — the compatibility stack would boot without the sibling. Turn this job off, or add sibling support here." >&2
           exit 1
 
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+
+      - name: Composer install (private packages over SSH)
+        if: ${{ inputs.composer_install }}
+        env:
+          CK_COMPOSER_DEPLOY_KEY: ${{ secrets.composer_deploy_key }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CK_COMPOSER_DEPLOY_KEY:-}" ]; then
+            mkdir -p ~/.ssh && chmod 700 ~/.ssh
+            printf '%s\n' "$CK_COMPOSER_DEPLOY_KEY" > ~/.ssh/civikitchen_composer
+            chmod 600 ~/.ssh/civikitchen_composer
+            ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+            printf 'Host github.com\n  IdentityFile ~/.ssh/civikitchen_composer\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          fi
+          composer install --no-dev --no-interaction --no-progress
 
       - name: Validate inputs
         run: |

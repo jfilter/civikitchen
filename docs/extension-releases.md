@@ -64,6 +64,8 @@ file can be promoted into the template later, when it has earned it.
 | `extra_extensions` | `''` | comma-separated registry keys to install into the smoke site first, for a `<requires>` on something core does not bundle |
 | `require_changelog` | `false` | fail when the repo has no `CHANGELOG.md` at all |
 | `draft` | `false` | publish the GitHub release as a draft |
+| `composer_install` | `false` | install the lockfile with `--no-dev` and bundle the generated `vendor/` tree |
+| `composer_deploy_key` | unset | optional read-only SSH key for private Composer packages; pass it explicitly under `secrets:` |
 
 ## Cutting one
 
@@ -81,7 +83,9 @@ smoke test → `gh release create --generate-notes` with the zip and its
 
 Locally, `ckrelease dist` produces exactly the same archive from the same
 commit — `git archive` is deterministic — so "what will ship" is inspectable
-before anything is pushed.
+before anything is pushed. A caller with `composer_install: true` additionally
+materializes the locked production dependencies on the runner and archives a
+temporary Git tree containing them; the release tag itself is not changed.
 
 ## What the archive contains
 
@@ -95,10 +99,17 @@ phpcs.xml(.dist) phpstan.neon(.dist) phpstanBootstrap.php phpunit.xml(.dist)
 playwright.config.ts package-lock.json bun.lock(b) tsconfig.json
 ```
 
-Two things are deliberately *not* on that list. `vendor/` — a repo that commits
-it does so because the site needs it at runtime, and a packager that silently
-drops runtime code is worse than one that ships a test file. And `dist/` — for a
-frontend-building extension the committed build *is* the shipped artifact.
+Two things are deliberately *not* on that list. `vendor/` — a repo either
+commits it because the site needs it at runtime, or sets `composer_install: true`
+so the release workflow bundles the locked production tree. A packager that
+silently drops runtime code is worse than one that ships a test file. And
+`dist/` — for a frontend-building extension the committed build *is* the
+shipped artifact.
+
+When `composer_install` is enabled, package-level copies of the same excluded
+development paths (for example `vendor/acme/package/.github/`) are removed
+before the temporary tree is archived. The resulting ZIP still goes through
+the ordinary `ckrelease verify` and fresh-install smoke test.
 
 Because the archive is built from tracked files, everything a `.gitignore`
 already covers is absent for free; the list above is only about files that are

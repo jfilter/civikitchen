@@ -57,6 +57,20 @@ on:
         description: Runner label override for all release jobs
         type: string
         default: ''
+      composer_install:
+        description: >-
+          Install locked production dependencies and include the generated
+          vendor/ tree in the archive. Use when vendor/ is not committed but
+          the extension requires vendor/autoload.php at runtime.
+        type: boolean
+        default: false
+
+    secrets:
+      composer_deploy_key:
+        description: >-
+          Optional read-only deploy key for private Composer packages. Used on
+          the runner only and never copied into the archive or smoke container.
+        required: false
 
 permissions:
   contents: read
@@ -73,6 +87,7 @@ jobs:
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
       CK_EXTRA_EXTENSIONS: ${{ inputs.extra_extensions }}
       CK_REQUIRE_CHANGELOG: ${{ inputs.require_changelog }}
+      CK_RELEASE_REF: HEAD
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -98,6 +113,46 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
 
+      - name: Bundle locked production dependencies
+        if: ${{ inputs.composer_install }}
+        env:
+          CK_COMPOSER_DEPLOY_KEY: ${{ secrets.composer_deploy_key }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CK_COMPOSER_DEPLOY_KEY:-}" ]; then
+            mkdir -p ~/.ssh && chmod 700 ~/.ssh
+            printf '%s\n' "$CK_COMPOSER_DEPLOY_KEY" > ~/.ssh/civikitchen_composer
+            chmod 600 ~/.ssh/civikitchen_composer
+            ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+            printf 'Host github.com\n  IdentityFile ~/.ssh/civikitchen_composer\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          fi
+
+          # The lockfile is the dependency input; do not update it and do not
+          # bypass its PHP requirements. Repositories whose runtime PHP is newer
+          # than the runner declare config.platform.php, as in extension CI.
+          composer install --no-dev --no-interaction --no-progress
+          test -f vendor/autoload.php \
+            || { echo 'composer_install produced no vendor/autoload.php' >&2; exit 1; }
+
+          # Apply ckrelease's one authoritative exclusion policy to development
+          # directories and config files nested inside Composer packages.
+          while IFS=' ' read -r kind relpath; do
+            case "$kind" in
+              dir)
+                find vendor -type d -path "*/$relpath" -prune -exec rm -rf -- {} +
+                ;;
+              file)
+                find vendor -type f -path "*/$relpath" -delete
+                ;;
+            esac
+          done < <(bash .civikitchen-ci/toolbelt/bin/ckconform --dist-paths)
+
+          # ckrelease archives Git objects, never a mutable working tree. Add
+          # vendor/ only to the disposable Actions index and archive that tree;
+          # the pushed tag itself remains untouched.
+          git add -f vendor
+          echo "CK_RELEASE_REF=$(git write-tree)" >> "$GITHUB_ENV"
+
       - name: Build the distribution archive
         id: build
         env:
@@ -114,7 +169,7 @@ jobs:
           # dist runs the consistency check itself and refuses to build without
           # it, so there is no way to publish an archive that skipped it.
           bash .civikitchen-ci/toolbelt/bin/ckrelease dist \
-            --version "$GITHUB_REF_NAME" --ref HEAD --output "$CK_DIST" "${args[@]}"
+            --version "$GITHUB_REF_NAME" --ref "$CK_RELEASE_REF" --output "$CK_DIST" "${args[@]}"
           {
             echo "key=$(bash .civikitchen-ci/toolbelt/bin/ckrelease info key)"
             echo "zip=$CK_DIST/$(bash .civikitchen-ci/toolbelt/bin/ckrelease info dist-name)"
