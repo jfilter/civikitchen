@@ -69,7 +69,15 @@ declared_format() {
   ' info.xml
 }
 
-scaffold_file() { ls -1 ./*.civix.php 2>/dev/null | head -1; }
+scaffold_file() {
+  local file
+  for file in ./*.civix.php; do
+    if [ -f "$file" ]; then
+      printf '%s\n' "$file"
+      return
+    fi
+  done
+}
 
 declared="$(declared_format)"
 current="$(current_format)"
