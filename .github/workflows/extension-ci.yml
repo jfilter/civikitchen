@@ -124,6 +124,14 @@ on:
           demo login, then `npm run test:e2e`. Slow — scheduled caller only.
         type: boolean
         default: false
+      extra_phpunit_config:
+        description: >-
+          Run one additional PHPUnit suite with this repository-relative XML
+          configuration after the normal headless coverage suite. Useful for
+          database-free or differently bootstrapped tests that still need the
+          materialized vendor directory or sibling extension. Empty skips it.
+        type: string
+        default: ''
       runs_on:
         description: >-
           Runner label for all jobs. Resolution: this input, else the caller's
@@ -335,6 +343,7 @@ jobs:
       - name: Validate inputs
         env:
           CK_SIBLING_REPO: ${{ inputs.sibling_repo }}
+          CK_EXTRA_PHPUNIT_CONFIG: ${{ inputs.extra_phpunit_config }}
         run: |
           [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
             || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
@@ -342,6 +351,12 @@ jobs:
           # be owner/repo, because it becomes a checkout target and a path.
           [[ -z "$CK_SIBLING_REPO" || "$CK_SIBLING_REPO" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
             || { echo "invalid sibling_repo (expected owner/repo): $CK_SIBLING_REPO" >&2; exit 1; }
+          [[ -z "$CK_EXTRA_PHPUNIT_CONFIG" || \
+             ( "$CK_EXTRA_PHPUNIT_CONFIG" =~ ^[A-Za-z0-9_./-]+$ &&
+               "$CK_EXTRA_PHPUNIT_CONFIG" != /* &&
+               "$CK_EXTRA_PHPUNIT_CONFIG" != *../* &&
+               "$CK_EXTRA_PHPUNIT_CONFIG" != ../* ) ]] \
+            || { echo "invalid extra_phpunit_config: $CK_EXTRA_PHPUNIT_CONFIG" >&2; exit 1; }
 
       # --- Frontend steps (opt-in via npm_ci / js_tests / bun) --------------
       #
@@ -609,6 +624,16 @@ jobs:
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && ckcoverage tests/phpunit"
+
+      - name: Additional PHPUnit suite
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' && inputs.extra_phpunit_config != '' }}
+        env:
+          CK_EXTRA_PHPUNIT_CONFIG: ${{ inputs.extra_phpunit_config }}
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data \
+            -e "CK_EXT_KEY=$CK_EXT_KEY" \
+            -e "CK_EXTRA_PHPUNIT_CONFIG=$CK_EXTRA_PHPUNIT_CONFIG" app bash -c \
+            'cd "/var/www/html/ext/$CK_EXT_KEY" && phpunit -c "$CK_EXTRA_PHPUNIT_CONFIG"'
 
       - name: PHPStan
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}

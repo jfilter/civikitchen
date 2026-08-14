@@ -1,0 +1,131 @@
+name: Standalone Playwright E2E
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: Directory containing the Playwright project
+        type: string
+        default: 'tests/e2e'
+      node_version:
+        description: Node.js major used by the test project
+        type: string
+        default: '24'
+      cache_dependency_path:
+        description: Path to the E2E package-lock.json
+        type: string
+        default: 'tests/e2e/package-lock.json'
+      install_command:
+        description: Optional dependency installation command
+        type: string
+        default: ''
+      browser_install_command:
+        description: Optional Playwright browser installation command
+        type: string
+        default: ''
+      prepare_command:
+        description: Optional build or stack-setup command
+        type: string
+        default: ''
+      test_command:
+        description: Playwright test command
+        type: string
+        default: 'npx playwright test'
+      failure_command:
+        description: Optional diagnostic command run after a failure
+        type: string
+        default: ''
+      cleanup_command:
+        description: Optional cleanup command, always run last
+        type: string
+        default: ''
+      base_url:
+        description: Optional BASE_URL exposed to the tests
+        type: string
+        default: ''
+      artifact_paths:
+        description: Newline-separated artifact paths, relative to repository root
+        type: string
+        default: |-
+          tests/e2e/playwright-report/
+          tests/e2e/test-results/
+      artifact_retention_days:
+        description: Number of days to retain Playwright artifacts
+        type: number
+        default: 7
+      timeout_minutes:
+        description: Maximum runtime for the E2E job
+        type: number
+        default: 30
+      runs_on:
+        description: Runner label override
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    env:
+      BASE_URL: ${{ inputs.base_url }}
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-playwright
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.cache_dependency_path }}
+
+      - name: Install dependencies
+        if: ${{ inputs.install_command != '' }}
+        env:
+          CK_COMMAND: ${{ inputs.install_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"
+
+      - name: Install Playwright browsers
+        if: ${{ inputs.browser_install_command != '' }}
+        env:
+          CK_COMMAND: ${{ inputs.browser_install_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"
+
+      - name: Prepare test environment
+        if: ${{ inputs.prepare_command != '' }}
+        env:
+          CK_COMMAND: ${{ inputs.prepare_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"
+
+      - name: Run Playwright tests
+        env:
+          CK_COMMAND: ${{ inputs.test_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"
+
+      - name: Diagnostics on failure
+        if: ${{ failure() && inputs.failure_command != '' }}
+        env:
+          CK_COMMAND: ${{ inputs.failure_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"
+
+      - name: Upload Playwright artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report
+          path: ${{ inputs.artifact_paths }}
+          if-no-files-found: warn
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Clean up test environment
+        if: ${{ always() && inputs.cleanup_command != '' }}
+        env:
+          CK_COMMAND: ${{ inputs.cleanup_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"

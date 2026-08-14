@@ -97,6 +97,7 @@ Details in [Custom or older CiviCRM versions](docs/images.md#custom-or-older-civ
 - [Building locally](docs/building.md) — build args, `KEEP_GIT=1`, running the test suite locally
 - [Releases](docs/releases.md) — the versioned contract extension repos pin (`@v1` / `:v1`), how a release is cut
 - [Releasing an extension](docs/extension-releases.md) — the other direction: how a consuming extension repo cuts *its* release (`ckrelease`, the shared `extension-release.yml`)
+- [Reusable CI building blocks](docs/reusable-workflows.md) — frontend, standalone Playwright, and lightweight repository checks beside `extension-ci.yml`
 
 ## Reliability
 
