@@ -89,6 +89,15 @@
     <exclude name="Squiz.Arrays.ArrayDeclaration.IndexNoNewline"/>
   </rule>
 
+  <!-- An array value that ckfmt wraps — a long concatenation, say — gets the
+       formatter's continuation indent, which this sniff measures against the
+       array element it belongs to and rejects. Demonstrably unsatisfiable:
+       phpcbf reindents, the next ckfmt puts it back, and the pair oscillates.
+       Every other Drupal.Arrays check stays on; only the indent yields. -->
+  <rule ref="Drupal.Arrays.Array">
+    <exclude name="Drupal.Arrays.Array.ArrayIndentation"/>
+  </rule>
+
   <!-- The test bootstrap's `if (!function_exists('cv')) { function cv() {…} }`
        idiom: ckfmt strips the blank lines at the block edges, this sniff wants
        them. Scoped to that one file, not disabled fleet-wide. -->

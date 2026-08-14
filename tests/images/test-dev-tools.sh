@@ -231,6 +231,12 @@ class Widget {
         'id' => 1,
         'label' => 'one',
       ]],
+      // A wrapped value carries ckfmt's continuation indent, which
+      // Drupal.Arrays.Array.ArrayIndentation measures against the element.
+      'html' =>
+        '<p>one</p>'
+          . '<p>two</p>'
+          . '<p>three</p>',
     ];
   }
 
