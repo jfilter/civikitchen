@@ -138,6 +138,7 @@ COPY toolbelt/phpcs/CiviKitchen /opt/civikitchen-coder/CiviKitchen
 COPY toolbelt/bin/cklint /usr/local/bin/cklint
 # cross-version compatibility against the declared PHP floor (PHPCompatibility).
 COPY toolbelt/bin/ckcompat /usr/local/bin/ckcompat
+COPY toolbelt/bin/ckcivix /usr/local/bin/ckcivix
 # composer.json vs the dependencies the code really uses.
 COPY toolbelt/bin/ckdeps /usr/local/bin/ckdeps
 COPY toolbelt/lib/composer-deps.php /opt/civikitchen-composer-deps.php

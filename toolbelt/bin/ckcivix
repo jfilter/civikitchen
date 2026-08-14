@@ -1,0 +1,111 @@
+#!/bin/bash
+#
+# ckcivix — is the civix scaffold current, and does it match what the extension needs?
+#
+# civix is a code generator, not a runtime dependency: an extension keeps working
+# with a scaffold generated years ago. What rots is the layout. info.xml records
+# the format it was generated against (<civix><format>), civix ships one upgrade
+# script per format, and `civix upgrade` replays the ones in between. Nothing
+# tells you the two have drifted apart — that is what this reports.
+#
+# Note the two version scales: `civix --version` is the TOOL (eg v26.02.0), the
+# format is the LAYOUT (eg 25.10.2). They are unrelated numbers, so the current
+# format is read from the upgrade scripts inside the phar, not from --version.
+#
+# Pairs with ckinit (which does the same for the civikitchen template files) and
+# with ckconform's mixin checks (which cover the declarations, not the layout).
+#
+set -euo pipefail
+
+# shellcheck source=../lib/ckcommon.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/ckcommon.sh"
+
+usage() {
+  cat <<'EOF'
+ckcivix — report or fix drift between the civix scaffold and the current format.
+
+  ckcivix            report the declared format, the current one, and the verdict
+  ckcivix --check    exit 1 when the scaffold is behind or missing
+  ckcivix --update   run `civix upgrade` to bring the scaffold forward
+
+Run from the extension root. An extension with no scaffold at all is reported,
+not failed, unless --check is given.
+EOF
+}
+
+mode="report"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --check)      mode="check" ;;
+    --update)     mode="update" ;;
+    -h|--help)    usage; exit 0 ;;
+    *)            ck_die "unknown argument: $1" ;;
+  esac
+  shift
+done
+
+ck_require_extension_root
+command -v civix >/dev/null 2>&1 || ck_die "civix not found — this needs the civikitchen image."
+
+# The newest upgrade script in the phar IS the current format: civix upgrades a
+# scaffold by replaying every script above the declared version.
+current_format() {
+  php -r '
+    $s = file_get_contents($argv[1]);
+    preg_match_all("#upgrades/([0-9]+\.[0-9]+\.[0-9]+)\.up\.php#", $s, $m);
+    $v = array_values(array_unique($m[1]));
+    if (!$v) { fwrite(STDERR, "no upgrade scripts found in the civix phar\n"); exit(2); }
+    usort($v, "version_compare");
+    echo end($v);
+  ' "$(command -v civix)"
+}
+
+declared_format() {
+  php -r '
+    libxml_use_internal_errors(TRUE);
+    $xml = simplexml_load_file($argv[1]);
+    if ($xml === FALSE) { fwrite(STDERR, "cannot parse info.xml\n"); exit(2); }
+    echo trim((string) $xml->civix->format);
+  ' info.xml
+}
+
+scaffold_file() { ls -1 ./*.civix.php 2>/dev/null | head -1; }
+
+declared="$(declared_format)"
+current="$(current_format)"
+scaffold="$(scaffold_file || true)"
+
+if [ "$mode" = "update" ]; then
+  [ -n "$declared" ] || ck_die "no <civix><format> in info.xml — this extension has no scaffold to upgrade."
+  exec civix upgrade -n
+fi
+
+# Three states, because they need different answers: no scaffold at all is a
+# deliberate choice in some extensions, behind is fixable, current is done.
+if [ -z "$declared" ] && [ -z "$scaffold" ]; then
+  echo "civix: no scaffold (no <civix><format>, no *.civix.php); current format is $current"
+  [ "$mode" = "check" ] && exit 1
+  exit 0
+fi
+
+if [ -z "$declared" ] || [ -z "$scaffold" ]; then
+  echo "civix: INCONSISTENT — info.xml format='${declared:-none}' but scaffold file '${scaffold:-none}'"
+  exit 1
+fi
+
+if [ "$declared" = "$current" ]; then
+  echo "civix: format $declared (current)"
+  exit 0
+fi
+
+# version_compare rather than a string test: formats are dotted versions, and a
+# scaffold ahead of the tool means the image is old, which is a different fault.
+verdict="$(php -r 'echo version_compare($argv[1], $argv[2], "<") ? "behind" : "ahead";' "$declared" "$current")"
+if [ "$verdict" = "ahead" ]; then
+  echo "civix: format $declared is AHEAD of this image's civix ($current) — update the image, do not run --update"
+  exit 1
+fi
+
+echo "civix: format $declared is behind $current — run 'ckcivix --update' (or 'civix upgrade')"
+[ "$mode" = "check" ] && exit 1
+exit 0
