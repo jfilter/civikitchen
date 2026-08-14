@@ -134,3 +134,25 @@ ck_drop_repo_vendored() {
     re=$(ck_re_repo_vendored)
     if [ -n "$re" ]; then grep -Ev "$re" || true; else cat; fi
 }
+
+# phpcs honours only the FIRST --ignore on a command line; a second one is
+# discarded without a word. Every caller must therefore pass exactly one
+# --ignore holding every pattern, comma-separated. Echoes that single value:
+# the always-on .civikitchen-siblings pattern plus one entry per declared
+# vendored_paths prefix.
+ck_phpcs_ignore() {
+    local line path out='*/.civikitchen-siblings/*'
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        # The reason is mandatory; strip it the way the other policy readers do.
+        path=${line%% -- *}
+        path=${path%/}
+        if [ -n "$path" ]; then
+            # Both spellings: phpcs matches the pattern against the path it
+            # happens to hold, which is absolute when a path argument drove the
+            # scan and repo-relative when a project ruleset's <file> did.
+            out="$out,*/${path}/*,${path}/*"
+        fi
+    done < <(ck_policy_all vendored_paths 2>/dev/null || true)
+    printf '%s' "$out"
+}

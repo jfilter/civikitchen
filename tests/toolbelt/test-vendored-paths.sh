@@ -45,4 +45,29 @@ printf '<?php\n' > other/.docker/upstream/proxy/proxy.php
 list | grep -q '^other/.docker/upstream/proxy/proxy.php$' \
   || fail "the prefix matched a same-named directory somewhere else"
 
+# A top-level prefix (civix drops `mixin/` into every extension) must survive
+# the same path, not just a nested one like .docker/upstream/proxy.
+mkdir -p mixin
+printf '<?php\n' > mixin/polyfill.php
+printf '%s\n' 'vendored_paths=mixin -- upstream polyfill, copied verbatim' >> .ckconform
+list | grep -q '^mixin/polyfill.php$' && fail "a top-level vendored prefix was still listed"
+
+# phpcs keeps only the FIRST --ignore it is given and discards every later one.
+# So the exclusions must arrive as ONE comma-separated value: the moment they
+# are split across flags, phpcs silently style-checks the vendored source.
+ignore=$(ck_phpcs_ignore)
+case "$ignore" in
+  *'.civikitchen-siblings'*) : ;;
+  *) fail "ck_phpcs_ignore dropped the .civikitchen-siblings pattern: $ignore" ;;
+esac
+for expected in '*/mixin/*' 'mixin/*' '*/.docker/upstream/proxy/*'; do
+  case ",$ignore," in
+    *",$expected,"*) : ;;
+    *) fail "ck_phpcs_ignore is missing '$expected': $ignore" ;;
+  esac
+done
+# One value, so no caller can be tempted to emit a second --ignore.
+[ "$(printf '%s' "$ignore" | tr -cd '\n' | wc -c | tr -d ' ')" = 0 ] \
+  || fail "ck_phpcs_ignore must echo a single line, got: $ignore"
+
 echo "vendored_paths suite OK"
