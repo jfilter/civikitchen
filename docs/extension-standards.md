@@ -4,10 +4,11 @@ The checklist the civikitchen tooling (cklint / CiviKitchen phpcs standard,
 ckmodernize, phpstan, the extension template) enforces or expects. Use it for
 audits and as the target state when modernizing an existing extension.
 
-For a new civix extension, run
-`/path/to/civikitchen/scaffold/ckinit.php <extension-directory>` to apply the
-versioned `scaffold/template/extension/` tooling layer. Existing files remain untouched
-unless `--force` is explicitly supplied. For an existing extension,
+For a new extension, run `/path/to/civikitchen/scaffold/ckcreate <key>` to
+generate the civix scaffold and apply the versioned
+`scaffold/template/extension/` tooling layer in one atomic operation. For an
+existing civix extension, `ckinit.php <extension-directory>` applies that layer;
+existing files remain untouched unless `--force` is explicitly supplied. Afterwards,
 `ckinit.php --check` reports where template-managed files have drifted and
 `ckinit.php --update` refreshes them (seeded files like `composer.json` and
 `phpstan.neon.dist` stay the repo's own after the first copy) — see
@@ -57,7 +58,10 @@ unless `--force` is explicitly supplied. For an existing extension,
   entity's `@since` against `<compatibility><ver>`, and remember core ships
   entities from bundled extensions (`ext/civi_mail` …), which then belong in
   `<requires>`. `ckconform` verifies each referenced entity exists in the core
-  it runs against.
+  it runs against. An entity supplied by a required third-party extension is
+  declared narrowly as
+  `known_api4_entities=ExternalEntity -- supplied by required example.ext` in
+  `.ckconform`; unused entries and declarations without a provider fail.
 - **The strings inside an APIv4 call are a contract, and phpstan now reads
   it.** Entity, action and field names are literals nothing checks until the
   call runs — a typo in a select survives the whole pipeline and then returns

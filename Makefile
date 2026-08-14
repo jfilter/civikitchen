@@ -102,7 +102,7 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-parity \
+.PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity \
 	test-compose-isolation test-vendored-paths test-doctor lint lint-shell \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
@@ -122,7 +122,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-ckconform test-phpstan test-ckinit test-parity test-compose-isolation test-vendored-paths test-doctor ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity test-compose-isolation test-vendored-paths test-doctor ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -144,6 +144,12 @@ test-phpstan: $(PHPUNIT) $(CORE) ## The phpstan extension's rule tests + catalog
 # must not touch or waves drift through.
 test-ckinit: ## ckinit seed/update/check integration checks
 	bash tests/ckinit/test-ckinit.sh
+
+test-ckcreate: ## ckcreate orchestration and atomic-output checks (fake Docker)
+	bash tests/ckcreate/test-ckcreate.sh
+
+test-ckcivix: ## ckcivix current/behind/missing/update checks (fake civix)
+	bash tests/toolbelt/test-ckcivix.sh
 
 # The Dockerfiles COPY the toolbelt selectively; without this gate a new tool
 # lands in git and silently never reaches the images the fleet's CI runs on.

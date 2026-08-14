@@ -35,6 +35,7 @@ final class Policy
         'vendor' => 'ckconform: the composer vendor name',
         'hook_style' => 'ckconform: which hook declaration style this repo uses',
         'known_hooks' => 'ckconform: hook names this repo defines itself',
+        'known_api4_entities' => 'ckconform: APIv4 entities supplied by required third-party extensions, reason mandatory',
         'bundles' => 'ckconform: vendored front-end bundles that are not repo source',
         'vendored_paths' => 'cklint + ckfmt + ckeslint: third-party source this repo carries verbatim, reason mandatory',
         'smarty_skip_templates' => 'cksmarty: managed MessageTemplates this repo renders without Smarty, reason mandatory',

@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\PhpSource;
+use CiviKitchen\Ckconform\Policy;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -50,9 +51,12 @@ final class Api4EntityCheck implements Check
         $tooNew = [];
         $undeclared = [];
 
-        foreach ($this->referencedEntities($context) as $entity) {
+        $referenced = $this->referencedEntities($context);
+        $external = $this->declaredExternalEntities($context, $referenced, $reporter);
+
+        foreach ($referenced as $entity) {
             // Entities the extension defines itself are its own business.
-            if ($context->shipsApi4Entity($entity)) {
+            if ($context->shipsApi4Entity($entity) || in_array($entity, $external, true)) {
                 continue;
             }
 
@@ -102,6 +106,41 @@ final class Api4EntityCheck implements Check
         } elseif ($declaredVer !== null) {
             $reporter->ok('every referenced APIv4 entity exists as of the declared core ' . $declaredVer);
         }
+    }
+
+    /**
+     * Entities supplied by an info.xml dependency are not present in core.
+     * The exact names stay explicit so a typo in extension code still fails.
+     *
+     * @param list<string> $referenced
+     * @return list<string>
+     */
+    private function declaredExternalEntities(Context $context, array $referenced, Reporter $reporter): array
+    {
+        $raw = $context->policyValue('known_api4_entities');
+        if ($raw === null) {
+            return [];
+        }
+        if (!str_contains($raw, ' -- ') || trim(explode(' -- ', $raw, 2)[1]) === '') {
+            $reporter->fail('.ckconform: known_api4_entities needs ` -- <reason>` naming the provider');
+        }
+        if ($context->requiredExtensions() === []) {
+            $reporter->fail('.ckconform: known_api4_entities is set but info.xml requires no provider extension');
+        }
+
+        $entities = array_values(array_filter(array_map(
+            'trim',
+            explode(',', Policy::stripReason($raw)),
+        )));
+        foreach ($entities as $entity) {
+            if (preg_match('/^[A-Z][A-Za-z0-9_]*$/', $entity) !== 1) {
+                $reporter->fail(".ckconform: invalid APIv4 entity name in known_api4_entities: '{$entity}'");
+            } elseif (!in_array($entity, $referenced, true)) {
+                $reporter->fail(".ckconform: known_api4_entities lists unused '{$entity}' — remove the stale exception");
+            }
+        }
+
+        return $entities;
     }
 
     /**

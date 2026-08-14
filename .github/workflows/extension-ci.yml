@@ -603,11 +603,11 @@ jobs:
       # one fleet repo accumulated 53 phpstan errors across 48 commits because
       # phpstan sat behind a red lint gate and never executed — every gate you
       # skip on failure is a gate someone meets all at once later.
-      - name: Lint (cklint + ckconform)
+      - name: Lint (cklint + ckconform + ckcivix)
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cklint --all && ckconform"
+            "cd /var/www/html/ext/$CK_EXT_KEY && cklint --all && ckconform && ckcivix --check"
 
       # Formatting gate (mago for PHP, oxfmt for JS/TS). Hard by design: the
       # bundled mago baseline is tuned so its output is clean under the phpcs

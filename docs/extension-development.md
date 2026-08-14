@@ -115,7 +115,6 @@ See the [example's README](../examples/extension-with-playwright/README.md) for 
 The image ships [`civix`](https://github.com/totten/civix) for scaffolding. Common commands:
 
 ```bash
-docker compose exec app civix generate:module org.example.myext   # bootstrap a new extension
 docker compose exec app civix generate:entity MyEntity            # APIv4-exposed entity + schema
 docker compose exec app civix generate:test --template headless \
     \\Civi\\Myext\\Test\\MyHeadlessTest                            # boilerplate for a headless test
@@ -134,10 +133,32 @@ exists`. `ckconform`'s `entity-dao-stub` catches both that and a stub whose
 
 Modern extensions configure features in `info.xml` via [standard mixins](https://docs.civicrm.org/dev/en/latest/framework/mixin/standard/) (`mgd-php@2`, `menu-xml`, `setting-php`, `entity-types-php@2.0.0`, `smarty@1`, `ang-php`, …) instead of bespoke hooks — `civix upgrade` keeps the mixin block current. (`smarty-v2` is a deprecated alias of the version-independent `smarty@1` — same behaviour, misleading name.)
 
-After generating a module, apply the versioned CiviKitchen tooling layer:
+Create a module with the host-side wrapper. It boots the temporary CiviCRM
+database which `civix generate:module` requires, generates the civix scaffold,
+applies the versioned CiviKitchen tooling layer, and only then moves the complete
+directory into place:
 
 ```bash
-civix generate:module org.example.myext
+/path/to/civikitchen/scaffold/ckcreate example_ext \
+  --author "Example Maintainer" \
+  --email dev@example.org \
+  --copyright "Example Organisation" \
+  --license Proprietary
+```
+
+The default target is `./<key>`. Keys are deliberately plain lowercase
+identifiers, so CiviCRM's extension key and file name stay identical. Repeated
+values may live in `~/.config/civikitchen/ckcreate.conf` as `CKCREATE_AUTHOR`,
+`CKCREATE_EMAIL`, `CKCREATE_COPYRIGHT`, `CKCREATE_LICENSE`, and
+`CKCREATE_COMPATIBILITY`. `CKCREATE_PHP_COMPATIBILITY` can raise the template's
+PHP floor while keeping `info.xml` and Composer aligned. `ckcreate --help`
+lists the flags and defaults.
+
+`ckcreate` is atomic: missing mandatory values, a civix error, or a template
+error leaves no partial target directory. For an existing civix module that
+only lacks the tooling layer, run `ckinit.php` directly:
+
+```bash
 /path/to/civikitchen/scaffold/ckinit.php org.example.myext
 ```
 
@@ -163,6 +184,17 @@ Two more modes work with that split:
 `git diff` like any other change. The shared `extension-ci.yml` workflow runs
 `--check` on every push, so a template improvement shows up in each repo as a
 red CI that one `--update` fixes.
+
+The civix layer has the matching maintenance command inside the image:
+
+```bash
+ckcivix --check    # fail when <civix><format> or *.civix.php is missing/behind
+ckcivix --update   # run civix upgrade -n
+```
+
+The shared workflow runs `ckcivix --check` with the other lint gates. Tool and
+format versions are separate scales; `ckcivix` reads the latest format from the
+upgrade scripts in the installed civix phar.
 
 Which template it checks against follows the ref the repo pins. The seeded
 caller says `extension-ci.yml@v1` and the CI stack says

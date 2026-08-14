@@ -1,0 +1,319 @@
+#!/bin/bash
+#
+# ckcreate — create a new extension that already conforms to the house standard.
+#
+# Three things have to meet for a new extension, and they live in three places:
+# civix (in the image) generates the scaffold, ckinit (in this repo) seeds the
+# template layer, and the org's own values (license, copyright, author) belong
+# to whoever runs this — they are deliberately NOT baked in here.
+#
+# The awkward part is civix: `generate:module` boots CiviCRM and opens a real
+# database connection, so it cannot run against the bare image. This boots a
+# throwaway stack for the duration and tears it down again. `civix upgrade`
+# does NOT need that (see ckcivix), which is why only creation is expensive.
+#
+# Values are read, in order, from: flags, $CKCREATE_* in the environment, and
+# ~/.config/civikitchen/ckcreate.conf (shell syntax, e.g. CKCREATE_AUTHOR="…").
+#
+set -euo pipefail
+
+tool="ckcreate"
+die() { echo "$tool: $*" >&2; exit 2; }
+
+usage() {
+  cat <<'EOF'
+ckcreate — create a new CiviCRM extension with civix scaffold + civikitchen template.
+
+  ckcreate <key> [options]
+
+  --dir <path>            where to create it (default: ./<key>)
+  --author <name>         author/organisation for info.xml
+  --email <address>       author email
+  --license <id>          civix license ID or Proprietary (default: Proprietary)
+  --copyright <text>      copyright line seeded into .ckconform
+  --compatibility <ver>   minimum CiviCRM version (default: 6.12)
+  --php <ver>             minimum PHP version (default: template floor)
+  --keep-stack            leave the throwaway stack running (for debugging)
+
+Author, email and copyright have no built-in values: pass them, export
+CKCREATE_AUTHOR / _EMAIL / _COPYRIGHT, or put them in the config file above.
+CKCREATE_LICENSE, CKCREATE_COMPATIBILITY, CKCREATE_PHP_COMPATIBILITY and
+CKCREATE_IMAGE override their defaults. This repo is public and carries no
+organisation's data.
+
+Afterwards the extension is a plain git-ready directory: `git init`, commit, and
+point its CI at the shared workflow.
+EOF
+}
+
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/civikitchen/ckcreate.conf"
+# shellcheck source=/dev/null
+[ -f "$conf" ] && . "$conf"
+
+key=""; dir=""; keep_stack=0
+author="${CKCREATE_AUTHOR:-}"
+email="${CKCREATE_EMAIL:-}"
+license="${CKCREATE_LICENSE:-Proprietary}"
+copyright="${CKCREATE_COPYRIGHT:-}"
+compat="${CKCREATE_COMPATIBILITY:-6.12}"
+php_floor="${CKCREATE_PHP_COMPATIBILITY:-}"
+image="${CKCREATE_IMAGE:-ghcr.io/jfilter/civikitchen:v1}"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dir|--author|--email|--license|--copyright|--compatibility|--php)
+      option="$1"
+      shift
+      [ "$#" -gt 0 ] && [[ "$1" != --* ]] || die "$option needs a value"
+      case "$option" in
+        --dir)           dir="$1" ;;
+        --author)        author="$1" ;;
+        --email)         email="$1" ;;
+        --license)       license="$1" ;;
+        --copyright)     copyright="$1" ;;
+        --compatibility) compat="$1" ;;
+        --php)           php_floor="$1" ;;
+      esac
+      ;;
+    --keep-stack)     keep_stack=1 ;;
+    -h|--help)        usage; exit 0 ;;
+    -*)               die "unknown option: $1" ;;
+    *)                [ -z "$key" ] || die "more than one key given"; key="$1" ;;
+  esac
+  shift
+done
+
+[ -n "$key" ] || { usage; exit 2; }
+# civix accepts more, but an extension key that is not a plain identifier makes
+# the namespace and the class prefix unpredictable.
+[[ "$key" =~ ^[a-z][a-z0-9_]*$ ]] || die "key must be lowercase letters, digits and underscores: $key"
+[ -n "$author" ] || die "no author — pass --author, export CKCREATE_AUTHOR, or set it in $conf"
+[ -n "$email" ]  || die "no email — pass --email, export CKCREATE_EMAIL, or set it in $conf"
+[ -n "$copyright" ] || die "no copyright — pass --copyright, export CKCREATE_COPYRIGHT, or set it in $conf"
+[ -z "$php_floor" ] || [[ "$php_floor" =~ ^[0-9]+\.[0-9]+$ ]] || die "PHP version must be major.minor: $php_floor"
+
+# civix has bundled texts for this fixed list. A closed licence needs a small
+# rewrite; rejecting any other ID avoids labelling an unknown licence as MIT.
+case "$license" in
+  AGPL-3.0|Apache-2.0|BSD-2-Clause|GPL-2.0|GPL-2.0+|GPL-3.0|GPL-3.0+|LGPL-2.1|LGPL-2.1+|LGPL-3.0|LGPL-3.0+|MIT|WTFPL)
+    gen_license="$license"
+    rewrite_license=0
+    ;;
+  Proprietary)
+    gen_license="MIT"
+    rewrite_license=1
+    ;;
+  *)
+    die "unsupported license '$license' — use a civix license ID or Proprietary"
+    ;;
+esac
+
+dir="${dir:-$PWD/$key}"
+[ -e "$dir" ] && die "$dir already exists"
+command -v docker >/dev/null 2>&1 || die "docker is required (civix needs a booted CiviCRM to generate)"
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -f "$here/ckinit.php" ] || die "cannot find ckinit.php next to this script"
+
+work="$(mktemp -d "${TMPDIR:-/tmp}/ckcreate.XXXXXX")"
+# The generated tree has to live somewhere Docker can mount. macOS VMs do not
+# mount the system temp dir, so keep the bind mount under the user's home.
+mount_root="$HOME/.cache/civikitchen/ckcreate.$$"
+mkdir -p "$mount_root"
+project="ckcreate-$$"
+
+cleanup() {
+  if [ "$keep_stack" = "0" ]; then
+    docker compose -p "$project" -f "$work/compose.yml" down -v --remove-orphans >/dev/null 2>&1 || true
+    /bin/rm -rf "$mount_root" "$work"
+  else
+    echo "$tool: stack left running as project '$project'"
+    echo "  compose: $work/compose.yml"
+    echo "  output:  $mount_root"
+    echo "  stop:    docker compose -p $project -f $work/compose.yml down -v"
+  fi
+}
+trap cleanup EXIT
+
+# Only app + db: phpmyadmin and a mail sink have nothing to do with generating
+# a scaffold, and every extra container is boot time paid for nothing.
+cat > "$work/compose.yml" <<EOF
+name: $project
+services:
+  app:
+    image: "$image"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      CIVICRM_AUTO_INSTALL: "1"
+      CIVICRM_DB_HOST: db
+      CIVICRM_DB_NAME: civicrm
+      CIVICRM_DB_USER: civicrm
+      CIVICRM_DB_PASSWORD: civicrm
+      CIVIKITCHEN_SITE_URL: "http://localhost"
+    volumes:
+      - $mount_root:/out
+  db:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: civicrm
+      MYSQL_USER: civicrm
+      MYSQL_PASSWORD: civicrm
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+EOF
+
+# --wait is enough on its own: the image's own HEALTHCHECK tests the
+# provisioning marker, so "healthy" already means cv core:install has finished.
+# A second wait loop here would only duplicate that contract.
+echo "$tool: booting a throwaway CiviCRM (civix needs one to generate; this takes a few minutes) …"
+docker compose -p "$project" -f "$work/compose.yml" up -d --wait >/dev/null \
+  || die "the throwaway CiviCRM did not come up healthy"
+
+# civix locates CiviCRM by walking UP from the working directory, and /out is
+# deliberately outside the site tree — so point it at the settings file instead.
+echo "$tool: generating the civix scaffold …"
+docker compose -p "$project" -f "$work/compose.yml" exec -T -w /out \
+  -e CIVICRM_SETTINGS=/var/www/html/civicrm.standalone.php app \
+  civix generate:module "$key" \
+    --author "$author" --email "$email" \
+    --license "$gen_license" --compatibility "$compat" --enable=no -n
+
+[ -d "$mount_root/$key" ] || die "civix produced no $key/ directory"
+generated="$mount_root/$key"
+
+# Files come out owned by the container user; take them over before anything
+# else touches them.
+docker compose -p "$project" -f "$work/compose.yml" exec -T app \
+  chown -R "$(id -u):$(id -g)" "/out/$key" 2>/dev/null || true
+
+if [ "$rewrite_license" = "1" ]; then
+  php -r '
+    $file = $argv[1];
+    $xml = new DOMDocument();
+    $xml->preserveWhiteSpace = true;
+    if (!$xml->load($file)) { fwrite(STDERR, "could not parse info.xml\n"); exit(2); }
+    $xpath = new DOMXPath($xml);
+    $licenses = $xpath->query("/extension/license");
+    if ($licenses === false || $licenses->length !== 1) { fwrite(STDERR, "info.xml needs one <license>\n"); exit(2); }
+    $licenses->item(0)->textContent = "Proprietary";
+    $urls = $xpath->query("/extension/urls/url[@desc=\"Licensing\"]");
+    if ($urls !== false) {
+      foreach (iterator_to_array($urls) as $url) { $url->parentNode->removeChild($url); }
+    }
+    if ($xml->save($file) === false) { fwrite(STDERR, "could not write info.xml\n"); exit(2); }
+  ' "$generated/info.xml"
+  cat > "$generated/LICENSE.txt" <<EOF
+Copyright (C) $(date +%Y) $copyright. All rights reserved.
+
+This software is proprietary. It is not licensed for redistribution or use
+outside the terms agreed with the copyright holder.
+EOF
+  php -r '
+    $file = $argv[1];
+    $text = file_get_contents($file);
+    $next = preg_replace(
+      "/, licensed under \\[[^]]+\\]\\(LICENSE\\.txt\\)\\./",
+      ", distributed as proprietary software under the terms in [LICENSE.txt](LICENSE.txt).",
+      $text,
+      1,
+      $count,
+    );
+    if ($count !== 1 || $next === null) { fwrite(STDERR, "could not rewrite the README license line\n"); exit(2); }
+    file_put_contents($file, $next);
+  ' "$generated/README.md"
+  echo "$tool: rewrote the license to '$license' (civix cannot generate it)"
+else
+  php -r '
+    $file = $argv[1];
+    $holder = $argv[2];
+    $year = date("Y");
+    $text = file_get_contents($file);
+    $line = "Copyright (C) $year $holder";
+    $next = preg_replace("/^Copyright[^\\r\\n]*$/mi", $line, $text, 1, $count);
+    if ($next === null) { fwrite(STDERR, "could not update LICENSE.txt\n"); exit(2); }
+    if ($count === 0) { $next = $line . "\n\n" . $text; }
+    file_put_contents($file, $next);
+  ' "$generated/LICENSE.txt" "$copyright"
+fi
+
+echo "$tool: seeding the civikitchen template …"
+php "$here/ckinit.php" --update "$generated"
+
+# ckinit owns the initial composer.json, but the licence comes from this
+# command. Keep both declarations consistent before the directory appears.
+php -r '
+  $file = $argv[1];
+  $license = $argv[2];
+  $phpFloor = $argv[3];
+  $json = json_decode(file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
+  $json["license"] = $license === "Proprietary" ? "proprietary" : $license;
+  if ($license === "Proprietary") { $json["private"] = true; }
+  else { unset($json["private"]); }
+  if ($phpFloor !== "") { $json["require"]["php"] = ">=$phpFloor"; }
+  file_put_contents($file, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
+' "$generated/composer.json" "$license" "$php_floor"
+
+# The template's composer constraint is the installation floor. Trim civix's
+# broad default list to the same value so package and extension metadata agree.
+php -r '
+  $composer = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
+  $constraint = $composer["require"]["php"] ?? "";
+  if (!preg_match("/^>=\\s*([0-9]+\\.[0-9]+)$/", $constraint, $match)) {
+    fwrite(STDERR, "composer require.php must be a simple >=major.minor floor\n");
+    exit(2);
+  }
+  $floor = $match[1];
+  $xml = new DOMDocument();
+  $xml->preserveWhiteSpace = true;
+  if (!$xml->load($argv[2])) { fwrite(STDERR, "could not parse info.xml\n"); exit(2); }
+  $xpath = new DOMXPath($xml);
+  $versions = $xpath->query("/extension/php_compatibility/ver");
+  if ($versions === false || $versions->length === 0) { fwrite(STDERR, "info.xml has no PHP compatibility list\n"); exit(2); }
+  $kept = 0;
+  for ($i = $versions->length - 1; $i >= 0; $i--) {
+    $version = $versions->item($i);
+    if (version_compare(trim($version->textContent), $floor, "<")) { $version->parentNode->removeChild($version); }
+    else { $kept++; }
+  }
+  if ($kept === 0) { fwrite(STDERR, "PHP floor $floor is newer than the civix compatibility list\n"); exit(2); }
+  if ($xml->save($argv[2]) === false) { fwrite(STDERR, "could not write info.xml\n"); exit(2); }
+  $phpstan = file_get_contents($argv[3]);
+  $versionId = sprintf("%d%02d00", ...array_map("intval", explode(".", $floor)));
+  $next = preg_replace_callback(
+    "/^(\\s*phpVersion:\\s*)\\d+$/m",
+    static fn(array $match): string => $match[1] . $versionId,
+    $phpstan,
+    1,
+    $count,
+  );
+  if ($next === null || $count !== 1) { fwrite(STDERR, "phpstan.neon.dist needs one phpVersion value\n"); exit(2); }
+  file_put_contents($argv[3], $next);
+' "$generated/composer.json" "$generated/info.xml" "$generated/phpstan.neon.dist"
+
+# The policy VALUES belong to the org, not to this repo — ckconform only checks
+# that the declarations agree with each other.
+if [ ! -f "$generated/.ckconform" ]; then
+  {
+    echo "license=$license"
+    echo "copyright=$copyright"
+  } > "$generated/.ckconform"
+  echo "$tool: wrote .ckconform (license, copyright)"
+fi
+
+php "$here/ckinit.php" --check "$generated" >/dev/null
+
+mkdir -p "$(dirname "$dir")"
+mv "$generated" "$dir"
+if [ "$keep_stack" = "0" ]; then
+  rmdir "$mount_root" 2>/dev/null || true
+fi
+
+echo
+echo "$tool: created $dir"
+echo "  next: git init, review the scaffold, and make the first commit"

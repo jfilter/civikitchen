@@ -55,6 +55,43 @@ final class Api4EntityCheckTest extends CheckTestCase
         );
     }
 
+    public function testRequiredThirdPartyEntityCanBeDeclared(): void
+    {
+        $this->core(['Contact' => null]);
+        $context = $this->repo([
+            '.ckconform' => "known_api4_entities=MosaicoTemplate -- supplied by required mosaico\n",
+            'info.xml' => $this->infoXml(extra: '<requires><ext>mosaico</ext></requires>'),
+            'CRM/X.php' => '<?php $x = \Civi\Api4\MosaicoTemplate::get();',
+        ], git: true);
+
+        $this->assertPasses($this->run_(new Api4EntityCheck(), $context));
+    }
+
+    public function testExternalEntityDeclarationNeedsAReasonAndProvider(): void
+    {
+        $this->core(['Contact' => null]);
+        $context = $this->repo([
+            '.ckconform' => "known_api4_entities=MosaicoTemplate\n",
+            'CRM/X.php' => '<?php $x = \Civi\Api4\MosaicoTemplate::get();',
+        ], git: true);
+
+        $reporter = $this->run_(new Api4EntityCheck(), $context);
+        $this->assertFails($reporter, 'needs ` -- <reason>`');
+        $this->assertFails($reporter, 'requires no provider extension');
+    }
+
+    public function testUnusedExternalEntityDeclarationFails(): void
+    {
+        $this->core(['Contact' => null]);
+        $context = $this->repo([
+            '.ckconform' => "known_api4_entities=MosaicoTemplate -- supplied by required mosaico\n",
+            'info.xml' => $this->infoXml(extra: '<requires><ext>mosaico</ext></requires>'),
+            'CRM/X.php' => '<?php $x = \Civi\Api4\Contact::get();',
+        ], git: true);
+
+        $this->assertFails($this->run_(new Api4EntityCheck(), $context), "lists unused 'MosaicoTemplate'");
+    }
+
     /** A test-only reference cannot fatal on a customer's site and fails its own CI run. */
     public function testAReferenceInTestsIsNotScanned(): void
     {
