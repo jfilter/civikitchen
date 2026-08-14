@@ -874,6 +874,31 @@ function acme_grouped(): array {
   ];
 }
 PHP
+# The conflict case from the scope tracker's side: an array value ckfmt wraps
+# leaves every following sibling key looking one level too deep to
+# Drupal.WhiteSpace.ScopeIndent, which phpcbf and ckfmt then undo in turn.
+cat > "${AGREEDIR}/arrayvaluewrap.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+function acme_columns(): array {
+  return [
+    'display' => [
+      'settings' => [
+        'columns' => [
+          [
+            'key' => 'flag',
+            'rewrite' => '{if $flag}' . acme_label('the widget is currently switched on') . '{else}' . acme_label('the widget is currently switched off') . '{/if}',
+            'css_rules' => [['font-bold', 'flag', '=', FALSE], ['font-italic', 'flag', '=', TRUE], ['font-strike', 'flag', '=', NULL]],
+            'icons' => [['icon' => 'fa-flask', 'side' => 'left', 'if' => ['flag', '=', TRUE]], ['icon' => 'fa-flag', 'side' => 'left', 'if' => ['flag', '=', FALSE]]],
+          ],
+        ],
+      ],
+    ],
+  ];
+}
+PHP
 mkdir -p "${AGREEDIR}/tests/phpunit"
 cat > "${AGREEDIR}/tests/phpunit/bootstrap.php" <<'PHP'
 <?php
@@ -892,7 +917,8 @@ if AGREE_FMT_OUT="$( (cd "${AGREEDIR}" && ckfmt) 2>&1 )"; then
 else
     fail "ckfmt failed on the overlong-line fixtures (output: ${AGREE_FMT_OUT:0:300})"
 fi
-for fixture in extends extendsimplements implements echoconcat nestedarray tests/phpunit/bootstrap; do
+for fixture in extends extendsimplements implements echoconcat nestedarray \
+    nestedarrayliteral arrayvaluewrap tests/phpunit/bootstrap; do
     if AGREE_OUT="$( (cd "${AGREEDIR}" && phpcs --standard=CiviKitchen --extensions=php -s "${fixture}.php") 2>&1 )"; then
         ok "ckfmt output for ${fixture}.php is clean under the CiviKitchen standard"
     else

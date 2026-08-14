@@ -98,6 +98,15 @@
     <exclude name="Drupal.Arrays.Array.ArrayIndentation"/>
   </rule>
 
+  <!-- The same wrapped value seen from the scope tracker: after ckfmt's
+       continuation indent this sniff measures every following sibling key
+       one level too deep, and phpcbf reindents what the next ckfmt undoes.
+       Indentation is the formatter's — ckfmt rewrites a wrong indent on the
+       same file set this standard covers, so nothing goes unchecked. -->
+  <rule ref="Drupal.WhiteSpace.ScopeIndent">
+    <exclude name="Drupal.WhiteSpace.ScopeIndent.IncorrectExact"/>
+  </rule>
+
   <!-- The test bootstrap's `if (!function_exists('cv')) { function cv() {…} }`
        idiom: ckfmt strips the blank lines at the block edges, this sniff wants
        them. Scoped to that one file, not disabled fleet-wide. -->

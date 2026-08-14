@@ -388,20 +388,31 @@ and everything you actually wrote stays in scope.
 ### Known formatter/phpcs stand-offs
 
 `ckfmt` and `cklint` are tuned to agree, and where they cannot the ruleset
-yields (the formatter owns layout — currently the wrapped-`implements` indent
-and the function spacing inside the test bootstrap). Two cases stay open on
-purpose, because in both the formatter is right and the readable fix is in the
-source, not in a gate:
+yields: the formatter owns layout. Anything else would leave a repo with no
+green state at all — `phpcbf` reindents, the next `ckfmt` puts it back, and the
+two gates oscillate forever. The sniffs that yield, each with the construct
+that forced it:
 
-- **A single-element nested array literal — `foo([[…]])`.** The formatter hugs
-  the two brackets, the Drupal array-indent sniff measures the inner array
-  against the outer one and objects. Pull the inner array into a local variable
-  and pass that; with APIv4 the better fix is usually `addRecord($record)`
-  instead of `setRecords([[…]])`.
-- **`echo` with a long concatenation chain.** The formatter wraps the operands,
-  the sniff wants the continuation lines somewhere else. Use `printf()` with
-  placeholders, or build the string in a variable first and echo the variable —
-  both read better than the chain did.
+- **Wrapped `extends` / `implements` lists** — `Drupal.Classes.ClassDeclaration`
+  (`InterfaceWrongIndent`, `SpaceBeforeName`, `ImplementsLine`).
+- **`echo` with a long concatenation chain** —
+  `Squiz.WhiteSpace.LanguageConstructSpacing.IncorrectSingle` and
+  `Squiz.WhiteSpace.SemicolonSpacing.Incorrect`.
+- **A nested array literal opening as `[[`, or a key whose value is an array** —
+  `Squiz.Arrays.ArrayDeclaration` (`CloseBraceNewLine`, `IndexNoNewline`).
+- **An array value the formatter wraps across lines** —
+  `Drupal.Arrays.Array.ArrayIndentation` for the value itself, and
+  `Drupal.WhiteSpace.ScopeIndent.IncorrectExact` for the sibling keys that
+  follow it.
+- **The `function_exists('cv')` block in the test bootstrap** —
+  `Squiz.WhiteSpace.FunctionSpacing`, scoped to that one file.
+
+Indentation therefore has exactly one owner: `ckfmt` rewrites a wrong indent on
+the same file set the standard covers, so nothing goes unchecked.
+
+Every one of these is asserted in `tests/images/test-dev-tools.sh`: the fixture
+is written unformatted, `ckfmt` formats it, and `phpcs` must accept the result.
+A new stand-off ships with its fixture, or the next release re-opens it.
 
 Suppression placement matters for the mago engine. A class-level
 `@mago-expect` goes either **above the docblock**, separated from it by a blank

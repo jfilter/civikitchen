@@ -8,9 +8,9 @@
 # or --fix and --check chase each other forever. Where a mago upgrade breaks
 # that, the fix is a setting here — or, where the formatter's layout is simply
 # a legitimate second opinion the Drupal sniff does not share, one named sniff
-# excluded in the phpcs ruleset (the formatter owns layout). Two such stand-offs
-# are known and documented in docs/extension-standards.md; both gates stay green
-# on formatter output either way.
+# excluded in the phpcs ruleset (the formatter owns layout). The stand-offs are
+# listed in docs/extension-standards.md; both gates stay green on formatter
+# output either way.
 #
 # [linter] is cklint's second engine: the bug-pattern rules the phpcs standard
 # does not carry. The rule set is subtractive — mago's defaults minus anything
