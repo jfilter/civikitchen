@@ -30,6 +30,16 @@ on:
         required: false
         default: ''
 
+# The moving tags (:standalone, :drupal10, …) are last-writer-wins, and the
+# writer is whichever run finishes promote last — not whichever commit is
+# newer. Two pushes in quick succession therefore leave the live images built
+# from the OLDER commit, and the next release refuses with "image drift".
+# Queue instead of cancelling: a cancelled run can already have moved some
+# flavors' tags, which is the same split state by another route.
+concurrency:
+  group: build-dev-images
+  cancel-in-progress: false
+
 # Default for every job; the ones that push to GHCR widen it themselves.
 permissions:
   contents: read
