@@ -153,7 +153,7 @@ on:
         default: '24'
       composer_install:
         description: >-
-          `composer install --no-dev` on the runner before the stack boots —
+          `composer install` on the runner before the stack boots —
           a repo without committed vendor/ cannot even enable the extension
           otherwise. On the runner (not in-container) so the deploy key never
           enters a container; the image's auto-composer sees vendor/ and skips.
@@ -579,7 +579,9 @@ jobs:
           # PHP should pin `config.platform.php` in composer.json to the
           # version the extension actually runs on, which is the honest fix for
           # resolving against one PHP and executing on another anyway.
-          composer install --no-dev --no-interaction --no-progress
+          # CI analyses repository tests as well as runtime code. Install the
+          # locked development tree here; release packaging remains --no-dev.
+          composer install --no-interaction --no-progress
 
       - name: Start CiviCRM stack
         id: stack
@@ -1482,7 +1484,7 @@ jobs:
             ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
             printf 'Host github.com\n  IdentityFile ~/.ssh/civikitchen_composer\n  IdentitiesOnly yes\n' >> ~/.ssh/config
           fi
-          composer install --no-dev --no-interaction --no-progress
+          composer install --no-interaction --no-progress
 
       - name: Validate inputs
         run: |

@@ -892,7 +892,7 @@ neither gets exactly the run it has today.
 
 | Input / secret | What it adds |
 |---|---|
-| `composer_install` | `composer install --no-dev --no-interaction --no-progress` on the runner, before the stack boots. |
+| `composer_install` | `composer install --no-interaction --no-progress` on the runner, before the stack boots. |
 | `composer_deploy_key` (secret) | Private SSH key used for `github.com` during that install, so a private VCS package resolves. |
 | `sibling_repo` | `owner/repo` of a second extension: checked out to `.civikitchen-siblings/<repo>` and bind-mounted read-only into the stack, which also enables it. |
 | `sibling_deploy_key` (secret) | Private SSH key for that checkout. |
@@ -907,8 +907,9 @@ It runs on the **runner**, not through the image's own
 `CIVIKITCHEN_AUTO_COMPOSER`, and that is the whole point: the deploy key never
 enters a container. The container-side auto-composer then sees `vendor/`
 through the bind mount and skips the directory, so the two do not collide.
-`--no-dev` is deliberate — `phpunit`, `phpstan` and `phpcs` come from the
-image and have no business in your `require-dev`.
+CI installs the locked development tree because static analysis covers tests
+and therefore must resolve their framework classes. Release packaging remains
+strictly `--no-dev`, so test-only packages never enter the shipped archive.
 
 **`sibling_repo`** is for the extension that implements another extension's
 interfaces: the classes must exist at boot (`cv ext:enable` wants the declared
