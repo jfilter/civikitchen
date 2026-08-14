@@ -79,9 +79,14 @@
 
   <!-- An array literal whose first element is itself an array literal: ckfmt
        keeps `[[` / `]]` on shared lines, this sniff wants the closing bracket
-       alone on its line. Bracket placement belongs to the formatter. -->
+       alone on its line. Bracket placement belongs to the formatter.
+       IndexNoNewline is the same disagreement from the opening side: ckfmt
+       writes `['key' => [` and the sniff wants `'key'` on its own line. Both
+       messages the code carries ("first index", "each index") are pure layout,
+       so a repo that runs ckfmt cannot satisfy the sniff at all. -->
   <rule ref="Squiz.Arrays.ArrayDeclaration">
     <exclude name="Squiz.Arrays.ArrayDeclaration.CloseBraceNewLine"/>
+    <exclude name="Squiz.Arrays.ArrayDeclaration.IndexNoNewline"/>
   </rule>
 
   <!-- The test bootstrap's `if (!function_exists('cv')) { function cv() {…} }`

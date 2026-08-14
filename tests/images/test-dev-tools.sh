@@ -202,6 +202,47 @@ else
     ok "CiviKitchen rejects the unspaced declare (ckfmt owns the spelling)"
 fi
 
+# Same contract for nested array literals, the other shape the two gates can
+# disagree about: ckfmt writes the first key on the opening line, and
+# Squiz.Arrays.ArrayDeclaration wants it on its own. A repo that runs both
+# would have no way to be green, so the sniff yields — layout is the
+# formatter's.
+cat > "${WORKDIR}/ArrayShape.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+namespace Acme;
+
+/**
+ * A widget.
+ */
+class Widget {
+
+  /**
+   * Go.
+   *
+   * @return array
+   *   The rows.
+   */
+  public function go(): array {
+    return [
+      'rows' => ['a:1' => [
+        'id' => 1,
+        'label' => 'one',
+      ]],
+    ];
+  }
+
+}
+PHP
+if phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/ArrayShape.php" >/dev/null 2>&1; then
+    ok "CiviKitchen accepts ckfmt's nested-array layout"
+else
+    ARR_OUT="$(phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/ArrayShape.php" 2>&1 || true)"
+    fail "CiviKitchen rejects the formatter's array layout (output: ${ARR_OUT:0:300})"
+fi
+
 # Warning tier: a phpcs warning is reported but must not fail the gate, while
 # an error still does. Scoped to a two-sniff project ruleset so the assertion
 # is about cklint's exit code, not about the rest of the standard. No git init
