@@ -1,0 +1,35 @@
+name: Repository Command Check
+
+on:
+  workflow_call:
+    inputs:
+      command:
+        description: Repository-owned check command
+        required: true
+        type: string
+      working_directory:
+        description: Directory in which to execute the command
+        type: string
+        default: '.'
+      runs_on:
+        description: Runner label override
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Run repository check
+        env:
+          CK_COMMAND: ${{ inputs.command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"

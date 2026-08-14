@@ -1,0 +1,100 @@
+name: Frontend CI
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: Directory containing package.json and the lockfile
+        type: string
+        default: '.'
+      node_version:
+        description: Node.js major used by the project
+        type: string
+        default: '24'
+      cache_dependency_path:
+        description: Path to package-lock.json, relative to the repository root
+        type: string
+        default: 'package-lock.json'
+      install_command:
+        description: Dependency installation command
+        type: string
+        default: 'npm ci'
+      typecheck_command:
+        description: Optional type-check command
+        type: string
+        default: ''
+      lint_command:
+        description: Optional lint command
+        type: string
+        default: ''
+      test_command:
+        description: Optional unit-test command
+        type: string
+        default: 'npm test'
+      build_command:
+        description: Optional production-build command
+        type: string
+        default: ''
+      verify_command:
+        description: Optional command that verifies generated output
+        type: string
+        default: ''
+      runs_on:
+        description: Runner label override
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.cache_dependency_path }}
+
+      - name: Install dependencies
+        env:
+          CK_COMMAND: ${{ inputs.install_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"
+
+      - name: Type check
+        if: ${{ inputs.typecheck_command != '' }}
+        env:
+          CK_COMMAND: ${{ inputs.typecheck_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"
+
+      - name: Lint
+        if: ${{ inputs.lint_command != '' }}
+        env:
+          CK_COMMAND: ${{ inputs.lint_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"
+
+      - name: Unit tests
+        if: ${{ inputs.test_command != '' }}
+        env:
+          CK_COMMAND: ${{ inputs.test_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"
+
+      - name: Build
+        if: ${{ inputs.build_command != '' }}
+        env:
+          CK_COMMAND: ${{ inputs.build_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"
+
+      - name: Verify build output
+        if: ${{ inputs.verify_command != '' }}
+        env:
+          CK_COMMAND: ${{ inputs.verify_command }}
+        run: bash -euo pipefail -c "$CK_COMMAND"

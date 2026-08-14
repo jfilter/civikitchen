@@ -53,14 +53,19 @@ on:
         description: 'Publish the GitHub release as a draft'
         type: boolean
         default: false
+      runs_on:
+        description: Runner label override for all release jobs
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
   dist:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     env:
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-release
       # Inputs reach the shell through the environment, never through expression
       # interpolation inside `run:` — an interpolated input IS the script text.
       # Read by the smoke stack's ${CIVIKITCHEN_IMAGE} on every compose call,
@@ -202,7 +207,7 @@ jobs:
 
   publish:
     needs: dist
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     # The only job that writes anything, and the only one with a token that can.
     permissions:
       contents: write
