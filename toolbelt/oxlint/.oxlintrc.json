@@ -104,7 +104,12 @@
         "**/*.config.cts",
         "**/*.config.mjs",
         "**/playwright.config.*",
-        "**/global-setup.*"
+        "**/global-setup.*",
+        "**/scripts/**/*.js",
+        "**/scripts/**/*.mjs",
+        "**/tests/e2e/**/*.js",
+        "**/tests/e2e/**/*.mjs",
+        "**/tests/e2e/**/*.ts"
       ],
       "env": {
         "node": true

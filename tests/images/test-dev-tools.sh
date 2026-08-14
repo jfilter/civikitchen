@@ -498,6 +498,25 @@ export function boot(): void {
   work();
 }
 TS
+# Node code outside the conventional *.config.js names: a build script and a
+# Playwright spec. The baseline lints with the browser env, so without a node
+# env for these paths every `require`/`process`/`__dirname` reads as no-undef —
+# a gate that fires on correct code, which a repo can only silence by replacing
+# the whole baseline.
+mkdir -p "${ESDIR}/scripts" "${ESDIR}/tests/e2e"
+cat > "${ESDIR}/scripts/build-widget.js" <<'NODEJS'
+const path = require('path');
+const out = path.join(__dirname, 'widget.js');
+if (process.env.CK_DEBUG) {
+  console.log(out);
+}
+NODEJS
+cat > "${ESDIR}/tests/e2e/widget.spec.js" <<'NODEJS'
+const { test } = require('@playwright/test');
+test('boots', async ({ page }) => {
+  await page.goto(process.env.CK_BASE_URL || 'http://localhost');
+});
+NODEJS
 (cd "${ESDIR}" && git init -q . && git add -A) >/dev/null 2>&1
 
 # --format=unix: oxlint's default reporter is the graphical one in some
@@ -522,6 +541,11 @@ if echo "${ESLINT_OUT}" | grep -q "no-floating-promises"; then
     ok "ckeslint runs the type-aware rules (tsgolint is wired up)"
 else
     fail "ckeslint didn't report the floating promise (output: ${ESLINT_OUT:0:400})"
+fi
+if echo "${ESLINT_OUT}" | grep -E "^(scripts/build-widget|tests/e2e/widget.spec)\.js:.*no-undef"; then
+    fail "ckeslint reported no-undef for Node globals outside *.config.js (output: ${ESLINT_OUT:0:400})"
+else
+    ok "ckeslint gives Node scripts and e2e specs the node env"
 fi
 
 # The type-aware rules are the half that can vanish quietly: oxlint reports the
