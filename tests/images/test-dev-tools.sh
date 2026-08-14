@@ -416,6 +416,13 @@ XML
 echo '<?php' > "${RELDIR}/greeter.php"
 echo '<?php' > "${RELDIR}/tests/phpunit/GreeterTest.php"
 echo 'x' > "${RELDIR}/phpunit.xml.dist"
+# Keep enough entries after info.xml to fill a pipe buffer. This reproduces the
+# Composer-sized archive where `printf entries | grep -q info.xml` used to make
+# printf die with SIGPIPE under pipefail, falsely reporting a missing info.xml.
+mkdir -p "${RELDIR}/vendor/example/package"
+for n in $(seq 1 2500); do
+    printf '<?php // %04d\n' "$n" > "${RELDIR}/vendor/example/package/File${n}.php"
+done
 (
     cd "${RELDIR}"
     git init -q .
@@ -433,8 +440,8 @@ fi
 
 # The whole point of the archive: dev/CI files stay out of what a site installs.
 CKREL_LIST="$(unzip -Z1 "${RELDIR}/.ckrelease/org.example.greeter-1.3.0.zip" 2>/dev/null || true)"
-if echo "${CKREL_LIST}" | grep -q 'org.example.greeter/greeter.php' \
-    && ! echo "${CKREL_LIST}" | grep -qE 'tests/|phpunit.xml.dist'; then
+if grep -q 'org.example.greeter/greeter.php' <<< "${CKREL_LIST}" \
+    && ! grep -qE 'tests/|phpunit.xml.dist' <<< "${CKREL_LIST}"; then
     ok "ckrelease excludes dev/CI files from the archive"
 else
     fail "ckrelease archive contents wrong (${CKREL_LIST:0:300})"

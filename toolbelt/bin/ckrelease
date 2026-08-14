@@ -225,7 +225,11 @@ run_verify() {
     ok=1
   fi
 
-  if ! printf '%s\n' "$entries" | grep -qx "${EXT_KEY}/info.xml"; then
+  # `grep -q` exits as soon as it finds the entry. With pipefail, the writer can
+  # then receive SIGPIPE for a Composer-sized archive and turn a successful
+  # match into a failure. Feed grep directly so verification is independent of
+  # how many vendored files follow info.xml.
+  if ! grep -Fqx "${EXT_KEY}/info.xml" <<< "$entries"; then
     echo "ckrelease: FAIL — the archive has no ${EXT_KEY}/info.xml." >&2
     ok=1
   else
