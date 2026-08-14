@@ -371,3 +371,35 @@ vulnerabilities:
       symfony/yaml 5.4.23, same tree — ReDoS in Parser::cleanup(), same "only
       parses its own config" argument. Recheck after the next Joomla release.
     expired_at: 2026-11-01
+
+  # -------------------------------------------------------------------------
+  # tsgolint's Go stdlib
+  #
+  # opt/civikitchen-oxlint/node_modules/@oxlint-tsgolint/linux-*/tsgolint, the
+  # prebuilt binary oxlint runs for its type-aware rules. Trivy reports these
+  # as `fixed` because Go fixed them — but the fix is a Go toolchain version,
+  # not a tsgolint release: oxlint-tsgolint 7.0.2001 is the newest published
+  # (verified against the npm registry) and it ships a binary built with Go
+  # 1.26.5. There is nothing to install over it, so this is the brace-expansion
+  # case, not an exception for something we could fix. Recheck when
+  # oxlint-tsgolint publishes a rebuild; then this entry goes, not its date.
+  # -------------------------------------------------------------------------
+  - id: CVE-2026-39821
+    paths:
+      - "opt/civikitchen-oxlint/**"
+    statement: >-
+      net/http request smuggling via x/net/idna in the Go stdlib compiled into
+      tsgolint. tsgolint is a local type checker: ckeslint execs it over files
+      already on disk and talks to it on stdio. It opens no listener, makes no
+      outbound request and resolves no name, so nothing supplies it the HTTP
+      traffic the CVE needs. No fixed tsgolint build exists.
+    expired_at: 2026-11-01
+
+  - id: CVE-2026-46600
+    paths:
+      - "opt/civikitchen-oxlint/**"
+    statement: >-
+      Same binary, same absence of a fixed build: a parsing flaw in
+      x/net/dns/dnsmessage, reachable only by feeding the process DNS responses.
+      tsgolint performs no name resolution during a ckeslint run.
+    expired_at: 2026-11-01
