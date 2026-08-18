@@ -75,7 +75,11 @@ committing both files:
 | `toolbelt/phpcs-root` | phpcs, PHPCompatibility, Slevomat, composer-dependency-analyser |
 | `toolbelt/phpstan-root` | phpstan + the extensions every image ships |
 | `toolbelt/rector` | rector (and the phpstan version it may see) |
-| `toolbelt/psalm` | psalm (its lock carries a PHP floor — see its README) |
+| `toolbelt/psalm` | psalm (taint engine for `cktaint`) |
+
+Every root resolves its lock against PHP 8.1.31 (`config.platform.php`), the
+floor the images support, so a re-lock on a newer laptop cannot pull a
+transitive that refuses to start on an 8.1/8.2 image.
 
 ```bash
 composer update --working-dir=toolbelt/phpstan-root

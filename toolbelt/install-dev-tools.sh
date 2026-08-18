@@ -24,10 +24,10 @@
 set -euo pipefail
 
 # Pins with more than one consumer come from versions.env, which Make `include`s
-# and bash sources natively — no parser on either side. Only PHPUNIT_* is shared
-# today (the Makefile runs the tool test suites on the same phar this image
-# bakes); everything else below has exactly one consumer and stays here, next to
-# the comment that explains it.
+# and bash sources natively — no parser on either side. Of the tool pins, only
+# PHPUNIT_* is shared (the Makefile runs the tool test suites on the same phar
+# this image bakes); everything else below has exactly one consumer and stays
+# here, next to the comment that explains it.
 #
 # One path expression for both worlds: versions.env sits beside this script in
 # the checkout AND beside it at /tmp/ in the image, because the Dockerfiles COPY
