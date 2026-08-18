@@ -103,7 +103,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity \
-	test-compose-isolation test-vendored-paths test-doctor lint lint-shell \
+	test-compose-isolation test-vendored-paths test-doctor test-tool-locks lint lint-shell \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
 help: ## Show this help
@@ -122,7 +122,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity test-compose-isolation test-vendored-paths test-doctor ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity test-compose-isolation test-vendored-paths test-doctor test-tool-locks ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -167,6 +167,12 @@ test-vendored-paths: ## .ckconform vendored_paths file-list exclusion
 # every verdict is exercised against a host that really lacks the tool.
 test-doctor: ## doctor verdicts against synthesised hosts
 	bash tests/toolbelt/test-doctor.sh
+
+# A lock that installs is not a lock that runs: resolved against a newer PHP
+# than the images ship, a tool tree can pick a transitive that dies at startup
+# on an 8.1/8.2 image. No build catches that — this does, without Docker.
+test-tool-locks: ## Tool lockfiles: in sync, and resolved against the PHP floor
+	bash tests/toolbelt/test-tool-locks.sh
 
 # Two jobs of one run sharing a compose project means the second one's
 # `down -v` kills the first one's containers. Only reproducible where jobs
