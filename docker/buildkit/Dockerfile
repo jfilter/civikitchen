@@ -77,14 +77,11 @@ RUN pecl install pcov xdebug \
 # Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder,
 # rector/ckmodernize).
 # Lives in toolbelt/ so the standalone image uses the same script.
-# Every tool version is pinned in the script; pass --build-arg to override.
+# Composer-installable tools are pinned in committed lockfiles (toolbelt/*-root,
+# toolbelt/rector, toolbelt/psalm); what is left below is what needs a phar,
+# a binary release or a git ref, and those stay overridable per --build-arg.
 ENV PATH="/opt/composer/vendor/bin:${PATH}"
-ARG PHPSTAN_VERSION
-ARG PHPSTAN_DEPRECATION_RULES_VERSION
-ARG PHPSTAN_EXTENSION_INSTALLER_VERSION
 ARG CODER_REF
-ARG RECTOR_VERSION
-ARG PSALM_VERSION
 # Overriding a phar *_VERSION requires overriding its *_SHA256 too — the
 # install script fails a mismatch on purpose.
 ARG CIVIX_VERSION
@@ -96,6 +93,9 @@ ARG MAGO_SHA256_X86_64
 ARG MAGO_SHA256_AARCH64
 ARG NPM_VERSION
 ARG INFECTION_VERSION
+# The phpcs installation root IS composer's home dir — `composer global
+# install` in install-dev-tools.sh reads exactly these two files.
+COPY toolbelt/phpcs-root /opt/composer
 COPY toolbelt/install-dev-tools.sh /tmp/install-dev-tools.sh
 # Beside the script, because that is where it looks for it — the same relative
 # path that resolves in a checkout. Shared pins only (the phpunit phar the tool
@@ -138,6 +138,8 @@ COPY toolbelt/bin/ckrelease /usr/local/bin/ckrelease
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
 COPY toolbelt/rector /opt/civikitchen-rector
 COPY toolbelt/bin/ckmodernize /usr/local/bin/ckmodernize
+# The phpstan installation root: pinned engine + extensions, from its lock.
+COPY toolbelt/phpstan-root /opt/civikitchen-phpstan
 # CiviKitchen's phpstan extension (@ck-legacy deprecated-scope resolver) —
 # install-dev-tools.sh pulls it in as a composer path repository from here.
 COPY toolbelt/phpstan /opt/civikitchen-phpstan-ext
@@ -161,10 +163,7 @@ COPY toolbelt/bin/ckeslint /usr/local/bin/ckeslint
 COPY toolbelt/mago /opt/civikitchen-mago
 COPY toolbelt/oxfmt /opt/civikitchen-oxfmt
 COPY toolbelt/bin/ckfmt /usr/local/bin/ckfmt
-RUN PHPSTAN_VERSION="${PHPSTAN_VERSION}" CODER_REF="${CODER_REF}" RECTOR_VERSION="${RECTOR_VERSION}" \
-        PSALM_VERSION="${PSALM_VERSION}" \
-        PHPSTAN_DEPRECATION_RULES_VERSION="${PHPSTAN_DEPRECATION_RULES_VERSION}" \
-        PHPSTAN_EXTENSION_INSTALLER_VERSION="${PHPSTAN_EXTENSION_INSTALLER_VERSION}" \
+RUN CODER_REF="${CODER_REF}" \
         CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
         PHPUNIT_VERSION="${PHPUNIT_VERSION}" PHPUNIT_SHA256="${PHPUNIT_SHA256}" \
         INFECTION_VERSION="${INFECTION_VERSION}" \

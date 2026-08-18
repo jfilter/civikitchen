@@ -40,61 +40,17 @@ set -euo pipefail
 # Pinned tool versions — bump deliberately here. The image tags are floating
 # (standalone-6.12 rebuilds monthly for CiviCRM patches); without pins the dev
 # tools would drift too, so a rebuild could silently bump phpstan to a new
-# major and turn a green `phpstan analyse` red with no code change. Override at
-# build time with --build-arg PHPSTAN_VERSION=... / CODER_REF=...
-# FLOOR: 2.2.3 is the lowest release phpstan-phpunit 2.0.18 accepts (^2.2.3);
-# every other extension pinned below resolves against it, so keep the bump small.
-PHPSTAN_VERSION="${PHPSTAN_VERSION:-2.2.3}"
-# Reports every call into code marked @deprecated (or #[\Deprecated]). Not a
-# phpstan default and not implied by any level, including 10 — it ships as a
-# separate package. This is how deprecated CiviCRM *symbols* get caught without
-# anyone maintaining a list; the hook catalog in ckconform covers the one thing
-# it structurally cannot see, since a hook implementation is a function
-# definition matching a naming convention, not a call to a deprecated symbol.
-PHPSTAN_DEPRECATION_RULES_VERSION="${PHPSTAN_DEPRECATION_RULES_VERSION:-2.0.5}"
-# Registers the rules with phpstan automatically, so no project has to add an
-# `includes:` line to its phpstan.neon.
-PHPSTAN_EXTENSION_INSTALLER_VERSION="${PHPSTAN_EXTENSION_INSTALLER_VERSION:-1.4.3}"
-# Bans as CONFIG instead of sniff code (civicrm-disallowed.neon). Inert until a
-# project includes a config, so installing it changes nothing by itself.
-PHPSTAN_DISALLOWED_CALLS_VERSION="${PHPSTAN_DISALLOWED_CALLS_VERSION:-v4.14.0}"
-# Opt-in per repo (see the ignore list below) — switching these on fleet-wide
-# at level 10 would turn every repo red in one build.
-PHPSTAN_STRICT_RULES_VERSION="${PHPSTAN_STRICT_RULES_VERSION:-2.0.12}"
-# Type narrowing for phpunit assertions (fewer level-10 false reports in tests)
-# and architecture rules AS phpstan rules. Both inert until a repo has tests
-# resp. writes an ArchitectureRule class, so both register automatically.
-PHPSTAN_PHPUNIT_VERSION="${PHPSTAN_PHPUNIT_VERSION:-2.0.18}"
-PHPAT_VERSION="${PHPAT_VERSION:-0.12.4}"
-# Powers `ckdeps`: composer.json against the dependencies the code really uses.
-COMPOSER_DEPENDENCY_ANALYSER_VERSION="${COMPOSER_DEPENDENCY_ANALYSER_VERSION:-1.8.4}"
-# Cherry-picked sniffs only (DeclareStrictTypes today); the full standard would
-# fight the Drupal base the CiviKitchen ruleset is built on.
+# major and turn a green `phpstan analyse` red with no code change.
 #
-# CEILING: 8.22.1 is the last release that accepts phpcs ^3 — from 8.23 on it
-# requires php_codesniffer ^4.0.1, and this whole install would stop resolving.
-# phpcs cannot follow: the civicrm/coder fork pinned at CODER_REF still requires
-# phpcs ^3, and under 4.0 the Drupal standard aborts outright ("Referenced sniff
-# Squiz.CSS.* does not exist", plus the CSS/JS scanning removal). So this pin
-# moves only together with a coder fork that speaks phpcs 4 — do not bump it on
-# its own, and do not let a bot do it.
-SLEVOMAT_VERSION="${SLEVOMAT_VERSION:-8.22.1}"
+# Everything composer can install is pinned in a committed composer.json +
+# composer.lock instead of here — toolbelt/phpcs-root, toolbelt/phpstan-root,
+# toolbelt/rector and toolbelt/psalm, each with a README explaining its pins.
+# A lock beats a variable: it fixes the transitive tree too, and it is a
+# reviewable diff rather than a resolution that happens at build time. What
+# stays below is what composer cannot pin — phars, a binary release, a git ref
+# — plus infection, which has to follow the image's PHP version (see below).
 # civicrm/coder has no usable release tags, so pin to a commit on 8.x-2.x-civi.
 CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
-# rector powers `ckmodernize`; pin it too so a rebuild can't silently change
-# what gets rewritten.
-RECTOR_VERSION="${RECTOR_VERSION:-2.4.6}"
-# CEILING: rector reads a private property of phpstan's RichParser that 2.2.6
-# removed, so its (loose ^2.2.2) phpstan must be pinned or every run fatals.
-RECTOR_PHPSTAN_VERSION="${RECTOR_PHPSTAN_VERSION:-2.2.5}"
-# PHPCompatibility powers `ckcompat`. See the require below for why an alpha.
-PHPCOMPATIBILITY_VERSION="${PHPCOMPATIBILITY_VERSION:-10.0.0-alpha2}"
-# psalm powers `cktaint`. Pinned for the same reason, and one more: a taint
-# engine that reports differently after an unrelated rebuild is worthless as a
-# review signal. Note psalm's own `php` constraint is patch-level
-# (~8.3.16 || ~8.4.3 || …), so a base image on an older PHP patch fails this
-# install loudly rather than silently skipping the tool.
-PSALM_VERSION="${PSALM_VERSION:-6.16.1}"
 # download.civicrm.org also serves versioned civix phars next to the floating
 # civix.phar, so the scaffolding tool can be pinned like everything else.
 CIVIX_VERSION="${CIVIX_VERSION:-26.02.0}"
@@ -102,9 +58,10 @@ CIVIX_VERSION="${CIVIX_VERSION:-26.02.0}"
 # From versions.env — the Makefile runs the tool test suites on this same phar.
 PHPUNIT_VERSION="${PHPUNIT_VERSION:-$CK_PHPUNIT_VERSION}"
 # infection powers `ckmutate` (nightly mutation testing, never a push gate).
-# Pinned like everything else: a mutation SCORE that moves because the engine
-# gained mutators would push a repo through its .ckconform floor with no code
-# change — the one thing a scheduled quality signal must not do.
+# Applied as a CEILING (see the require below), because images for older
+# CiviCRM lines run on PHP 8.1/8.2 and recent infection rejects those. The
+# ceiling still holds the SCORE: an engine that gained mutators would push a
+# repo through its .ckconform floor with no code change.
 INFECTION_VERSION="${INFECTION_VERSION:-0.34.1}"
 # mago powers the PHP half of `ckfmt`. A formatter that changes its output
 # after an unrelated rebuild would turn every repo's format gate red, so the
@@ -200,20 +157,11 @@ rm -rf /tmp/mago.tar.gz "/tmp/mago-${MAGO_VERSION}-${MAGO_ARCH}-unknown-linux-gn
 export COMPOSER_HOME=/opt/composer
 export COMPOSER_ALLOW_SUPERUSER=1
 
-composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
-# PHPCompatibility powers `ckcompat` (does this code RUN on the declared PHP
-# floor — the question phpstan's phpVersion does not answer). Pinned to an
-# alpha deliberately: the last stable is 9.3.5 from 2019, which predates every
-# PHP version these extensions target. 10.x is the line that knows PHP 8.
-#
-# phpcs stays on the 3 line (civicrm/coder needs it, see SLEVOMAT_VERSION), but
-# below 3.13.6 the image scan fails on CVE-2026-67434 (OS command injection).
-composer global require --no-interaction --no-progress \
-    "squizlabs/php_codesniffer:^3.13.6" \
-    "dealerdirect/phpcodesniffer-composer-installer:^1" \
-    "phpcompatibility/php-compatibility:${PHPCOMPATIBILITY_VERSION}" \
-    "slevomat/coding-standard:${SLEVOMAT_VERSION}" \
-    "shipmonk/composer-dependency-analyser:${COMPOSER_DEPENDENCY_ANALYSER_VERSION}"
+# phpcs and everything riding on it (cklint, ckcompat, ckdeps) come from the
+# committed composer.json + lock the Dockerfile COPYs to COMPOSER_HOME — see
+# toolbelt/phpcs-root/README.md for what each pin is for. allow-plugins for the
+# phpcs installer is declared in that file, not set here.
+composer global install --no-interaction --no-progress
 
 # Clone the civicrm fork of drupal/coder (relaxed Drupal CS rules; ruleset
 # still registers as "Drupal" / "DrupalPractice" via phpcs). Pinned to
@@ -243,9 +191,9 @@ phpcs --config-set installed_paths \
 # rector (isolated install in its own dir) — powers `ckmodernize`. Its config +
 # CiviCRM rules dir is COPYed to /opt/civikitchen-rector by the Dockerfile
 # before this script runs; here we add the pinned rector and dump the autoload.
-composer require --working-dir=/opt/civikitchen-rector --no-interaction --no-progress \
-    "rector/rector:${RECTOR_VERSION}" \
-    "phpstan/phpstan:${RECTOR_PHPSTAN_VERSION}"
+# From the committed lock (toolbelt/rector), which also holds rector's phpstan
+# at the last release before it lost the private property rector reaches into.
+composer install --working-dir=/opt/civikitchen-rector --no-interaction --no-progress
 
 # ---------------------------------------------------------------------------
 # phpstan (isolated install, same shape as rector above).
@@ -256,7 +204,7 @@ composer require --working-dir=/opt/civikitchen-rector --no-interaction --no-pro
 # CiviCRM core marks @deprecated, and they need no list anyone has to maintain.
 #
 # extension-installer is a composer plugin, so it needs allow-plugins like the
-# phpcs installer above; it writes a GeneratedConfig.php into its own vendor
+# phpcs installer above — both declared in their composer.json. It writes a GeneratedConfig.php into its own vendor
 # tree, which means the rules are active for every project this phpstan
 # analyses without a single project neon mentioning them.
 PHPSTAN_DIR=/opt/civikitchen-phpstan
@@ -267,26 +215,17 @@ PHPSTAN_DIR=/opt/civikitchen-phpstan
 # explicit `version` because the COPYed directory has no git history for
 # composer to derive one from.
 PHPSTAN_EXT_DIR=/opt/civikitchen-phpstan-ext
-mkdir -p "${PHPSTAN_DIR}"
-[ -f "${PHPSTAN_DIR}/composer.json" ] || echo '{}' > "${PHPSTAN_DIR}/composer.json"
-composer config --working-dir="${PHPSTAN_DIR}" --no-plugins \
-    allow-plugins.phpstan/extension-installer true
+# The engine and the upstream extensions come from the committed lock the
+# Dockerfile COPYs to PHPSTAN_DIR (toolbelt/phpstan-root/README.md explains
+# each pin, including why strict-rules is installed but not auto-registered).
+composer install --working-dir="${PHPSTAN_DIR}" --no-interaction --no-progress
+# Only the local extension is added at build time — it cannot be in the lock,
+# because its path exists in the image, not in the checkout. Adding it does not
+# move the locked tree: every version above is exact, so this resolves to
+# "1 install, 0 updates".
 composer config --working-dir="${PHPSTAN_DIR}" --no-plugins \
     repositories.civikitchen-phpstan path "${PHPSTAN_EXT_DIR}"
-# strict-rules is installed but NOT auto-registered: at level 10 it would turn
-# every repo red in the build that shipped it. Repos opt in with one `includes:`
-# line (see docs/extension-standards.md). disallowed-calls stays auto-registered
-# because it is inert until a project includes a ban list.
-composer config --working-dir="${PHPSTAN_DIR}" --no-plugins --json \
-    extra.phpstan/extension-installer.ignore '["phpstan/phpstan-strict-rules"]'
 composer require --working-dir="${PHPSTAN_DIR}" --no-interaction --no-progress \
-    "phpstan/phpstan:${PHPSTAN_VERSION}" \
-    "phpstan/phpstan-deprecation-rules:${PHPSTAN_DEPRECATION_RULES_VERSION}" \
-    "phpstan/extension-installer:${PHPSTAN_EXTENSION_INSTALLER_VERSION}" \
-    "spaze/phpstan-disallowed-calls:${PHPSTAN_DISALLOWED_CALLS_VERSION}" \
-    "phpstan/phpstan-phpunit:${PHPSTAN_PHPUNIT_VERSION}" \
-    "phpat/phpat:${PHPAT_VERSION}" \
-    "phpstan/phpstan-strict-rules:${PHPSTAN_STRICT_RULES_VERSION}" \
     "civikitchen/phpstan-ck-legacy:*"
 
 # Goes through composer's bin proxy — the documented entry point for a composer
@@ -302,7 +241,7 @@ chmod +x /usr/local/bin/phpstan
 # ---------------------------------------------------------------------------
 # psalm (isolated install in its own dir) — powers `cktaint`. Its taint config
 # and CiviCRM stubs are COPYed to /opt/civikitchen-psalm by the Dockerfile
-# before this script runs; here we add the pinned psalm.
+# before this script runs, composer.json and its lock among them.
 #
 # Isolated, NOT `composer global require` alongside phpcs, and deliberately not
 # near phpstan: psalm pulls ~50 packages of its own (amphp, nikic/php-parser,
@@ -310,17 +249,9 @@ chmod +x /usr/local/bin/phpstan
 # every extension depends on — it must not be perturbed by another tool's
 # dependency resolution. Two engines, two roots, no shared resolution.
 # From the committed lockfile: psalm drags ~50 transitive packages, and a
-# monthly rebuild re-resolving them would be exactly the drift the version
-# pins exist to prevent (oxlint installs from its lockfile for the same
-# reason). Overriding PSALM_VERSION re-resolves — accepting a fresh tree is
-# the meaning of that override.
-PSALM_LOCKED=$(php -r 'echo json_decode(file_get_contents("/opt/civikitchen-psalm/composer.json"))->require->{"vimeo/psalm"} ?? "";')
-if [ "${PSALM_VERSION}" = "${PSALM_LOCKED}" ] && [ -f /opt/civikitchen-psalm/composer.lock ]; then
-    composer install --working-dir=/opt/civikitchen-psalm --no-interaction --no-progress
-else
-    composer require --working-dir=/opt/civikitchen-psalm --no-interaction --no-progress \
-        "vimeo/psalm:${PSALM_VERSION}"
-fi
+# monthly rebuild re-resolving them would be exactly the drift the pins exist
+# to prevent (oxlint installs from its lockfile for the same reason).
+composer install --working-dir=/opt/civikitchen-psalm --no-interaction --no-progress
 
 # ---------------------------------------------------------------------------
 # infection (isolated install, same shape as rector/psalm) — powers `ckmutate`.
@@ -332,8 +263,10 @@ mkdir -p "${INFECTION_DIR}"
 # infection/extension-installer is a composer plugin, like phpstan's.
 composer config --working-dir="${INFECTION_DIR}" --no-plugins \
     allow-plugins.infection/extension-installer true
+# `<=`, not the exact version: composer then picks the newest release the
+# image's PHP accepts (8.1 -> 0.29.x, 8.2 -> 0.32.x, 8.3+ -> the ceiling).
 composer require --working-dir="${INFECTION_DIR}" --no-interaction --no-progress \
-    "infection/infection:${INFECTION_VERSION}"
+    "infection/infection:<=${INFECTION_VERSION}"
 
 cat > /usr/local/bin/infection <<EOF
 #!/bin/sh

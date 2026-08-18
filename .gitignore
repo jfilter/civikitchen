@@ -15,3 +15,7 @@ playwright-report/
 extensions/
 sites/
 .cache/
+
+# Composer trees for the pinned tool roots: installed inside the image, and
+# regenerated locally only to refresh the lockfile beside them.
+toolbelt/*/vendor/

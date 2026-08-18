@@ -315,8 +315,8 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
 - **Rule packs come from the image, not from each repo's `composer.json`.**
   phpcs standards (civicrm/coder, PHPCompatibility, Slevomat) and phpstan
   extensions (deprecation rules, disallowed-calls, strict-rules) are installed
-  and pinned once in `toolbelt/install-dev-tools.sh` — an extension carries
-  no dev dependencies at all. Third-party rules are cherry-picked, never a
+  once from the image's committed lockfiles (`toolbelt/phpcs-root`,
+  `toolbelt/phpstan-root`) — an extension carries no dev dependencies at all. Third-party rules are cherry-picked, never a
   whole foreign standard, and every pack that would turn the fleet red at once
   (`phpstan-strict-rules`) is installed but left out of the auto-registration
   so a repo opts in with one `includes:` line when it is ready.

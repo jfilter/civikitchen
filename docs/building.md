@@ -63,6 +63,37 @@ docker build -f docker/buildkit/Dockerfile \
     -t civikitchen:joomla .
 ```
 
+## Bumping a dev tool
+
+Composer-installable tools are pinned in committed `composer.json` +
+`composer.lock` pairs, one per install root. Each root has a README saying what
+its pins are for; bumping means editing the `composer.json`, re-locking and
+committing both files:
+
+| Root | Tools |
+| --- | --- |
+| `toolbelt/phpcs-root` | phpcs, PHPCompatibility, Slevomat, composer-dependency-analyser |
+| `toolbelt/phpstan-root` | phpstan + the extensions every image ships |
+| `toolbelt/rector` | rector (and the phpstan version it may see) |
+| `toolbelt/psalm` | psalm (its lock carries a PHP floor — see its README) |
+
+```bash
+composer update --working-dir=toolbelt/phpstan-root
+```
+
+The lock is the pin: it fixes the transitive tree as well, so a monthly image
+rebuild cannot move a gate under a repo that did not change. There is no
+`--build-arg` for these — an image whose tool tree was resolved fresh at build
+time is not the image anyone reviewed.
+
+What composer cannot install stays in `toolbelt/install-dev-tools.sh` and stays
+overridable per `--build-arg`: the civix and phpunit phars and the mago binary
+(each with a checksum — overriding a `*_VERSION` means overriding its `*_SHA256`
+too), npm, and the `civicrm/coder` commit ref. infection is the one composer
+tool still pinned there, because it is applied as a ceiling: images for older
+CiviCRM lines run on PHP 8.1/8.2, and composer picks the newest release that
+PHP accepts.
+
 ## Keeping the CiviCRM git history (`KEEP_GIT=1`)
 
 The published buildkit images strip the git history civibuild clones into the

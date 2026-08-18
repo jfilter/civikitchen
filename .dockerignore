@@ -24,9 +24,13 @@ toolbelt/oxfmt/node_modules
 toolbelt/phpstan/vendor
 toolbelt/phpstan/composer.lock
 
-# Host-built artifacts from running the tool test suites out of a checkout.
+# Host-built artifacts from running the tool test suites, or from re-locking a
+# tool root, out of a checkout. The composer.lock files next to them are the
+# opposite: they MUST reach the image — they are what the installs read.
 toolbelt/psalm/vendor
 toolbelt/rector/vendor
+toolbelt/phpstan-root/vendor
+toolbelt/phpcs-root/vendor
 toolbelt/ckconform/.phpunit.result.cache
 toolbelt/phpstan/.phpunit.result.cache
 node_modules
