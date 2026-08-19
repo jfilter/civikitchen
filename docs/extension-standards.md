@@ -964,9 +964,10 @@ keys:
   it belongs to no person, so it survives someone leaving. A PAT is the
   opposite on both counts, and per-repo deploy keys do not scale past one
   dependency because ssh cannot tell which key a given repo wants.
-- Store the App ID as organisation secret `COMPOSER_APP_ID` and the PEM as
-  `COMPOSER_APP_PRIVATE_KEY`, visible to the repos that need them. Nothing
-  goes into the dependency repos themselves.
+- Store the App ID as secret `COMPOSER_APP_ID` and the PEM as
+  `COMPOSER_APP_PRIVATE_KEY` in each calling repo (an organisation secret
+  scoped to private repos needs a paid GitHub plan). Nothing goes into the
+  dependency repos themselves.
 - The token is HTTPS-only. Private Composer packages must be declared by
   HTTPS URL in `composer.json` — `"url": "https://github.com/myorg/mypackage"`
   (`.git` suffix optional) — and `composer.lock` re-resolved so its
