@@ -83,6 +83,27 @@ vulnerabilities:
     expired_at: 2026-11-01
 
   # -------------------------------------------------------------------------
+  # Go stdlib inside the oxlint-tsgolint binary
+  #
+  # opt/civikitchen-oxlint/node_modules/@oxlint-tsgolint/*/tsgolint is a
+  # prebuilt Go binary from npm; its stdlib version is whatever oxlint built
+  # with, and nothing here can relink it.
+  # -------------------------------------------------------------------------
+  - id: CVE-2026-33818
+    paths:
+      - "opt/civikitchen-oxlint/node_modules/@oxlint-tsgolint/**"
+    statement: >-
+      encoding/asn1 stack exhaustion on deeply nested input in Go <= 1.26.5.
+      tsgolint is the type-aware linter behind ckeslint: it reads TypeScript
+      sources the developer points it at and never parses ASN.1 from anywhere,
+      so the vulnerable function is unreachable. oxlint-tsgolint 7.0.2001 (the
+      newest release, 2026-07-21) predates go1.26.6 and no build with the fix
+      exists yet. On expiry: `npm view oxlint-tsgolint version` — bump
+      toolbelt/oxlint/package.json as soon as a release built with >= 1.26.6
+      is out and delete this entry.
+    expired_at: 2026-11-01
+
+  # -------------------------------------------------------------------------
   # CiviCRM core's bundled frontend libraries
   #
   # core/bower_components/* in every flavor. These are CiviCRM's own vendored
