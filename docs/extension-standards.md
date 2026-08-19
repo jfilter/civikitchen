@@ -887,15 +887,14 @@ repo-local job.
 
 civikitchen is public and the shared workflow needs no token to be called —
 but not every extension's *dependencies* are public. Two cases, two opt-in
-inputs plus one optional secret each. Both default to off; a caller that sets
-neither gets exactly the run it has today.
+inputs plus one optional pair of secrets shared by both. Both inputs default
+to off; a caller that sets neither gets exactly the run it has today.
 
 | Input / secret | What it adds |
 |---|---|
 | `composer_install` | `composer install --no-interaction --no-progress` on the runner, before the stack boots. |
-| `composer_deploy_key` (secret) | Private SSH key used for `github.com` during that install, so a private VCS package resolves. |
 | `sibling_repo` | `owner/repo` of a second extension: checked out to `.civikitchen-siblings/<repo>` and bind-mounted read-only into the stack, which also enables it. |
-| `sibling_deploy_key` (secret) | Private SSH key for that checkout. |
+| `composer_app_id`, `composer_app_private_key` (secrets) | A GitHub App with `contents: read`, installed on the private dependency repos. The workflow mints a short-lived installation token from it and uses that for both the composer install and the sibling checkout. |
 
 **`composer_install` is not an optimization — for a repo without a committed
 `vendor/` it is the precondition for everything else.** The extension's main
@@ -904,7 +903,7 @@ enable the mounted extension: the stack boot fails before a test runs. Commit
 `vendor/` or set this input; there is no third option.
 
 It runs on the **runner**, not through the image's own
-`CIVIKITCHEN_AUTO_COMPOSER`, and that is the whole point: the deploy key never
+`CIVIKITCHEN_AUTO_COMPOSER`, and that is the whole point: the read token never
 enters a container. The container-side auto-composer then sees `vendor/`
 through the bind mount and skips the directory, so the two do not collide.
 CI installs the locked development tree because static analysis covers tests
@@ -944,8 +943,8 @@ jobs:
       composer_install: true
       sibling_repo: myorg/othersibling
     secrets:
-      composer_deploy_key: ${{ secrets.PACKAGE_DEPLOY_KEY }}
-      sibling_deploy_key: ${{ secrets.SIBLING_DEPLOY_KEY }}
+      composer_app_id: ${{ secrets.COMPOSER_APP_ID }}
+      composer_app_private_key: ${{ secrets.COMPOSER_APP_PRIVATE_KEY }}
 ```
 
 Name the two secrets you pass; do **not** write `secrets: inherit`. Inherit
@@ -953,17 +952,26 @@ hands the reusable workflow every secret the repo has, for the sake of two —
 and the workflow it hands them to is one you move by retagging. Least
 privilege costs one line here.
 
-What goes in those secrets, and why deploy keys rather than a PAT:
+What goes in those secrets, and why a GitHub App rather than a PAT or deploy
+keys:
 
-- A **read-only deploy key** is scoped to exactly one repository and belongs
-  to no person, so it survives someone leaving and cannot reach a second repo
-  if it leaks. A PAT is the opposite on both counts. One key per dependency
-  repo — that scoping is the entire feature.
-- The private half goes into the calling repo's secrets, the public half into
-  the dependency repo's *Deploy keys*, with write access **off**.
-- The key is configured with `IdentitiesOnly`, so it is the only identity
-  offered: a missing grant fails here rather than passing on one runner and
-  failing on another because an agent key happened to cover it.
+- Create **one GitHub App** in the organisation (*Settings → Developer
+  settings → GitHub Apps*): no webhook, no callback, repository permission
+  **Contents: Read-only** and nothing else. Generate a private key (PEM).
+- **Install** the app on the organisation and restrict it to the private
+  dependency repositories — the composer packages and any sibling. A token
+  minted from it reaches exactly those repos and expires within the hour;
+  it belongs to no person, so it survives someone leaving. A PAT is the
+  opposite on both counts, and per-repo deploy keys do not scale past one
+  dependency because ssh cannot tell which key a given repo wants.
+- Store the App ID as organisation secret `COMPOSER_APP_ID` and the PEM as
+  `COMPOSER_APP_PRIVATE_KEY`, visible to the repos that need them. Nothing
+  goes into the dependency repos themselves.
+- The token is HTTPS-only. Private Composer packages must be declared by
+  HTTPS URL in `composer.json` — `"url": "https://github.com/myorg/mypackage"`
+  (`.git` suffix optional) — and `composer.lock` re-resolved so its
+  `source.url` matches; a `git@github.com:` URL cannot use the token and
+  fails as "repository not found".
 
 Two limits worth knowing before you switch something else on as well:
 

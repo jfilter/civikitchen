@@ -65,7 +65,7 @@ file can be promoted into the template later, when it has earned it.
 | `require_changelog` | `false` | fail when the repo has no `CHANGELOG.md` at all |
 | `draft` | `false` | publish the GitHub release as a draft |
 | `composer_install` | `false` | install the lockfile with `--no-dev` and bundle the generated `vendor/` tree |
-| `composer_deploy_key` | unset | optional read-only SSH key for private Composer packages; pass it explicitly under `secrets:` |
+| `composer_app_id`, `composer_app_private_key` | unset | GitHub App (`contents: read`, installed on the private package repos) for private Composer packages; pass both explicitly under `secrets:` |
 
 ## Cutting one
 

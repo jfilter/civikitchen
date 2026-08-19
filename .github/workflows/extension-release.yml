@@ -66,10 +66,16 @@ on:
         default: false
 
     secrets:
-      composer_deploy_key:
+      composer_app_id:
         description: >-
-          Optional read-only deploy key for private Composer packages. Used on
-          the runner only and never copied into the archive or smoke container.
+          App ID of a GitHub App with `contents: read`, installed on the
+          private Composer package repos. Optional — without it composer
+          resolves what is public.
+        required: false
+      composer_app_private_key:
+        description: >-
+          Private key (PEM) of that app. Used on the runner only to mint a
+          short-lived token; never copied into the archive or smoke container.
         required: false
 
 permissions:
@@ -113,25 +119,41 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
 
+      # Branching on the secret in bash — the `secrets` context is not
+      # available in `if:`. No app means every required package is public.
+      - name: Decide whether a private-dependency token is needed
+        id: need-token
+        if: ${{ inputs.composer_install }}
+        env:
+          CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
+          CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CK_COMPOSER_APP_ID:-}" ] && [ -n "${CK_COMPOSER_APP_PRIVATE_KEY:-}" ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mint a read token for private dependencies
+        id: app
+        if: ${{ steps.need-token.outputs.app == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.composer_app_id }}
+          private-key: ${{ secrets.composer_app_private_key }}
+          owner: ${{ github.repository_owner }}
+
       - name: Bundle locked production dependencies
         if: ${{ inputs.composer_install }}
         env:
-          CK_COMPOSER_DEPLOY_KEY: ${{ secrets.composer_deploy_key }}
+          CK_COMPOSER_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
-          if [ -n "${CK_COMPOSER_DEPLOY_KEY:-}" ]; then
-            mkdir -p ~/.ssh && chmod 700 ~/.ssh
-            printf '%s\n' "$CK_COMPOSER_DEPLOY_KEY" > ~/.ssh/civikitchen_composer
-            chmod 600 ~/.ssh/civikitchen_composer
-            # github.com's published host keys (api.github.com/meta; fingerprints
-            # match docs.github.com) — pinned, not scanned: a keyscan on port 22
-            # trusts whatever answers and is blocked on proxied runners.
-            {
-              echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl'
-              echo 'github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg='
-              echo 'github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk='
-            } >> ~/.ssh/known_hosts
-            printf 'Host github.com\n  IdentityFile ~/.ssh/civikitchen_composer\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          # Private packages are declared by https://github.com/... URL; the
+          # token goes in as Composer's github-oauth credential.
+          if [ -n "${CK_COMPOSER_TOKEN:-}" ]; then
+            composer config -g github-oauth.github.com "$CK_COMPOSER_TOKEN"
           fi
 
           # The lockfile is the dependency input; do not update it and do not

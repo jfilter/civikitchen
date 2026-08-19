@@ -17,7 +17,7 @@
 # ask a CiviCRM about: the template-drift check and the lockfile scan.
 #
 # The opt-in extras, which of them belong in a scheduled second caller, and how
-# a repo with private dependencies passes deploy keys: see
+# a repo with private dependencies passes GitHub App credentials: see
 # docs/extension-standards.md. The inputs below document themselves.
 name: Extension CI
 
@@ -155,7 +155,7 @@ on:
         description: >-
           `composer install` on the runner before the stack boots —
           a repo without committed vendor/ cannot even enable the extension
-          otherwise. On the runner (not in-container) so the deploy key never
+          otherwise. On the runner (not in-container) so the read token never
           enters a container; the image's auto-composer sees vendor/ and skips.
         type: boolean
         default: false
@@ -165,21 +165,22 @@ on:
           .civikitchen-siblings/ and mounted read-only beside this one, under
           the key from ITS info.xml — for extensions implementing a sibling's
           interfaces. Mounted as-is (no composer install there); private
-          sibling needs sibling_deploy_key. Empty mounts nothing.
+          sibling needs the composer_app_* secrets. Empty mounts nothing.
         type: string
         default: ''
 
     secrets:
-      composer_deploy_key:
+      composer_app_id:
         description: >-
-          Read-only deploy key for the private composer package; used only by
-          ssh(1) on the runner (IdentitiesOnly), never enters a container.
-          Optional — without it composer resolves what is public.
+          App ID of a GitHub App with `contents: read`, installed on the
+          private dependency repos (composer packages, sibling). Optional —
+          without it composer resolves what is public and the sibling checkout
+          uses the caller-scoped token (404 for private).
         required: false
-      sibling_deploy_key:
+      composer_app_private_key:
         description: >-
-          Read-only deploy key for a private sibling_repo. Optional — without
-          it the checkout uses the caller-scoped token (404 for private).
+          Private key (PEM) of that app. Used once on the runner to mint a
+          short-lived installation token; never enters a container.
         required: false
 
 permissions:
@@ -434,19 +435,45 @@ jobs:
       # extension needs — its autoloader, a sibling it declares a requirement
       # on — has to be in the tree by then, not a step later.
       #
-      # Deploy keys stay on the runner. Nothing here is mounted, copied or
-      # passed into a container, and nothing echoes the key: the container gets
-      # the *result* (a vendor/ directory, a checked-out sibling), never the
-      # credential that produced it. A leaked build secret is otherwise the one
-      # mistake in this pipeline that outlives the job.
+      # App credentials stay on the runner. Nothing here is mounted, copied or
+      # passed into a container, and nothing echoes the token: the container
+      # gets the *result* (a vendor/ directory, a checked-out sibling), never
+      # the credential that produced it. A leaked build secret is otherwise the
+      # one mistake in this pipeline that outlives the job — and an
+      # installation token at least expires within the hour.
       #
-      # The sibling checkout goes FIRST, before any ~/.ssh/config exists. Two
-      # deploy keys for github.com are ambiguous by nature: the server accepts
-      # whichever valid key ssh offers first and only then decides the
-      # repository is off limits, which surfaces as "repository not found" for
-      # a repo the run has perfectly good access to. actions/checkout passes
-      # its own key with `-i … -o IdentitiesOnly=yes`, so ordering the steps
-      # this way keeps the question from arising at all.
+      # One read token serves both the sibling checkout and composer: the app
+      # is installed on every private dependency repo, so there is no
+      # per-repo key to pick.
+
+      # Branching on the secret in bash, not in the step's `if:` — the
+      # `secrets` context is not available there. An absent app is a
+      # legitimate configuration: a repo can keep vendor/ out of git while
+      # every package it requires is public.
+      - name: Decide whether a private-dependency token is needed
+        id: need-token
+        if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
+        env:
+          CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
+          CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CK_COMPOSER_APP_ID:-}" ] && [ -n "${CK_COMPOSER_APP_PRIVATE_KEY:-}" ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # No `repositories:` — the token covers every repo the app is installed
+      # on, which is the least-privilege set by construction.
+      - name: Mint a read token for private dependencies
+        id: app
+        if: ${{ steps.need-token.outputs.app == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.composer_app_id }}
+          private-key: ${{ secrets.composer_app_private_key }}
+          owner: ${{ github.repository_owner }}
 
       # Two steps rather than an expression: GitHub's expression language has
       # no split(), and what the checkout needs is the repo name — the part
@@ -471,16 +498,16 @@ jobs:
       #     such rule of its own, and a project phpcs.xml.dist scoped to
       #     `<file>.</file>` would otherwise lint the sibling's code.
       #
-      # ssh-key is passed unconditionally: actions/checkout treats the empty
-      # string as "not set" and falls back to the calling workflow's token,
-      # which is the right behaviour for a public sibling.
+      # token is passed unconditionally: without an app the output is empty
+      # and actions/checkout falls back to the calling workflow's token, which
+      # is the right behaviour for a public sibling.
       - name: Check out the sibling extension
         if: ${{ inputs.sibling_repo != '' }}
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
           repository: ${{ inputs.sibling_repo }}
-          ssh-key: ${{ secrets.sibling_deploy_key }}
+          token: ${{ steps.app.outputs.token || github.token }}
           path: ${{ steps.sibling.outputs.path }}
 
       # The CI compose file is template-managed (ckinit checks it), so the
@@ -548,34 +575,18 @@ jobs:
           YAML
           echo "CK_SIBLING_OVERRIDE=$override" >> "$GITHUB_ENV"
 
-      - name: Composer install (private packages over SSH)
+      - name: Composer install (private packages over HTTPS)
         if: ${{ inputs.composer_install }}
         env:
-          CK_COMPOSER_DEPLOY_KEY: ${{ secrets.composer_deploy_key }}
+          CK_COMPOSER_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
-          # Branching on the secret in bash, not in the step's `if:` — the
-          # `secrets` context is not available there. And an absent key is a
-          # legitimate configuration: a repo can keep vendor/ out of git while
-          # every package it requires is public.
-          if [ -n "${CK_COMPOSER_DEPLOY_KEY:-}" ]; then
-            mkdir -p ~/.ssh && chmod 700 ~/.ssh
-            # printf, not echo: the key is multi-line and OpenSSH rejects it
-            # without the trailing newline that a secret often loses.
-            printf '%s\n' "$CK_COMPOSER_DEPLOY_KEY" > ~/.ssh/civikitchen_composer
-            chmod 600 ~/.ssh/civikitchen_composer
-            # github.com's published host keys (api.github.com/meta; fingerprints
-            # match docs.github.com) — pinned, not scanned: a keyscan on port 22
-            # trusts whatever answers and is blocked on proxied runners.
-            {
-              echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl'
-              echo 'github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg='
-              echo 'github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk='
-            } >> ~/.ssh/known_hosts
-            # IdentitiesOnly: offer this key and nothing else. Without it ssh
-            # walks the agent's keys first, so a *missing* grant on the deploy
-            # key can pass on one runner and fail on another.
-            printf 'Host github.com\n  IdentityFile ~/.ssh/civikitchen_composer\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          # Composer's github-oauth config works for installation tokens too:
+          # it becomes the Authorization header for https://github.com/... VCS
+          # repositories and api.github.com dist downloads. Private packages
+          # therefore have to be declared by HTTPS URL, not git@github.com:.
+          if [ -n "${CK_COMPOSER_TOKEN:-}" ]; then
+            composer config -g github-oauth.github.com "$CK_COMPOSER_TOKEN"
           fi
           # No `composer update` and no --ignore-platform-reqs: the committed
           # lock is installed as it stands. It runs on the RUNNER's PHP though,
@@ -1475,25 +1486,37 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Composer install (private packages over SSH)
+      - name: Decide whether a private-dependency token is needed
+        id: need-token
         if: ${{ inputs.composer_install }}
         env:
-          CK_COMPOSER_DEPLOY_KEY: ${{ secrets.composer_deploy_key }}
+          CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
+          CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
         run: |
           set -euo pipefail
-          if [ -n "${CK_COMPOSER_DEPLOY_KEY:-}" ]; then
-            mkdir -p ~/.ssh && chmod 700 ~/.ssh
-            printf '%s\n' "$CK_COMPOSER_DEPLOY_KEY" > ~/.ssh/civikitchen_composer
-            chmod 600 ~/.ssh/civikitchen_composer
-            # github.com's published host keys (api.github.com/meta; fingerprints
-            # match docs.github.com) — pinned, not scanned: a keyscan on port 22
-            # trusts whatever answers and is blocked on proxied runners.
-            {
-              echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl'
-              echo 'github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg='
-              echo 'github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk='
-            } >> ~/.ssh/known_hosts
-            printf 'Host github.com\n  IdentityFile ~/.ssh/civikitchen_composer\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          if [ -n "${CK_COMPOSER_APP_ID:-}" ] && [ -n "${CK_COMPOSER_APP_PRIVATE_KEY:-}" ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mint a read token for private dependencies
+        id: app
+        if: ${{ steps.need-token.outputs.app == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.composer_app_id }}
+          private-key: ${{ secrets.composer_app_private_key }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Composer install (private packages over HTTPS)
+        if: ${{ inputs.composer_install }}
+        env:
+          CK_COMPOSER_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CK_COMPOSER_TOKEN:-}" ]; then
+            composer config -g github-oauth.github.com "$CK_COMPOSER_TOKEN"
           fi
           composer install --no-interaction --no-progress
 
