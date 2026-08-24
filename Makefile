@@ -103,7 +103,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity \
-	test-compose-isolation test-vendored-paths test-doctor test-tool-locks lint lint-shell \
+	test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks lint lint-shell \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
 help: ## Show this help
@@ -122,7 +122,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity test-compose-isolation test-vendored-paths test-doctor test-tool-locks ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -161,6 +161,9 @@ test-parity: ## Toolbelt components vs. Dockerfile COPY parity
 # reformats third-party source that must stay byte-identical.
 test-vendored-paths: ## .ckconform vendored_paths file-list exclusion
 	bash tests/toolbelt/test-vendored-paths.sh
+
+test-ckcoverage: ## ckcoverage uses collision-free temporary logs
+	bash tests/toolbelt/test-ckcoverage.sh
 
 # A doctor that cannot fail is worse than none: it reports a healthy host while
 # the prerequisite it was written for is absent. The fixtures shadow PATH so
