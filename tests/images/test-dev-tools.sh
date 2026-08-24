@@ -80,6 +80,12 @@ if [ "${CIVICRM_UF:-}" = "Standalone" ]; then
     else
         fail "civicrm.standalone.php carries the bootSettings anchor (patch-test-db-boot)"
     fi
+    if [ -s /var/www/html/core/sql/test_data.mysql ] \
+        && [ -s /var/www/html/core/sql/test_data_second_domain.mysql ]; then
+        ok "core headless-test seed SQL is present"
+    else
+        fail "core headless-test seed SQL is missing from the standalone release archive"
+    fi
 fi
 
 # ---------------------------------------------------------------------------

@@ -31,10 +31,19 @@ ARG CIVICRM_VERSION=6.17.0
 FROM php:${PHP_VERSION}-apache-bookworm AS download
 ARG CIVICRM_VERSION
 ARG CIVICRM_DOWNLOAD_URL="https://download.civicrm.org/civicrm-${CIVICRM_VERSION}-standalone.tar.gz"
+# The release archive export-ignores core's headless-test seed SQL even though
+# Civi\Test\Data reads it for every extension PHPUnit bootstrap. Restore the
+# two exact-version fixtures so direct `phpunit` runs don't emit warnings and
+# silently initialize without the standard seed rows.
 RUN curl -fsSL "${CIVICRM_DOWNLOAD_URL}" -o /tmp/civicrm-standalone.tar.gz \
     && mkdir /tmp/civicrm \
     && tar -xzf /tmp/civicrm-standalone.tar.gz -C /tmp/civicrm \
-    && test -f /tmp/civicrm/civicrm-standalone/civicrm.standalone.php
+    && test -f /tmp/civicrm/civicrm-standalone/civicrm.standalone.php \
+    && for fixture in test_data.mysql test_data_second_domain.mysql; do \
+         curl -fsSL \
+           "https://raw.githubusercontent.com/civicrm/civicrm-core/${CIVICRM_VERSION}/sql/${fixture}" \
+           -o "/tmp/civicrm/civicrm-standalone/core/sql/${fixture}"; \
+       done
 
 FROM php:${PHP_VERSION}-apache-bookworm
 

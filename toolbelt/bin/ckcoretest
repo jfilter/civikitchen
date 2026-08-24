@@ -3,11 +3,12 @@
 # ckcoretest — run CiviCRM *core* phpunit suites inside the kitchen.
 #
 # The official civicrm/civicrm image installs core as a composer dist, and
-# core's .gitattributes export-ignores tests/, phpunit.xml.dist and tools/ —
-# so the dist can't run its own test suite. This fetches exactly the missing
-# pieces for the *installed* core version (sparse, blob-filtered checkout of
-# the matching tag) into [core]/tests + phpunit.xml.dist, then runs phpunit
-# headless (CIVICRM_UF=UnitTests) against the scratch test DB.
+# core's .gitattributes export-ignores tests/, phpunit.xml.dist, tools/ and the
+# two sql/test_data*.mysql seed files — so the dist can't initialize or run
+# its own suite cleanly. This fetches exactly the missing pieces for the
+# *installed* core version (sparse, blob-filtered checkout of the matching tag)
+# into the core tree, then runs phpunit headless (CIVICRM_UF=UnitTests) against
+# the scratch test DB.
 #
 # The fetched tree is cached in the container ([core]/tests/.ckcoretest-version
 # marker); re-runs skip the network. On buildkit flavors core is a real git
@@ -49,17 +50,21 @@ marker="${CK_CORE_DIR}/tests/.ckcoretest-version"
 if [ -d "${CK_CORE_DIR}/tests/phpunit" ] && [ ! -f "${marker}" ]; then
   echo "[ckcoretest] ${CK_CORE_DIR}/tests already present (git checkout?) — not touching it"
 elif [ ! -f "${marker}" ] || [ "$(cat "${marker}")" != "${version}" ]; then
-  echo "[ckcoretest] Fetching tests/ + phpunit.xml.dist for core ${version}..."
+  echo "[ckcoretest] Fetching tests, phpunit config and seed SQL for core ${version}..."
   src=$(mktemp -d)
   trap 'rm -rf "${src}"' EXIT
   # The dist export-ignores **/tests/** — restore core's tests/ AND the
   # per-extension suites under ext/*/tests (each ext ships its phpunit.xml.dist).
   git -c advice.detachedHead=false clone --quiet --depth 1 --branch "${version}" --filter=blob:none --sparse \
       "${CK_CORE_REPO}" "${src}/core"
-  git -C "${src}/core" sparse-checkout set --no-cone '/phpunit.xml.dist' '/tests/' '/ext/**/tests/'
+  git -C "${src}/core" sparse-checkout set --no-cone \
+      '/phpunit.xml.dist' '/tests/' '/ext/**/tests/' \
+      '/sql/test_data.mysql' '/sql/test_data_second_domain.mysql'
   rm -rf "${CK_CORE_DIR}/tests"
   mv "${src}/core/tests" "${CK_CORE_DIR}/tests"
   cp "${src}/core/phpunit.xml.dist" "${CK_CORE_DIR}/phpunit.xml.dist"
+  cp "${src}/core/sql/test_data.mysql" "${src}/core/sql/test_data_second_domain.mysql" \
+      "${CK_CORE_DIR}/sql/"
   # ext suites can nest (ext/afform/core/tests), so walk rather than glob
   while IFS= read -r d; do
     rel="${d#"${src}/core/"}"
@@ -70,6 +75,7 @@ elif [ ! -f "${marker}" ] || [ "$(cat "${marker}")" != "${version}" ]; then
   done < <(find "${src}/core/ext" -type d -name tests -prune 2>/dev/null)
   echo "${version}" > "${marker}"
   chown -R www-data:www-data "${CK_CORE_DIR}/tests" "${CK_CORE_DIR}/phpunit.xml.dist" \
+      "${CK_CORE_DIR}/sql/test_data.mysql" "${CK_CORE_DIR}/sql/test_data_second_domain.mysql" \
       "${CK_CORE_DIR}"/ext/*/tests 2>/dev/null || true
 fi
 
