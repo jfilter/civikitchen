@@ -8,9 +8,14 @@ single source of truth any tool validates these profiles against.
 Reusable `$defs` for consumers that only need a slice:
 
 - `#/$defs/dependency` — one extension entry (an extension manifest).
-- `#/$defs/contentProfile` — a standalone `config` + `seed` (+ optional
-  `scripts`) document (e.g. a seeding profile). A full profile embeds the same
-  shape inline.
+- `#/$defs/contentProfile` — a standalone `authx` + `apiUsers` + `config` +
+  `seed` (+ optional `scripts`) document (e.g. a seeding profile). A full
+  profile embeds the same shape inline.
+- `#/$defs/apiUser` — one API user (username, role, permissions). Credentials
+  are never part of a profile: the applying tool supplies or issues them.
+
+`config` covers settings, the domain organization, from-address, mailbox domain,
+groups and membership types (`membership_types`, asserted by name).
 
 Content has two tiers: **declarative** `config` (asserted every run) + `seed`
 (created-once fixtures) for config and anchors, and optional **imperative**

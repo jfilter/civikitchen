@@ -13,47 +13,31 @@
       "description": "One-line human summary of the scenario."
     },
     "authx": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["header_cred"],
-      "description": "AuthX configuration for headless API access.",
-      "properties": {
-        "header_cred": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": { "enum": ["jwt", "api_key", "pass"] },
-          "description": "Accepted credential flows in the Authorization header."
-        }
-      }
+      "$ref": "#/$defs/authx"
     },
     "apiUsers": {
       "type": "array",
-      "description": "API users created after install; credentials land in the boot log / credentials file.",
+      "description": "API users asserted after install (idempotent by username); credentials are supplied or issued by the applying tool, never stored in the profile.",
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["username", "role", "permissions"],
-        "properties": {
-          "username": { "type": "string", "minLength": 1 },
-          "role": { "type": "string", "minLength": 1 },
-          "permissions": {
-            "type": "array",
-            "minItems": 1,
-            "items": { "type": "string", "minLength": 1 },
-            "description": "CiviCRM permission strings granted to the user's role."
-          }
-        }
+        "$ref": "#/$defs/apiUser"
       }
     },
     "dependencies": {
       "type": "array",
       "description": "Extensions the scenario needs. Applied in array order (deps before dependents).",
-      "items": { "$ref": "#/$defs/dependency" }
+      "items": {
+        "$ref": "#/$defs/dependency"
+      }
     },
-    "config": { "$ref": "#/$defs/config" },
-    "seed": { "$ref": "#/$defs/seed" },
-    "scripts": { "$ref": "#/$defs/scripts" }
+    "config": {
+      "$ref": "#/$defs/config"
+    },
+    "seed": {
+      "$ref": "#/$defs/seed"
+    },
+    "scripts": {
+      "$ref": "#/$defs/scripts"
+    }
   },
   "$defs": {
     "dependency": {
@@ -133,13 +117,21 @@
           "type": "object",
           "description": "CiviCRM Settings (Setting.set), asserted every run — e.g. environment: Staging (jobs refused + mail off)."
         },
-        "domain_name": { "type": "string", "minLength": 1, "description": "Default organization / domain name." },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Default organization / domain name."
+        },
         "from_email": {
           "type": "string",
           "minLength": 1,
           "description": "Default from-address; replaces the fresh-install EXAMPLE.ORG placeholder."
         },
-        "mailbox_domain": { "type": "string", "minLength": 1, "description": "Incoming mailbox domain (MailSettings)." },
+        "mailbox_domain": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Incoming mailbox domain (MailSettings)."
+        },
         "groups": {
           "type": "array",
           "description": "Groups asserted by machine name (idempotent).",
@@ -148,9 +140,63 @@
             "additionalProperties": false,
             "required": ["name"],
             "properties": {
-              "ref": { "type": "string", "minLength": 1, "description": "Stable handle to cross-link seed contacts to this group." },
-              "name": { "type": "string", "minLength": 1, "description": "Machine name — the idempotent match key." },
-              "title": { "type": "string", "minLength": 1 }
+              "ref": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Stable handle to cross-link seed contacts to this group."
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Machine name — the idempotent match key."
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "membership_types": {
+          "type": "array",
+          "description": "Membership types asserted by name (idempotent). Owned by the domain organization unless member_of_ref names a seed contact.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "financial_type"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Machine name — the idempotent match key."
+              },
+              "financial_type": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Financial type by name, e.g. Member Dues."
+              },
+              "period_type": {
+                "enum": ["rolling", "fixed"],
+                "description": "Default: rolling."
+              },
+              "duration_unit": {
+                "enum": ["day", "month", "year"],
+                "description": "Default: year."
+              },
+              "duration_interval": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Default: 1."
+              },
+              "minimum_fee": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Default: 0."
+              },
+              "is_active": {
+                "type": "boolean",
+                "description": "Default: true."
+              }
             }
           }
         }
@@ -168,12 +214,26 @@
             "type": "object",
             "required": ["ref"],
             "properties": {
-              "ref": { "type": "string", "minLength": 1, "description": "Doubles as external_identifier — the idempotent match key." },
-              "contact_type": { "type": "string", "minLength": 1, "description": "Default: Individual." },
-              "email": { "type": "string", "minLength": 1 },
+              "ref": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Doubles as external_identifier — the idempotent match key."
+              },
+              "contact_type": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Default: Individual."
+              },
+              "email": {
+                "type": "string",
+                "minLength": 1
+              },
               "groups": {
                 "type": "array",
-                "items": { "type": "string", "minLength": 1 },
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
                 "description": "Group refs (config.groups[].ref) or bare group names."
               }
             }
@@ -186,9 +246,19 @@
             "type": "object",
             "required": ["contact_ref", "total_amount"],
             "properties": {
-              "ref": { "type": "string", "minLength": 1, "description": "Optional stable handle (used to build the idempotent trxn_id)." },
-              "contact_ref": { "type": "string", "minLength": 1, "description": "Links to a seed.contacts[].ref." },
-              "total_amount": { "type": "number" }
+              "ref": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional stable handle (used to build the idempotent trxn_id)."
+              },
+              "contact_ref": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Links to a seed.contacts[].ref."
+              },
+              "total_amount": {
+                "type": "number"
+              }
             }
           }
         }
@@ -197,17 +267,78 @@
     "scripts": {
       "type": "array",
       "description": "Optional imperative seed scripts (PHP run via `cv scr`), applied AFTER the declarative config + seed. The escape hatch for volume / complex fixtures that config/seed cannot express (a year of history, generated records, mandates). Each entry is a path relative to the profile file's directory. A consumer that only wants the declarative tier ignores it.",
-      "items": { "type": "string", "minLength": 1 }
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "contentProfile": {
       "type": "object",
       "additionalProperties": false,
-      "description": "A standalone declarative content document (config + seed + optional scripts) applied to an instance — e.g. civenv seed's --profile file. A full profile embeds the same shape inline.",
+      "description": "A standalone declarative content document (authx + apiUsers + config + seed + optional scripts) applied to an instance — e.g. civenv seed's --profile file. A full profile embeds the same shape inline.",
       "properties": {
-        "config": { "$ref": "#/$defs/config" },
-        "seed": { "$ref": "#/$defs/seed" },
-        "scripts": { "$ref": "#/$defs/scripts" }
+        "authx": {
+          "$ref": "#/$defs/authx"
+        },
+        "apiUsers": {
+          "type": "array",
+          "description": "API users asserted after install (idempotent by username); credentials are supplied or issued by the applying tool, never stored in the profile.",
+          "items": {
+            "$ref": "#/$defs/apiUser"
+          }
+        },
+        "config": {
+          "$ref": "#/$defs/config"
+        },
+        "seed": {
+          "$ref": "#/$defs/seed"
+        },
+        "scripts": {
+          "$ref": "#/$defs/scripts"
+        }
       }
+    },
+    "authx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["header_cred"],
+      "description": "AuthX configuration for headless API access.",
+      "properties": {
+        "header_cred": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["jwt", "api_key", "pass"]
+          },
+          "description": "Accepted credential flows in the Authorization header."
+        }
+      }
+    },
+    "apiUser": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["username", "role", "permissions"],
+      "properties": {
+        "username": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "permissions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "CiviCRM permission strings granted to the user's role."
+        }
+      },
+      "description": "One API user: a CMS role carrying exactly these CiviCRM permissions and a user in it. The credential (api key) is never part of a profile — the applying tool supplies or issues it."
     }
   }
 }
