@@ -5,7 +5,8 @@
 # `cv core:install`; buildkit: `civibuild create site`). It holds the
 # CMS-agnostic first-boot provisioning so the standalone and buildkit images
 # behave the same: auto-composer for bind-mounted extensions, dev settings,
-# SMTP backend, an isolated test DB, registry + mounted extension enabling,
+# SMTP backend, an isolated test DB, registry + mounted extension enabling
+# (with the mounted extensions' <requires> resolved),
 # named profiles (CIVIKITCHEN_PROFILE), and /civikitchen-init.d hooks.
 #
 # Caller contract — define this BEFORE calling any ck_* function:
@@ -208,41 +209,105 @@ ck_setup_test_db() {
     fi
 }
 
-# Download + enable a comma-separated list of registry extensions.
-# Each entry is a bare key (de.systopia.xcm) or key@URL for a pinned/forked
-# release. Split download + enable into two cv calls (the combined form bombs
-# for some extensions) and so later entries see earlier ones' deps installed.
+# Download one registry extension: a bare key (de.systopia.xcm) or key@URL
+# for a pinned/forked release, passed to cv verbatim. Release-asset downloads
+# (GitHub et al.) fail transiently often enough that one cURL timeout
+# shouldn't abort the whole first-boot provisioning — retry before giving up.
+ck_download_extension() {
+    local ext_spec="$1" ext_key="${1%%@*}" attempt
+    for attempt in 1 2 3; do
+        if ck_as_web cv ext:download -n --no-install "${ext_spec}"; then
+            return 0
+        fi
+        if [[ "${attempt}" == "3" ]]; then
+            echo "[civikitchen] ERROR: download of ${ext_key} failed after ${attempt} attempts" >&2
+            return 1
+        fi
+        echo "[civikitchen] WARN: download of ${ext_key} failed (attempt ${attempt}/3); retrying in 5s..." >&2
+        sleep 5
+    done
+}
+
+# Download + enable a comma-separated list of registry extensions. Split
+# download + enable into two cv calls (the combined form bombs for some
+# extensions) and so later entries see earlier ones' deps installed.
 ck_extra_extensions() {
     [[ -n "${CIVIKITCHEN_EXTRA_EXTENSIONS}" ]] || return 0
     echo "[civikitchen] Installing extra extensions: ${CIVIKITCHEN_EXTRA_EXTENSIONS}"
     local ext_spec ext_key
     local -a specs
     IFS=',' read -ra specs <<< "${CIVIKITCHEN_EXTRA_EXTENSIONS}"
-    local attempt
     for ext_spec in "${specs[@]}"; do
         ext_spec="${ext_spec// /}"
         [[ -z "${ext_spec}" ]] && continue
         ext_key="${ext_spec%%@*}"
         echo "[civikitchen]   - ${ext_key}"
-        # Release-asset downloads (GitHub et al.) fail transiently often
-        # enough that one cURL timeout shouldn't abort the whole first-boot
-        # provisioning — retry a few times before giving up.
-        for attempt in 1 2 3; do
-            if ck_as_web cv ext:download -n --no-install "${ext_spec}"; then
-                break
-            fi
-            if [[ "${attempt}" == "3" ]]; then
-                echo "[civikitchen] ERROR: download of ${ext_key} failed after ${attempt} attempts" >&2
-                return 1
-            fi
-            echo "[civikitchen] WARN: download of ${ext_key} failed (attempt ${attempt}/3); retrying in 5s..." >&2
-            sleep 5
-        done
+        ck_download_extension "${ext_spec}" || return 1
         ck_as_web cv ext:enable "${ext_key}"
     done
 }
 
-# Enable extensions already present (e.g. bind-mounted into the ext dir) by key.
+# Does the site know KEY — core, downloaded, or mounted? cv's own list,
+# parsed as JSON, never grepped.
+ck_extension_present() {
+    ck_as_web cv ext:list -L --out=json-strict | php -r '
+      $list = json_decode((string) stream_get_contents(STDIN), TRUE);
+      foreach (is_array($list) ? $list : [] as $ext) {
+        if (($ext["key"] ?? "") === $argv[1]) { exit(0); }
+      }
+      exit(1);
+    ' "$1"
+}
+
+# <requires><ext> keys of an extension directory, one per line. simplexml,
+# like ck_xml_field in the toolbelt — never a regex over XML.
+ck_extension_requires() {
+    php -r '
+      libxml_use_internal_errors(TRUE);
+      $xml = simplexml_load_file($argv[1]);
+      if ($xml === FALSE) { exit(0); }
+      foreach ($xml->requires->ext ?? [] as $ext) { echo trim((string) $ext), "\n"; }
+    ' "$1/info.xml"
+}
+
+# The pinned download spec for a dependency the registry cannot serve: an
+# `extension_source=<key>@<URL>` line in the extension's own .ckconform,
+# read through ckconform so the file has exactly one parser. Prints nothing
+# when there is no pin.
+ck_extension_source() {
+    local ext_dir="$1" key="$2" spec
+    [[ -f "${ext_dir}/.ckconform" ]] || return 0
+    while IFS= read -r spec; do
+        spec="${spec%% -- *}"
+        if [[ "${spec%%@*}" == "${key}" ]]; then
+            echo "${spec}"
+            return 0
+        fi
+    done < <(cd "${ext_dir}" && ckconform --policy extension_source)
+}
+
+# Dependencies of a mounted extension, from its info.xml <requires>: what the
+# site does not have yet is downloaded — pinned via extension_source, else
+# from the registry — and enabled before the extension itself, so its
+# `cv ext:enable` finds them. One level deep: a dependency's own <requires>
+# are core or registry extensions cv resolves on enable.
+ck_resolve_requires() {
+    local ext_key="$1" ext_dir="${CK_EXT_DIR}/$1" required spec
+    [[ -f "${ext_dir}/info.xml" ]] || return 0
+    while IFS= read -r required; do
+        [[ -z "${required}" ]] && continue
+        if ck_extension_present "${required}"; then
+            continue
+        fi
+        spec="$(ck_extension_source "${ext_dir}" "${required}")"
+        echo "[civikitchen]   ${ext_key} requires ${required} — installing ${spec:-it from the registry}"
+        ck_download_extension "${spec:-${required}}" || return 1
+        ck_as_web cv ext:enable "${required}"
+    done < <(ck_extension_requires "${ext_dir}")
+}
+
+# Enable extensions already present (e.g. bind-mounted into the ext dir) by
+# key, each after its <requires> are in place.
 ck_enable_extensions() {
     [[ -n "${CIVIKITCHEN_ENABLE_EXTENSIONS}" ]] || return 0
     echo "[civikitchen] Enabling extensions: ${CIVIKITCHEN_ENABLE_EXTENSIONS}"
@@ -252,6 +317,7 @@ ck_enable_extensions() {
     for ext_key in "${keys[@]}"; do
         ext_key="${ext_key// /}"
         [[ -z "${ext_key}" ]] && continue
+        ck_resolve_requires "${ext_key}" || return 1
         ck_as_web cv ext:enable "${ext_key}"
     done
 }

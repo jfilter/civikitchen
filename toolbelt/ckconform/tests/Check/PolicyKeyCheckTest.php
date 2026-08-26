@@ -74,6 +74,38 @@ final class PolicyKeyCheckTest extends CheckTestCase
         $this->assertPasses($reporter);
     }
 
+    /** A pin the entrypoint can hand to cv ext:download verbatim, repeated per dependency. */
+    public function testExtensionSourcesPass(): void
+    {
+        $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
+            '.ckconform' => "extension_source=org.project60.banking@https://example.org/banking-1.4.1.zip -- not in the feed\n"
+                . "extension_source=de.systopia.xcm@https://example.org/xcm.zip\n",
+        ]));
+        $this->assertPasses($reporter);
+    }
+
+    /**
+     * @dataProvider badSources
+     */
+    public function testExtensionSourceWithoutKeyAndUrlFails(string $value): void
+    {
+        $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
+            '.ckconform' => "extension_source={$value}\n",
+        ]));
+        $this->assertFails($reporter, 'extension_source must be <key>@<http URL>');
+    }
+
+    /** @return array<string, list<string>> */
+    public static function badSources(): array
+    {
+        return [
+            'a bare key' => ['org.project60.banking'],
+            'a bare URL' => ['https://example.org/banking.zip'],
+            'a local path' => ['org.project60.banking@/srv/banking.zip'],
+            'a space in the URL' => ['org.project60.banking@https://example.org/banking 1.zip'],
+        ];
+    }
+
     /** A line without `=` never becomes a key, so the key checks alone cannot see it. */
     public function testMalformedLineFails(): void
     {

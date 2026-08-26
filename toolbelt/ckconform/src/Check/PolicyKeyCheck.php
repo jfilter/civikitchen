@@ -33,6 +33,10 @@ use CiviKitchen\Ckconform\Reporter;
  *   malformed     a non-comment line without `KEY=` never becomes a key, so
  *                 the three checks above cannot see it — `min_coverage 70`
  *                 disables a floor as silently as the typo'd name does.
+ *   bad source    an `extension_source` that is not `<key>@<http URL>` never
+ *                 matches the dependency it was written for, so the
+ *                 entrypoint falls back to the registry — the exact download
+ *                 the pin was declared to avoid.
  *
  * What is deliberately NOT here: whether a value means the right thing. The
  * key's owner judges that, one tool per question — TestSuiteRequiredCheck is
@@ -79,6 +83,18 @@ final class PolicyKeyCheck implements Check
                     count($values),
                     $key,
                 ));
+            }
+
+            if ($key === 'extension_source') {
+                foreach ($values as $value) {
+                    $spec = Policy::stripReason($value);
+                    if (preg_match('#^[A-Za-z0-9][A-Za-z0-9._-]*@https?://\S+$#', $spec) !== 1) {
+                        $reporter->fail(sprintf(
+                            ".ckconform: extension_source must be <key>@<http URL> (what cv ext:download takes), got '%s'",
+                            $spec,
+                        ));
+                    }
+                }
             }
 
             if (!in_array($key, Policy::PERCENT, true)) {

@@ -47,7 +47,9 @@ dev data** — so this is configured automatically. Opt out with
 `CIVIKITCHEN_TEST_DB=0` if you manage `TEST_DB_DSN` yourself.
 
 **Resetting the scratch DB — `cktestreset`.** A suite can leave `<db>_test`
-inconsistent: `Civi\Test`'s `installMe()` does *not* resolve `<requires>`, so
+inconsistent: `Civi\Test`'s `installMe()` does *not* resolve `<requires>`
+(the image entrypoint does, for the dev site — the test framework is its own
+installer), so
 a test that installs only its own extension leaves it enabled with its
 dependencies missing. Every later `CIVICRM_UF=UnitTests` boot then dies during
 the class scan (`Interface "..." not found`) — and it does not heal itself,
@@ -208,6 +210,11 @@ files may be listed:
 ```
 template_custom=.docker/docker-compose.ci.yml -- sibling mounts for e2e
 ```
+
+A third-party `<requires>` is not a reason to deviate: the entrypoint reads
+`info.xml` and installs missing dependencies before `ext:enable` (from the
+registry, or from an `extension_source=<key>@<URL>` pin in `.ckconform` for a
+release the registry does not serve — see [Configuration](configuration.md)).
 
 Repo-specific test setup belongs in `tests/phpunit/bootstrap.local.php` (the
 managed bootstrap requires it when present), not in edits to the managed

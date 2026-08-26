@@ -51,6 +51,8 @@ final class Policy
         'lifecycle_log_ignore' => 'cklifecycle: log patterns to ignore, reason mandatory',
         // read by ckinit
         'template_custom' => 'ckinit: template-managed files this repo owns instead',
+        // read by the image entrypoint (docker/runtime/provision.sh)
+        'extension_source' => 'entrypoint: key@URL to download a <requires> dependency the registry does not serve, one per line',
     ];
 
     /**
@@ -63,7 +65,7 @@ final class Policy
      *
      * @var list<string>
      */
-    public const REPEATABLE = ['lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates'];
+    public const REPEATABLE = ['lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates', 'extension_source'];
 
     /** @var list<string> */
     public const PERCENT = ['min_coverage', 'mutation_min_msi', 'mutation_min_covered_msi'];

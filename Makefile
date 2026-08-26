@@ -122,7 +122,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-provision test-parity test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -150,6 +150,11 @@ test-ckcreate: ## ckcreate orchestration and atomic-output checks (fake Docker)
 
 test-ckcivix: ## ckcivix current/behind/missing/update checks (fake civix)
 	bash tests/toolbelt/test-ckcivix.sh
+
+# The entrypoint's <requires> resolution decides what a CI stack installs before
+# `ext:enable`; a regression here surfaces as every dependent repo's boot failing.
+test-provision: ## provision.sh resolves info.xml <requires> (fake cv)
+	bash tests/toolbelt/test-provision-requires.sh
 
 # The Dockerfiles COPY the toolbelt selectively; without this gate a new tool
 # lands in git and silently never reaches the images the fleet's CI runs on.

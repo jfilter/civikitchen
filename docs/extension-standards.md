@@ -614,6 +614,7 @@ license=Proprietary          # info.xml <license> + composer.json
 npm_license=UNLICENSED       # every tracked package.json
 copyright=Example Ltd        # must appear in LICENSE.txt
 template_custom=phpcs.xml.dist -- <reason>   # deliberate template deviation (ckinit --check/--update)
+extension_source=org.example.dep@https://example.org/dep-1.2.0.zip -- <reason>   # where the image entrypoint downloads a <requires> dependency the registry does not serve (one line per dependency)
 ```
 
 SPDX disjunctive licensing (`"license": ["MIT", "GPL-2.0"]`) is allowed in both
