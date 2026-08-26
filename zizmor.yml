@@ -58,3 +58,17 @@ rules:
       # the finding comes back. Re-pin it rather than widening this to the
       # whole file.
       - release.yml:100:9
+
+  github-app:
+    ignore:
+      # The app token is minted for the caller's private dependencies —
+      # composer packages named in ITS composer.lock and an optional sibling
+      # repo — so the workflow cannot list them in `repositories:`; the
+      # installation itself is what scopes the repos. What the workflow does
+      # bound is the permission: `permission-contents: read`, right below each
+      # of these lines. Anchored to the `owner:` line and column, like the
+      # artipacked entry above: an edit above a step shifts the line and the
+      # finding returns — re-pin it, never widen to the whole file.
+      - extension-ci.yml:476:11
+      - extension-ci.yml:1513:11
+      - extension-release.yml:145:11

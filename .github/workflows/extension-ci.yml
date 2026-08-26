@@ -474,6 +474,9 @@ jobs:
           app-id: ${{ secrets.composer_app_id }}
           private-key: ${{ secrets.composer_app_private_key }}
           owner: ${{ github.repository_owner }}
+          # The token only ever reads: a sibling checkout and composer's
+          # private packages over HTTPS. Nothing here writes with it.
+          permission-contents: read
 
       # Two steps rather than an expression: GitHub's expression language has
       # no split(), and what the checkout needs is the repo name — the part
@@ -1508,6 +1511,9 @@ jobs:
           app-id: ${{ secrets.composer_app_id }}
           private-key: ${{ secrets.composer_app_private_key }}
           owner: ${{ github.repository_owner }}
+          # The token only ever reads: a sibling checkout and composer's
+          # private packages over HTTPS. Nothing here writes with it.
+          permission-contents: read
 
       - name: Composer install (private packages over HTTPS)
         if: ${{ inputs.composer_install }}

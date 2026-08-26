@@ -143,6 +143,9 @@ jobs:
           app-id: ${{ secrets.composer_app_id }}
           private-key: ${{ secrets.composer_app_private_key }}
           owner: ${{ github.repository_owner }}
+          # The token only ever reads: a sibling checkout and composer's
+          # private packages over HTTPS. Nothing here writes with it.
+          permission-contents: read
 
       - name: Bundle locked production dependencies
         if: ${{ inputs.composer_install }}
