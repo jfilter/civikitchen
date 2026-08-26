@@ -100,7 +100,7 @@
     {
       "name": "org.project60.banking",
       "repo": "https://github.com/Project60/org.project60.banking.git",
-      "version": "master",
+      "version": "1.4.1",
       "enable": true
     },
     {

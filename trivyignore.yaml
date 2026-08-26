@@ -65,6 +65,28 @@ vulnerabilities:
       and delete this entry as soon as an npm release ships >= 5.0.8.
     expired_at: 2026-11-01
 
+  # -------------------------------------------------------------------------
+  # npm's own bundled tar
+  #
+  # /usr/lib/node_modules/npm/node_modules/tar 7.5.19. Same shape as the
+  # brace-expansion entries: npm 11.19.0 and npm 12.0.2 (the current npm) both
+  # bundle 7.5.19, verified by reading node_modules/tar/package.json out of
+  # both registry tarballs on 2026-08-26, so there is no npm to install over it.
+  # -------------------------------------------------------------------------
+  - id: CVE-2026-73566
+    paths:
+      - "usr/lib/node_modules/npm/**"
+    statement: >-
+      Denial of service in node-tar on a crafted long-path archive. In this
+      tree only npm's own CLI extracts with it, and only the packages the
+      lockfiles the images install name — a malicious archive would have to
+      come from a dependency the repos pinned. Nothing the images serve
+      reaches it. Scoped to npm's tree on purpose: a tar in a tree this repo
+      controls must NOT be hidden. On expiry re-read the bundled version
+      (node -p 'require("/usr/lib/node_modules/npm/node_modules/tar/package.json").version')
+      and delete this entry as soon as an npm release ships >= 7.5.21.
+    expired_at: 2026-11-01
+
   - id: CVE-2026-69152
     paths:
       - "usr/lib/node_modules/npm/**"
