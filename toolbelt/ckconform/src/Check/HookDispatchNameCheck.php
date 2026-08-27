@@ -40,7 +40,8 @@ use CiviKitchen\Ckconform\Suppressions;
  *  - a deprecated hook WARNS, because it still fires today;
  *  - an unrecognised suffix WARNS, because third-party extensions publish
  *    their own hooks (`hook_civicrm_acmeConnectors`) that no embedded list can
- *    enumerate.
+ *    enumerate — a <requires> extension found on disk contributes the hooks
+ *    it dispatches, so only the rest needs declaring.
  */
 final class HookDispatchNameCheck implements Check
 {
@@ -97,10 +98,16 @@ final class HookDispatchNameCheck implements Check
             return;
         }
 
-        // Hooks invented by other (possibly private) extensions can't live in
-        // the public KNOWN_HOOKS list — a repo declares them in its own
-        // .ckconform policy: known_hooks=acmeConnectors,otherHook
+        // Hooks invented by other extensions can't live in the public catalog.
+        // A <requires> extension present on disk publishes them by dispatching
+        // them — its call sites are read directly. What that cannot reach (a
+        // dependency not mounted, this repo's own hooks) a repo declares in
+        // its .ckconform policy: known_hooks=acmeConnectors,otherHook
         $policyHooks = array_filter(array_map('trim', explode(',', $context->policyValue('known_hooks') ?? '')));
+        foreach ($context->requiredExtensionDirs() as $dir) {
+            $policyHooks = array_merge($policyHooks, HookSurface::dispatchedSuffixes($dir));
+        }
+        $policyHooks = array_values(array_unique($policyHooks));
 
         foreach (HookSurface::candidates($context) as $file) {
             $contents = $context->read($file);
@@ -195,7 +202,7 @@ final class HookDispatchNameCheck implements Check
 
         if (!in_array($suffix, HookCatalog::LIVE, true)) {
             return [false, sprintf(
-                '%s: %s — unknown hook suffix \'%s\'; a typo never fires, a third-party hook is fine (declare it via known_hooks= in .ckconform)',
+                '%s: %s — unknown hook suffix \'%s\'; a typo never fires, a third-party hook is fine (a <requires> extension present under the ext dir publishes the hooks it dispatches; otherwise declare it via known_hooks= in .ckconform)',
                 $file,
                 $subject,
                 $suffix,

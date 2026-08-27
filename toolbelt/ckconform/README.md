@@ -69,7 +69,7 @@ min_coverage=70              # enforced by ckcoverage
 mutation_min_msi=60          # enforced by ckmutate (nightly), absent = no-op
 mutation_min_covered_msi=75  # optional second floor, covered code only
 mutation_paths=Civi          # optional: what ckmutate mutates (default: changed lines)
-known_hooks=acmeConnectors   # third-party hook names HookDispatchNameCheck should trust
+known_hooks=acmeConnectors   # hook names HookDispatchNameCheck should trust beyond core's and those a present <requires> extension dispatches
 hook_style=listener          # business hooks in scan classes; classic form only for pre-boot/lifecycle/return-value hooks
 template_custom=<file>,...  -- <reason>   # read by ckinit --check/--update, not by ckconform
 ```

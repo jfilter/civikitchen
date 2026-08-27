@@ -194,6 +194,32 @@ final class Context
     }
 
     /**
+     * Where a required extension's code is, for the checks that read a
+     * dependency rather than this repo: under the image's extension directory
+     * (CK_EXT_DIR, the entrypoint's convention — every <requires> is there once
+     * the site booted), else as a sibling checkout next to this repo. Only
+     * dependencies actually present are returned; a missing one is not an
+     * error here, the check that needs it says what it could not judge.
+     *
+     * @return array<string, string> extension key => directory
+     */
+    public function requiredExtensionDirs(): array
+    {
+        $extDir = getenv('CK_EXT_DIR') ?: '/var/www/html/ext';
+        $dirs = [];
+        foreach ($this->requiredExtensions() as $key) {
+            foreach ([$extDir . '/' . $key, dirname(rtrim($this->root, '/')) . '/' . $key] as $candidate) {
+                if (is_file($candidate . '/info.xml')) {
+                    $dirs[$key] = $candidate;
+                    break;
+                }
+            }
+        }
+
+        return $dirs;
+    }
+
+    /**
      * @return array<mixed>|null
      */
     public function json(string $relative): ?array

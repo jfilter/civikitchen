@@ -73,6 +73,91 @@ final class HookSurface
     }
 
     /**
+     * The hook suffixes an extension directory dispatches — the hooks it
+     * invents. Read from the dispatch sites themselves, because that is the
+     * only place a hook is defined: `dispatch('hook_civicrm_x', …)` (the
+     * listener-era form) and `CRM_Utils_Hook::singleton()->invoke([...], …,
+     * 'civicrm_x')` (the classic form, whose last argument is the name).
+     * Tests, vendored and generated code are skipped like everywhere else.
+     *
+     * @return list<string>
+     */
+    public static function dispatchedSuffixes(string $dir): array
+    {
+        if (!is_dir($dir)) {
+            return [];
+        }
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            static fn (\SplFileInfo $file): bool => !($file->isDir()
+                && in_array($file->getFilename(), ['.git', 'vendor', 'node_modules', 'tests'], true)),
+        ));
+        $suffixes = [];
+        foreach ($iterator as $file) {
+            if (!$file instanceof \SplFileInfo || !$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+            $contents = (string) file_get_contents($file->getPathname());
+            if (!str_contains($contents, '_civicrm_')) {
+                continue;
+            }
+            foreach (self::dispatchSites($contents) as $suffix) {
+                $suffixes[$suffix] = true;
+            }
+        }
+        $found = array_keys($suffixes);
+        sort($found);
+
+        return $found;
+    }
+
+    /**
+     * Hook suffixes named at `dispatch(` (first argument) and `invoke(` (last
+     * string argument) call sites of one file.
+     *
+     * @return list<string>
+     */
+    private static function dispatchSites(string $contents): array
+    {
+        $tokens = @token_get_all($contents);
+        $found = [];
+        for ($i = 0, $n = count($tokens); $i < $n; $i++) {
+            $token = $tokens[$i];
+            if (!is_array($token) || $token[0] !== \T_STRING || !in_array($token[1], ['dispatch', 'invoke'], true)) {
+                continue;
+            }
+            $j = $i + 1;
+            while ($j < $n && is_array($tokens[$j]) && $tokens[$j][0] === \T_WHITESPACE) {
+                $j++;
+            }
+            if ($j >= $n || $tokens[$j] !== '(') {
+                continue;
+            }
+            $depth = 1;
+            $first = null;
+            $last = null;
+            for ($k = $j + 1; $k < $n && $depth > 0; $k++) {
+                $inner = $tokens[$k];
+                if ($inner === '(' || $inner === '[') {
+                    $depth++;
+                } elseif ($inner === ')' || $inner === ']') {
+                    $depth--;
+                } elseif ($depth === 1 && is_array($inner) && $inner[0] === \T_CONSTANT_ENCAPSED_STRING) {
+                    $literal = substr($inner[1], 1, -1);
+                    $first ??= $literal;
+                    $last = $literal;
+                }
+            }
+            $name = $token[1] === 'dispatch' ? $first : $last;
+            if ($name !== null && preg_match('/^(?:hook_)?civicrm_([a-zA-Z]+)$/', $name, $m) === 1) {
+                $found[] = $m[1];
+            }
+        }
+
+        return $found;
+    }
+
+    /**
      * Top-level function names with their declaration line, by token scan.
      *
      * Brace depth is the whole trick: a `function` seen at depth 0 is global,

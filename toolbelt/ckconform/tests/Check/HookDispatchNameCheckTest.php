@@ -403,4 +403,76 @@ final class HookDispatchNameCheckTest extends CheckTestCase
         ]);
         $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
     }
+
+    /**
+     * A hook another extension invents is defined where that extension
+     * dispatches it. With the dependency present under the ext dir, the
+     * implementing repo declares nothing — in both dispatch forms.
+     */
+    public function testARequiredExtensionPublishesTheHooksItDispatches(): void
+    {
+        $extDir = sys_get_temp_dir() . '/ckconform-ext-' . bin2hex(random_bytes(6));
+        mkdir($extDir . '/org.example.acme/Civi/Acme', 0777, true);
+        mkdir($extDir . '/org.example.acme/tests', 0777, true);
+        file_put_contents($extDir . '/org.example.acme/info.xml', $this->infoXml(key: 'org.example.acme'));
+        file_put_contents($extDir . '/org.example.acme/Civi/Acme/Registry.php', <<<'PHP'
+            <?php
+            class Registry {
+              public function collect(array &$connectors, array &$widgets): void {
+                \Civi::dispatcher()->dispatch('hook_civicrm_acmeConnectors', GenericHookEvent::create(['connectors' => &$connectors]));
+                \CRM_Utils_Hook::singleton()->invoke(['widgets'], $widgets, \CRM_Utils_Hook::$_nullObject,
+                  \CRM_Utils_Hook::$_nullObject, \CRM_Utils_Hook::$_nullObject, \CRM_Utils_Hook::$_nullObject,
+                  \CRM_Utils_Hook::$_nullObject, 'civicrm_acmeWidgets');
+              }
+            }
+            PHP);
+        // A dispatch in the dependency's tests is not a hook it publishes.
+        file_put_contents($extDir . '/org.example.acme/tests/T.php', "<?php\n\\Civi::dispatcher()->dispatch('hook_civicrm_acmeTestOnly');\n");
+        putenv('CK_EXT_DIR=' . $extDir);
+        try {
+            $context = $this->repo([
+                'info.xml' => $this->infoXml(extra: '<requires><ext>org.example.acme</ext></requires>'),
+                'fixture.php' => <<<'PHP'
+                    <?php
+                    function fixture_civicrm_acmeConnectors(array &$connectors): void {
+                    }
+                    function fixture_civicrm_acmeWidgets(array &$widgets): void {
+                    }
+                    PHP,
+            ]);
+            $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+
+            $context = $this->repo([
+                'info.xml' => $this->infoXml(extra: '<requires><ext>org.example.acme</ext></requires>'),
+                'fixture.php' => "<?php\nfunction fixture_civicrm_acmeTestOnly(): void {\n}\n",
+            ]);
+            $this->assertWarns($this->run_(new HookDispatchNameCheck(), $context), "unknown hook suffix 'acmeTestOnly'");
+        } finally {
+            putenv('CK_EXT_DIR');
+            foreach (['Civi/Acme/Registry.php', 'tests/T.php', 'info.xml'] as $file) {
+                unlink($extDir . '/org.example.acme/' . $file);
+            }
+            foreach (['Civi/Acme', 'Civi', 'tests', ''] as $dir) {
+                rmdir(rtrim($extDir . '/org.example.acme/' . $dir, '/'));
+            }
+            rmdir($extDir);
+        }
+    }
+
+    /** Without the dependency on disk there is nothing to read; the declaration route stays. */
+    public function testAMissingRequiredExtensionPublishesNothing(): void
+    {
+        putenv('CK_EXT_DIR=' . sys_get_temp_dir() . '/ckconform-no-such-ext-dir');
+        try {
+            $context = $this->repo([
+                'info.xml' => $this->infoXml(extra: '<requires><ext>org.example.acme</ext></requires>'),
+                'fixture.php' => "<?php\nfunction fixture_civicrm_acmeConnectors(array &\$c): void {\n}\n",
+            ]);
+            $reporter = $this->run_(new HookDispatchNameCheck(), $context);
+            $this->assertWarns($reporter, "unknown hook suffix 'acmeConnectors'");
+            $this->assertWarns($reporter, 'known_hooks=');
+        } finally {
+            putenv('CK_EXT_DIR');
+        }
+    }
 }
