@@ -37,6 +37,15 @@ export TAKEN_PORTS="8082,1080,1025,8083"
 (cd "$work/repo" && "$root/scaffold/ckup" >/dev/null)
 [[ "$(grep -c . "$work/repo/.docker/.env")" == 4 ]] || fail ".env must not grow on rerun"
 
+# A partial .env: the existing value is kept and not handed out again, even
+# though nothing listens on it right now.
+mkdir -p "$work/partial/.docker"; : > "$work/partial/.docker/docker-compose.yml"
+printf 'CK_HTTP_PORT=8081\n' > "$work/partial/.docker/.env"
+export TAKEN_PORTS=""
+(cd "$work/partial" && "$root/scaffold/ckup" >/dev/null)
+[[ "$(cat "$work/partial/.docker/.env")" == $'CK_HTTP_PORT=8081\nCK_MAILDEV_PORT=1080\nCK_SMTP_PORT=1025\nCK_PMA_PORT=8082' ]] \
+  || fail "existing port reused: $(cat "$work/partial/.docker/.env")"
+
 # Outside a repo: a clear error, no compose call.
 : > "$DOCKER_LOG"
 if (cd "$work" && "$root/scaffold/ckup" 2>/dev/null); then fail "no compose file must fail"; fi

@@ -33,8 +33,12 @@ ck_port_free() {
 # not there yet and marks it as taken for the rest of this run.
 taken=""
 assign() {
-  local name="$1" port="$2"
-  if [[ -f "$env_file" ]] && grep -q "^${name}=" "$env_file"; then
+  local name="$1" port="$2" existing
+  existing="$( [[ -f "$env_file" ]] && sed -n "s/^${name}=//p" "$env_file" | tail -1 || true)"
+  if [[ -n "$existing" ]]; then
+    # Kept as it is, and off limits for the variables still to be assigned —
+    # a stopped stack's port probes as free.
+    taken="${taken},${existing}"
     return 0
   fi
   while [[ ",${taken}," == *",${port},"* ]] || ! "$CK_PORT_CHECK" "$port"; do
