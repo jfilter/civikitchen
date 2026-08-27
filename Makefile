@@ -142,8 +142,9 @@ test-phpstan: $(PHPUNIT) $(CORE) ## The phpstan extension's rule tests + catalog
 # ckinit stamps the template into every extension repo and its --check mode
 # gates those repos' CI, so a silent regression here either rewrites files it
 # must not touch or waves drift through.
-test-ckinit: ## ckinit seed/update/check integration checks
+test-ckinit: ## ckinit seed/update/check integration checks, ckup port picking
 	bash tests/ckinit/test-ckinit.sh
+	bash tests/ckinit/test-ckup.sh
 
 test-ckcreate: ## ckcreate orchestration and atomic-output checks (fake Docker)
 	bash tests/ckcreate/test-ckcreate.sh

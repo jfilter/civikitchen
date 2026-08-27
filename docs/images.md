@@ -39,11 +39,7 @@ services:
     image: ghcr.io/jfilter/civikitchen:standalone
     ports: ["8080:80"]
     environment:
-      CIVICRM_AUTO_INSTALL: "1"
-      CIVICRM_DB_HOST: db
-      CIVICRM_DB_NAME: civicrm
-      CIVICRM_DB_USER: civicrm
-      CIVICRM_DB_PASSWORD: civicrm
+      CIVICRM_AUTO_INSTALL: "1"   # DB host/name/user/password default to db/civicrm
     depends_on:
       db: { condition: service_healthy }
     volumes:

@@ -2,10 +2,14 @@
 # + phpMyAdmin.
 #
 # Usage:
-#   cd .docker && docker compose up -d        # first boot: auto-install + provisioning
+#   /path/to/civikitchen/scaffold/ckup     # picks free host ports, then `up -d`
+#   cd .docker && docker compose up -d     # same, on the default ports below
 #
-# URLs:  CiviCRM http://localhost:8080 (admin/admin)
-#        maildev http://localhost:1080 · phpMyAdmin http://localhost:8081
+# URLs:  CiviCRM http://localhost:${CK_HTTP_PORT:-8080} (admin/admin)
+#        maildev :${CK_MAILDEV_PORT:-1080} · phpMyAdmin :${CK_PMA_PORT:-8081}
+#
+# Host ports come from .docker/.env (gitignored; ckup writes it) so several
+# stacks can run side by side; the defaults apply when it is absent.
 #
 # Re-provision from scratch (re-runs init.d hooks): docker compose down -v && up -d
 
@@ -25,26 +29,23 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8080:80"
+      - "${CK_HTTP_PORT:-8080}:80"
+    # The DB connection (host db, database/user/password civicrm) is the
+    # image's default and matches the db service below; only what differs
+    # from the defaults in docs/configuration.md needs a line here.
     environment:
       CIVICRM_AUTO_INSTALL: "1"
-      CIVICRM_DB_HOST: db
-      CIVICRM_DB_NAME: civicrm
-      CIVICRM_DB_USER: civicrm
-      CIVICRM_DB_PASSWORD: civicrm
       # Must match the host:port opened in the browser (asset URLs).
-      CIVIKITCHEN_SITE_URL: "http://localhost:8080"
+      CIVIKITCHEN_SITE_URL: "http://localhost:${CK_HTTP_PORT:-8080}"
       CIVIKITCHEN_DEMO_USER: admin
       # Outbound mail lands in maildev.
       CIVIKITCHEN_SMTP_HOST: maildev
       CIVIKITCHEN_SMTP_PORT: "1025"
-      # Enable the mounted extension reproducibly on first boot. Add sibling
-      # extensions here (comma-separated) instead of coupling them in info.xml
-      # when the integration is optional by design.
-      CIVIKITCHEN_ENABLE_EXTENSIONS: "__EXTKEY__"
     volumes:
+      # Every extension mounted under ext/ is enabled on first boot, with its
+      # info.xml <requires> resolved. Mount siblings the same way; use
+      # CIVIKITCHEN_ENABLE_EXTENSIONS only to order them or add non-mounts.
       - ..:/var/www/html/ext/__EXTKEY__
-      # Sibling extension example (mount + add to CIVIKITCHEN_ENABLE_EXTENSIONS):
       # - ../../othersibling:/var/www/html/ext/othersibling
       # First-boot provisioning hooks (seed data, API users, settings) — run
       # after install + ext:enable, in lexical order. See init.d/README.md.
@@ -70,15 +71,15 @@ services:
   maildev:
     image: maildev/maildev:2.1.0
     ports:
-      - "1080:1080"
-      - "1025:1025"
+      - "${CK_MAILDEV_PORT:-1080}:1080"
+      - "${CK_SMTP_PORT:-1025}:1025"
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin:5.2.2
     depends_on:
       - db
     ports:
-      - "8081:80"
+      - "${CK_PMA_PORT:-8081}:80"
     environment:
       PMA_HOST: db
 

@@ -14,9 +14,18 @@ volumes:
 
 ```bash
 docker compose up -d
-# Container runs `cv core:install` against the linked DB on first boot.
+# Container runs `cv core:install` against the linked DB on first boot, then
+# enables every extension mounted under ext/ (its <requires> resolved first).
 # Subsequent starts skip the install (idempotent: settings.php and DB persist).
 ```
+
+Several stacks on one machine collide on host ports. The template compose
+reads them from a gitignored `.docker/.env` (`CK_HTTP_PORT`, `CK_MAILDEV_PORT`,
+`CK_SMTP_PORT`, `CK_PMA_PORT`) and derives `CIVIKITCHEN_SITE_URL` from the
+HTTP one; `/path/to/civikitchen/scaffold/ckup` writes that file with free
+ports on its first run and then runs `docker compose up -d` (any further
+arguments are passed through). Without it the defaults 8080/1080/1025/8081
+apply.
 
 **3. Install vendor deps (if your extension uses composer):**
 
@@ -94,8 +103,8 @@ services:
   app:
     environment:
       CIVIKITCHEN_EXTRA_PACKAGES: "libreoffice-writer,unoconv"
-      CIVIKITCHEN_ENABLE_EXTENSIONS: "mailattachment,de.systopia.civioffice"
     volumes:
+      - ../../de.systopia.civioffice:/var/www/html/ext/de.systopia.civioffice
       - ./init.d:/civikitchen-init.d:ro
 ```
 

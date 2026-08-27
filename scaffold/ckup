@@ -1,0 +1,57 @@
+#!/bin/bash
+#
+# ckup — start an extension's dev stack on host ports that are free.
+#
+# The template compose reads its host ports from .docker/.env
+# (CK_HTTP_PORT, CK_MAILDEV_PORT, CK_SMTP_PORT, CK_PMA_PORT) and derives
+# CIVIKITCHEN_SITE_URL from the HTTP one. This writes a missing variable with
+# the first free port at or above its default, keeps what is already there
+# (a stack keeps its ports across restarts), then runs `docker compose up -d`
+# with any further arguments passed through.
+#
+# Usage, from anywhere inside the extension repo:  ckup [compose up args]
+set -euo pipefail
+
+tool="ckup"
+die() { echo "$tool: $*" >&2; exit 2; }
+
+: "${CK_PORT_CHECK:=ck_port_free}"
+
+dir="$PWD"
+while [[ ! -f "$dir/.docker/docker-compose.yml" ]]; do
+  [[ "$dir" != "/" ]] || die "no .docker/docker-compose.yml above $PWD"
+  dir="$(dirname "$dir")"
+done
+env_file="$dir/.docker/.env"
+
+# A port is taken when something on the host accepts a connection on it.
+ck_port_free() {
+  ! (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+}
+
+# Variable, default; appends the first free port to .env when the variable is
+# not there yet and marks it as taken for the rest of this run.
+taken=""
+assign() {
+  local name="$1" port="$2"
+  if [[ -f "$env_file" ]] && grep -q "^${name}=" "$env_file"; then
+    return 0
+  fi
+  while [[ ",${taken}," == *",${port},"* ]] || ! "$CK_PORT_CHECK" "$port"; do
+    port=$((port + 1))
+    [[ "$port" -le 65535 ]] || die "no free port for $name"
+  done
+  taken="${taken},${port}"
+  printf '%s=%s\n' "$name" "$port" >> "$env_file"
+  echo "$tool: $name=$port"
+}
+
+assign CK_HTTP_PORT 8080
+assign CK_MAILDEV_PORT 1080
+assign CK_SMTP_PORT 1025
+assign CK_PMA_PORT 8081
+
+cd "$dir/.docker"
+docker compose up -d "$@"
+http_port="$(sed -n 's/^CK_HTTP_PORT=//p' "$env_file" | tail -1)"
+echo "$tool: CiviCRM at http://localhost:${http_port}"
