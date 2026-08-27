@@ -73,12 +73,14 @@ docker compose exec app cktestreset
 
 The durable fix belongs in the extension: build the environment with the
 managed bootstrap's `ck_headless()` instead of `\Civi\Test::headless()`. It
-asks `CRM_Extension_Manager` for the same transitive, sorted `<requires>`
-closure the APIv3 `Extension.install` action uses and queues it, this
-extension last — so `setUpHeadless()` is `return ck_headless()->apply();` and
-the dependency chain lives in `info.xml` only. A dependency the site does not
-have fails the install loudly; further steps chain as before
-(`ck_headless()->sqlFile(...)->apply()`).
+queues one install step per `info.xml` `<requires>` entry, then this
+extension — so `setUpHeadless()` is `return ck_headless()->apply();` and the
+dependency list lives in `info.xml` only. One level deep, like the image
+entrypoint; and read from the file rather than asked of
+`CRM_Extension_Manager`, because touching the extension system before
+`Civi\Test` rebuilds the headless schema leaves caches the rebuilt site no
+longer matches. A dependency the site does not have fails the install loudly;
+further steps chain as before (`ck_headless()->sqlFile(...)->apply()`).
 
 All first-boot knobs (SMTP, extra extensions, demo users, …) are listed in the
 [configuration reference](configuration.md).

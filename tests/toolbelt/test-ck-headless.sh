@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# The managed test bootstrap's ck_headless() queues the extension's whole
-# <requires> closure (as CRM_Extension_Manager computes it) before the
-# extension itself. Civi is stubbed: what is under test is the key reader and
-# that the builder receives the manager's list, dependencies first.
+# The managed test bootstrap's ck_headless() queues the extension's info.xml
+# <requires> before the extension itself, without touching the extension
+# system. Civi is stubbed: what is under test is the info.xml reader and the
+# list the builder receives.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -16,7 +16,10 @@ cat > "$work/ext/info.xml" <<'XML'
 <?xml version="1.0"?>
 <extension key="org.example.fixture" type="module">
   <file>fixture</file>
-  <requires><ext>org.example.dep</ext></requires>
+  <requires>
+    <ext>org.example.base</ext>
+    <ext> org.example.dep </ext>
+  </requires>
 </extension>
 XML
 
@@ -25,7 +28,8 @@ cat > "$work/stubs.php" <<'PHP'
 namespace Civi\Test {
   class CiviEnvBuilder {
     public array $installed = [];
-    public function install($names): self { $this->installed = (array) $names; return $this; }
+    // One step per call, recorded in order — the helper must not batch them.
+    public function install($names): self { $this->installed[] = implode("+", (array) $names); return $this; }
   }
 }
 namespace Civi {
@@ -34,20 +38,10 @@ namespace Civi {
   }
 }
 namespace {
-  class CRM_Extension_Manager {
-    public array $asked = [];
-    // The real one returns the transitive closure, sorted, the asked key last.
-    public function findInstallRequirements($keys): array {
-      $this->asked = $keys;
-      return ['org.example.base', 'org.example.dep', $keys[0]];
-    }
-  }
+  // Touching the extension system before the headless rebuild is the bug this
+  // helper avoids: the stub makes any such call loud.
   class CRM_Extension_System {
-    private static ?self $instance = NULL;
-    public CRM_Extension_Manager $manager;
-    public function __construct() { $this->manager = new CRM_Extension_Manager(); }
-    public static function singleton(): self { return self::$instance ??= new self(); }
-    public function getManager(): CRM_Extension_Manager { return $this->manager; }
+    public static function singleton(): never { throw new RuntimeException('ck_headless touched CRM_Extension_System'); }
   }
 }
 PHP
@@ -56,10 +50,10 @@ out="$(php -r '
   require $argv[1];
   require $argv[2];
   $b = ck_headless();
-  echo implode(",", CRM_Extension_System::singleton()->getManager()->asked), "|", implode(",", $b->installed), "\n";
+  echo implode(",", $b->installed), "\n";
 ' "$work/stubs.php" "$work/ext/tests/phpunit/ckHeadless.php")"
-[[ "$out" == "org.example.fixture|org.example.base,org.example.dep,org.example.fixture" ]] \
-  || fail "expected the manager closure, own key last; got '$out'"
+[[ "$out" == "org.example.base,org.example.dep,org.example.fixture" ]] \
+  || fail "expected the info.xml requires, trimmed, own key last; got '$out'"
 
 # No key in info.xml: a loud error, never a guessed key.
 printf '%s\n' '<extension type="module"><file>fixture</file></extension>' > "$work/ext/info.xml"
