@@ -208,9 +208,11 @@ jobs:
     # A push that supersedes an earlier one on the same ref cancels that run's
     # copy of this job: on a self-hosted runner with a handful of slots, a
     # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other.
+    # same suite behind each other. The job name is a literal: inside a
+    # reusable workflow github.job is the CALLER's job id, the same for every
+    # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      group: ck-${{ github.repository }}-${{ github.ref }}-key
       cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     outputs:
@@ -252,9 +254,11 @@ jobs:
     # A push that supersedes an earlier one on the same ref cancels that run's
     # copy of this job: on a self-hosted runner with a handful of slots, a
     # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other.
+    # same suite behind each other. The job name is a literal: inside a
+    # reusable workflow github.job is the CALLER's job id, the same for every
+    # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      group: ck-${{ github.repository }}-${{ github.ref }}-template
       cancel-in-progress: true
     if: ${{ inputs.check_template }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -335,9 +339,11 @@ jobs:
     # A push that supersedes an earlier one on the same ref cancels that run's
     # copy of this job: on a self-hosted runner with a handful of slots, a
     # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other.
+    # same suite behind each other. The job name is a literal: inside a
+    # reusable workflow github.job is the CALLER's job id, the same for every
+    # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      group: ck-${{ github.repository }}-${{ github.ref }}-osv
       cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     steps:
@@ -426,9 +432,11 @@ jobs:
     # A push that supersedes an earlier one on the same ref cancels that run's
     # copy of this job: on a self-hosted runner with a handful of slots, a
     # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other.
+    # same suite behind each other. The job name is a literal: inside a
+    # reusable workflow github.job is the CALLER's job id, the same for every
+    # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      group: ck-${{ github.repository }}-${{ github.ref }}-ci
       cancel-in-progress: true
     needs: key
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -970,9 +978,11 @@ jobs:
     # A push that supersedes an earlier one on the same ref cancels that run's
     # copy of this job: on a self-hosted runner with a handful of slots, a
     # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other.
+    # same suite behind each other. The job name is a literal: inside a
+    # reusable workflow github.job is the CALLER's job id, the same for every
+    # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      group: ck-${{ github.repository }}-${{ github.ref }}-upgrade
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.upgrade_from_last_release }}
@@ -1107,9 +1117,11 @@ jobs:
     # A push that supersedes an earlier one on the same ref cancels that run's
     # copy of this job: on a self-hosted runner with a handful of slots, a
     # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other.
+    # same suite behind each other. The job name is a literal: inside a
+    # reusable workflow github.job is the CALLER's job id, the same for every
+    # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      group: ck-${{ github.repository }}-${{ github.ref }}-schema-parity
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.schema_parity }}
@@ -1290,9 +1302,11 @@ jobs:
     # A push that supersedes an earlier one on the same ref cancels that run's
     # copy of this job: on a self-hosted runner with a handful of slots, a
     # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other.
+    # same suite behind each other. The job name is a literal: inside a
+    # reusable workflow github.job is the CALLER's job id, the same for every
+    # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      group: ck-${{ github.repository }}-${{ github.ref }}-mutation
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.mutation }}
@@ -1364,9 +1378,11 @@ jobs:
     # A push that supersedes an earlier one on the same ref cancels that run's
     # copy of this job: on a self-hosted runner with a handful of slots, a
     # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other.
+    # same suite behind each other. The job name is a literal: inside a
+    # reusable workflow github.job is the CALLER's job id, the same for every
+    # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      group: ck-${{ github.repository }}-${{ github.ref }}-core-upgrade
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.core_upgrade_from != '' }}
@@ -1607,9 +1623,11 @@ jobs:
     # A push that supersedes an earlier one on the same ref cancels that run's
     # copy of this job: on a self-hosted runner with a handful of slots, a
     # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other.
+    # same suite behind each other. The job name is a literal: inside a
+    # reusable workflow github.job is the CALLER's job id, the same for every
+    # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      group: ck-${{ github.repository }}-${{ github.ref }}-compat-images
       cancel-in-progress: true
     if: ${{ inputs.matrix_images != '' }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -1643,9 +1661,11 @@ jobs:
     # A push that supersedes an earlier one on the same ref cancels that run's
     # copy of this job: on a self-hosted runner with a handful of slots, a
     # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other.
+    # same suite behind each other. The job name is a literal: inside a
+    # reusable workflow github.job is the CALLER's job id, the same for every
+    # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      group: ck-${{ github.repository }}-${{ github.ref }}-compat
       cancel-in-progress: true
     needs: [compat-images, key]
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -1776,9 +1796,11 @@ jobs:
     # A push that supersedes an earlier one on the same ref cancels that run's
     # copy of this job: on a self-hosted runner with a handful of slots, a
     # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other.
+    # same suite behind each other. The job name is a literal: inside a
+    # reusable workflow github.job is the CALLER's job id, the same for every
+    # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      group: ck-${{ github.repository }}-${{ github.ref }}-playwright
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.playwright }}

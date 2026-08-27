@@ -74,8 +74,19 @@ jobs:
         working-directory: ${{ inputs.working_directory }}
     env:
       BASE_URL: ${{ inputs.base_url }}
-      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-playwright
     steps:
+      # One compose project per CALL, not per run: a caller that runs this
+      # workflow twice in one run (two identity providers, say) lands both
+      # copies on the same Docker host of a multi-slot self-hosted runner, and
+      # with one shared name the first `down` kills the other job's stack.
+      # The test command is what differs between the calls.
+      - name: Compose project name
+        env:
+          CK_COMMAND: ${{ inputs.test_command }}
+        run: |
+          suffix=$(printf '%s' "$CK_COMMAND" | sha256sum | cut -c1-8)
+          echo "COMPOSE_PROJECT_NAME=ck-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-pw-${suffix}" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
