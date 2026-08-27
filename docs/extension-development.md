@@ -219,12 +219,19 @@ caller says `extension-ci.yml@v1` and the CI stack says
 `ghcr.io/jfilter/civikitchen:v1`, because workflow, template, `ck*` tools and
 images are released as one version — the drift job checks the template out at
 the caller's own resolved commit, so there is nothing else to keep in sync.
-See [Releases](releases.md) for what a version covers and how one is cut. A repo that must deviate on a managed file
-declares it in its `.ckconform` — the reason is mandatory, and only managed
-files may be listed:
+See [Releases](releases.md) for what a version covers and how one is cut.
+
+The CI caller and the CI compose file carry **managed blocks** —
+`# BEGIN CIVIKITCHEN MANAGED <name>` … `# END CIVIKITCHEN MANAGED <name>`.
+Only the blocks are compared and refreshed; what a repo writes outside them is
+its own and survives `ckinit --update`: workflow inputs and further jobs after
+the caller's END marker, a sibling mount between the compose file's `app` and
+`db` blocks. A repo that must deviate *inside* a block, or on a managed file
+without blocks, declares it in its `.ckconform` — the reason is mandatory, and
+only managed files may be listed:
 
 ```
-template_custom=.docker/docker-compose.ci.yml -- sibling mounts for e2e
+template_custom=tests/phpunit/bootstrap.php -- Drupal settings discovery and its own test DSN
 ```
 
 A third-party `<requires>` is not a reason to deviate: the entrypoint reads

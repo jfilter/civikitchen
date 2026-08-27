@@ -84,7 +84,12 @@ seeded files the repo has edited (composer.json, phpcs.xml.dist,
 phpstan.neon.dist, dev compose, .gitignore) are never touched. --check is
 the dry twin for CI.
 
-A repo that must deviate on a managed file lists it in .ckconform:
+Some managed files carry marked blocks:
+  # BEGIN CIVIKITCHEN MANAGED <name> … # END CIVIKITCHEN MANAGED <name>
+Only the blocks are managed (compared, refreshed); what a repo writes outside
+them — extra workflow inputs and jobs, a sibling mount — is its own. A repo
+that must deviate INSIDE a block, or on a file without blocks, lists it in
+.ckconform:
   template_custom=<file>[,<file>...] -- <reason>
 
 Typical flow:
@@ -296,6 +301,68 @@ if ($conflicts !== []) {
   exit(1);
 }
 
+/**
+ * The managed blocks of a file, in order: name => text including both marker
+ * lines. A file without markers is whole-file managed. Unbalanced or repeated
+ * markers are a template or repo error, never silently a smaller block.
+ *
+ * @return array<string, string>
+ */
+function managedBlocks(string $content, string $relative): array {
+  $blocks = [];
+  $open = NULL;
+  $buffer = '';
+  foreach (preg_split('/(?<=\n)/', $content) ?: [] as $line) {
+    if (preg_match('/^\s*#\s*(BEGIN|END) CIVIKITCHEN MANAGED (\S+)\s*$/', $line, $m) === 1) {
+      if ($m[1] === 'BEGIN') {
+        if ($open !== NULL || isset($blocks[$m[2]])) {
+          fwrite(STDERR, "ckinit: {$relative}: managed block '{$m[2]}' opened twice or inside '{$open}'\n");
+          exit(1);
+        }
+        $open = $m[2];
+        $buffer = $line;
+        continue;
+      }
+      if ($open !== $m[2]) {
+        fwrite(STDERR, "ckinit: {$relative}: END of managed block '{$m[2]}' without its BEGIN\n");
+        exit(1);
+      }
+      $blocks[$open] = $buffer . $line;
+      $open = NULL;
+      continue;
+    }
+    if ($open !== NULL) {
+      $buffer .= $line;
+    }
+  }
+  if ($open !== NULL) {
+    fwrite(STDERR, "ckinit: {$relative}: managed block '{$open}' is never closed\n");
+    exit(1);
+  }
+  return $blocks;
+}
+
+/**
+ * The repo file with every template block's text swapped in, or NULL when
+ * the repo's blocks do not match the template's set (a block missing, an
+ * unknown one, or a different order) — that needs a person, not a rewrite.
+ */
+function spliceBlocks(string $repoContent, array $templateBlocks, string $relative): ?string {
+  $repoBlocks = managedBlocks($repoContent, $relative);
+  if (array_keys($repoBlocks) !== array_keys($templateBlocks)) {
+    return NULL;
+  }
+  $out = $repoContent;
+  foreach ($repoBlocks as $name => $text) {
+    $at = strpos($out, $text);
+    if ($at === FALSE) {
+      return NULL;
+    }
+    $out = substr($out, 0, $at) . $templateBlocks[$name] . substr($out, $at + strlen($text));
+  }
+  return $out;
+}
+
 function writeRendered(string $destination, string $relative, int $perms, string $content): void {
   $parent = dirname($destination);
   if (!is_dir($parent) && !mkdir($parent, 0775, TRUE) && !is_dir($parent)) {
@@ -371,12 +438,29 @@ foreach ($files as [$destination, $relative, $perms, $content]) {
   // Content plus the executable bit — the one mode bit git actually tracks,
   // so comparing full permissions would drift with the checkout umask.
   $sameExec = (($perms & 0111) !== 0) === ((fileperms($destination) & 0111) !== 0);
-  if (!$managed || (file_get_contents($destination) === $content && $sameExec)) {
+  $existing = (string) file_get_contents($destination);
+  if (!$managed || ($existing === $content && $sameExec)) {
     continue;
+  }
+  // Block-managed: the repo's version converges block by block; a repo file
+  // that predates the markers is whole-file drift and gets the template.
+  $blocks = managedBlocks($content, $relative);
+  $rendered = $content;
+  if ($blocks !== [] && managedBlocks($existing, $relative) !== []) {
+    $rendered = spliceBlocks($existing, $blocks, $relative);
+    if ($rendered === NULL) {
+      $drifted[] = $relative;
+      fwrite(STDOUT, "drifted   {$relative} (managed blocks do not match the template's: "
+        . implode(', ', array_keys($blocks)) . " — align the markers by hand)\n");
+      continue;
+    }
+    if ($rendered === $existing && $sameExec) {
+      continue;
+    }
   }
   $drifted[] = $relative;
   if ($mode === 'update') {
-    writeRendered($destination, $relative, $perms, $content);
+    writeRendered($destination, $relative, $perms, $rendered);
     fwrite(STDOUT, "updated   {$relative}\n");
   }
   else {
