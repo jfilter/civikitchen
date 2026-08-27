@@ -79,6 +79,16 @@ final class Policy
     public const DEFAULTS_ENV = 'CK_DEFAULT_POLICY';
 
     /**
+     * The keys a defaults file may set: those read by ckconform and ckinit
+     * only. In CI the variable reaches exactly those two runs; a key another
+     * gate reads (min_coverage, mutation_*, lifecycle_log_ignore, ...) would
+     * apply in one place and silently not in the other, so it stays per repo.
+     *
+     * @var list<string>
+     */
+    public const SHARED = ['license', 'npm_license', 'copyright', 'vendor', 'hook_style', 'max_unreleased_days', 'renovate_preset'];
+
+    /**
      * The defaults file's contents, null when the variable is unset. A variable
      * that names a file which cannot be read is an error, not an absent layer:
      * a fleet whose licence policy silently stopped applying is the exact
@@ -104,12 +114,17 @@ final class Policy
      * `vendored_paths` lines never silently inherit a fleet-wide one. Keys the
      * repo does not mention keep the default. The defaults' keys come first,
      * so "first occurrence wins" ordering is preserved within each source.
+     * Only SHARED keys are taken from the defaults; PolicyKeyCheck reports the
+     * others, and dropping them here keeps a gate honest even where it does
+     * not run.
      *
      * @return array<string, list<string>>
      */
     public static function layered(?string $repoRaw, ?string $defaultsRaw): array
     {
-        return array_merge(self::parse($defaultsRaw), self::parse($repoRaw));
+        $defaults = array_intersect_key(self::parse($defaultsRaw), array_flip(self::SHARED));
+
+        return array_merge($defaults, self::parse($repoRaw));
     }
 
     /**

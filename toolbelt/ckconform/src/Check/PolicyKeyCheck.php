@@ -64,7 +64,18 @@ final class PolicyKeyCheck implements Check
             $defaults = null;
         }
         if ($defaults !== null) {
-            $this->validate(Policy::DEFAULTS_ENV . ' (' . getenv(Policy::DEFAULTS_ENV) . ')', $defaults, $reporter);
+            $source = Policy::DEFAULTS_ENV . ' (' . getenv(Policy::DEFAULTS_ENV) . ')';
+            $this->validate($source, $defaults, $reporter);
+            foreach (array_keys(Policy::parse($defaults)) as $key) {
+                if (isset(Policy::KEYS[$key]) && !in_array($key, Policy::SHARED, true)) {
+                    $reporter->fail(sprintf(
+                        '%s: %s is read by a gate the defaults do not reach — set it in the repo .ckconform (shareable: %s)',
+                        $source,
+                        $key,
+                        implode(', ', Policy::SHARED),
+                    ));
+                }
+            }
         }
 
         $raw = $context->read('.ckconform');

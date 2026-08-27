@@ -44,6 +44,20 @@ final class PolicyLayerTest extends CheckTestCase
         self::assertSame(['js/own.js -- repo copy'], $merged['vendored_paths']);
     }
 
+    public function testOnlyShareableKeysComeFromTheDefaults(): void
+    {
+        $merged = Policy::layered("license=MIT\n", "min_coverage=90\ncopyright=Example Ltd\n");
+        self::assertArrayNotHasKey('min_coverage', $merged);
+        self::assertSame(['Example Ltd'], $merged['copyright']);
+    }
+
+    public function testPolicyKeyCheckRejectsANonShareableDefault(): void
+    {
+        $this->defaults("min_coverage=90\n");
+        $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([]));
+        $this->assertFails($reporter, 'min_coverage is read by a gate the defaults do not reach');
+    }
+
     public function testWithoutTheVariableOnlyTheRepoFileCounts(): void
     {
         putenv(Policy::DEFAULTS_ENV);

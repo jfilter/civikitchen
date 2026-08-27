@@ -69,6 +69,7 @@ rules:
       # of these lines. Anchored to the `owner:` line and column, like the
       # artipacked entry above: an edit above a step shifts the line and the
       # finding returns — re-pin it, never widen to the whole file.
-      - extension-ci.yml:526:11
-      - extension-ci.yml:1587:11
+      - extension-ci.yml:283:11
+      - extension-ci.yml:565:11
+      - extension-ci.yml:1626:11
       - extension-release.yml:137:11

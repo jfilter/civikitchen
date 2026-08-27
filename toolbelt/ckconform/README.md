@@ -82,7 +82,10 @@ deviations from the standard live in one place with their reasons attached.
 
 Keys every repo of an organisation shares (`license`, `npm_license`,
 `copyright`, `vendor`) can live once, in a file of the same format that
-`CK_DEFAULT_POLICY` names. Its keys apply to every repo the variable reaches;
+`CK_DEFAULT_POLICY` names. Only the keys ckconform and ckinit read
+(`Policy::SHARED`) are taken from it — a key another gate reads would apply in
+one run and not the next, so `PolicyKeyCheck` rejects it there. Its keys apply
+to every repo the variable reaches;
 a key the repo's own `.ckconform` sets replaces the default's values — for the
 repeatable keys too, a repo's lines never inherit a fleet-wide one. The merge
 happens in `Policy::effective()`, so every reader (the checks, `--policy-env`,

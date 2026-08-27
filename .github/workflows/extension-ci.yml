@@ -257,8 +257,47 @@ jobs:
           repository: jfilter/civikitchen
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
+      # ckinit stamps renovate.json from the organisation's renovate_preset,
+      # so the check needs the same defaults file the ci job's ckconform sees
+      # — otherwise a correctly generated file reads as drift.
+      - name: Decide whether the policy checkout needs a token
+        id: need-token
+        if: ${{ inputs.policy_defaults != '' }}
+        env:
+          CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
+          CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CK_COMPOSER_APP_ID:-}" ] && [ -n "${CK_COMPOSER_APP_PRIVATE_KEY:-}" ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Mint a read token for the policy repo
+        id: app
+        if: ${{ steps.need-token.outputs.app == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.composer_app_id }}
+          private-key: ${{ secrets.composer_app_private_key }}
+          owner: ${{ github.repository_owner }}
+          permission-contents: read
+      - name: Check out the organisation policy defaults
+        if: ${{ inputs.policy_defaults != '' }}
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.policy_defaults }}
+          token: ${{ steps.app.outputs.token || github.token }}
+          path: .civikitchen-siblings/policy
       - name: Check template drift (ckinit --check)
-        run: php .civikitchen-ci/scaffold/ckinit.php --check .
+        env:
+          CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults }}
+        run: |
+          if [ -n "$CK_POLICY_DEFAULTS" ]; then
+            export CK_DEFAULT_POLICY="$PWD/.civikitchen-siblings/policy/.ckconform"
+          fi
+          php .civikitchen-ci/scaffold/ckinit.php --check .
 
   # Known vulnerabilities in the dependencies the repo actually ships. Read from
   # the committed lockfiles, not from the ranges in composer.json/package.json:
@@ -502,7 +541,7 @@ jobs:
       # every package it requires is public.
       - name: Decide whether a private-dependency token is needed
         id: need-token
-        if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
+        if: ${{ inputs.composer_install || inputs.sibling_repo != '' || inputs.policy_defaults != '' }}
         env:
           CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
           CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
