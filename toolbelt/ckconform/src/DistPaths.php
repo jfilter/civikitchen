@@ -46,6 +46,7 @@ final class DistPaths
         '.gitignore',
         '.editorconfig',
         '.ckconform',
+        'renovate.json',
         '.phpunit.result.cache',
         'phpcs.xml',
         'phpcs.xml.dist',

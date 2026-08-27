@@ -88,8 +88,9 @@ repeatable keys too, a repo's lines never inherit a fleet-wide one. The merge
 happens in `Policy::effective()`, so every reader (the checks, `--policy-env`,
 `--policy`) sees the same view. A variable naming an unreadable file is an
 error, not an absent layer, and `PolicyKeyCheck` validates the defaults file
-under its own name. `ckinit` reads `template_custom` from the repo file alone:
-which managed files a repo owns is per-repo by nature.
+under its own name. `ckinit` reads `template_custom` from the repo file alone
+(which managed files a repo owns is per-repo by nature) and `renovate_preset`
+from the layered view.
 
 ### One file, one parser
 

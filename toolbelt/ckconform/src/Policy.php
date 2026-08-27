@@ -51,6 +51,7 @@ final class Policy
         'lifecycle_log_ignore' => 'cklifecycle: log patterns to ignore, reason mandatory',
         // read by ckinit
         'template_custom' => 'ckinit: template-managed files this repo owns instead',
+        'renovate_preset' => 'ckinit: the Renovate preset the managed renovate.json extends',
         // read by the image entrypoint (docker/runtime/provision.sh)
         'extension_source' => 'entrypoint: key@URL to download a <requires> dependency the registry does not serve, one per line',
     ];

@@ -14,7 +14,8 @@ make_extension() {
 make_extension "$work/clean"
 "$root/scaffold/ckinit.php" "$work/clean" >/dev/null
 grep -q 'acme/example_ext' "$work/clean/composer.json"
-if grep -R -q '__EXTKEY__\|__VENDOR__' "$work/clean"; then
+grep -q '"extends": \["config:recommended"\]' "$work/clean/renovate.json"
+if grep -R -q '__EXTKEY__\|__VENDOR__\|__RENOVATE_PRESET__' "$work/clean"; then
   echo "placeholder remained after rendering" >&2
   exit 1
 fi
@@ -23,6 +24,20 @@ mkdir -p "$work/nokey"
 printf '%s\n' '<extension><file>example_ext</file></extension>' > "$work/nokey/info.xml"
 "$root/scaffold/ckinit.php" "$work/nokey" >/dev/null
 grep -q 'example/example_ext' "$work/nokey/composer.json"
+
+# renovate_preset from the repo policy, or from the organisation defaults file.
+make_extension "$work/preset"
+printf '%s\n' 'renovate_preset=github>acme/renovate' > "$work/preset/.ckconform"
+"$root/scaffold/ckinit.php" "$work/preset" >/dev/null
+grep -q '"extends": \["github>acme/renovate"\]' "$work/preset/renovate.json"
+make_extension "$work/orgpreset"
+printf '%s\n' 'renovate_preset=github>org/renovate' > "$work/org-policy"
+CK_DEFAULT_POLICY="$work/org-policy" "$root/scaffold/ckinit.php" "$work/orgpreset" >/dev/null
+grep -q '"extends": \["github>org/renovate"\]' "$work/orgpreset/renovate.json"
+if CK_DEFAULT_POLICY="$work/missing" "$root/scaffold/ckinit.php" "$work/orgpreset" --update >/dev/null 2>&1; then
+  echo "an unreadable CK_DEFAULT_POLICY must fail" >&2
+  exit 1
+fi
 
 if "$root/scaffold/ckinit.php" "$work/clean" >/dev/null 2>&1; then
   echo "existing files were overwritten without --force" >&2

@@ -21,6 +21,7 @@ const MANAGED_FILES = [
   '.docker/docker-compose.ci.yml',
   '.docker/db-init/01-grants.sql',
   '.docker/init.d/README.md',
+  'renovate.json',
   'phpstanBootstrap.php',
   'tests/phpunit/bootstrap.php',
   'tests/phpunit/ckHeadless.php',
@@ -72,8 +73,9 @@ Usage:
   scaffold/ckinit.php --check <extension-directory>      report drift, exit 1 on any
 
 The target must contain info.xml. Files from scaffold/template/extension are copied
-recursively; __EXTKEY__ is replaced with info.xml's <file> value and
-__VENDOR__ with the vendor segment of the extension key.
+recursively; __EXTKEY__ is replaced with info.xml's <file> value,
+__VENDOR__ with the vendor segment of the extension key and __RENOVATE_PRESET__
+with the renovate_preset policy key (default config:recommended).
 
 Seeding preserves existing files unless --force is given. --update rewrites
 only the MANAGED files (CI caller, test bootstraps, CI compose stack — the
@@ -207,6 +209,22 @@ if (is_string($policyRaw)) {
   }
 }
 
+// The Renovate preset the managed renovate.json extends. An organisation
+// sets it once in the CK_DEFAULT_POLICY file rather than per repo, which is
+// why this goes through the layered view; the repo file can still override.
+try {
+  $effective = \CiviKitchen\Ckconform\Policy::effective(is_string($policyRaw) ? $policyRaw : NULL);
+}
+catch (\RuntimeException $e) {
+  fwrite(STDERR, "ckinit: {$e->getMessage()}\n");
+  exit(2);
+}
+$renovatePreset = \CiviKitchen\Ckconform\Policy::stripReason($effective['renovate_preset'][0] ?? 'config:recommended');
+if (preg_match('#^[A-Za-z0-9][A-Za-z0-9_.:/>@-]*$#', $renovatePreset) !== 1) {
+  fwrite(STDERR, "ckinit: renovate_preset '{$renovatePreset}' is not a Renovate preset name (e.g. github>org/renovate)\n");
+  exit(2);
+}
+
 $iterator = new RecursiveIteratorIterator(
   new RecursiveDirectoryIterator($templateDir, FilesystemIterator::SKIP_DOTS),
   RecursiveIteratorIterator::SELF_FIRST,
@@ -229,7 +247,7 @@ foreach ($iterator as $item) {
     $destination,
     $relative,
     $item->getPerms() & 0777,
-    str_replace(['__EXTKEY__', '__VENDOR__'], [$extensionFile, $vendor], $content),
+    str_replace(['__EXTKEY__', '__VENDOR__', '__RENOVATE_PRESET__'], [$extensionFile, $vendor, $renovatePreset], $content),
   ];
   if ($mode === 'seed' && (file_exists($destination) || is_link($destination)) && !$force) {
     $conflicts[] = $relative;
