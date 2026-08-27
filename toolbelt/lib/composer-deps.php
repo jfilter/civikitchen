@@ -35,5 +35,11 @@ if (is_dir('vendor')) {
 if (is_dir('tests')) {
   $configuration->addPathToScan('tests', true);
 }
+// The template-managed phpstan bootstrap sits in the repo root (phpstan's
+// bootstrapFiles path) but only ever runs under phpstan: what it uses
+// (simplexml, the required extensions' autoloaders) is a dev dependency.
+if (is_file('phpstanBootstrap.php')) {
+  $configuration->addPathToScan('phpstanBootstrap.php', true);
+}
 
 return $configuration;

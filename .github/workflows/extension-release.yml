@@ -142,14 +142,15 @@ jobs:
       - name: Bundle locked production dependencies
         if: ${{ inputs.composer_install }}
         env:
-          CK_COMPOSER_TOKEN: ${{ steps.app.outputs.token }}
+          # The app token for private packages, else the run's own token: an
+          # unauthenticated runner hits GitHub's API rate limit on dist
+          # downloads and composer silently falls back to source clones.
+          CK_COMPOSER_TOKEN: ${{ steps.app.outputs.token || github.token }}
         run: |
           set -euo pipefail
           # Private packages are declared by https://github.com/... URL; the
           # token goes in as Composer's github-oauth credential.
-          if [ -n "${CK_COMPOSER_TOKEN:-}" ]; then
-            composer config -g github-oauth.github.com "$CK_COMPOSER_TOKEN"
-          fi
+          composer config -g github-oauth.github.com "$CK_COMPOSER_TOKEN"
 
           # The lockfile is the dependency input; do not update it and do not
           # bypass its PHP requirements. Repositories whose runtime PHP is newer
@@ -170,6 +171,11 @@ jobs:
                 ;;
             esac
           done < <(bash .civikitchen-ci/toolbelt/bin/ckconform --dist-paths)
+
+          # A package composer installed from source carries its own .git;
+          # `git add` would record that as a gitlink (an empty entry in the
+          # archive) instead of the package's files. Strip them first.
+          find vendor -name .git -prune -exec rm -rf -- {} +
 
           # ckrelease archives Git objects, never a mutable working tree. Add
           # vendor/ only to the disposable Actions index and archive that tree;

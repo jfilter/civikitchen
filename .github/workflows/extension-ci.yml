@@ -720,7 +720,7 @@ jobs:
       - name: Composer install (private packages over HTTPS)
         if: ${{ inputs.composer_install }}
         env:
-          CK_COMPOSER_TOKEN: ${{ steps.app.outputs.token }}
+          CK_COMPOSER_TOKEN: ${{ steps.app.outputs.token || github.token }}
         run: |
           set -euo pipefail
           # Composer's github-oauth config works for installation tokens too:
@@ -1723,7 +1723,7 @@ jobs:
       - name: Composer install (private packages over HTTPS)
         if: ${{ inputs.composer_install }}
         env:
-          CK_COMPOSER_TOKEN: ${{ steps.app.outputs.token }}
+          CK_COMPOSER_TOKEN: ${{ steps.app.outputs.token || github.token }}
         run: |
           set -euo pipefail
           if [ -n "${CK_COMPOSER_TOKEN:-}" ]; then
