@@ -16,7 +16,12 @@ cat > "$work/bin/cv" <<'FAKE'
 # fake cv: records calls; ext:list serves $CV_LIST; a download adds its key to it.
 printf '%s\n' "$*" >> "$CV_LOG"
 case "$1" in
-  ext:list) cat "$CV_LIST" ;;
+  api4)
+    # Extension.get +w key=<key>: rows of $CV_LIST with that key; CV_LIST_FAILS breaks the query.
+    [[ -n "${CV_LIST_FAILS:-}" ]] && exit 1
+    key="${4#key=}"
+    php -r '$l = json_decode(file_get_contents($argv[1]), TRUE); echo json_encode(array_values(array_filter((array) $l, fn($e) => ($e["key"] ?? "") === $argv[2])));' "$CV_LIST" "$key"
+    ;;
   ext:download)
     spec="$4"; key="${spec%%@*}"
     [[ -n "${CV_DOWNLOAD_FAILS:-}" ]] && exit 1
@@ -52,7 +57,7 @@ reset_site() {
 expect_log() {
   local expected="$1"
   local actual
-  actual="$(grep -v '^ext:list' "$CV_LOG" | tr '\n' ';')"
+  actual="$(grep -v '^api4 Extension.get' "$CV_LOG" | tr '\n' ';')"
   [[ "$actual" == "$expected" ]] || fail "$2 — expected '$expected', got '$actual'"
 }
 
@@ -81,6 +86,16 @@ if CV_DOWNLOAD_FAILS=1 ck_enable_extensions 2>/dev/null; then
 fi
 if grep -q 'ext:enable fixture' "$CV_LOG"; then
   fail "the extension must not be enabled without its dependency"
+fi
+
+# A failing extension query aborts instead of downloading what the site may well have.
+reset_site '[{"key":"org.example.dep","status":"installed"}]'
+write_info '<requires><ext>org.example.dep</ext></requires>'
+if CV_LIST_FAILS=1 ck_enable_extensions 2>/dev/null; then
+  fail "a failed extension query must fail ck_enable_extensions"
+fi
+if grep -q 'ext:download' "$CV_LOG"; then
+  fail "a failed extension query must not turn into a download"
 fi
 
 # No <requires> at all: just the enable.

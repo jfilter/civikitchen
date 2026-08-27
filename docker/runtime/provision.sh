@@ -309,16 +309,21 @@ ck_mounted_extension_source() {
     done < <(ck_mounted_extension_dirs)
 }
 
-# Does the site know KEY — core, downloaded, or mounted? cv's own list,
-# parsed as JSON, never grepped.
+# Does the site know KEY — core, downloaded, or mounted? Asked through
+# APIv4 Extension.get, which reads the local extension container only:
+# `cv ext:list` also contacts the extensions feed for download URLs and dies
+# without network. Returns 0 present, 1 absent, 2 when the question itself
+# failed — the caller must not mistake a failed lookup for a missing extension.
 ck_extension_present() {
-    ck_as_web cv ext:list -L --out=json-strict | php -r '
-      $list = json_decode((string) stream_get_contents(STDIN), TRUE);
-      foreach (is_array($list) ? $list : [] as $ext) {
-        if (($ext["key"] ?? "") === $argv[1]) { exit(0); }
-      }
-      exit(1);
-    ' "$1"
+    local out
+    if ! out="$(ck_as_web cv api4 Extension.get +w "key=$1" +s key --out=json-strict)"; then
+        echo "[civikitchen] ERROR: could not query the extension list for $1" >&2
+        return 2
+    fi
+    php -r '
+      $list = json_decode((string) $argv[1], TRUE);
+      exit(is_array($list) && $list !== [] ? 0 : 1);
+    ' "${out}"
 }
 
 # <requires><ext> keys of an extension directory, one per line. simplexml,
@@ -358,9 +363,11 @@ ck_resolve_requires() {
     [[ -f "${ext_dir}/info.xml" ]] || return 0
     while IFS= read -r required; do
         [[ -z "${required}" ]] && continue
-        if ck_extension_present "${required}"; then
-            continue
-        fi
+        ck_extension_present "${required}"
+        case $? in
+            0) continue ;;
+            2) return 1 ;;
+        esac
         spec="$(ck_extension_source "${ext_dir}" "${required}")"
         echo "[civikitchen]   ${ext_key} requires ${required} — installing ${spec:-it from the registry}"
         ck_download_extension "${spec:-${required}}" || return 1

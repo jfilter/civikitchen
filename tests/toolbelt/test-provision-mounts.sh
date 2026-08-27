@@ -17,7 +17,7 @@ cat > "$work/bin/cv" <<'FAKE'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$CV_LOG"
 case "$1" in
-  ext:list) echo '[]' ;;
+  api4) echo '[]' ;;
 esac
 FAKE
 chmod +x "$work/bin/cv"
@@ -57,7 +57,7 @@ MOUNTS
 
 expect_log() {
   local actual
-  actual="$( (grep -v '^ext:list' "$CV_LOG" || true) | tr '\n' ';')"
+  actual="$( (grep -v '^api4 Extension.get' "$CV_LOG" || true) | tr '\n' ';')"
   [[ "$actual" == "$1" ]] || fail "$2 — expected '$1', got '$actual'"
 }
 
