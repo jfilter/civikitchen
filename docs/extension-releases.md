@@ -61,7 +61,6 @@ file can be promoted into the template later, when it has earned it.
 |-------|---------|----------------|
 | `image` | `ghcr.io/jfilter/civikitchen:v1` | image the smoke test installs into |
 | `smoke_test` | `true` | set `false` only for an extension whose install genuinely cannot be reached this way — and say why in the caller |
-| `extra_extensions` | `''` | comma-separated registry keys to install into the smoke site first, for a `<requires>` on something core does not bundle |
 | `require_changelog` | `false` | fail when the repo has no `CHANGELOG.md` at all |
 | `draft` | `false` | publish the GitHub release as a draft |
 | `composer_install` | `false` | install the lockfile with `--no-dev` and bundle the generated `vendor/` tree |
@@ -169,9 +168,14 @@ plain git. `ckrelease` is only the CiviCRM-shaped part.
 
 The archive is unzipped into a fresh CiviCRM in the standalone image and
 installed with `cv en` — no source mount, so the site sees exactly what a user
-downloads. It catches the failure class that no amount of green CI does: a PHP
-file that the exclude list swallowed, a `<requires>` on an extension that is not
-there, an upgrader that fatals on a first install.
+downloads. Before the install, the `info.xml` `<requires>` are resolved the way
+the image entrypoint resolves them for a mounted extension: a dependency the
+fresh site lacks is downloaded from the registry, or from the
+`extension_source=<key>@<URL>` pin in the repo's `.ckconform` (copied in for
+that step — the archive itself carries no `.ckconform`), and enabled first. The
+smoke test catches the failure class that no amount of green CI does: a PHP
+file that the exclude list swallowed, a `<requires>` on an extension that no
+pin and no registry serves, an upgrader that fatals on a first install.
 
 It costs a CiviCRM boot (a few minutes) per release. If it turns out to be
 flaky rather than informative, `smoke_test: false` is one line — but turn it off

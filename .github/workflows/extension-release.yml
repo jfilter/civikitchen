@@ -38,13 +38,6 @@ on:
           way (and say so in the caller).
         type: boolean
         default: true
-      extra_extensions:
-        description: >-
-          Comma-separated registry extension keys to install into the smoke-test
-          site first — for an extension whose info.xml <requires> something that
-          is not bundled with core.
-        type: string
-        default: ''
       require_changelog:
         description: 'Fail when the repo has no CHANGELOG.md at all'
         type: boolean
@@ -91,7 +84,6 @@ jobs:
       # Read by the smoke stack's ${CIVIKITCHEN_IMAGE} on every compose call,
       # not just `up` — an unset variable there resolves to an empty image.
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
-      CK_EXTRA_EXTENSIONS: ${{ inputs.extra_extensions }}
       CK_REQUIRE_CHANGELOG: ${{ inputs.require_changelog }}
       CK_RELEASE_REF: HEAD
     steps:
@@ -215,8 +207,16 @@ jobs:
         env:
           CK_EXT_KEY: ${{ steps.build.outputs.key }}
           CK_DIST: ${{ runner.temp }}/ckrelease
+          CK_POLICY_DIR: ${{ runner.temp }}/ckrelease-policy
         run: |
           set -euo pipefail
+          # The archive carries no .ckconform (a dev file, excluded by the
+          # central list), but the <requires> resolver reads extension_source
+          # pins from it. Its own directory, not $CK_DIST: that one is uploaded
+          # as the release artifact. A directory mount is fine when the file
+          # does not exist; a file mount would silently create a directory.
+          mkdir -p "$CK_POLICY_DIR"
+          if [ -f .ckconform ]; then cp .ckconform "$CK_POLICY_DIR/"; fi
           cat > smoke-compose.yml <<'YAML'
           name: ckrelease-smoke
           services:
@@ -233,9 +233,9 @@ jobs:
                 CIVICRM_DB_USER: civicrm
                 CIVICRM_DB_PASSWORD: civicrm
                 CIVIKITCHEN_SITE_URL: "http://localhost:8080"
-                CIVIKITCHEN_EXTRA_EXTENSIONS: "${CK_EXTRA_EXTENSIONS}"
               volumes:
                 - ${CK_DIST}:/ck-dist:ro
+                - ${CK_POLICY_DIR}:/ck-policy:ro
             db:
               image: mariadb:10.11
               environment:
@@ -253,19 +253,30 @@ jobs:
 
           # Unzip as root: the extension directory is the image's, not ours.
           # CK_EXT_DIR is where the image puts extensions (docker/runtime/provision.sh).
-          docker compose -f smoke-compose.yml exec -T app bash -c '
+          docker compose -f smoke-compose.yml exec -T \
+            -e "CK_EXT_KEY=$CK_EXT_KEY" app bash -c '
             set -eu
             mkdir -p "${CK_EXT_DIR:-/var/www/html/ext}"
             unzip -q -o /ck-dist/*.zip -d "${CK_EXT_DIR:-/var/www/html/ext}"
+            if [ -f /ck-policy/.ckconform ]; then
+              cp /ck-policy/.ckconform "${CK_EXT_DIR:-/var/www/html/ext}/$CK_EXT_KEY/.ckconform"
+            fi
             chown -R www-data:www-data "${CK_EXT_DIR:-/var/www/html/ext}"'
 
-          # Rescan the container so the new directory is known, then install for
-          # real — this is where a missing <requires>, a broken upgrader or a PHP
-          # file the exclude list swallowed by mistake actually shows up.
+          # Rescan the container so the new directory is known, resolve the
+          # info.xml <requires> the way the entrypoint does for a mounted
+          # extension (registry download, or the extension_source pin), then
+          # install for real — this is where a missing <requires>, a broken
+          # upgrader or a PHP file the exclude list swallowed by mistake
+          # actually shows up. provision.sh is sourced for its functions only;
+          # this exec already runs as the web user, so ck_as_web is a no-op.
           docker compose -f smoke-compose.yml exec -T -u www-data \
             -e "CK_EXT_KEY=$CK_EXT_KEY" app bash -c '
             set -eu
             cv ev "CRM_Extension_System::singleton()->getFullContainer()->refresh();"
+            ck_as_web() { "$@"; }
+            . /usr/local/share/civikitchen/provision.sh
+            ck_resolve_requires "$CK_EXT_KEY"
             cv ext:enable "$CK_EXT_KEY"'
 
           # Same status assertion the lifecycle smoke in extension-ci.yml uses:

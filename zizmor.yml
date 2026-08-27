@@ -71,4 +71,4 @@ rules:
       # finding returns — re-pin it, never widen to the whole file.
       - extension-ci.yml:514:11
       - extension-ci.yml:1555:11
-      - extension-release.yml:145:11
+      - extension-release.yml:137:11
