@@ -17,10 +17,13 @@ printf '%s|%s\n' "$PWD" "$*" >> "$DOCKER_LOG"
 FAKE
 chmod +x "$work/bin/docker"
 export PATH="$work/bin:$PATH" DOCKER_LOG="$work/docker.log"
-# 8080 and 8081 are "taken": the probe fails for them.
-fake_probe() { [[ "$1" != 8080 && "$1" != 8081 ]]; }
-export -f fake_probe
-export CK_PORT_CHECK=fake_probe
+# The port probe is a script: ports listed in TAKEN_PORTS are "taken".
+cat > "$work/bin/probe" <<'FAKE'
+#!/usr/bin/env bash
+[[ ",${TAKEN_PORTS}," != *",$1,"* ]]
+FAKE
+chmod +x "$work/bin/probe"
+export CK_PORT_CHECK="$work/bin/probe" TAKEN_PORTS="8080,8081"
 
 # From a subdirectory: the repo is found upwards, ports skip the taken ones and
 # each other, compose runs in .docker with the arguments passed through.
@@ -30,8 +33,7 @@ export CK_PORT_CHECK=fake_probe
 [[ "$(cat "$DOCKER_LOG")" == "$work/repo/.docker|compose up -d --build" ]] || fail "unexpected docker call: $(cat "$DOCKER_LOG")"
 
 # A second run keeps the file as it is, even though its ports are now "taken".
-fake_probe() { false; }
-export -f fake_probe
+export TAKEN_PORTS="8082,1080,1025,8083"
 (cd "$work/repo" && "$root/scaffold/ckup" >/dev/null)
 [[ "$(grep -c . "$work/repo/.docker/.env")" == 4 ]] || fail ".env must not grow on rerun"
 

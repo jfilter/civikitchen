@@ -32,12 +32,13 @@ case "$1" in
   path) echo "$CV_L10N_DIR" ;;
 esac
 FAKE
-chmod +x "$work/bin/curl" "$work/bin/cv"
+# chown to the web user is not possible on the host; a no-op stands in.
+printf '#!/usr/bin/env bash\nexit 0\n' > "$work/bin/chown"
+chmod +x "$work/bin/curl" "$work/bin/cv" "$work/bin/chown"
 export PATH="$work/bin:$PATH"
 export CURL_LOG="$work/curl.log" CURL_DIR="$work" CV_LOG="$work/cv.log" CV_L10N_DIR="$work/site/l10n"
 
 ck_as_web() { "$@"; }
-chown() { :; }
 export CK_L10N_BASE_URL="https://l10n.example.org"
 # shellcheck source=../../docker/runtime/provision.sh
 . "$root/docker/runtime/provision.sh"
