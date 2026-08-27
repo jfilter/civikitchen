@@ -34,7 +34,8 @@ parameters:
 		- __EXTKEY__.civix.php
 	# scanDirectories:
 	#	# Core component extensions live off the classloader path — add the
-	#	# ones whose types you touch, e.g.:
+	#	# ones whose types you touch (extensions in info.xml <requires> are
+	#	# autoloaded by phpstanBootstrap.php already), e.g.:
 	#	# - /var/www/html/core/ext/civi_mail
 	#	# - /var/www/html/core/ext/flexmailer/src
 	bootstrapFiles:

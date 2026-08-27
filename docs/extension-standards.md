@@ -915,13 +915,11 @@ interfaces: the classes must exist at boot (`cv ext:enable` wants the declared
 requirement present), and `phpstan` and the test bootstrap resolve them from
 the sibling's ext directory. The mount target is the sibling's **extension
 key**, read from its `info.xml` — not its repo name, which is free to differ
-and is not what CiviCRM registers it under. That is the directory a
-`scanDirectories` entry has to point at:
-
-```neon
-	scanDirectories:
-		- /var/www/html/ext/othersibling/Civi
-```
+and is not what CiviCRM registers it under. That is the directory the managed
+`phpstanBootstrap.php` autoloads it from, provided the sibling is also in
+`info.xml` `<requires>` — the bootstrap reads the requires list and registers
+every required extension present under the ext dir, so no `scanDirectories`
+entry is needed for it.
 
 The sibling is mounted **as is**, read-only: no `composer install` runs in it.
 A sibling that keeps its own `vendor/` out of git is not supported yet — say
