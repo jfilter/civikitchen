@@ -614,12 +614,15 @@ license=Proprietary          # info.xml <license> + composer.json
 npm_license=UNLICENSED       # every tracked package.json
 copyright=Example Ltd        # must appear in LICENSE.txt
 template_custom=phpcs.xml.dist -- <reason>   # deliberate template deviation (ckinit --check/--update)
+renovate_preset=github>example/renovate   # what the managed renovate.json extends (default config:recommended); usually an organisation default
 extension_source=org.example.dep@https://example.org/dep-1.2.0.zip -- <reason>   # where the image entrypoint downloads a <requires> dependency the registry does not serve (one line per dependency)
 ```
 
 Values shared across an organisation's repos can sit once in a file of the same
-format named by `CK_DEFAULT_POLICY` (the reusable workflow can point it at a
-file the organisation publishes); a repo's own `.ckconform` overrides per key.
+format named by `CK_DEFAULT_POLICY`; a repo's own `.ckconform` overrides per
+key. In CI the `policy_defaults` input of `extension-ci.yml` names the
+`owner/repo` whose root `.ckconform` is that file; on a developer machine
+export the variable (ckinit reads it too, for `renovate_preset`).
 
 SPDX disjunctive licensing (`"license": ["MIT", "GPL-2.0"]`) is allowed in both
 manifests, and satisfies the policy when the expected licence is one of the

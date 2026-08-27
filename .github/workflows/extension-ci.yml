@@ -160,6 +160,15 @@ on:
           enters a container; the image's auto-composer sees vendor/ and skips.
         type: boolean
         default: false
+      policy_defaults:
+        description: >-
+          Repo (`owner/repo`) whose root `.ckconform` holds the organisation's
+          default policy — the keys every repo shares (license, copyright,
+          vendor, ...). Checked out to .civikitchen-siblings/policy and read
+          by ckconform under the repo's own file, which overrides per key. A
+          private repo needs the composer_app_* secrets. Empty: no defaults.
+        type: string
+        default: ''
       sibling_repo:
         description: >-
           Second extension repo (`owner/repo`) checked out to
@@ -382,6 +391,7 @@ jobs:
       - name: Validate inputs
         env:
           CK_SIBLING_REPO: ${{ inputs.sibling_repo }}
+          CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults }}
           CK_EXTRA_PHPUNIT_CONFIG: ${{ inputs.extra_phpunit_config }}
         run: |
           [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
@@ -390,6 +400,8 @@ jobs:
           # be owner/repo, because it becomes a checkout target and a path.
           [[ -z "$CK_SIBLING_REPO" || "$CK_SIBLING_REPO" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
             || { echo "invalid sibling_repo (expected owner/repo): $CK_SIBLING_REPO" >&2; exit 1; }
+          [[ -z "$CK_POLICY_DEFAULTS" || "$CK_POLICY_DEFAULTS" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
+            || { echo "invalid policy_defaults (expected owner/repo): $CK_POLICY_DEFAULTS" >&2; exit 1; }
           [[ -z "$CK_EXTRA_PHPUNIT_CONFIG" || \
              ( "$CK_EXTRA_PHPUNIT_CONFIG" =~ ^[A-Za-z0-9_./-]+$ &&
                "$CK_EXTRA_PHPUNIT_CONFIG" != /* &&
@@ -551,6 +563,18 @@ jobs:
           token: ${{ steps.app.outputs.token || github.token }}
           path: ${{ steps.sibling.outputs.path }}
 
+      # The organisation's default .ckconform, next to the sibling for the
+      # same two reasons (dot-prefixed: invisible to the extension scanner and
+      # to cklint). It reaches ckconform through the extension's own mount.
+      - name: Check out the organisation policy defaults
+        if: ${{ inputs.policy_defaults != '' }}
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.policy_defaults }}
+          token: ${{ steps.app.outputs.token || github.token }}
+          path: .civikitchen-siblings/policy
+
       # The CI compose file is template-managed (ckinit checks it), so the
       # sibling cannot be written into it — the same bind this job's Playwright
       # counterpart is in, and the same way out: a compose override written
@@ -663,8 +687,16 @@ jobs:
       # skip on failure is a gate someone meets all at once later.
       - name: Lint (cklint + ckconform + ckcivix)
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        env:
+          CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults }}
         run: |
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
+          # The defaults file is read from inside the container, where the
+          # checkout above sits below the extension's mount. Empty = no layer.
+          defaults=""
+          if [ -n "$CK_POLICY_DEFAULTS" ]; then
+            defaults="/var/www/html/ext/$CK_EXT_KEY/.civikitchen-siblings/policy/.ckconform"
+          fi
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data -e "CK_DEFAULT_POLICY=$defaults" app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && cklint --all && ckconform && ckcivix --check"
 
       # Formatting gate (mago for PHP, oxfmt for JS/TS). Hard by design: the
