@@ -4,8 +4,6 @@
 #   jobs:
 #     ci:
 #       uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
-#       with:
-#         key: <extension-key>
 #
 # Pin the major (@v1), not @main: workflow, template, ck* tools and images are
 # released as one versioned contract (docs/releases.md).
@@ -25,9 +23,12 @@ on:
   workflow_call:
     inputs:
       key:
-        description: 'Extension key — the directory it mounts to under /var/www/html/ext'
-        required: true
+        description: >-
+          The extension's directory name under /var/www/html/ext — info.xml
+          <file>, which the `key` job reads itself. Passing it is a cross-check
+          only: a value that differs from info.xml fails the run.
         type: string
+        default: ''
       compose_file:
         description: 'Compose file that brings up the CiviCRM stack'
         type: string
@@ -187,6 +188,42 @@ permissions:
   contents: read
 
 jobs:
+  # The extension's directory name — info.xml <file>, the same value ckinit
+  # stamps into the compose mount and CIVIKITCHEN_ENABLE_EXTENSIONS. Read once
+  # here so the caller has nothing to restate; every stack job consumes the
+  # output. Parsed as XML, not with a tag-shaped regex — the same reader the
+  # sibling step uses, inline because this runs on the bare runner.
+  key:
+    runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    env:
+      CK_EXT_KEY_INPUT: ${{ inputs.key }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Read the extension key from info.xml
+        id: key
+        run: |
+          set -euo pipefail
+          [ -f info.xml ] || { echo "no info.xml at the repository root — this is not a CiviCRM extension" >&2; exit 1; }
+          # shellcheck disable=SC2016  # the $vars belong to PHP, not the shell.
+          key=$(php -r '
+            libxml_use_internal_errors(TRUE);
+            $xml = simplexml_load_file($argv[1]);
+            if ($xml === FALSE) { fwrite(STDERR, "cannot parse {$argv[1]}\n"); exit(2); }
+            echo trim((string) $xml->file);
+          ' info.xml)
+          [[ "$key" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
+            || { echo "info.xml <file> is not a usable extension directory name (got: '$key')" >&2; exit 1; }
+          if [ -n "$CK_EXT_KEY_INPUT" ] && [ "$CK_EXT_KEY_INPUT" != "$key" ]; then
+            echo "the key input ($CK_EXT_KEY_INPUT) does not match info.xml <file> ($key) — drop the input or fix info.xml" >&2
+            exit 1
+          fi
+          echo "extension key: $key"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
   # Template drift: the tooling files civikitchen owns (CI caller, test
   # bootstraps, CI compose stack) must match the template, or
   # eleven repos quietly diverge again — the exact state the shared workflow
@@ -315,12 +352,13 @@ jobs:
           exit "$rc"
 
   ci:
+    needs: key
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     # Inputs enter shell commands through the environment, never by expression
     # interpolation inside `run:` — an interpolated input IS the script text.
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
-      CK_EXT_KEY: ${{ inputs.key }}
+      CK_EXT_KEY: ${{ needs.key.outputs.key }}
       # Read by the compose file's ${CIVIKITCHEN_IMAGE:-<default>}; `:-` treats
       # the empty default as unset, so not passing `image` changes nothing.
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
@@ -828,11 +866,12 @@ jobs:
   # and "move to HEAD" is a second `git checkout` afterwards. No second stack,
   # no image build, no artifact shuffling.
   upgrade:
+    needs: key
     if: ${{ inputs.upgrade_from_last_release }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
-      CK_EXT_KEY: ${{ inputs.key }}
+      CK_EXT_KEY: ${{ needs.key.outputs.key }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
       # One compose project per job — see the note in `ci`.
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-upgrade
@@ -957,11 +996,12 @@ jobs:
   # Two boots on one runner, so: scheduled caller, like every other opt-in job
   # here.
   schema-parity:
+    needs: key
     if: ${{ inputs.schema_parity }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
-      CK_EXT_KEY: ${{ inputs.key }}
+      CK_EXT_KEY: ${{ needs.key.outputs.key }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
       # One compose project per job — see the note in `ci`.
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-schema-parity
@@ -1132,11 +1172,12 @@ jobs:
   # saying so, which is what makes switching the input on safe before the
   # number is known.
   mutation:
+    needs: key
     if: ${{ inputs.mutation }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
-      CK_EXT_KEY: ${{ inputs.key }}
+      CK_EXT_KEY: ${{ needs.key.outputs.key }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
       # One compose project per job — see the note in `ci`.
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-mutation
@@ -1198,11 +1239,12 @@ jobs:
   # Skipped entirely when the input is empty — the matrix_images deal: a caller
   # that never sets it pays nothing.
   core-upgrade:
+    needs: key
     if: ${{ inputs.core_upgrade_from != '' }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
-      CK_EXT_KEY: ${{ inputs.key }}
+      CK_EXT_KEY: ${{ needs.key.outputs.key }}
       CK_CORE_FROM: ${{ inputs.core_upgrade_from }}
       # The job-level image is the upgrade TARGET: the run's normal image, or
       # empty for the compose file's own default. Only the first boot overrides
@@ -1462,7 +1504,7 @@ jobs:
   # version-dependent is whether the extension installs into that CiviCRM and
   # whether its tests pass there.
   compat:
-    needs: compat-images
+    needs: [compat-images, key]
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     strategy:
       # One old CiviCRM failing must not hide the result for the new one.
@@ -1471,7 +1513,7 @@ jobs:
         image: ${{ fromJSON(needs.compat-images.outputs.images) }}
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
-      CK_EXT_KEY: ${{ inputs.key }}
+      CK_EXT_KEY: ${{ needs.key.outputs.key }}
       CIVIKITCHEN_IMAGE: ${{ matrix.image }}
       # One compose project per job — see the note in `ci`.
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-compat-${{ strategy.job-index }}
@@ -1588,11 +1630,12 @@ jobs:
   # on `image`, not per matrix entry — see the notes in
   # docs/extension-standards.md.
   playwright:
+    needs: key
     if: ${{ inputs.playwright }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
-      CK_EXT_KEY: ${{ inputs.key }}
+      CK_EXT_KEY: ${{ needs.key.outputs.key }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
       # One compose project per job — see the note in `ci`.
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-playwright
@@ -1715,7 +1758,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: playwright-${{ inputs.key }}
+          name: playwright-${{ needs.key.outputs.key }}
           path: |
             playwright-report/
             test-results/

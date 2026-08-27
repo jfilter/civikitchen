@@ -825,7 +825,6 @@ tests should do it from its own `test` script, where it is visible in the log.
 
 ```yaml
     with:
-      key: myextension
       js_tests: true      # implies npm_ci
       # bun: true         # same steps, run with Bun instead of npm
 ```
@@ -940,7 +939,6 @@ jobs:
   ci:
     uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
     with:
-      key: myextension
       composer_install: true
       sibling_repo: myorg/othersibling
     secrets:
@@ -1187,7 +1185,6 @@ jobs:
   compat:
     uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
     with:
-      key: myextension
       # This caller gets the default `ci` job too — there is one reusable
       # workflow, not two. Point it at the moving edge instead of repeating
       # the pinned :v1 run every push already does: together with the oldest

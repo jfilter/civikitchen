@@ -67,10 +67,12 @@ fi
 
 # --update restores the managed file (re-stamped) and leaves the seeded edit.
 /bin/rm "$work/drift/phpcs.xml.dist"
+printf '%s\n' '# local edit' >> "$work/drift/.docker/docker-compose.ci.yml"
 out=$("$root/scaffold/ckinit.php" --update "$work/drift")
 echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
+echo "$out" | grep -q 'updated   .docker/docker-compose.ci.yml'
 echo "$out" | grep -q 'created   phpcs.xml.dist'
-grep -q 'key: example_ext' "$work/drift/.github/workflows/ci.yml"
+grep -q 'ext/example_ext' "$work/drift/.docker/docker-compose.ci.yml"
 grep -q '"edited": true' "$work/drift/composer.json"
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
 echo "$out" | grep -q 'up to date'

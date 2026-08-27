@@ -171,7 +171,6 @@ jobs:
   ci:
     uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main
     with:
-      key: <extension-key>
       image: ghcr.io/jfilter/civikitchen:standalone
 ```
 

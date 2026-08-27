@@ -13,7 +13,6 @@ jobs:
   ci:
     uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
     with:
-      key: example
       extra_phpunit_config: phpunit-unit.xml.dist
 ```
 
