@@ -137,7 +137,7 @@ Ready-to-run: [`examples/joomla/`](../examples/joomla/)
 > `:joomla`) share
 > [`docker/runtime/provision.sh`](../docker/runtime/provision.sh) with standalone, so the
 > same first-boot knobs work: `CIVIKITCHEN_AUTO_COMPOSER`,
-> `CIVIKITCHEN_SMTP_HOST`, `CIVIKITCHEN_EXTRA_EXTENSIONS` /
+> `CIVIKITCHEN_SMTP_HOST`, `CIVIKITCHEN_LOCALES`, `CIVIKITCHEN_EXTRA_EXTENSIONS` /
 > `CIVIKITCHEN_ENABLE_EXTENSIONS`, and `/civikitchen-init.d` hooks (marked
 > *all* in the [env-var table](configuration.md)). Only the CMS-less standalone
 > install knobs differ

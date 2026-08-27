@@ -5,8 +5,8 @@
 # `cv core:install`; buildkit: `civibuild create site`). It holds the
 # CMS-agnostic first-boot provisioning so the standalone and buildkit images
 # behave the same: auto-composer for bind-mounted extensions, dev settings,
-# SMTP backend, an isolated test DB, registry + mounted extension enabling
-# (with the mounted extensions' <requires> resolved),
+# SMTP backend, an isolated test DB, core language files, registry + mounted
+# extension enabling (with the mounted extensions' <requires> resolved),
 # named profiles (CIVIKITCHEN_PROFILE), and /civikitchen-init.d hooks.
 #
 # Caller contract — define this BEFORE calling any ck_* function:
@@ -44,6 +44,10 @@
 # Optional civibuild-style settings.d dir (loaded into civicrm.settings.php).
 # Only the buildkit entrypoint sets this; see ck_smtp.
 : "${CK_SETTINGS_D:=}"
+# Mount table used to tell bind-mounted extensions from downloaded ones.
+: "${CK_MOUNTINFO:=/proc/self/mountinfo}"
+# Where the version-matching core language tarball is fetched from.
+: "${CK_L10N_BASE_URL:=https://download.civicrm.org}"
 
 # --- functions -------------------------------------------------------------
 
@@ -230,21 +234,67 @@ ck_download_extension() {
 
 # Download + enable a comma-separated list of registry extensions. Split
 # download + enable into two cv calls (the combined form bombs for some
-# extensions) and so later entries see earlier ones' deps installed.
+# extensions) and so later entries see earlier ones' deps installed. A bare
+# key takes the extension_source pin of a mounted extension when one names
+# it, so an optional integration is pinned in the same place as a hard one.
 ck_extra_extensions() {
     [[ -n "${CIVIKITCHEN_EXTRA_EXTENSIONS}" ]] || return 0
     echo "[civikitchen] Installing extra extensions: ${CIVIKITCHEN_EXTRA_EXTENSIONS}"
-    local ext_spec ext_key
+    local ext_spec ext_key pin
     local -a specs
     IFS=',' read -ra specs <<< "${CIVIKITCHEN_EXTRA_EXTENSIONS}"
     for ext_spec in "${specs[@]}"; do
         ext_spec="${ext_spec// /}"
         [[ -z "${ext_spec}" ]] && continue
         ext_key="${ext_spec%%@*}"
-        echo "[civikitchen]   - ${ext_key}"
+        pin=""
+        if [[ "${ext_spec}" == "${ext_key}" ]]; then
+            pin="$(ck_mounted_extension_source "${ext_key}")"
+            ext_spec="${pin:-${ext_spec}}"
+        fi
+        echo "[civikitchen]   - ${ext_key}${pin:+ (pinned: ${pin#*@})}"
         ck_download_extension "${ext_spec}" || return 1
         ck_as_web cv ext:enable "${ext_key}"
     done
+}
+
+# Directories bind-mounted directly into the ext dir, one per line — the
+# extensions a developer put there, as opposed to downloaded ones. Read from
+# the mount table (field 5 is the mount point), so nothing has to be declared.
+ck_mounted_extension_dirs() {
+    [[ -n "${CK_EXT_DIR}" && -r "${CK_MOUNTINFO}" ]] || return 0
+    local mount_point
+    while read -r _ _ _ _ mount_point _; do
+        # Mount points escape space, tab and newline as \040 \011 \012.
+        mount_point="$(printf '%b' "${mount_point}")"
+        if [[ "${mount_point}" == "${CK_EXT_DIR}"/* && "${mount_point#"${CK_EXT_DIR}"/}" != */* ]]; then
+            echo "${mount_point}"
+        fi
+    done < "${CK_MOUNTINFO}" | sort -u
+}
+
+# The extension key an info.xml declares, or nothing when it cannot be read.
+ck_extension_key() {
+    php -r '
+      libxml_use_internal_errors(TRUE);
+      $xml = simplexml_load_file($argv[1]);
+      if ($xml === FALSE) { exit(0); }
+      echo trim((string) $xml["key"]);
+    ' "$1/info.xml"
+}
+
+# The extension_source pin for KEY from any mounted extension's .ckconform.
+# First hit wins; a key pinned to two different URLs is a repo problem that
+# ckconform reports, not one to resolve here.
+ck_mounted_extension_source() {
+    local key="$1" ext_dir spec
+    while IFS= read -r ext_dir; do
+        spec="$(ck_extension_source "${ext_dir}" "${key}")"
+        if [[ -n "${spec}" ]]; then
+            echo "${spec}"
+            return 0
+        fi
+    done < <(ck_mounted_extension_dirs)
 }
 
 # Does the site know KEY — core, downloaded, or mounted? cv's own list,
@@ -292,7 +342,7 @@ ck_extension_source() {
 # `cv ext:enable` finds them. One level deep: a dependency's own <requires>
 # are core or registry extensions cv resolves on enable.
 ck_resolve_requires() {
-    local ext_key="$1" ext_dir="${CK_EXT_DIR}/$1" required spec
+    local ext_key="$1" ext_dir="${2:-${CK_EXT_DIR}/$1}" required spec
     [[ -f "${ext_dir}/info.xml" ]] || return 0
     while IFS= read -r required; do
         [[ -z "${required}" ]] && continue
@@ -306,20 +356,97 @@ ck_resolve_requires() {
     done < <(ck_extension_requires "${ext_dir}")
 }
 
-# Enable extensions already present (e.g. bind-mounted into the ext dir) by
-# key, each after its <requires> are in place.
+# Enable the extensions bind-mounted into the ext dir, plus the keys listed
+# in CIVIKITCHEN_ENABLE_EXTENSIONS (listed ones first, in their order — the
+# override for an extension that must precede another or is not a mount),
+# each after its <requires> are in place. A mount whose info.xml carries no
+# key is reported and skipped: a directory of files is not an extension.
 ck_enable_extensions() {
-    [[ -n "${CIVIKITCHEN_ENABLE_EXTENSIONS}" ]] || return 0
-    echo "[civikitchen] Enabling extensions: ${CIVIKITCHEN_ENABLE_EXTENSIONS}"
-    local ext_key
-    local -a keys
-    IFS=',' read -ra keys <<< "${CIVIKITCHEN_ENABLE_EXTENSIONS}"
+    local ext_key ext_dir listed
+    local -a keys=() dirs=()
+    if [[ -n "${CIVIKITCHEN_ENABLE_EXTENSIONS}" ]]; then
+        IFS=',' read -ra keys <<< "${CIVIKITCHEN_ENABLE_EXTENSIONS}"
+    fi
     for ext_key in "${keys[@]}"; do
         ext_key="${ext_key// /}"
         [[ -z "${ext_key}" ]] && continue
-        ck_resolve_requires "${ext_key}" || return 1
+        listed+=",${ext_key}"
+        dirs+=("${ext_key}=${CK_EXT_DIR}/${ext_key}")
+    done
+    while IFS= read -r ext_dir; do
+        [[ -n "${ext_dir}" ]] || continue
+        ext_key="$(ck_extension_key "${ext_dir}")"
+        if [[ -z "${ext_key}" ]]; then
+            echo "[civikitchen] WARN: ${ext_dir} is mounted into the ext dir but has no readable info.xml key — not enabled" >&2
+            continue
+        fi
+        [[ ",${listed:-}," == *",${ext_key},"* ]] && continue
+        listed+=",${ext_key}"
+        dirs+=("${ext_key}=${ext_dir}")
+    done < <(ck_mounted_extension_dirs)
+    [[ ${#dirs[@]} -gt 0 ]] || return 0
+    echo "[civikitchen] Enabling extensions: ${listed#,}"
+    for ext_dir in "${dirs[@]}"; do
+        ext_key="${ext_dir%%=*}"
+        ck_resolve_requires "${ext_key}" "${ext_dir#*=}" || return 1
         ck_as_web cv ext:enable "${ext_key}"
     done
+}
+
+# Core language files. Opt-in via CIVIKITCHEN_LOCALES=de_DE[,fr_FR,...]: the
+# version-matching civicrm-<version>-l10n.tar.gz is streamed once and only
+# the requested locales land in [civicrm.l10n], the directory core reads
+# translations from. Without a core .mo there, CRM_Core_I18n never
+# initialises gettext and setGettextDomain() returns early for extension
+# domains too — a mounted extension's own l10n/<locale> catalogue renders
+# English with no error. CIVIKITCHEN_DEFAULT_LOCALE=<locale> additionally
+# sets lcMessages; it has to be one of the installed locales.
+ck_locales() {
+    if [[ -z "${CIVIKITCHEN_LOCALES:-}" ]]; then
+        if [[ -n "${CIVIKITCHEN_DEFAULT_LOCALE:-}" ]]; then
+            echo "[civikitchen] ERROR: CIVIKITCHEN_DEFAULT_LOCALE=${CIVIKITCHEN_DEFAULT_LOCALE} needs its language files — list it in CIVIKITCHEN_LOCALES" >&2
+            return 1
+        fi
+        return 0
+    fi
+    local locale version l10n_dir tarball unpack
+    local -a locales=() members=()
+    IFS=',' read -ra locales <<< "${CIVIKITCHEN_LOCALES}"
+    for locale in "${locales[@]}"; do
+        locale="${locale// /}"
+        [[ -z "${locale}" ]] && continue
+        if [[ ! "${locale}" =~ ^[a-z]{2,3}_[A-Z]{2}$ ]]; then
+            echo "[civikitchen] ERROR: '${locale}' is not a CiviCRM locale (expected e.g. de_DE)" >&2
+            return 1
+        fi
+        members+=("civicrm/l10n/${locale}")
+    done
+    [[ ${#members[@]} -gt 0 ]] || return 0
+    if [[ -n "${CIVIKITCHEN_DEFAULT_LOCALE:-}" && " ${members[*]} " != *" civicrm/l10n/${CIVIKITCHEN_DEFAULT_LOCALE} "* ]]; then
+        echo "[civikitchen] ERROR: CIVIKITCHEN_DEFAULT_LOCALE=${CIVIKITCHEN_DEFAULT_LOCALE} is not in CIVIKITCHEN_LOCALES=${CIVIKITCHEN_LOCALES}" >&2
+        return 1
+    fi
+    version="$(ck_as_web cv ev 'echo CRM_Utils_System::version();')"
+    l10n_dir="$(ck_as_web cv path -d '[civicrm.l10n]')"
+    tarball="${CK_L10N_BASE_URL}/civicrm-${version}-l10n.tar.gz"
+    echo "[civikitchen] Installing core language files ${CIVIKITCHEN_LOCALES} from ${tarball} into ${l10n_dir}..."
+    unpack="$(mktemp -d)"
+    # Streamed, not saved: the tarball is ~100 MB and only a few MB of it are
+    # wanted. tar exits non-zero for a member that is not in the archive, so an
+    # unknown locale fails here instead of silently leaving English behind.
+    if ! (set -o pipefail; curl -fsSL "${tarball}" | tar -xz -C "${unpack}" "${members[@]}"); then
+        rm -rf "${unpack}"
+        echo "[civikitchen] ERROR: could not fetch ${CIVIKITCHEN_LOCALES} from ${tarball}" >&2
+        return 1
+    fi
+    mkdir -p "${l10n_dir}"
+    cp -R "${unpack}/civicrm/l10n/." "${l10n_dir}/"
+    rm -rf "${unpack}"
+    chown -R "${CK_WEB_USER}:${CK_WEB_GROUP}" "${l10n_dir}"
+    if [[ -n "${CIVIKITCHEN_DEFAULT_LOCALE:-}" ]]; then
+        ck_as_web cv setting:set "lcMessages=${CIVIKITCHEN_DEFAULT_LOCALE}" >/dev/null
+        echo "[civikitchen] Default locale set to ${CIVIKITCHEN_DEFAULT_LOCALE} (lcMessages)."
+    fi
 }
 
 # Apply named profiles (extensions + seed data + API users) at first boot.
@@ -438,8 +565,8 @@ ck_post_install_config() {
     touch "${CK_CONFIGURED_MARKER}"
 }
 
-# Marker-gated post-install provisioning bundle: profile, registry + mounted
-# extensions, and init.d hooks, run once. The marker is written only on success
+# Marker-gated post-install provisioning bundle: core locales, profile,
+# registry + mounted extensions, and init.d hooks, run once. The marker is written only on success
 # so a failed step re-runs on the next start instead of being silently skipped.
 # The profile goes first: it sets up the base stack that the user's extension
 # knobs and init hooks layer on top of.
@@ -448,6 +575,7 @@ ck_post_install_provision() {
         echo "[civikitchen] Already provisioned (${CK_PROVISIONED_MARKER}) — CIVIKITCHEN_PROFILE / *_EXTENSIONS / init.d changes are not re-applied; remove the marker to re-run."
         return 0
     fi
+    ck_locales
     ck_apply_profile
     ck_extra_extensions
     ck_enable_extensions

@@ -153,8 +153,10 @@ test-ckcivix: ## ckcivix current/behind/missing/update checks (fake civix)
 
 # The entrypoint's <requires> resolution decides what a CI stack installs before
 # `ext:enable`; a regression here surfaces as every dependent repo's boot failing.
-test-provision: ## provision.sh resolves info.xml <requires> (fake cv)
+test-provision: ## provision.sh: <requires>, mounted extensions, core locales (fake cv)
 	bash tests/toolbelt/test-provision-requires.sh
+	bash tests/toolbelt/test-provision-mounts.sh
+	bash tests/toolbelt/test-provision-locales.sh
 
 # The Dockerfiles COPY the toolbelt selectively; without this gate a new tool
 # lands in git and silently never reaches the images the fleet's CI runs on.
