@@ -208,7 +208,8 @@ final class Context
     }
 
     /**
-     * Repo policy from the optional `.ckconform`: KEY=VALUE, '#' comments.
+     * Repo policy from the optional `.ckconform`: KEY=VALUE, '#' comments,
+     * over the organisation-wide defaults file CK_DEFAULT_POLICY names.
      * The mechanism is public (it ships in this image), the values are not —
      * they live in the consuming repo, so a private licence policy stays private.
      *
@@ -222,7 +223,7 @@ final class Context
             // ckinit, and every ck* tool through `ckconform --policy-env`.
             $this->policy = array_map(
                 static fn (array $values): string => $values[0],
-                Policy::parse($this->read('.ckconform')),
+                Policy::effective($this->read('.ckconform')),
             );
         }
 

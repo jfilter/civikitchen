@@ -71,6 +71,59 @@ final class Policy
     public const PERCENT = ['min_coverage', 'mutation_min_msi', 'mutation_min_covered_msi'];
 
     /**
+     * Environment variable naming an organisation-wide defaults file in the
+     * same format. Its keys apply to every repo whose tools see the variable;
+     * the repo's own `.ckconform` overrides per key.
+     */
+    public const DEFAULTS_ENV = 'CK_DEFAULT_POLICY';
+
+    /**
+     * The defaults file's contents, null when the variable is unset. A variable
+     * that names a file which cannot be read is an error, not an absent layer:
+     * a fleet whose licence policy silently stopped applying is the exact
+     * failure the layer exists to prevent.
+     */
+    public static function defaultsRaw(): ?string
+    {
+        $file = getenv(self::DEFAULTS_ENV);
+        if ($file === false || $file === '') {
+            return null;
+        }
+        $raw = is_file($file) ? file_get_contents($file) : false;
+        if ($raw === false) {
+            throw new \RuntimeException(self::DEFAULTS_ENV . " names '{$file}', which is not a readable file");
+        }
+
+        return $raw;
+    }
+
+    /**
+     * Defaults overlaid by the repo's own file, per key: a key the repo sets
+     * REPLACES the default's values — for repeatable keys too, so a repo's
+     * `vendored_paths` lines never silently inherit a fleet-wide one. Keys the
+     * repo does not mention keep the default. The defaults' keys come first,
+     * so "first occurrence wins" ordering is preserved within each source.
+     *
+     * @return array<string, list<string>>
+     */
+    public static function layered(?string $repoRaw, ?string $defaultsRaw): array
+    {
+        return array_merge(self::parse($defaultsRaw), self::parse($repoRaw));
+    }
+
+    /**
+     * The view every reader gets: the repo file over the CK_DEFAULT_POLICY
+     * layer. Context::policy() and the CLI read-outs go through here, so the
+     * merge happens in exactly one place.
+     *
+     * @return array<string, list<string>>
+     */
+    public static function effective(?string $repoRaw): array
+    {
+        return self::layered($repoRaw, self::defaultsRaw());
+    }
+
+    /**
      * Unknown keys are returned like any other — reporting them is
      * PolicyKeyCheck's job, and dropping them here would leave it nothing.
      *
@@ -135,11 +188,12 @@ final class Policy
      * `CK_POLICY_<KEY>='<value>'` lines for `eval` in a shell tool. Scalar keys
      * only, reason stripped; repeatable keys go through `--policy <key>`.
      * escapeshellarg, not quotes by hand: values are free text from a repo.
+     * Takes the repo file's contents; the defaults layer is applied here.
      */
     public static function toShell(string $raw): string
     {
         $out = '';
-        foreach (self::parse($raw) as $key => $values) {
+        foreach (self::effective($raw) as $key => $values) {
             if (in_array($key, self::REPEATABLE, true) || !isset(self::KEYS[$key])) {
                 continue;
             }

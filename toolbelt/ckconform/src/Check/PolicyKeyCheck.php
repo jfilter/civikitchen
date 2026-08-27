@@ -38,6 +38,9 @@ use CiviKitchen\Ckconform\Reporter;
  *                 entrypoint falls back to the registry — the exact download
  *                 the pin was declared to avoid.
  *
+ * Both layers are checked — the repo's `.ckconform` and the CK_DEFAULT_POLICY
+ * file — each finding named after the file it came from.
+ *
  * What is deliberately NOT here: whether a value means the right thing. The
  * key's owner judges that, one tool per question — TestSuiteRequiredCheck is
  * the only thing that decides what `tests=` may say, and this check duplicating
@@ -52,14 +55,30 @@ final class PolicyKeyCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        $raw = $context->read('.ckconform');
-        if ($raw === null) {
-            return;
+        // The defaults file is judged by the same rules, under its own name:
+        // a typo there disables a policy for the whole fleet at once.
+        try {
+            $defaults = Policy::defaultsRaw();
+        } catch (\RuntimeException $e) {
+            $reporter->fail($e->getMessage());
+            $defaults = null;
+        }
+        if ($defaults !== null) {
+            $this->validate(Policy::DEFAULTS_ENV . ' (' . getenv(Policy::DEFAULTS_ENV) . ')', $defaults, $reporter);
         }
 
+        $raw = $context->read('.ckconform');
+        if ($raw !== null) {
+            $this->validate('.ckconform', $raw, $reporter);
+        }
+    }
+
+    private function validate(string $source, string $raw, Reporter $reporter): void
+    {
         foreach (Policy::malformed($raw) as $lineNo => $line) {
             $reporter->fail(sprintf(
-                ".ckconform:%d: no KEY=VALUE in '%s' — the line declares nothing",
+                "%s:%d: no KEY=VALUE in '%s' — the line declares nothing",
+                $source,
                 $lineNo,
                 $line,
             ));
@@ -68,7 +87,8 @@ final class PolicyKeyCheck implements Check
         foreach (Policy::parse($raw) as $key => $values) {
             if (!isset(Policy::KEYS[$key])) {
                 $reporter->fail(sprintf(
-                    ".ckconform: unknown key '%s' — nothing reads it, so the policy it declares does not apply%s",
+                    "%s: unknown key '%s' — nothing reads it, so the policy it declares does not apply%s",
+                    $source,
                     $key,
                     $this->didYouMean($key),
                 ));
@@ -78,7 +98,8 @@ final class PolicyKeyCheck implements Check
 
             if (count($values) > 1 && !in_array($key, Policy::REPEATABLE, true)) {
                 $reporter->fail(sprintf(
-                    ".ckconform: %s is declared %d times but only the first is read — %s takes a comma-separated value on one line",
+                    "%s: %s is declared %d times but only the first is read — %s takes a comma-separated value on one line",
+                    $source,
                     $key,
                     count($values),
                     $key,
@@ -90,7 +111,8 @@ final class PolicyKeyCheck implements Check
                     $spec = Policy::stripReason($value);
                     if (preg_match('#^[A-Za-z0-9][A-Za-z0-9._-]*@https?://\S+$#', $spec) !== 1) {
                         $reporter->fail(sprintf(
-                            ".ckconform: extension_source must be <key>@<http URL> (what cv ext:download takes), got '%s'",
+                            "%s: extension_source must be <key>@<http URL> (what cv ext:download takes), got '%s'",
+                            $source,
                             $spec,
                         ));
                     }
@@ -105,7 +127,8 @@ final class PolicyKeyCheck implements Check
                 $number = Policy::stripReason($value);
                 if (preg_match('/^\d{1,3}$/', $number) !== 1 || (int) $number > 100) {
                     $reporter->fail(sprintf(
-                        ".ckconform: %s must be a whole percentage 0-100, got '%s'",
+                        "%s: %s must be a whole percentage 0-100, got '%s'",
+                        $source,
                         $key,
                         $number,
                     ));

@@ -617,6 +617,10 @@ template_custom=phpcs.xml.dist -- <reason>   # deliberate template deviation (ck
 extension_source=org.example.dep@https://example.org/dep-1.2.0.zip -- <reason>   # where the image entrypoint downloads a <requires> dependency the registry does not serve (one line per dependency)
 ```
 
+Values shared across an organisation's repos can sit once in a file of the same
+format named by `CK_DEFAULT_POLICY` (the reusable workflow can point it at a
+file the organisation publishes); a repo's own `.ckconform` overrides per key.
+
 SPDX disjunctive licensing (`"license": ["MIT", "GPL-2.0"]`) is allowed in both
 manifests, and satisfies the policy when the expected licence is one of the
 members — permitted, but not unchecked: an unread array would be a hole straight

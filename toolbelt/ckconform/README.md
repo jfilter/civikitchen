@@ -78,6 +78,19 @@ template_custom=<file>,...  -- <reason>   # read by ckinit --check/--update, not
 ckcoverage, ckmutate, ckrelease, cklifecycle and ckinit all read it, so a repo's
 deviations from the standard live in one place with their reasons attached.
 
+### Organisation-wide defaults
+
+Keys every repo of an organisation shares (`license`, `npm_license`,
+`copyright`, `vendor`) can live once, in a file of the same format that
+`CK_DEFAULT_POLICY` names. Its keys apply to every repo the variable reaches;
+a key the repo's own `.ckconform` sets replaces the default's values — for the
+repeatable keys too, a repo's lines never inherit a fleet-wide one. The merge
+happens in `Policy::effective()`, so every reader (the checks, `--policy-env`,
+`--policy`) sees the same view. A variable naming an unreadable file is an
+error, not an absent layer, and `PolicyKeyCheck` validates the defaults file
+under its own name. `ckinit` reads `template_custom` from the repo file alone:
+which managed files a repo owns is per-repo by nature.
+
 ### One file, one parser
 
 They read it *through this tool*, which is the only thing that parses the

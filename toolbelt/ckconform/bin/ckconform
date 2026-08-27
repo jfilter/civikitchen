@@ -33,6 +33,7 @@ $root = getcwd();
  *   ckconform --policy <key>           # every value of one key, one per line
  *   ckconform --dist-paths             # `dir <name>` / `file <name>`, one per line
  *
+ * Both read the repo file over the CK_DEFAULT_POLICY layer (Policy::effective).
  * --policy-env gives the scalar view with the ` -- <reason>` stripped, which is
  * what a shell caller comparing a number wants. --policy keeps the value
  * verbatim, for the repeatable keys and for the callers whose job is to check
@@ -60,7 +61,7 @@ switch ($argv[1] ?? '') {
             fwrite(STDERR, "ckconform: --policy needs a key, e.g. --policy min_coverage\n");
             exit(2);
         }
-        foreach (Policy::parse($policyRaw())[$key] ?? [] as $value) {
+        foreach (Policy::effective($policyRaw())[$key] ?? [] as $value) {
             echo $value, "\n";
         }
         exit(0);
