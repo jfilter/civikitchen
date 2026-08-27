@@ -23,6 +23,7 @@ const MANAGED_FILES = [
   '.docker/init.d/README.md',
   'phpstanBootstrap.php',
   'tests/phpunit/bootstrap.php',
+  'tests/phpunit/ckHeadless.php',
   'tests/e2e/lib.sh',
 ];
 

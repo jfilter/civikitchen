@@ -71,9 +71,14 @@ the cached containers/loaders):
 docker compose exec app cktestreset
 ```
 
-The durable fix belongs in the extension: list the dependency chain explicitly
-in `setUpHeadless()`, e.g.
-`\Civi\Test::headless()->install(['my-dependency'])->installMe(__DIR__)->apply()`.
+The durable fix belongs in the extension: build the environment with the
+managed bootstrap's `ck_headless()` instead of `\Civi\Test::headless()`. It
+asks `CRM_Extension_Manager` for the same transitive, sorted `<requires>`
+closure the APIv3 `Extension.install` action uses and queues it, this
+extension last — so `setUpHeadless()` is `return ck_headless()->apply();` and
+the dependency chain lives in `info.xml` only. A dependency the site does not
+have fails the install loudly; further steps chain as before
+(`ck_headless()->sqlFile(...)->apply()`).
 
 All first-boot knobs (SMTP, extra extensions, demo users, …) are listed in the
 [configuration reference](configuration.md).
@@ -231,7 +236,17 @@ managed bootstrap requires it when present), not in edits to the managed
 
 ## PHPStan
 
-PHPStan needs to know about CiviCRM's autoloader to resolve `CRM_*` and `Civi\*` symbols. Each extension typically ships its own `phpstanBootstrap.php` that boots civi enough for static analysis ([`scaffold/template/extension/phpstanBootstrap.php`](../scaffold/template/extension/phpstanBootstrap.php) is a working reference). Run:
+PHPStan needs to know about CiviCRM's autoloader to resolve `CRM_*` and
+`Civi\*` symbols. The managed
+[`phpstanBootstrap.php`](../scaffold/template/extension/phpstanBootstrap.php)
+registers core's class loader, then the civix layout (`CRM_*`, `Civi\*`,
+`api_*`, `vendor/`) of every extension the repo's `info.xml` `<requires>`
+that exists under the ext dir (`CK_EXT_DIR`, default `/var/www/html/ext` — the
+mount and download target of the images). A class extended from a required
+extension therefore resolves without a repo-specific bootstrap or
+`scanDirectories` entry; a required extension that is not present is noted on
+stderr and its classes stay unresolved, which phpstan then reports where the
+code touches them. Run:
 
 ```bash
 docker compose exec app bash -c \

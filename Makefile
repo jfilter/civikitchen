@@ -103,7 +103,8 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity \
-	test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks lint lint-shell \
+	test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
+	test-ck-headless test-phpstan-bootstrap lint lint-shell \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
 help: ## Show this help
@@ -122,7 +123,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-provision test-parity test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -158,6 +159,14 @@ test-provision: ## provision.sh: <requires>, mounted extensions, core locales (f
 	bash tests/toolbelt/test-provision-requires.sh
 	bash tests/toolbelt/test-provision-mounts.sh
 	bash tests/toolbelt/test-provision-locales.sh
+
+# Two managed template files derive the <requires> chain from info.xml — the
+# test bootstrap for Civi\Test, the phpstan bootstrap for class resolution.
+test-ck-headless: ## ck_headless() installs the manager's <requires> closure (stubbed Civi)
+	bash tests/toolbelt/test-ck-headless.sh
+
+test-phpstan-bootstrap: ## phpstanBootstrap.php autoloads mounted <requires> extensions (stubbed core)
+	bash tests/toolbelt/test-phpstan-bootstrap.sh
 
 # The Dockerfiles COPY the toolbelt selectively; without this gate a new tool
 # lands in git and silently never reaches the images the fleet's CI runs on.
