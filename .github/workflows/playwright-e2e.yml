@@ -129,3 +129,14 @@ jobs:
         env:
           CK_COMMAND: ${{ inputs.cleanup_command }}
         run: bash -euo pipefail -c "$CK_COMMAND"
+
+      # Tests that run inside Docker leave root-owned reports and bind-mount
+      # directories behind. On a self-hosted runner the next actions/checkout
+      # cannot delete those and the whole job fails before it starts — hand
+      # the workspace back to the runner user, with the same Docker that
+      # created the files (no sudo needed).
+      - name: Restore workspace ownership
+        if: ${{ always() }}
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/workspace" alpine:3.22 \
+            chown -R "$(id -u):$(id -g)" /workspace
