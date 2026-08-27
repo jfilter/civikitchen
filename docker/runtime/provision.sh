@@ -76,15 +76,27 @@ ck_auto_composer() {
             continue
         fi
         echo "[civikitchen] composer install in ext/${ext_name}..."
-        if ( cd "${ext_dir}" && composer install --no-interaction --no-progress --prefer-dist ); then
-            # Bind mounts belong to the host user; match vendor/ to the mount
-            # owner so it isn't left root-owned on Linux hosts.
-            chown -R --reference="${ext_dir}" "${ext_dir}/vendor" 2>/dev/null || true
-        else
+        if ! ( cd "${ext_dir}" && composer install --no-interaction --no-progress --prefer-dist ); then
             echo "[civikitchen] WARN: composer install failed in ext/${ext_name} — set CIVIKITCHEN_AUTO_COMPOSER=0 or fix composer.json" >&2
         fi
+        # Bind mounts belong to the host user; match what composer wrote to
+        # the mount owner so nothing is left root-owned on Linux hosts — also
+        # after a failed install, whose half-written vendor/ would otherwise
+        # block the host user (a CI runner's next checkout) from removing it.
+        ck_match_mount_owner "${ext_dir}" "${ext_dir}/vendor" "${ext_dir}/composer.lock"
     done
     shopt -u nullglob
+}
+
+# chown PATHS (recursively, when they exist) to the owner of DIR, which is
+# the host user of a bind mount. Silent when there is nothing to do.
+ck_match_mount_owner() {
+    local dir="$1" path
+    shift
+    for path in "$@"; do
+        [[ -e "${path}" ]] || continue
+        chown -R --reference="${dir}" "${path}" 2>/dev/null || true
+    done
 }
 
 # Dev-mode defaults — there's no reason a dev image would want them off.

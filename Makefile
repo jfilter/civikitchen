@@ -159,6 +159,7 @@ test-provision: ## provision.sh: <requires>, mounted extensions, core locales (f
 	bash tests/toolbelt/test-provision-requires.sh
 	bash tests/toolbelt/test-provision-mounts.sh
 	bash tests/toolbelt/test-provision-locales.sh
+	bash tests/toolbelt/test-provision-composer.sh
 
 # Two managed template files derive the <requires> chain from info.xml — the
 # test bootstrap for Civi\Test, the phpstan bootstrap for class resolution.
