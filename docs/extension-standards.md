@@ -620,8 +620,9 @@ extension_source=org.example.dep@https://example.org/dep-1.2.0.zip -- <reason>  
 
 Values shared across an organisation's repos can sit once in a file of the same
 format named by `CK_DEFAULT_POLICY`; a repo's own `.ckconform` overrides per
-key. In CI the `policy_defaults` input of `extension-ci.yml` names the
-`owner/repo` whose root `.ckconform` is that file; on a developer machine
+key. In CI the `policy_defaults` input of `extension-ci.yml` — or, set once
+for the whole organisation, the `CK_POLICY_DEFAULTS` Actions variable — names
+the `owner/repo` whose root `.ckconform` is that file; on a developer machine
 export the variable (ckinit reads it too, for `renovate_preset`).
 
 SPDX disjunctive licensing (`"license": ["MIT", "GPL-2.0"]`) is allowed in both

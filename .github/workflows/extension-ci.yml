@@ -166,7 +166,9 @@ on:
           default policy — the keys every repo shares (license, copyright,
           vendor, ...). Checked out to .civikitchen-siblings/policy and read
           by ckconform under the repo's own file, which overrides per key. A
-          private repo needs the composer_app_* secrets. Empty: no defaults.
+          private repo needs the composer_app_* secrets. Empty falls back to
+          the CK_POLICY_DEFAULTS organisation variable — set once, no caller
+          input in any repo; empty both ways means no defaults.
         type: string
         default: ''
       sibling_repo:
@@ -262,7 +264,7 @@ jobs:
       # — otherwise a correctly generated file reads as drift.
       - name: Decide whether the policy checkout needs a token
         id: need-token
-        if: ${{ inputs.policy_defaults != '' }}
+        if: ${{ (inputs.policy_defaults || vars.CK_POLICY_DEFAULTS) != '' }}
         env:
           CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
           CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
@@ -283,16 +285,16 @@ jobs:
           owner: ${{ github.repository_owner }}
           permission-contents: read
       - name: Check out the organisation policy defaults
-        if: ${{ inputs.policy_defaults != '' }}
+        if: ${{ (inputs.policy_defaults || vars.CK_POLICY_DEFAULTS) != '' }}
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-          repository: ${{ inputs.policy_defaults }}
+          repository: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
           token: ${{ steps.app.outputs.token || github.token }}
           path: .civikitchen-siblings/policy
       - name: Check template drift (ckinit --check)
         env:
-          CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults }}
+          CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
         run: |
           if [ -n "$CK_POLICY_DEFAULTS" ]; then
             export CK_DEFAULT_POLICY="$PWD/.civikitchen-siblings/policy/.ckconform"
@@ -430,7 +432,7 @@ jobs:
       - name: Validate inputs
         env:
           CK_SIBLING_REPO: ${{ inputs.sibling_repo }}
-          CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults }}
+          CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
           CK_EXTRA_PHPUNIT_CONFIG: ${{ inputs.extra_phpunit_config }}
         run: |
           [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
@@ -541,7 +543,7 @@ jobs:
       # every package it requires is public.
       - name: Decide whether a private-dependency token is needed
         id: need-token
-        if: ${{ inputs.composer_install || inputs.sibling_repo != '' || inputs.policy_defaults != '' }}
+        if: ${{ inputs.composer_install || inputs.sibling_repo != '' || (inputs.policy_defaults || vars.CK_POLICY_DEFAULTS) != '' }}
         env:
           CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
           CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
@@ -606,11 +608,11 @@ jobs:
       # same two reasons (dot-prefixed: invisible to the extension scanner and
       # to cklint). It reaches ckconform through the extension's own mount.
       - name: Check out the organisation policy defaults
-        if: ${{ inputs.policy_defaults != '' }}
+        if: ${{ (inputs.policy_defaults || vars.CK_POLICY_DEFAULTS) != '' }}
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-          repository: ${{ inputs.policy_defaults }}
+          repository: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
           token: ${{ steps.app.outputs.token || github.token }}
           path: .civikitchen-siblings/policy
 
@@ -727,7 +729,7 @@ jobs:
       - name: Lint (cklint + ckconform + ckcivix)
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         env:
-          CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults }}
+          CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
         run: |
           # The defaults file is read from inside the container, where the
           # checkout above sits below the extension's mount. Empty = no layer.
