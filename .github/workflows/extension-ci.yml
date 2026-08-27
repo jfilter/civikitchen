@@ -205,6 +205,13 @@ jobs:
   # output. Parsed as XML, not with a tag-shaped regex — the same reader the
   # sibling step uses, inline because this runs on the bare runner.
   key:
+    # A push that supersedes an earlier one on the same ref cancels that run's
+    # copy of this job: on a self-hosted runner with a handful of slots, a
+    # fleet-wide template update otherwise queues three generations of the
+    # same suite behind each other.
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     outputs:
       key: ${{ steps.key.outputs.key }}
@@ -242,6 +249,13 @@ jobs:
   # (template_custom=<file> -- <reason>); the fix for everything else is one
   # `scaffold/ckinit.php --update` away.
   template:
+    # A push that supersedes an earlier one on the same ref cancels that run's
+    # copy of this job: on a self-hosted runner with a handful of slots, a
+    # fleet-wide template update otherwise queues three generations of the
+    # same suite behind each other.
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      cancel-in-progress: true
     if: ${{ inputs.check_template }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     steps:
@@ -318,6 +332,13 @@ jobs:
   # scan step), not per repo — a switch that turns the gate off is one nobody
   # ever turns back on.
   osv:
+    # A push that supersedes an earlier one on the same ref cancels that run's
+    # copy of this job: on a self-hosted runner with a handful of slots, a
+    # fleet-wide template update otherwise queues three generations of the
+    # same suite behind each other.
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -402,6 +423,13 @@ jobs:
           exit "$rc"
 
   ci:
+    # A push that supersedes an earlier one on the same ref cancels that run's
+    # copy of this job: on a self-hosted runner with a handful of slots, a
+    # fleet-wide template update otherwise queues three generations of the
+    # same suite behind each other.
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      cancel-in-progress: true
     needs: key
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     # Inputs enter shell commands through the environment, never by expression
@@ -939,6 +967,13 @@ jobs:
   # and "move to HEAD" is a second `git checkout` afterwards. No second stack,
   # no image build, no artifact shuffling.
   upgrade:
+    # A push that supersedes an earlier one on the same ref cancels that run's
+    # copy of this job: on a self-hosted runner with a handful of slots, a
+    # fleet-wide template update otherwise queues three generations of the
+    # same suite behind each other.
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      cancel-in-progress: true
     needs: key
     if: ${{ inputs.upgrade_from_last_release }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -1069,6 +1104,13 @@ jobs:
   # Two boots on one runner, so: scheduled caller, like every other opt-in job
   # here.
   schema-parity:
+    # A push that supersedes an earlier one on the same ref cancels that run's
+    # copy of this job: on a self-hosted runner with a handful of slots, a
+    # fleet-wide template update otherwise queues three generations of the
+    # same suite behind each other.
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      cancel-in-progress: true
     needs: key
     if: ${{ inputs.schema_parity }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -1245,6 +1287,13 @@ jobs:
   # saying so, which is what makes switching the input on safe before the
   # number is known.
   mutation:
+    # A push that supersedes an earlier one on the same ref cancels that run's
+    # copy of this job: on a self-hosted runner with a handful of slots, a
+    # fleet-wide template update otherwise queues three generations of the
+    # same suite behind each other.
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      cancel-in-progress: true
     needs: key
     if: ${{ inputs.mutation }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -1312,6 +1361,13 @@ jobs:
   # Skipped entirely when the input is empty — the matrix_images deal: a caller
   # that never sets it pays nothing.
   core-upgrade:
+    # A push that supersedes an earlier one on the same ref cancels that run's
+    # copy of this job: on a self-hosted runner with a handful of slots, a
+    # fleet-wide template update otherwise queues three generations of the
+    # same suite behind each other.
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      cancel-in-progress: true
     needs: key
     if: ${{ inputs.core_upgrade_from != '' }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -1548,6 +1604,13 @@ jobs:
   # the CSV is parsed here and handed on as `images`. Same shape as
   # build-dev-images.yml's resolve-civicrm job.
   compat-images:
+    # A push that supersedes an earlier one on the same ref cancels that run's
+    # copy of this job: on a self-hosted runner with a handful of slots, a
+    # fleet-wide template update otherwise queues three generations of the
+    # same suite behind each other.
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      cancel-in-progress: true
     if: ${{ inputs.matrix_images != '' }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     outputs:
@@ -1577,6 +1640,13 @@ jobs:
   # version-dependent is whether the extension installs into that CiviCRM and
   # whether its tests pass there.
   compat:
+    # A push that supersedes an earlier one on the same ref cancels that run's
+    # copy of this job: on a self-hosted runner with a handful of slots, a
+    # fleet-wide template update otherwise queues three generations of the
+    # same suite behind each other.
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      cancel-in-progress: true
     needs: [compat-images, key]
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     strategy:
@@ -1703,6 +1773,13 @@ jobs:
   # on `image`, not per matrix entry — see the notes in
   # docs/extension-standards.md.
   playwright:
+    # A push that supersedes an earlier one on the same ref cancels that run's
+    # copy of this job: on a self-hosted runner with a handful of slots, a
+    # fleet-wide template update otherwise queues three generations of the
+    # same suite behind each other.
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ github.job }}
+      cancel-in-progress: true
     needs: key
     if: ${{ inputs.playwright }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
