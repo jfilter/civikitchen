@@ -174,6 +174,11 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: .github/scripts/run-dev-tools-test.sh
 
+      - name: Boot test (first boot against an external DB, mounted extension, core locale)
+        env:
+          IMG: ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}
+        run: bash tests/images/boot-test-standalone.sh "$IMG"
+
   e2e-test-standalone:
     # Runs the example compose stack and exercises the auto-installed site
     # with Playwright (real Chromium). Catches install/Apache/SITE_URL bugs

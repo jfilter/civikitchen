@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<extension key="ckbootfixture" type="module">
+  <file>ckbootfixture</file>
+  <name>civikitchen boot fixture</name>
+  <description>Bind-mounted by tests/images/boot-test-standalone.sh; nothing else uses it.</description>
+  <version>1.0.0</version>
+  <releaseDate>2026-01-01</releaseDate>
+  <compatibility><ver>6.0</ver></compatibility>
+  <requires>
+    <ext>org.civicrm.search_kit</ext>
+  </requires>
+</extension>

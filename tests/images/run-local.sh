@@ -12,8 +12,9 @@
 # What runs per flavor (same scripts as CI):
 #   dev flavors    test-dev-tools.sh (bundled tooling works)
 #                  boot-test.sh (buildkit flavors: first-boot reinstall
-#                  against an external MariaDB sidecar; skipped for
-#                  standalone, whose boot path is compose-based)
+#                  against an external MariaDB sidecar) or
+#                  boot-test-standalone.sh (standalone: auto-install, a
+#                  mounted extension, CIVIKITCHEN_LOCALES)
 #   demo flavors   boot-test-demo.sh (embedded DB boots clean, demo data,
 #                  CIVIKITCHEN_SITE_URL rewrite on a non-80 port; plus one
 #                  profile leg when CK_PROFILE is set)
@@ -77,7 +78,7 @@ for flavor in "${FLAVORS[@]}"; do
                 run "boot-test ${image} (${site_type})" \
                     bash boot-test.sh "${image}" "${site_type}"
             else
-                echo "(skipping boot-test for ${flavor} — compose-based, see examples/${flavor}/)"
+                run "boot-test-standalone ${image}" bash boot-test-standalone.sh "${image}"
             fi
             ;;
     esac
