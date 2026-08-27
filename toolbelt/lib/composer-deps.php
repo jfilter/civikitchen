@@ -3,6 +3,7 @@
 declare(strict_types = 1);
 
 use ShipMonk\ComposerDependencyAnalyser\Config\Configuration;
+use ShipMonk\ComposerDependencyAnalyser\Config\ErrorType;
 
 /**
  * Default config for `ckdeps` (shipmonk/composer-dependency-analyser).
@@ -40,6 +41,13 @@ if (is_dir('tests')) {
 // (simplexml, the required extensions' autoloaders) is a dev dependency.
 if (is_file('phpstanBootstrap.php')) {
   $configuration->addPathToScan('phpstanBootstrap.php', true);
+}
+// The two template-managed files read info.xml with simplexml. That is the
+// template's dependency, not the repo's: nothing in a repo's composer.json
+// should have to name ext-simplexml because of a file ckinit rewrites.
+$ckTemplateFiles = array_filter(['phpstanBootstrap.php', 'tests/phpunit/ckHeadless.php'], 'is_file');
+if ($ckTemplateFiles !== []) {
+  $configuration->ignoreErrorsOnPaths(array_values($ckTemplateFiles), [ErrorType::SHADOW_DEPENDENCY]);
 }
 
 return $configuration;

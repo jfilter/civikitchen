@@ -540,9 +540,12 @@ ck_run_init_hooks() {
 # Heal root-owned files in the CiviCRM data dirs that root-run steps may have
 # left behind — the web workers can't write them otherwise. Cheap no-op when
 # ownership is already correct. -h: change symlinks, never their targets.
+# -xdev: an extension bind-mounted below a data dir (the buildkit flavors put
+# the CMS ext dir inside the site tree) belongs to the host user, and chowning
+# it to the web user locks that user — a CI runner — out of its own checkout.
 ck_heal_perms() {
     # shellcheck disable=SC2086 # CK_DATA_DIRS is a space-separated path list.
-    find ${CK_DATA_DIRS} ! -user "${CK_WEB_USER}" \
+    find ${CK_DATA_DIRS} -xdev ! -user "${CK_WEB_USER}" \
         -exec chown -h "${CK_WEB_USER}:${CK_WEB_GROUP}" {} + 2>/dev/null || true
 }
 
