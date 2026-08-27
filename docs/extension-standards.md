@@ -769,7 +769,7 @@ on `extension-ci.yml`, all off by default:
 |---|---|
 | `npm_ci` | `npm ci --ignore-scripts` on the runner, before the stack boots. The stack bind-mounts the checkout, so `node_modules/` is there for PHP code that reads an asset bundle. |
 | `js_tests` | Runs `npm test`. Implies `npm_ci`. Fails when `package.json` has no `test` script. |
-| `bun` | Uses Bun for all of the above instead of npm: `bun install --frozen-lockfile`, `bun run test`, `bun run test:e2e`. Implies the install, the way `js_tests` implies `npm_ci`. Needs a committed `bun.lock`. |
+| `bun` | Uses Bun for all of the above instead of npm: `bun install --frozen-lockfile`, `bun run test`, `bun run test:e2e`. Implies the install, the way `js_tests` implies `npm_ci`. Needs a committed `bun.lock` and `"packageManager": "bun@x.y.z"` in `package.json` — that is the Bun the jobs install, so a Bun release cannot change a green run on its own. |
 | `playwright` | Own job: boots the stack with port 8080 published and an `admin` / `admin` demo user, then runs `npm run test:e2e` from the runner. Report and traces are uploaded on failure. |
 | `node_version` | Node for all of the above. Default `'24'` — the major the dev images ship, so a browser job tests the Node the image actually serves. Still applies under `bun` — see below. |
 

@@ -107,8 +107,10 @@ on:
         description: >-
           Drive all frontend steps with Bun (`bun install --frozen-lockfile`,
           `bun run test` / `test:e2e`) instead of npm — whole pipeline or
-          none. Needs a committed bun.lock. node_version still applies: the
-          installed binaries run on Node. See docs/extension-standards.md.
+          none. Needs a committed bun.lock and a `packageManager` pin
+          ("bun@x.y.z") in package.json, which is the Bun the jobs install.
+          node_version still applies: the installed binaries run on Node.
+          See docs/extension-standards.md.
         type: boolean
         default: false
       mutation:
@@ -517,6 +519,11 @@ jobs:
       - name: Set up Bun
         if: ${{ inputs.bun }}
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          # The repo pins its Bun in package.json ("packageManager": "bun@x.y.z"),
+          # next to its lockfile; an unpinned setup would test whatever Bun
+          # shipped this week.
+          bun-version-file: package.json
 
       # --ignore-scripts is deliberate and not configurable — see the input
       # description. A package that genuinely needs a build step should run it
@@ -1876,6 +1883,11 @@ jobs:
       - name: Set up Bun
         if: ${{ inputs.bun }}
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          # The repo pins its Bun in package.json ("packageManager": "bun@x.y.z"),
+          # next to its lockfile; an unpinned setup would test whatever Bun
+          # shipped this week.
+          bun-version-file: package.json
 
       # Same --ignore-scripts rule as the ci job: this job installs the
       # extension's own tree, and a browser test repo is exactly where an
