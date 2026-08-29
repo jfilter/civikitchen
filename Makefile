@@ -104,7 +104,7 @@ endef
 .DEFAULT_GOAL := help
 .PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity \
 	test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
-	test-ck-headless test-phpstan-bootstrap test-shell-portability lint lint-shell lint-shell-portability \
+	test-ck-headless test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
 help: ## Show this help
@@ -123,7 +123,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -203,6 +203,9 @@ test-compose-isolation: ## Per-job compose project names in the workflows
 
 test-shell-portability: ## Shell portability lint accepts portable edits and rejects BSD-only sed -i
 	bash tests/parity/test-shell-portability.sh
+
+test-install-trivy: ## Trivy installer architecture selection and release checksum pins
+	bash tests/parity/test-install-trivy.sh
 
 # --- static checks -----------------------------------------------------------
 

@@ -57,6 +57,13 @@ on:
           the extension requires vendor/autoload.php at runtime.
         type: boolean
         default: false
+      composer_app_repositories:
+        description: >-
+          Comma- or newline-separated repository names within the caller's
+          owner that the GitHub App token may read. Required whenever the app
+          secrets are supplied for private Composer packages.
+        type: string
+        default: ''
 
     secrets:
       composer_app_id:
@@ -119,9 +126,14 @@ jobs:
         env:
           CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
           CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
+          CK_COMPOSER_APP_REPOSITORIES: ${{ inputs.composer_app_repositories }}
         run: |
           set -euo pipefail
           if [ -n "${CK_COMPOSER_APP_ID:-}" ] && [ -n "${CK_COMPOSER_APP_PRIVATE_KEY:-}" ]; then
+            if [ -z "${CK_COMPOSER_APP_REPOSITORIES//[[:space:],]/}" ]; then
+              echo "composer_app_repositories must list the repositories readable by the app token" >&2
+              exit 1
+            fi
             echo "app=true" >> "$GITHUB_OUTPUT"
           else
             echo "app=false" >> "$GITHUB_OUTPUT"
@@ -135,6 +147,7 @@ jobs:
           app-id: ${{ secrets.composer_app_id }}
           private-key: ${{ secrets.composer_app_private_key }}
           owner: ${{ github.repository_owner }}
+          repositories: ${{ inputs.composer_app_repositories }}
           # The token only ever reads: a sibling checkout and composer's
           # private packages over HTTPS. Nothing here writes with it.
           permission-contents: read

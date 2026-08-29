@@ -325,7 +325,8 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   ckconform → ckfmt --check → phpunit under ckcoverage → phpstan → phpstan over
   the tests when the repo opted in → ckcompat →
   ckdeps → cktaint → cksmarty → ckeslint → template-drift check →
-  lockfile vulnerability scan, plus the opt-in schema-parity job), so
+  lockfile vulnerability scan → repository secret scan, plus the opt-in
+  schema-parity job), so
   the pipeline is defined once instead of copy-pasted per repo. The caller pins
   the released major (`@v1`) and the CI stack the matching `:v1` image —
   workflow, template, tools and images are one versioned contract, so they move
@@ -434,7 +435,7 @@ Two more habits around the mago engine:
   inline-variable-return rewrite that can take a `@var` annotation with it, and
   the type it pinned is then gone.
 
-## Known vulnerabilities: dependencies and images
+## Known vulnerabilities and secrets
 
 Two scanners, two layers, and neither replaces the other. The extension CI
 workflow scans what a repo *declares*; the image pipeline scans what a repo
@@ -489,6 +490,31 @@ printed on every run, and an entry that no longer matches anything is reported
 as an unused ignore — so the file cleans itself up out loud instead of
 accumulating.
 
+**Repository secrets — `trivy` in `extension-ci.yml`.** A separate mandatory
+job scans the checked-out extension source with Trivy's secret scanner. Tests
+and fixtures stay in scope: a credential committed as "test data" is still in
+the repository and still needs rotation. Generated/materialized dependency
+trees (`vendor/`, `node_modules/`) and the workflow's CiviKitchen helper
+checkout are excluded because they are separate upstream source boundaries and
+frequently carry deliberately fake-key fixtures.
+
+A false positive is scoped in `.trivyignore.yaml` by rule and path, with a
+statement and an enforced expiry date; there is no workflow switch that turns
+the scanner off for a whole repository:
+
+```yaml
+secrets:
+  - id: generic-api-key
+    paths:
+      - tests/fixtures/example-token.txt
+    statement: Synthetic non-routable fixture generated from the public example.
+    expired_at: 2026-11-01
+```
+
+This scans the current checkout, not deleted blobs elsewhere in Git history,
+and it reports after the push has already reached GitHub. A one-time
+history-wide scan plus GitHub Push Protection remain necessary complements.
+
 **Images — `trivy` in `build-dev-images.yml`.** Runs after the candidate images
 are pushed, against the **published digest** resolved from the registry, not
 against a tag and not against the Dockerfile: only the digest is the artifact
@@ -535,15 +561,13 @@ NodeSource's nodejs package ships is upgraded in `install-dev-tools.sh`
 (`NPM_VERSION`) rather than ignored, and the `toolbelt/oxlint` and
 `toolbelt/oxfmt` lockfiles are expected to stay clean on their own.
 
-**Recommended, not implemented: secrets.** Neither scanner looks for
-credentials in git history, and the private extension repos are exactly where a
-deploy key or an API token gets committed once and then lives forever in a blob
-that no `git rm` removes. Two things worth doing once, outside this pipeline:
-run a history-wide secret scan over each private repo (`gitleaks detect`,
-`trufflehog git`, or GitHub's own secret scanning where the plan includes it),
-and switch on **GitHub Push Protection** organization-wide so the next one is
-refused at push time rather than found later. A rotated credential is cheap; a
-credential nobody knows is in the history is not.
+The private extension repos are also where a deploy key or API token can live
+forever in a deleted blob that no `git rm` removes. Run a history-wide secret
+scan over each private repo (`gitleaks detect`, `trufflehog git`, or GitHub's
+own secret scanning where the plan includes it), and switch on **GitHub Push
+Protection** organization-wide so the next one is refused at push time rather
+than found later. A rotated credential is cheap; a credential nobody knows is
+in the history is not.
 
 ## Tests and coverage
 
@@ -902,7 +926,8 @@ to off; a caller that sets neither gets exactly the run it has today.
 |---|---|
 | `composer_install` | `composer install --no-interaction --no-progress` on the runner, before the stack boots. |
 | `sibling_repo` | `owner/repo` of a second extension: checked out to `.civikitchen-siblings/<repo>` and bind-mounted read-only into the stack, which also enables it. |
-| `composer_app_id`, `composer_app_private_key` (secrets) | A GitHub App with `contents: read`, installed on the private dependency repos. The workflow mints a short-lived installation token from it and uses that for both the composer install and the sibling checkout. |
+| `composer_app_repositories` | Comma- or newline-separated repository names within the caller's owner. Required with the App secrets and scopes the minted token to exactly these private dependencies. |
+| `composer_app_id`, `composer_app_private_key` (secrets) | A GitHub App with `contents: read`, installed on the private dependency repos. The workflow mints a short-lived installation token restricted by `composer_app_repositories` and uses it for both the composer install and the sibling checkout. |
 
 **`composer_install` is not an optimization — for a repo without a committed
 `vendor/` it is the precondition for everything else.** The extension's main

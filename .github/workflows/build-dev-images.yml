@@ -782,14 +782,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Pinned version AND pinned checksum, for the reason spelled out on the
-      # same step in extension-ci.yml: a version pin still trusts whatever the
-      # tag serves today. The hash is the release's own
-      # trivy_<version>_checksums.txt entry and moves with the version.
+      # Version, architecture selection and the release checksums live in the
+      # shared installer — the image and extension security jobs execute the
+      # same verified binary contract instead of carrying independent pins.
       - name: Install trivy
-        env:
-          CK_TRIVY_VERSION: 0.72.0
-          CK_TRIVY_SHA256: bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea
         run: .github/scripts/install-trivy.sh
 
       # The scan target is the DIGEST, resolved from the registry — the point of

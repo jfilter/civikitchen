@@ -1,5 +1,5 @@
 # The one CI definition every civico extension calls, so the pipeline lives in
-# one place instead of drifting between eleven copy-pasted workflows:
+# one place instead of drifting between copy-pasted extension workflows:
 #
 #   jobs:
 #     ci:
@@ -11,8 +11,9 @@
 # Everything runs inside the extension's own CiviCRM stack — the standalone
 # image auto-installs, enables the mounted extension and seeds the civicrm_test
 # scratch DB, and cklint / ckconform / phpstan / ckcoverage / cktaint all ship
-# in it. The two exceptions run on the bare runner because they have nothing to
-# ask a CiviCRM about: the template-drift check and the lockfile scan.
+# in it. The bare-runner exceptions have nothing to
+# ask a CiviCRM about: template drift, lockfile vulnerabilities and repository
+# secrets.
 #
 # The opt-in extras, which of them belong in a scheduled second caller, and how
 # a repo with private dependencies passes GitHub App credentials: see
@@ -182,6 +183,14 @@ on:
           sibling needs the composer_app_* secrets. Empty mounts nothing.
         type: string
         default: ''
+      composer_app_repositories:
+        description: >-
+          Comma- or newline-separated repository names within the caller's
+          owner that the GitHub App token may read. Required whenever the app
+          secrets are supplied for private Composer packages or a private
+          sibling; list only the repositories actually needed by this run.
+        type: string
+        default: ''
 
     secrets:
       composer_app_id:
@@ -288,10 +297,15 @@ jobs:
         env:
           CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
           CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
+          CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
         run: |
           set -euo pipefail
           if [ -n "${CK_COMPOSER_APP_ID:-}" ] && [ -n "${CK_COMPOSER_APP_PRIVATE_KEY:-}" ]; then
-            echo "app=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "app=true"
+              echo "owner=${CK_POLICY_DEFAULTS%%/*}"
+              echo "repository=${CK_POLICY_DEFAULTS#*/}"
+            } >> "$GITHUB_OUTPUT"
           else
             echo "app=false" >> "$GITHUB_OUTPUT"
           fi
@@ -302,7 +316,8 @@ jobs:
         with:
           app-id: ${{ secrets.composer_app_id }}
           private-key: ${{ secrets.composer_app_private_key }}
-          owner: ${{ github.repository_owner }}
+          owner: ${{ steps.need-token.outputs.owner }}
+          repositories: ${{ steps.need-token.outputs.repository }}
           permission-contents: read
       - name: Check out the organisation policy defaults
         if: ${{ (inputs.policy_defaults || vars.CK_POLICY_DEFAULTS) != '' }}
@@ -429,6 +444,58 @@ jobs:
             exit 0
           fi
           exit "$rc"
+
+  # Credentials accidentally committed to an extension are independent of its
+  # dependency CVEs and runtime behavior, so scan them in their own bare-runner
+  # job. This is deliberately not optional: a repo-wide off switch would become
+  # permanent, while a false positive can be scoped to its rule and path in an
+  # expiring .trivyignore.yaml entry.
+  security:
+    concurrency:
+      group: ck-${{ github.repository }}-${{ github.ref }}-security
+      cancel-in-progress: true
+    runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      # Use the installer belonging to this resolved reusable workflow, not a
+      # floating main checkout. The helper checkout itself is excluded from the
+      # scan below: callers are responsible for their tree, CiviKitchen scans
+      # its own source in its own pipeline.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+          repository: jfilter/civikitchen
+          ref: ${{ job.workflow_sha }}
+          path: .civikitchen-ci
+      - name: Install trivy
+        run: .civikitchen-ci/.github/scripts/install-trivy.sh
+
+      # Scan repository-owned source, including tests and fixtures. Materialized
+      # dependency trees and CiviKitchen's helper checkout are separate trust
+      # boundaries and notorious for upstream fake-key fixtures, so exclude them
+      # by role rather than teaching every extension to ignore their contents.
+      - name: Scan repository source for secrets (trivy)
+        run: |
+          set -euo pipefail
+          ignore_args=()
+          if [ -f .trivyignore.yaml ]; then
+            ignore_args+=(--ignorefile .trivyignore.yaml)
+          fi
+          "$RUNNER_TEMP/trivy" fs \
+            --scanners secret \
+            --exit-code 1 \
+            --no-progress \
+            --skip-version-check \
+            --skip-dirs .git \
+            --skip-dirs .civikitchen-ci \
+            --skip-dirs .civikitchen-siblings \
+            --skip-dirs '**/vendor' \
+            --skip-dirs '**/node_modules' \
+            "${ignore_args[@]}" \
+            .
 
   ci:
     # A push that supersedes an earlier one on the same ref cancels that run's
@@ -590,9 +657,14 @@ jobs:
         env:
           CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
           CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
+          CK_COMPOSER_APP_REPOSITORIES: ${{ inputs.composer_app_repositories }}
         run: |
           set -euo pipefail
           if [ -n "${CK_COMPOSER_APP_ID:-}" ] && [ -n "${CK_COMPOSER_APP_PRIVATE_KEY:-}" ]; then
+            if [ -z "${CK_COMPOSER_APP_REPOSITORIES//[[:space:],]/}" ]; then
+              echo "composer_app_repositories must list the repositories readable by the app token" >&2
+              exit 1
+            fi
             echo "app=true" >> "$GITHUB_OUTPUT"
           else
             echo "app=false" >> "$GITHUB_OUTPUT"
@@ -608,6 +680,7 @@ jobs:
           app-id: ${{ secrets.composer_app_id }}
           private-key: ${{ secrets.composer_app_private_key }}
           owner: ${{ github.repository_owner }}
+          repositories: ${{ inputs.composer_app_repositories }}
           # The token only ever reads: a sibling checkout and composer's
           # private packages over HTTPS. Nothing here writes with it.
           permission-contents: read
@@ -1707,9 +1780,14 @@ jobs:
         env:
           CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
           CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
+          CK_COMPOSER_APP_REPOSITORIES: ${{ inputs.composer_app_repositories }}
         run: |
           set -euo pipefail
           if [ -n "${CK_COMPOSER_APP_ID:-}" ] && [ -n "${CK_COMPOSER_APP_PRIVATE_KEY:-}" ]; then
+            if [ -z "${CK_COMPOSER_APP_REPOSITORIES//[[:space:],]/}" ]; then
+              echo "composer_app_repositories must list the repositories readable by the app token" >&2
+              exit 1
+            fi
             echo "app=true" >> "$GITHUB_OUTPUT"
           else
             echo "app=false" >> "$GITHUB_OUTPUT"
@@ -1723,6 +1801,7 @@ jobs:
           app-id: ${{ secrets.composer_app_id }}
           private-key: ${{ secrets.composer_app_private_key }}
           owner: ${{ github.repository_owner }}
+          repositories: ${{ inputs.composer_app_repositories }}
           # The token only ever reads: a sibling checkout and composer's
           # private packages over HTTPS. Nothing here writes with it.
           permission-contents: read

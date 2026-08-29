@@ -1,11 +1,30 @@
 #!/usr/bin/env bash
-# Install trivy $CK_TRIVY_VERSION into $RUNNER_TEMP, verified against
-# $CK_TRIVY_SHA256 (the release's own trivy_<version>_checksums.txt entry).
+# Install the workflow contract's Trivy into $RUNNER_TEMP, verified against the
+# release's own checksums. Both Linux runner architectures supported by the
+# reusable workflows are pinned; anything else fails instead of scanning with
+# an unverified or wrong binary.
 set -euo pipefail
 
-tarball="$RUNNER_TEMP/trivy.tar.gz"
+readonly version=0.72.0
+
+case "$(uname -s)/$(uname -m)" in
+  Linux/x86_64)
+    asset=Linux-64bit
+    sha=bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea
+    ;;
+  Linux/aarch64|Linux/arm64)
+    asset=Linux-ARM64
+    sha=2ca2c023109c2db6b2b77366b6717291452d4531167377d95c79547f0c8e3467
+    ;;
+  *)
+    echo "no pinned Trivy build for $(uname -s)/$(uname -m) — this installer supports Linux x86_64 and arm64 runners" >&2
+    exit 1
+    ;;
+esac
+
+tarball="$RUNNER_TEMP/trivy_${version}_${asset}.tar.gz"
 curl -fsSL -o "$tarball" \
-  "https://github.com/aquasecurity/trivy/releases/download/v${CK_TRIVY_VERSION}/trivy_${CK_TRIVY_VERSION}_Linux-64bit.tar.gz"
-echo "$CK_TRIVY_SHA256  $tarball" | sha256sum -c -
+  "https://github.com/aquasecurity/trivy/releases/download/v${version}/trivy_${version}_${asset}.tar.gz"
+echo "$sha  $tarball" | sha256sum -c -
 tar -xzf "$tarball" -C "$RUNNER_TEMP" trivy
 "$RUNNER_TEMP/trivy" --version
