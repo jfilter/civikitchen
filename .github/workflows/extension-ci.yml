@@ -1993,7 +1993,18 @@ jobs:
       # but the local node_modules/.bin/playwright binary, which either
       # manager has just put there.
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        env:
+          CK_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: |
+          set -euo pipefail
+          if [ "$CK_RUNNER_ENVIRONMENT" = github-hosted ]; then
+            npx playwright install --with-deps
+          else
+            # Self-hosted runners must provision system libraries as part of
+            # the runner image. Asking Playwright for --with-deps invokes sudo,
+            # which is deliberately unavailable on hardened runners.
+            npx playwright install
+          fi
 
       - name: Playwright (npm run test:e2e / bun run test:e2e)
         env:

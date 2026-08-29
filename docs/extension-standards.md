@@ -903,8 +903,10 @@ What that job assumes, because the shared workflow cannot ask:
 - the suite reads `CIVICRM_BASE_URL`, `DEMO_USER` and `DEMO_PASS` from the
   environment (the starter's `playwright.config.ts` and `tests/auth.setup.ts`
   already do). The job sets all three; a hardcoded `localhost:8080` works too.
-- browsers are installed with `playwright install --with-deps`, all of them,
-  so a config with `webkit` or `firefox` projects works without another input.
+- all browsers are installed, so a config with `webkit` or `firefox` projects
+  works without another input. GitHub-hosted runners additionally use
+  `--with-deps`; self-hosted runner images must provide the system libraries
+  themselves because CI does not receive passwordless `sudo`.
 
 Copy-pasteable starter, including the config files and the `test:e2e` script:
 [`examples/extension-with-playwright/`](../examples/extension-with-playwright/).
