@@ -5,7 +5,7 @@ at all:
 
 ```bash
 make test     # ckconform's fixtures, the phpstan extension's rule tests, ckinit
-make lint     # shellcheck, actionlint, zizmor, php -l, the profile.json schema
+make lint     # shell portability, shellcheck, actionlint, zizmor, PHP and JSON
 make build    # the standalone image, as civikitchen:standalone
 ```
 
@@ -147,8 +147,9 @@ docker run --rm -v "$(pwd)/tests/images:/civikitchen-test:ro" \
 
 Every push runs the `Lint` workflow: strict shellcheck (style level, see
 `.shellcheckrc` for the two disabled false-positive classes) over all shell
-scripts, actionlint over the workflows, `php -l` over the seed/profile
-scripts, and a shape check on the `profile.json` files. Locally:
+scripts, a portability check that rejects BSD-only `sed -i ''`, actionlint over
+the workflows, `php -l` over the seed/profile scripts, and a shape check on the
+`profile.json` files. Locally:
 
 ```bash
 find images examples -name '*.sh' -print0 | xargs -0 shellcheck -S style

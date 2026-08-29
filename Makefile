@@ -104,7 +104,7 @@ endef
 .DEFAULT_GOAL := help
 .PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity \
 	test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
-	test-ck-headless test-phpstan-bootstrap lint lint-shell \
+	test-ck-headless test-phpstan-bootstrap test-shell-portability lint lint-shell lint-shell-portability \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
 help: ## Show this help
@@ -123,7 +123,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -201,15 +201,23 @@ test-tool-locks: ## Tool lockfiles: in sync, and resolved against the PHP floor
 test-compose-isolation: ## Per-job compose project names in the workflows
 	bash tests/parity/test-compose-project-isolation.sh
 
+test-shell-portability: ## Shell portability lint accepts portable edits and rejects BSD-only sed -i
+	bash tests/parity/test-shell-portability.sh
+
 # --- static checks -----------------------------------------------------------
 
-lint: lint-shell lint-actions lint-php lint-schema ## Every static check CI runs
+lint: lint-shell lint-shell-portability lint-actions lint-php lint-schema ## Every static check CI runs
 
 lint-shell: $(SHELLCHECK) ## shellcheck (pinned) at style level over every tracked shell file
 	@files=$$($(SHELL_FILES)) ; \
 	  $(call require_nonempty,$$files,shell) ; \
 	  printf '%s\n' "$$files" | xargs $(SHELLCHECK) -S style ; \
 	  echo "shellcheck clean ($$(printf '%s\n' "$$files" | wc -l) files)"
+
+lint-shell-portability: ## Reject host-incompatible BSD sed in-place syntax
+	@files=$$($(SHELL_FILES)) ; \
+	  $(call require_nonempty,$$files,shell) ; \
+	  scripts/lint-shell-portability.sh $$files
 
 # actionlint reads workflows as YAML+shell; zizmor reads them as a threat model
 # — unpinned actions, expression injection into run blocks, tokens wider than

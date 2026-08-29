@@ -11,6 +11,20 @@ make_extension() {
   printf '%s\n' '<extension key="org.acme.example_ext" type="module"><file>example_ext</file></extension>' > "$target/info.xml"
 }
 
+# POSIX sed has no portable in-place flag: GNU and BSD sed interpret `-i`
+# differently. Rewrite through a sibling temporary file and copy back so the
+# original file mode remains intact for ckinit's mode-drift assertions.
+rewrite_with_sed() {
+  local expression="$1"
+  local file="$2"
+  local output
+
+  output=$(mktemp "${file}.sed-output.XXXXXX")
+  sed "$expression" "$file" > "$output"
+  cat "$output" > "$file"
+  /bin/rm "$output"
+}
+
 make_extension "$work/clean"
 "$root/scaffold/ckinit.php" "$work/clean" >/dev/null
 grep -q 'acme/example_ext' "$work/clean/composer.json"
@@ -69,7 +83,7 @@ echo "$out" | grep -q 'up to date'
 
 # A drifted MANAGED file fails --check; an edited SEEDED file does not.
 # Inside the managed block — an addition after the END marker would be the repo's own.
-sed -i '' 's|extension-ci.yml@v1|extension-ci.yml@v0|' "$work/drift/.github/workflows/ci.yml"
+rewrite_with_sed 's|extension-ci.yml@v1|extension-ci.yml@v0|' "$work/drift/.github/workflows/ci.yml"
 printf '%s\n' '{"name": "acme/example_ext", "edited": true}' > "$work/drift/composer.json"
 if out=$("$root/scaffold/ckinit.php" --check "$work/drift" 2>&1); then
   echo "managed drift was not detected" >&2
@@ -83,7 +97,7 @@ fi
 
 # --update restores the managed file (re-stamped) and leaves the seeded edit.
 /bin/rm "$work/drift/phpcs.xml.dist"
-sed -i '' 's|mariadb:10.11|mariadb:10.6|' "$work/drift/.docker/docker-compose.ci.yml"
+rewrite_with_sed 's|mariadb:10.11|mariadb:10.6|' "$work/drift/.docker/docker-compose.ci.yml"
 out=$("$root/scaffold/ckinit.php" --update "$work/drift")
 echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
 echo "$out" | grep -q 'updated   .docker/docker-compose.ci.yml'
@@ -184,13 +198,13 @@ cat >> "$work/blocks/.github/workflows/ci.yml" <<'YAML'
     steps:
       - run: echo extra
 YAML
-sed -i '' 's|^# END CIVIKITCHEN MANAGED app$|# END CIVIKITCHEN MANAGED app\
+rewrite_with_sed 's|^# END CIVIKITCHEN MANAGED app$|# END CIVIKITCHEN MANAGED app\
       - ../../other:/var/www/html/ext/other:ro|' "$work/blocks/.docker/docker-compose.ci.yml"
 out=$("$root/scaffold/ckinit.php" --check "$work/blocks")
 echo "$out" | grep -q 'up to date' || { echo "additions outside the managed blocks were reported as drift: $out" >&2; exit 1; }
 # An edit inside a block is drift; --update restores the block and keeps the additions.
-sed -i '' 's|extension-ci.yml@v1|extension-ci.yml@v0|' "$work/blocks/.github/workflows/ci.yml"
-sed -i '' 's|mariadb:10.11|mariadb:10.6|' "$work/blocks/.docker/docker-compose.ci.yml"
+rewrite_with_sed 's|extension-ci.yml@v1|extension-ci.yml@v0|' "$work/blocks/.github/workflows/ci.yml"
+rewrite_with_sed 's|mariadb:10.11|mariadb:10.6|' "$work/blocks/.docker/docker-compose.ci.yml"
 if "$root/scaffold/ckinit.php" --check "$work/blocks" >/dev/null 2>&1; then
   echo "an edit inside a managed block was not detected" >&2; exit 1
 fi
@@ -212,7 +226,7 @@ out=$("$root/scaffold/ckinit.php" --update "$work/legacy")
 echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
 grep -q 'BEGIN CIVIKITCHEN MANAGED caller' "$work/legacy/.github/workflows/ci.yml"
 # A repo that removed a block is reported, never silently rewritten.
-sed -i '' '/CIVIKITCHEN MANAGED db/d' "$work/blocks/.docker/docker-compose.ci.yml"
+rewrite_with_sed '/CIVIKITCHEN MANAGED db/d' "$work/blocks/.docker/docker-compose.ci.yml"
 out=$("$root/scaffold/ckinit.php" --check "$work/blocks" 2>&1 || true)
 echo "$out" | grep -q 'managed blocks do not match' || { echo "a removed block was not reported: $out" >&2; exit 1; }
 
