@@ -72,8 +72,12 @@ $contactLayout = array_values(array_filter(
 ));
 validator_expect(count($contactLayout) === 1, 'verein declares Contact Layout exactly once');
 validator_expect(
-  !isset($contactLayout[0]['repo']) && !isset($contactLayout[0]['version']) && ($contactLayout[0]['enable'] ?? false) === true,
-  'verein enables the core-packaged Contact Layout without replacing its installed code',
+  !isset($contactLayout[0]['repo'])
+    && !isset($contactLayout[0]['version'])
+    && ($contactLayout[0]['enable'] ?? false) === true
+    && ($contactLayout[0]['skipUf'] ?? []) === ['Joomla']
+    && trim((string) ($contactLayout[0]['skipUfReason'] ?? '')) !== '',
+  'verein enables the core-packaged Contact Layout without replacing it and skips Joomla where it is absent',
 );
 
 echo "profile validator tests passed\n";
