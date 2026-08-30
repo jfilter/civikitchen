@@ -328,6 +328,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install scenario YAML parser
+        run: composer install --no-interaction --no-progress --working-dir=packages/civikitchen-scenario-schema
+
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
@@ -602,6 +605,8 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+      - name: Install scenario YAML parser
+        run: composer install --no-interaction --no-progress --working-dir=packages/civikitchen-scenario-schema
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
