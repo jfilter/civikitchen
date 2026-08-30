@@ -49,7 +49,7 @@ final class UnreleasedShippedChangesCheckTest extends CheckTestCase
     public function testTheRepoMayRaiseTheThreshold(): void
     {
         $context = $this->tagged();
-        $this->write('.ckconform', "max_unreleased_days=9999\n");
+        $this->write('civikitchen.yaml', $this->policyFixture("max_unreleased_days=9999\n"));
         $this->write('Civi/Feature.php', '<?php');
         $this->gitCommit('feature', '2020-01-01T00:00:00Z');
         $this->assertSilent($this->run_(new UnreleasedShippedChangesCheck(), $context));
@@ -58,7 +58,7 @@ final class UnreleasedShippedChangesCheckTest extends CheckTestCase
     public function testTheRepoMayLowerTheThreshold(): void
     {
         $context = $this->tagged();
-        $this->write('.ckconform', "max_unreleased_days=1\n");
+        $this->write('civikitchen.yaml', $this->policyFixture("max_unreleased_days=1\n"));
         $this->write('Civi/Feature.php', '<?php');
         $this->gitCommit('feature', date('c', time() - 5 * 86400));
         $this->assertWarns($this->run_(new UnreleasedShippedChangesCheck(), $context), 'unreleased for 5 days');
@@ -67,20 +67,18 @@ final class UnreleasedShippedChangesCheckTest extends CheckTestCase
     public function testAThresholdThatIsNotANumberIsAFinding(): void
     {
         $context = $this->tagged();
-        $this->write('.ckconform', "max_unreleased_days=one month\n");
+        $this->write('civikitchen.yaml', $this->policyFixture("max_unreleased_days=one month\n"));
         $this->gitCommit('policy');
-        $this->assertFails(
-            $this->run_(new UnreleasedShippedChangesCheck(), $context),
-            'max_unreleased_days must be a whole number of days',
-        );
+        $this->expectException(\RuntimeException::class);
+        $this->run_(new UnreleasedShippedChangesCheck(), $context);
     }
 
     public function testTheRepoDecidesWhatShipsThroughDistInclude(): void
     {
-        // dist_include=tests puts the test suite back into the archive, so a
+        // policy.dist.include puts the test suite back into the archive, so a
         // change to it is a change an install gets.
         $context = $this->tagged();
-        $this->write('.ckconform', "dist_include=tests\n");
+        $this->write('civikitchen.yaml', $this->policyFixture("dist_include=tests -- release fixture\n"));
         $this->write('tests/phpunit/FeatureTest.php', '<?php');
         $this->gitCommit('tests only', '2020-01-01T00:00:00Z');
         $this->assertWarns($this->run_(new UnreleasedShippedChangesCheck(), $context), 'shipped code has been unreleased');

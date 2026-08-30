@@ -12,43 +12,43 @@ final class LicenseCoherenceCheckTest extends CheckTestCase
     public function testFailsWhenInfoXmlDisagreesWithThePolicy(): void
     {
         $context = $this->repo([
-            '.ckconform' => "license=Proprietary\n",
+            '__policy_fixture' => "license=Proprietary\n",
             'info.xml' => $this->infoXml(license: 'AGPL-3.0-or-later'),
         ]);
         $this->assertFails(
             $this->run_(new LicenseCoherenceCheck(), $context),
-            "info.xml <license> is 'AGPL-3.0-or-later', .ckconform expects 'Proprietary'"
+            "info.xml <license> is 'AGPL-3.0-or-later', civikitchen.yaml expects 'Proprietary'"
         );
     }
 
     public function testAMissingLicenseTagReadsAsEmptyInTheMessage(): void
     {
         $context = $this->repo([
-            '.ckconform' => "license=Proprietary\n",
+            '__policy_fixture' => "license=Proprietary\n",
             'info.xml' => '<?xml version="1.0"?><extension key="fixture" type="module"><file>fixture</file></extension>',
         ]);
         $this->assertFails(
             $this->run_(new LicenseCoherenceCheck(), $context),
-            "info.xml <license> is 'empty', .ckconform expects 'Proprietary'"
+            "info.xml <license> is 'empty', civikitchen.yaml expects 'Proprietary'"
         );
     }
 
     public function testFailsWhenComposerDisagreesWithThePolicy(): void
     {
         $context = $this->repo([
-            '.ckconform' => "license=Proprietary\n",
+            '__policy_fixture' => "license=Proprietary\n",
             'composer.json' => '{"name": "example/fixture", "license": "MIT"}',
         ]);
         $this->assertFails(
             $this->run_(new LicenseCoherenceCheck(), $context),
-            "composer.json license is 'MIT', .ckconform expects 'Proprietary'"
+            "composer.json license is 'MIT', civikitchen.yaml expects 'Proprietary'"
         );
     }
 
     public function testPolicyComparisonIsCaseInsensitive(): void
     {
         $context = $this->repo([
-            '.ckconform' => "license=proprietary\n",
+            '__policy_fixture' => "license=proprietary\n",
             'info.xml' => $this->infoXml(license: 'Proprietary'),
             'composer.json' => '{"license": "PROPRIETARY"}',
         ]);
@@ -58,7 +58,7 @@ final class LicenseCoherenceCheckTest extends CheckTestCase
     public function testAComposerWithoutALicenseFieldIsNotPolicedAgainstThePolicy(): void
     {
         $context = $this->repo([
-            '.ckconform' => "license=Proprietary\n",
+            '__policy_fixture' => "license=Proprietary\n",
             'composer.json' => '{"name": "example/fixture"}',
         ]);
         $this->assertSilent($this->run_(new LicenseCoherenceCheck(), $context));
@@ -98,7 +98,7 @@ final class LicenseCoherenceCheckTest extends CheckTestCase
         $context = $this->repo([
             'info.xml' => $this->infoXml(license: 'MIT'),
             'composer.json' => '{"license": ["MIT", "GPL-2.0"]}',
-            '.ckconform' => "license=MIT\n",
+            '__policy_fixture' => "license=MIT\n",
         ]);
         $this->assertPasses($this->run_(new LicenseCoherenceCheck(), $context));
     }
@@ -112,11 +112,11 @@ final class LicenseCoherenceCheckTest extends CheckTestCase
         $context = $this->repo([
             'info.xml' => $this->infoXml(license: 'Proprietary'),
             'composer.json' => '{"license": ["MIT", "GPL-2.0"]}',
-            '.ckconform' => "license=Proprietary\n",
+            '__policy_fixture' => "license=Proprietary\n",
         ]);
         $this->assertFails(
             $this->run_(new LicenseCoherenceCheck(), $context),
-            "composer.json license is 'MIT or GPL-2.0', .ckconform expects 'Proprietary'"
+            "composer.json license is 'MIT or GPL-2.0', civikitchen.yaml expects 'Proprietary'"
         );
     }
 

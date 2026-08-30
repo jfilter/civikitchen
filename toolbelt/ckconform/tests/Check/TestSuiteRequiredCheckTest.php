@@ -35,7 +35,7 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
         ], git: true);
         $this->assertFails(
             $this->run_(new TestSuiteRequiredCheck(), $context),
-            "no test suite (tests/phpunit) but 2 PHP source file(s) — add tests, or declare 'tests=optional -- <reason>' in .ckconform",
+            "no test suite (tests/phpunit) but 2 PHP source file(s) — add tests, or declare 'tests=optional -- <reason>' in civikitchen.yaml",
         );
     }
 
@@ -82,12 +82,12 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'Civi/Api4/Thing.php' => '<?php class Thing {}',
-            '.ckconform' => "# policy\ntests=optional -- config/mgd-only extension, verified by the checks/ harness\n",
+            '__policy_fixture' => "# policy\ntests=optional -- config/mgd-only extension, verified by the checks/ harness\n",
         ], git: true);
         $reporter = $this->run_(new TestSuiteRequiredCheck(), $context);
         $this->assertPasses($reporter);
         self::assertSame(
-            ['no test suite — declared optional in .ckconform (optional -- config/mgd-only extension, verified by the checks/ harness)'],
+            ['no test suite — declared optional in civikitchen.yaml (optional -- config/mgd-only extension, verified by the checks/ harness)'],
             $reporter->messages('ok'),
         );
     }
@@ -97,9 +97,10 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'Civi/Api4/Thing.php' => '<?php class Thing {}',
-            '.ckconform' => "tests=required\n",
+            '__policy_fixture' => "tests=required\n",
         ], git: true);
-        $this->assertFails($this->run_(new TestSuiteRequiredCheck(), $context), "unrecognised tests= policy");
+        $this->expectException(\RuntimeException::class);
+        $this->run_(new TestSuiteRequiredCheck(), $context);
     }
 
     /** The reason is not optional. */
@@ -107,9 +108,10 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'Civi/Api4/Thing.php' => '<?php class Thing {}',
-            '.ckconform' => "tests=optional\n",
+            '__policy_fixture' => "tests=optional\n",
         ], git: true);
-        $this->assertFails($this->run_(new TestSuiteRequiredCheck(), $context), "unrecognised tests= policy");
+        $this->expectException(\RuntimeException::class);
+        $this->run_(new TestSuiteRequiredCheck(), $context);
     }
 
     /** Outside git (tarball export) the filesystem fallback still counts source. */

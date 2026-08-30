@@ -157,6 +157,7 @@ applies the versioned CiviKitchen tooling layer, and only then moves the complet
 directory into place:
 
 ```bash
+composer install --no-dev --working-dir=/path/to/civikitchen/packages/civikitchen-scenario-schema
 /path/to/civikitchen/scaffold/ckcreate example_ext \
   --author "Example Maintainer" \
   --email dev@example.org \
@@ -177,6 +178,7 @@ error leaves no partial target directory. For an existing civix module that
 only lacks the tooling layer, run `ckinit.php` directly:
 
 ```bash
+composer install --no-dev --working-dir=/path/to/civikitchen/packages/civikitchen-scenario-schema
 /path/to/civikitchen/scaffold/ckinit.php org.example.myext
 ```
 
@@ -227,16 +229,21 @@ Only the blocks are compared and refreshed; what a repo writes outside them is
 its own and survives `ckinit --update`: workflow inputs and further jobs after
 the caller's END marker, a sibling mount between the compose file's `app` and
 `db` blocks. A repo that must deviate *inside* a block, or on a managed file
-without blocks, declares it in its `.ckconform` — the reason is mandatory, and
+without blocks, declares it in its `civikitchen.yaml` — the reason is mandatory, and
 only managed files may be listed:
 
-```
-template_custom=tests/phpunit/bootstrap.php -- Drupal settings discovery and its own test DSN
+```yaml
+policy:
+  template_custom:
+    paths:
+      - tests/phpunit/bootstrap.php
+    reason: Drupal settings discovery and its own test DSN
 ```
 
 A third-party `<requires>` is not a reason to deviate: the entrypoint reads
 `info.xml` and installs missing dependencies before `ext:enable` (from the
-registry, or from an `extension_source=<key>@<URL>` pin in `.ckconform` for a
+registry, or from a digest-pinned `policy.extension_sources` entry in
+`civikitchen.yaml` for a
 release the registry does not serve — see [Configuration](configuration.md)).
 
 Repo-specific test setup belongs in `tests/phpunit/bootstrap.local.php` (the

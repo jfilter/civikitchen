@@ -169,7 +169,7 @@ final class HookDispatchNameCheckTest extends CheckTestCase
     public function testPolicyDeclaredHookSuffixIsSilent(): void
     {
         $context = $this->repo([
-            '.ckconform' => "known_hooks=acmeConnectors,otherHook\n",
+            '__policy_fixture' => "known_hooks=acmeConnectors,otherHook\n",
             'fixture.php' => <<<'PHP'
                 <?php
                 function fixture_civicrm_acmeConnectors(&$connectors) {
@@ -271,7 +271,7 @@ final class HookDispatchNameCheckTest extends CheckTestCase
     public function testAPolicyDeclaredSuffixOutranksCoreHistory(): void
     {
         $context = $this->repo([
-            '.ckconform' => "known_hooks=tabs\n",
+            '__policy_fixture' => "known_hooks=tabs\n",
             'fixture.php' => <<<'PHP'
                 <?php
                 function fixture_civicrm_tabs(&$tabs) {
@@ -387,9 +387,9 @@ final class HookDispatchNameCheckTest extends CheckTestCase
     public function testPolicyDeclaredSuffixCoversListenerForms(): void
     {
         // An extension dispatching its own hook names it as a string too; the
-        // .ckconform declaration is the authority for every binding form.
+        // civikitchen.yaml declaration is the authority for every binding form.
         $context = $this->repo([
-            '.ckconform' => "known_hooks=acmeConnectors\n",
+            '__policy_fixture' => "known_hooks=acmeConnectors\n",
             'Civi/Fixture/Registry.php' => <<<'PHP'
                 <?php
                 class Registry implements \Civi\Core\HookInterface {

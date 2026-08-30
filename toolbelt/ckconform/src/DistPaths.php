@@ -9,15 +9,14 @@ namespace CiviKitchen\Ckconform;
  *
  * The one copy of that list. `ckrelease` builds and verifies the zip from it,
  * reading it through `ckconform --dist-paths` the way every ck* tool reads
- * `.ckconform` through this tool — same reason (one owner per format), and here
+ * `civikitchen.yaml` through this tool — same reason (one owner per format), and here
  * a drifting second copy reaches production sites as dev files inside an
  * installed extension.
  *
  * The list is central rather than per-repo `.gitattributes export-ignore`,
  * because `.gitattributes` is template-managed: editing it turns every
  * conforming repo's drift job red and puts the list in as many copies as there
- * are repos. A repo declares its deviation in `.ckconform` instead —
- * `dist_exclude=` / `dist_include=`.
+ * are repos. A repo declares its deviation in `policy.dist` instead.
  *
  * Two names are deliberately absent. `vendor/`: a repo that commits it does so
  * because the site needs it at runtime. `dist/`: for a frontend-building
@@ -25,6 +24,21 @@ namespace CiviKitchen\Ckconform;
  */
 final class DistPaths
 {
+    /** Paths which policy may never put into a release archive. */
+    public const PROTECTED_PATHS = [
+        'civikitchen.yaml',
+        '.git',
+        '.github',
+        '.env',
+        '.env.*',
+        '.envrc',
+        '.netrc',
+        '.npmrc',
+        '.pypirc',
+        'auth.json',
+        'credentials.json',
+    ];
+
     /**
      * Directory-shaped entries. The build excludes them at the repo root, which
      * is where the template puts them; `ckrelease verify` additionally rejects
@@ -42,10 +56,11 @@ final class DistPaths
 
     /** @var list<string> */
     public const FILES = [
+        ...self::PROTECTED_PATHS,
         '.gitattributes',
         '.gitignore',
         '.editorconfig',
-        '.ckconform',
+        'civikitchen.yaml',
         'renovate.json',
         '.phpunit.result.cache',
         'phpcs.xml',
@@ -63,7 +78,7 @@ final class DistPaths
     ];
 
     /**
-     * The central list ± this repo's `.ckconform`. An entry ending in `/` is
+     * The central list adjusted by this repo's civikitchen.yaml policy.
      * directory-shaped, everything else is a file name — which is the only
      * thing the two lists differ in, since both become the same `git archive`
      * pathspec.
@@ -76,7 +91,7 @@ final class DistPaths
         $files = self::FILES;
 
         foreach (self::listValue($context, 'dist_exclude') as $item) {
-            if (self::problem($item) !== null) {
+            if (self::problem($item, 'dist.exclude') !== null) {
                 continue;
             }
             if (str_ends_with($item, '/')) {
@@ -88,6 +103,7 @@ final class DistPaths
 
         foreach (self::listValue($context, 'dist_include') as $keep) {
             $keep = rtrim($keep, '/');
+            if (self::isProtected($keep)) continue;
             $dirs = array_values(array_filter($dirs, static fn (string $d): bool => $d !== $keep));
             $files = array_values(array_filter($files, static fn (string $f): bool => $f !== $keep));
         }
@@ -106,9 +122,16 @@ final class DistPaths
     {
         $problems = [];
         foreach (self::listValue($context, 'dist_exclude') as $item) {
-            $problem = self::problem($item);
+            $problem = self::problem($item, 'dist.exclude');
             if ($problem !== null) {
                 $problems[] = $problem;
+            }
+        }
+        foreach (self::listValue($context, 'dist_include') as $item) {
+            $problem = self::problem($item, 'dist.include');
+            if ($problem !== null) $problems[] = $problem;
+            if (self::isProtected(rtrim($item, '/'))) {
+                $problems[] = "dist.include may not ship protected development or secret-bearing path: {$item}";
             }
         }
 
@@ -128,7 +151,7 @@ final class DistPaths
     public static function ships(string $path, array $excluded): bool
     {
         foreach ([...$excluded['dirs'], ...$excluded['files']] as $entry) {
-            if ($path === $entry || str_starts_with($path, $entry . '/')) {
+            if ($path === $entry || str_starts_with($path, $entry . '/') || (strpbrk($entry, '*?[') !== false && fnmatch($entry, $path, FNM_PATHNAME))) {
                 return false;
             }
         }
@@ -144,13 +167,10 @@ final class DistPaths
      */
     private static function listValue(Context $context, string $key): array
     {
-        $raw = $context->policyValue($key);
-        if ($raw === null) {
-            return [];
-        }
         $items = [];
-        foreach (explode(',', Policy::stripReason($raw)) as $item) {
-            $item = (string) preg_replace('/\s+/', '', $item);
+        foreach ($context->policyValues($key) as $raw) {
+            $item = $key === 'dist_include' ? Policy::stripReason($raw) : $raw;
+            $item = trim($item);
             if ($item !== '') {
                 $items[] = $item;
             }
@@ -159,10 +179,22 @@ final class DistPaths
         return $items;
     }
 
-    private static function problem(string $item): ?string
+    private static function isProtected(string $path): bool
     {
-        return str_starts_with($item, '/') || str_contains($item, '..')
-            ? "dist_exclude must be a repo-relative path: {$item}"
-            : null;
+        foreach (self::PROTECTED_PATHS as $protected) {
+            if ($path === $protected || (strpbrk($protected, '*?[') !== false && fnmatch($protected, $path, FNM_PATHNAME))) return true;
+        }
+        return false;
+    }
+
+    private static function problem(string $item, string $key): ?string
+    {
+        if ($item === '' || str_starts_with($item, '/') || str_starts_with($item, ':') || str_contains($item, '\\') || preg_match('/[\x00-\x1F\x7F]/', $item)) {
+            return "{$key} must be a safe repo-relative path: {$item}";
+        }
+        foreach (explode('/', rtrim($item, '/')) as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..') return "{$key} must be a safe repo-relative path: {$item}";
+        }
+        return null;
     }
 }

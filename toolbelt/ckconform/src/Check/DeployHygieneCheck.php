@@ -20,7 +20,7 @@ use CiviKitchen\Ckconform\Reporter;
  *  - documents and binary data files outside docs/, tests/, examples/
  *
  * A repo that genuinely needs to ship such a path declares it in its
- * .ckconform policy: deploy-hygiene=<path>[,<path>] -- <reason>
+ * civikitchen.yaml policy: deploy_hygiene=<path>[,<path>] -- <reason>
  */
 final class DeployHygieneCheck implements Check
 {
@@ -32,7 +32,7 @@ final class DeployHygieneCheck implements Check
 
     public function name(): string
     {
-        return 'deploy-hygiene';
+        return 'deploy_hygiene';
     }
 
     public function run(Context $context, Reporter $reporter): void
@@ -84,13 +84,13 @@ final class DeployHygieneCheck implements Check
 
     /**
      * Paths a repo has declared deliberate, comma-separated, with the usual
-     * `-- reason` suffix the .ckconform policy format carries.
+     * `-- reason` suffix the civikitchen.yaml policy format carries.
      *
      * @return list<string>
      */
     private function allowedPaths(Context $context): array
     {
-        $value = $context->policyValue('deploy-hygiene');
+        $value = $context->policyValue('deploy_hygiene');
         if ($value === null) {
             return [];
         }

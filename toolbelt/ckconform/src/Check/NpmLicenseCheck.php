@@ -10,7 +10,7 @@ use CiviKitchen\Ckconform\Reporter;
 
 /**
  * Every tracked package.json must carry the npm licence the repo policy names
- * (`npm_license=` in `.ckconform`). npm publishes what the manifest says, not
+ * (`npm_license=` in `civikitchen.yaml`). npm publishes what the manifest says, not
  * what info.xml says, so a proprietary extension with a default `"ISC"` in a
  * nested build manifest is one `npm publish` away from being open source.
  *
@@ -37,7 +37,7 @@ final class NpmLicenseCheck implements Check
             $have = $this->license($context, $manifest, $want);
             if (strtolower($have) !== strtolower($want)) {
                 $reporter->fail(sprintf(
-                    "%s license is '%s', .ckconform expects '%s'",
+                    "%s license is '%s', civikitchen.yaml expects '%s'",
                     $manifest,
                     $have === '' ? 'unset' : $have,
                     $want,

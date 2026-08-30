@@ -6,7 +6,7 @@ namespace CiviKitchen\Ckconform;
 
 /**
  * Inline suppressions, the eslint-style escape levels below the repo-wide
- * `.ckconform` policy (`ignore_checks=` there is the global one):
+ * `civikitchen.yaml` policy (`ignore_checks=` there is the global one):
  *
  *   // ckconform-ignore <check-name> -- <reason>        (this line + the next)
  *   // ckconform-ignore-file <check-name> -- <reason>   (the whole file)
@@ -104,6 +104,37 @@ final class Suppressions
     }
 
     /**
+     * Suppressions in JS/TS-style source files.
+     *
+     * PHP's tokenizer deliberately treats a TypeScript file as inline HTML, so
+     * `of()` cannot see its comments. Playwright configs need the same narrow,
+     * reason-required escape hatch as PHP without accepting a marker hidden in
+     * a string literal. Requiring a standalone // or one-line block comment is
+     * intentionally stricter than a JavaScript parser and covers the documented
+     * file-level form without inventing a second suppression language.
+     */
+    public static function ofLineComments(string $contents): self
+    {
+        if (!str_contains($contents, 'ckconform-ignore')) {
+            return new self();
+        }
+
+        $key = 'line-comments:' . md5($contents);
+        if (isset(self::$cache[$key])) {
+            return self::$cache[$key];
+        }
+
+        $self = new self();
+        foreach (self::standaloneJavaScriptComments($contents) as [$text, $line]) {
+            if (str_starts_with($text, 'ckconform-ignore')) {
+                $self->parseMarker($text, $line);
+            }
+        }
+
+        return self::$cache[$key] = $self;
+    }
+
+    /**
      * Drop the shared instances. Tests only — a run is one process.
      */
     public static function reset(): void
@@ -113,6 +144,118 @@ final class Suppressions
 
     private function __construct()
     {
+    }
+
+    /** @return list<array{0: string, 1: int}> comment text + source line */
+    private static function standaloneJavaScriptComments(string $contents): array
+    {
+        $comments = [];
+        $state = 'code';
+        $line = 1;
+        $lineStart = 0;
+        $length = strlen($contents);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $contents[$i];
+            $next = $contents[$i + 1] ?? '';
+            if ($char === "\n") {
+                $line++;
+                $lineStart = $i + 1;
+                if ($state === 'line-comment') {
+                    $state = 'code';
+                }
+                continue;
+            }
+            if ($state === 'line-comment') {
+                continue;
+            }
+            if ($state === 'block-comment') {
+                if ($char === '*' && $next === '/') {
+                    $state = 'code';
+                    $i++;
+                }
+                continue;
+            }
+            if (in_array($state, ['single', 'double', 'template'], true)) {
+                if ($char === '\\') {
+                    $i++;
+                    continue;
+                }
+                $closing = ['single' => "'", 'double' => '"', 'template' => '`'][$state];
+                if ($char === $closing) {
+                    $state = 'code';
+                }
+                continue;
+            }
+            if ($char === "'") {
+                $state = 'single';
+                continue;
+            }
+            if ($char === '"') {
+                $state = 'double';
+                continue;
+            }
+            if ($char === '`') {
+                $state = 'template';
+                continue;
+            }
+            if ($char === '/' && $next === '/') {
+                $lineEnd = strpos($contents, "\n", $i + 2);
+                $lineEnd = $lineEnd === false ? $length : $lineEnd;
+                if (trim(substr($contents, $lineStart, $i - $lineStart)) === '') {
+                    $comments[] = [trim(substr($contents, $i + 2, $lineEnd - $i - 2)), $line];
+                }
+                $state = 'line-comment';
+                $i++;
+                continue;
+            }
+            if ($char === '/' && $next === '*') {
+                $close = strpos($contents, '*/', $i + 2);
+                $lineEnd = strpos($contents, "\n", $i + 2);
+                $lineEnd = $lineEnd === false ? $length : $lineEnd;
+                if ($close !== false && $close < $lineEnd
+                    && trim(substr($contents, $lineStart, $i - $lineStart)) === ''
+                    && trim(substr($contents, $close + 2, $lineEnd - $close - 2)) === ''
+                ) {
+                    $comments[] = [trim(substr($contents, $i + 2, $close - $i - 2)), $line];
+                    $i = $close + 1;
+                } else {
+                    $state = 'block-comment';
+                    $i++;
+                }
+            }
+        }
+
+        return $comments;
+    }
+
+    private function parseMarker(string $text, int $line): void
+    {
+        if (preg_match(
+            '/^ckconform-ignore(-file)?\s+([A-Za-z0-9-]+(?:\s*,\s*[A-Za-z0-9-]+)*)\s+--\s*(\S.*?)\s*$/',
+            $text,
+            $m,
+        ) !== 1) {
+            $this->missingReason[] = $line;
+            return;
+        }
+
+        $names = array_values(array_map('trim', explode(',', $m[2])));
+        $fileWide = $m[1] === '-file';
+        $index = count($this->entries);
+        $this->entries[] = [
+            'line' => $line,
+            'names' => $names,
+            'file' => $fileWide,
+            'consumed' => [],
+        ];
+        foreach ($names as $name) {
+            if ($fileWide) {
+                $this->fileWide[$name][] = $index;
+            } else {
+                $this->byLine[$line][$name][] = $index;
+                $this->byLine[$line + 1][$name][] = $index;
+            }
+        }
     }
 
     /**

@@ -122,10 +122,10 @@ final class Api4EntityCheck implements Check
             return [];
         }
         if (!str_contains($raw, ' -- ') || trim(explode(' -- ', $raw, 2)[1]) === '') {
-            $reporter->fail('.ckconform: known_api4_entities needs ` -- <reason>` naming the provider');
+            $reporter->fail('civikitchen.yaml: known_api4_entities needs ` -- <reason>` naming the provider');
         }
         if ($context->requiredExtensions() === []) {
-            $reporter->fail('.ckconform: known_api4_entities is set but info.xml requires no provider extension');
+            $reporter->fail('civikitchen.yaml: known_api4_entities is set but info.xml requires no provider extension');
         }
 
         $entities = array_values(array_filter(array_map(
@@ -134,9 +134,9 @@ final class Api4EntityCheck implements Check
         )));
         foreach ($entities as $entity) {
             if (preg_match('/^[A-Z][A-Za-z0-9_]*$/', $entity) !== 1) {
-                $reporter->fail(".ckconform: invalid APIv4 entity name in known_api4_entities: '{$entity}'");
+                $reporter->fail("civikitchen.yaml: invalid APIv4 entity name in known_api4_entities: '{$entity}'");
             } elseif (!in_array($entity, $referenced, true)) {
-                $reporter->fail(".ckconform: known_api4_entities lists unused '{$entity}' — remove the stale exception");
+                $reporter->fail("civikitchen.yaml: known_api4_entities lists unused '{$entity}' — remove the stale exception");
             }
         }
 

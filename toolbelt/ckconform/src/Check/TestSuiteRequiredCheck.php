@@ -10,7 +10,7 @@ use CiviKitchen\Ckconform\Reporter;
 
 /**
  * A repo with real PHP logic and no suite is a gap, not a style preference.
- * Config-only extensions can say so in .ckconform: tests=optional -- <reason>
+ * Config-only extensions can say so in civikitchen.yaml: tests=optional -- <reason>
  *
  * The source count is the delicate part: it once missed the extension's own
  * root .php file, which is exactly where a config-only extension keeps whatever
@@ -47,7 +47,7 @@ final class TestSuiteRequiredCheck implements Check
             // must not silently disable the check, and the reason is not
             // optional.
             if (preg_match('/^optional\s+--\s+\S/', $optout) === 1) {
-                $reporter->ok("no test suite — declared optional in .ckconform ({$optout})");
+                $reporter->ok("no test suite — declared optional in civikitchen.yaml ({$optout})");
 
                 return;
             }
@@ -58,7 +58,7 @@ final class TestSuiteRequiredCheck implements Check
 
         $count = count($this->sourceFiles($context));
         if ($count > 0) {
-            $reporter->fail("no test suite (tests/phpunit) but {$count} PHP source file(s) — add tests, or declare 'tests=optional -- <reason>' in .ckconform");
+            $reporter->fail("no test suite (tests/phpunit) but {$count} PHP source file(s) — add tests, or declare 'tests=optional -- <reason>' in civikitchen.yaml");
         } else {
             $reporter->ok('no test suite — no PHP source to cover');
         }

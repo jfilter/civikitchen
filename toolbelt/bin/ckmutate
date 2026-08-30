@@ -17,12 +17,13 @@
 # Like every other threshold in this fleet, the floor is POLICY and lives in
 # the consuming repo:
 #
-#     # .ckconform
-#     mutation_min_msi=60          # --min-msi: mutants killed, all mutants
-#     mutation_min_covered_msi=75  # optional, --min-covered-msi: covered code only
-#     mutation_paths=Civi          # optional, what to mutate (comma-separated)
+#     policy:
+#       mutation:
+#         minimum_msi: 60          # mutants killed, all mutants
+#         minimum_covered_msi: 75  # optional, covered code only
+#         paths: [Civi]             # optional, what to mutate
 #
-# Without mutation_min_msi this tool is a NO-OP that exits 0 and says so. That
+# Without policy.mutation.minimum_msi this tool is a NO-OP that exits 0 and says so. That
 # is deliberate: a repo has to measure its own score before it can pick a floor,
 # and a fleet-wide default floor would only teach people to ignore a red
 # scheduled build.
@@ -50,8 +51,8 @@ ck_policy_load
 
 floor="${CK_POLICY_MUTATION_MIN_MSI:-}"
 if [ -z "$floor" ]; then
-  echo "ckmutate: no mutation_min_msi in .ckconform — nothing to enforce, skipping."
-  echo "ckmutate: to adopt this, measure once (ckmutate runs with any floor, e.g. mutation_min_msi=1), then set the floor to what you have."
+  echo "ckmutate: no policy.mutation.minimum_msi in civikitchen.yaml — nothing to enforce, skipping."
+  echo "ckmutate: to adopt this, set policy.mutation.minimum_msi to the measured score and ratchet it."
   exit 0
 fi
 
@@ -83,7 +84,7 @@ else
   dirs=()
   for d in Civi CRM src; do [ -d "$d" ] && dirs+=("$d"); done
 fi
-[ "${#dirs[@]}" -gt 0 ] || { echo "ckmutate: no source directory to mutate (looked for Civi/, CRM/, src/ — or set mutation_paths in .ckconform)." >&2; exit 2; }
+[ "${#dirs[@]}" -gt 0 ] || { echo "ckmutate: no source directory to mutate (looked for Civi/, CRM/, src/ — or set policy.mutation.paths)." >&2; exit 2; }
 for d in "${dirs[@]}"; do
   [ -e "$d" ] || { echo "ckmutate: mutation_paths names '$d', which does not exist here." >&2; exit 2; }
 done
@@ -96,7 +97,7 @@ tmpdir=$(mktemp -d /tmp/ckmutate-run-XXXXXX)
 trap 'rm -rf "$config" "$tmpdir"' EXIT
 
 # Generated rather than committed per repo: the only repo-specific parts are
-# the paths, and those are already in .ckconform.
+# the paths, and those are already in civikitchen.yaml.
 php -r '
   $dirs = array_slice($argv, 2);
   $conf = [
@@ -131,7 +132,7 @@ status=$?
 if [ "$status" -eq 0 ]; then
   echo "ckmutate: floor met."
 else
-  echo "ckmutate: FAIL — the score is below the floor from .ckconform, or the run itself broke (exit ${status})." >&2
+  echo "ckmutate: FAIL — the score is below policy.mutation.minimum_msi, or the run broke (exit ${status})." >&2
   echo "ckmutate: a surviving mutant is a line the suite EXECUTES but does not assert on — add the assertion, do not lower the floor." >&2
 fi
 exit "$status"

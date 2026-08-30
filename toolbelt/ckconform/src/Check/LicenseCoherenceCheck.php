@@ -14,7 +14,7 @@ use CiviKitchen\Ckconform\Reporter;
  * never granted.
  *
  * WHICH licence is organisation policy, so the expected value is read from the
- * optional `.ckconform` (`license=`). Without one the declarations only have to
+ * optional `civikitchen.yaml` (`license=`). Without one the declarations only have to
  * agree with each other.
  *
  * Both values are now read with real parsers — SimpleXML and json_decode. The
@@ -39,14 +39,14 @@ final class LicenseCoherenceCheck implements Check
         if ($want !== null) {
             if (!$this->sameLicense($xml, $want)) {
                 $reporter->fail(sprintf(
-                    "info.xml <license> is '%s', .ckconform expects '%s'",
+                    "info.xml <license> is '%s', civikitchen.yaml expects '%s'",
                     $xml === '' ? 'empty' : $xml,
                     $want,
                 ));
             }
             if ($composerLicenses !== [] && !$this->anyMatches($composerLicenses, $want)) {
                 $reporter->fail(
-                    "composer.json license is '{$composer}', .ckconform expects '{$want}'"
+                    "composer.json license is '{$composer}', civikitchen.yaml expects '{$want}'"
                 );
             }
 

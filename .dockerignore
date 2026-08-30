@@ -23,6 +23,7 @@ toolbelt/oxfmt/node_modules
 # host's, not the image's.
 toolbelt/phpstan/vendor
 toolbelt/phpstan/composer.lock
+packages/civikitchen-scenario-schema/vendor
 
 # Host-built artifacts from running the tool test suites, or from re-locking a
 # tool root, out of a checkout. The composer.lock files next to them are the

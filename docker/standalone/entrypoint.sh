@@ -72,6 +72,7 @@ fi
 # Auto-run composer install for bind-mounted extensions. Runs before the
 # auto-install so extensions enabled during install (e.g. via
 # CIVIKITCHEN_ENABLE_EXTENSIONS) already have their vendor/ in place.
+ck_attach_scenario_extension
 ck_auto_composer
 
 # ---------------------------------------------------------------------------

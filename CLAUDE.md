@@ -27,10 +27,11 @@ the rest; `make test-images` is the ~1 h Docker round.
 
 ## Rules
 
-- **One parser per format.** `.ckconform` → `ckconform --policy-env` /
+- **One parser per format.** `civikitchen.yaml` → `ckconform --policy-env` /
   `--policy <key>`; XML and JSON → `ck_xml_field` / `ck_json_field` in
   `toolbelt/lib/ckcommon.sh`. Never `sed`/`grep -o` a structured file. A new
-  `.ckconform` key goes in `Policy::KEYS` or PolicyKeyCheck rejects it.
+  Public YAML keys belong in the JSON Schema; every normalized key exposed to
+  a consumer also belongs in `Policy::KEYS`.
 - **Select files by what they are, not where they live.** A directory list
   fails open: the run says "clean" about files it never saw.
 - **A fix ships with the fixture that would have failed.** Most checks here are

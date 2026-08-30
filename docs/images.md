@@ -22,8 +22,8 @@ without depending on its Docker Hub publishing), with dev tools added:
 - **ckmodernize + rector** — opt-in code modernization for extension repos: previews by default, applies with `--fix`, and includes CiviKitchen rules for the same CiviCRM footguns `cklint` flags.
 - **cktaint + psalm** — taint analysis only (never a second phpstan): does request input reach a query, shell command, file path or redirect unescaped? Runs against CiviKitchen's CiviCRM source/sink/escape stubs; the SQL/shell/include/unserialize/SSRF classes **block** in CI, the noisier classes are advisory — see [extension-standards.md](extension-standards.md#taint-analysis-cktaint)
 - **ckconform** — repo-structure conformance checks against the extension template (see [extension-standards.md](extension-standards.md))
-- **ckcoverage** — runs phpunit with line coverage and enforces the `min_coverage` floor from `.ckconform`
-- **ckmutate** — mutation testing (infection) against the `mutation_min_msi` floor from `.ckconform`; a no-op without that key, and a scheduled job rather than a push gate
+- **ckcoverage** — runs phpunit with line coverage and enforces the `policy.coverage.minimum` floor from `civikitchen.yaml`
+- **ckmutate** — mutation testing (infection) against the `policy.mutation.minimum_msi` floor from `civikitchen.yaml`; a no-op without that key, and a scheduled job rather than a push gate
 - **cksmarty** — compiles every `.tpl` the extension ships, plus the bodies of the managed MessageTemplates it installed, with the real `CRM_Core_Smarty` in the booted site. Compiles, never renders: whether a template compiles depends on the Smarty major core ships, on the prefilters `CRM_Core_Smarty` installs and on which `{crm*}` plugins are registered — none of which a file-based check can know. Message-template bodies are the blind spot it exists for: they are Smarty strings in the database, first compiled when the workflow fires.
 - **ckeslint + the CiviKitchen oxlint baseline** — JS/TS linting with a toolchain pinned in the image, so no extension needs a linter devDependency block of its own. The engine is oxlint (plus `oxlint-tsgolint` for the type-aware half). The baseline is oxlint's `correctness` category (real mistakes, no style rules), Mozilla's `eslint-plugin-no-unsanitized` (`innerHTML` and friends — an XSS in an extension is an XSS on every site that installs it), and the type-aware TypeScript rules *when the repo has a `tsconfig.json`*, which is what brings `no-floating-promises` / `no-misused-promises`. Type-aware rules apply to `.ts`/`.tsx`; plain `.js` gets the syntactic rules and `no-unsanitized`. CiviCRM's globals (`CRM`, `cj`, `ts`, `_`, `angular`) are declared; `dist/`, `vendor/`, `node_modules/`, vendored asset dirs and `*.min.js` are ignored. A repo's own `.oxlintrc.json` wins outright (and then supplies its own `jsPlugins`); a repo that ships only an `eslint.config.*` fails the gate with a pointer, since ESLint is no longer in the image. No JS in the repo is a pass with a log line.
 - **ckfmt + mago + oxfmt** — code formatting: [mago](https://mago.carthage.software/) for PHP with a bundled baseline (`preset = "drupal"` + declare spacing) whose output is verified clean under the bundled phpcs standard (which excludes the layout sniffs the formatter contradicts — see [Known formatter/phpcs stand-offs](extension-standards.md#known-formatterphpcs-stand-offs)), [oxfmt](https://oxc.rs/) at its defaults for JS/TS. `ckfmt` formats in place, `ckfmt --check` is the hard CI gate. Vendored, minified and civix/DAO-generated files are excluded; a committed `mago.toml` / `.oxfmtrc.*` wins over the baseline for its half. No files of a kind is a pass with a log line.
@@ -208,14 +208,20 @@ lists and Mosaico). Each layer converges instead of colliding: extensions the
 site already has are skipped, seeds skip when their anchor org exists, and a
 username/role declared by several profiles ends up with the union of the
 permissions (one line per username in the credentials file; the last
-profile's api_key is the valid one).
+profile's random password and api_key are the valid pair). Profiles with API
+users must agree on one global AuthX header policy; a conflicting combination
+fails before the first profile changes the site.
 
 The profile applies once, on first boot — it clones the extensions from
 GitHub, so it **needs network access and takes a few minutes** (watch
 `docker logs -f civicrm`; the container turns healthy when done). The
-generated API-user credentials are printed to the logs and kept in the
-container: `docker exec civicrm cat /home/buildkit/api-credentials.txt` (the
-default path — overridable via `CK_CREDENTIALS_FILE`).
+generated API-user credentials stay out of the logs by default and are kept in
+a mode-`0600` container file:
+`docker exec civicrm cat /home/buildkit/api-credentials.txt` (the default path
+— overridable via `CK_CREDENTIALS_FILE`). Set `CK_CREDENTIALS_OUTPUT=log` or
+`both` only when the container log is an intentional secret destination;
+`none` disables both disclosure channels and removes a stale credentials file
+before accounts are rotated.
 
 Profiles also work on the dev images (`:standalone`, `:drupal10`, `:drupal11`,
 `:wordpress`, `:joomla`) — set the same env var in your compose file to develop
@@ -223,12 +229,45 @@ against a realistic stack. On the `:standalone` dev image the profile needs an
 admin user to seed as, so combine it with `CIVICRM_AUTO_INSTALL=1` and
 `CIVIKITCHEN_DEMO_USER=admin`.
 
+Profiles can live outside the image. Mount a root read-only, point
+`CIVIKITCHEN_PROFILE_PATH` at it, and select its directory name normally:
+
+```yaml
+services:
+  app:
+    volumes:
+      - ./profiles:/profiles:ro
+    environment:
+      CIVIKITCHEN_PROFILE_PATH: /profiles
+      CIVIKITCHEN_TRUST_EXTERNAL_PROFILES: "1"
+      CIVIKITCHEN_PROFILE: my-ngo
+```
+
+`ck profile validate ./profiles/my-ngo` validates the data shape with the same
+dependency-free canonical schema used at boot. It does not sandbox the optional
+root/profile `apply.sh` or PHP seeds: external profile roots are fully trusted
+executable code with app and CiviCRM-admin access, which is why the separate
+trust flag is mandatory. Runtime validation and trust checks cover the complete
+selected list before the first profile changes the site; duplicate names and
+conflicting AuthX policies are errors.
+
 > **Migrating from `civicrm-eu-ngo:latest`?** That pre-baked image is retired;
 > use `civikitchen:drupal10-demo` with `CIVIKITCHEN_PROFILE=verein` instead —
 > the same extension stack (minus the deprecated Shoreditch theme), now with
 > proper membership/SEPA seed data, applied at first boot.
 
 ## Tags & versions
+
+### Database compatibility
+
+The standalone candidate is promotion-gated against `mariadb:10.11`, the
+recommended `mariadb:11.4`, and `mysql:8.0`. Each leg performs a real install,
+mounted-extension provisioning, locale rendering, and a boot through the
+isolated `CIVICRM_UF=UnitTests` scratch database. The examples keep MariaDB
+10.11 as their conservative default. The gate asserts `SELECT DATABASE()` is
+`civicrm_test` and writes a canary that must remain absent from `civicrm`, not
+merely that a UnitTests process can boot. Changing the default still requires
+passing this matrix; automated database-image PRs are not compatibility proof.
 
 All images rebuild **weekly** (and on every `docker/**` or `toolbelt/**` change) against the
 current CiviCRM stable release, resolved from

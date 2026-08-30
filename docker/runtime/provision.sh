@@ -41,6 +41,7 @@
 : "${CK_BOOT_STUB:=/var/www/html/civicrm.standalone.php}"
 # Where named profiles (docker/profiles/<name>/) ship inside the image.
 : "${CK_PROFILE_DIR:=/usr/local/share/civikitchen/profiles}"
+: "${CK_PROFILE_SCHEMA_DIR:=/usr/local/share/civikitchen/profile-schema}"
 # Optional civibuild-style settings.d dir (loaded into civicrm.settings.php).
 # Only the buildkit entrypoint sets this; see ck_smtp.
 : "${CK_SETTINGS_D:=}"
@@ -50,6 +51,39 @@
 : "${CK_L10N_BASE_URL:=https://download.civicrm.org}"
 
 # --- functions -------------------------------------------------------------
+
+# Attach the scenario's flavor-neutral source mount to the extension directory
+# discovered/configured by the current image. This keeps generated scenarios
+# portable across Standalone, Drupal, WordPress and Joomla layouts without
+# teaching the generator each CMS's internal paths.
+ck_attach_scenario_extension() {
+    [[ -n "${CIVIKITCHEN_EXTENSION_PATH:-}" ]] || return 0
+    local source="${CIVIKITCHEN_EXTENSION_PATH}" key="${CIVIKITCHEN_EXTENSION_KEY:-}"
+    local declared target existing
+    [[ -d "${source}" && -f "${source}/info.xml" ]] || {
+        echo "[civikitchen] ERROR: scenario extension path is not a readable extension: ${source}" >&2
+        return 1
+    }
+    declared="$(ck_extension_key "${source}")"
+    [[ -n "${key}" && "${declared}" == "${key}" ]] || {
+        echo "[civikitchen] ERROR: scenario extension key '${key}' does not match info.xml key '${declared}'" >&2
+        return 1
+    }
+    mkdir -p "${CK_EXT_DIR}"
+    target="${CK_EXT_DIR}/${key}"
+    if [[ -L "${target}" ]]; then
+        existing="$(readlink "${target}")"
+        [[ "${existing}" == "${source}" ]] || {
+            echo "[civikitchen] ERROR: ${target} already links to ${existing}, not ${source}" >&2
+            return 1
+        }
+    elif [[ -e "${target}" ]]; then
+        echo "[civikitchen] ERROR: cannot attach scenario extension; ${target} already exists" >&2
+        return 1
+    else
+        ln -s "${source}" "${target}"
+    fi
+}
 
 # Auto-run composer install for bind-mounted extensions under CK_EXT_DIR.
 # An extension's composer.json usually pulls dev tooling (phpunit, phpstan)
@@ -229,8 +263,102 @@ ck_setup_test_db() {
 # for a pinned/forked release, passed to cv verbatim. Release-asset downloads
 # (GitHub et al.) fail transiently often enough that one cURL timeout
 # shouldn't abort the whole first-boot provisioning — retry before giving up.
+ck_install_verified_archive() {
+    local archive="$1" ext_key="$2" target
+    if [[ ! "${ext_key}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+        echo "[civikitchen] ERROR: unsafe extension key in digest-pinned source" >&2
+        return 1
+    fi
+    target="${CK_EXT_DIR}/${ext_key}"
+    php -r '
+      [$archive, $expected, $target] = array_slice($argv, 1);
+      if (!class_exists("ZipArchive")) { fwrite(STDERR, "ZipArchive is unavailable\n"); exit(2); }
+      $zip = new ZipArchive();
+      if ($zip->open($archive) !== TRUE) { fwrite(STDERR, "invalid extension ZIP\n"); exit(2); }
+      $top = NULL; $total = 0;
+      for ($i = 0; $i < $zip->numFiles; $i++) {
+        $stat = $zip->statIndex($i);
+        $name = $zip->getNameIndex($i);
+        if (!is_string($name) || $name === "" || str_contains($name, "\\") || str_starts_with($name, "/")) {
+          fwrite(STDERR, "unsafe extension ZIP path\n"); exit(2);
+        }
+        $parts = explode("/", rtrim($name, "/"));
+        if (in_array("", $parts, TRUE) || in_array(".", $parts, TRUE) || in_array("..", $parts, TRUE)) {
+          fwrite(STDERR, "unsafe extension ZIP path\n"); exit(2);
+        }
+        $top ??= $parts[0];
+        if ($top !== $parts[0]) { fwrite(STDERR, "extension ZIP needs one root directory\n"); exit(2); }
+        $total += (int) ($stat["size"] ?? 0);
+        if ($zip->numFiles > 10000 || $total > 268435456) { fwrite(STDERR, "extension ZIP exceeds extraction limits\n"); exit(2); }
+        if ($zip->getExternalAttributesIndex($i, $opsys, $attr)) {
+          $kind = ($attr >> 16) & 0170000;
+          if ($kind === 0120000) { fwrite(STDERR, "extension ZIP contains a symlink\n"); exit(2); }
+        }
+      }
+      if ($top === NULL || file_exists($target)) { fwrite(STDERR, "extension target exists or ZIP is empty\n"); exit(2); }
+      $tmp = dirname($target) . "/.civikitchen-extract-" . bin2hex(random_bytes(8));
+      if (!mkdir($tmp, 0700)) exit(2);
+      $cleanup = static function(string $dir): void {
+        if (!is_dir($dir)) return;
+        $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+        foreach ($it as $entry) { $entry->isDir() && !$entry->isLink() ? rmdir($entry->getPathname()) : unlink($entry->getPathname()); }
+        rmdir($dir);
+      };
+      try {
+        if (!$zip->extractTo($tmp)) throw new RuntimeException("could not extract extension ZIP");
+        $info = $tmp . "/" . $top . "/info.xml";
+        libxml_use_internal_errors(TRUE);
+        $xml = is_file($info) ? simplexml_load_file($info) : FALSE;
+        if ($xml === FALSE || trim((string) $xml["key"]) !== $expected) throw new RuntimeException("extension ZIP key does not match {$expected}");
+        if (!rename($tmp . "/" . $top, $target)) throw new RuntimeException("could not install extension ZIP");
+      } catch (Throwable $e) {
+        fwrite(STDERR, $e->getMessage() . "\n");
+        $cleanup($tmp);
+        exit(2);
+      }
+      $cleanup($tmp);
+    ' "${archive}" "${ext_key}" "${target}" || return 1
+    if ! chown -R "${CK_WEB_USER}:${CK_WEB_GROUP}" "${target}" \
+        || ! chmod -R u=rwX,go=rX "${target}" \
+        || ! ck_as_web cv ev 'CRM_Extension_System::singleton()->getFullContainer()->refresh();'; then
+        /bin/rm -rf -- "${target}"
+        return 1
+    fi
+    # A prior Extension.get may have cached the directory map before this key
+    # existed. cv's downloader refreshes it implicitly; a verified direct
+    # extraction must do so explicitly before ext:enable can see the key.
+    return 0
+}
+
 ck_download_extension() {
-    local ext_spec="$1" ext_key="${1%%@*}" attempt
+    local ext_spec="$1" ext_key="${1%%@*}" attempt source digest archive got
+    if [[ "${ext_spec}" == *@*#sha256=* ]]; then
+        source="${ext_spec#*@}"
+        digest="${source##*#sha256=}"
+        source="${source%%#sha256=*}"
+        archive="$(mktemp /tmp/civikitchen-extension.XXXXXX.zip)"
+        for attempt in 1 2 3; do
+            if curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-redirs 3 --max-filesize 134217728 "${source}" -o "${archive}"; then
+                got="$(sha256sum < "${archive}" | cut -d' ' -f1)"
+                if [[ "${got}" != "${digest}" ]]; then
+                    echo "[civikitchen] ERROR: checksum mismatch for ${ext_key}" >&2
+                    rm -f "${archive}"
+                    return 1
+                fi
+                # Hash and extract as root without handing the verified file
+                # to the web process between those two operations.
+                chmod 600 "${archive}"
+                if ck_install_verified_archive "${archive}" "${ext_key}"; then
+                    rm -f "${archive}"
+                    return 0
+                fi
+            fi
+            if [[ "${attempt}" != "3" ]]; then sleep 5; fi
+        done
+        rm -f "${archive}"
+        echo "[civikitchen] ERROR: digest-pinned download of ${ext_key} failed" >&2
+        return 1
+    fi
     for attempt in 1 2 3; do
         if ck_as_web cv ext:download -n --no-install "${ext_spec}"; then
             return 0
@@ -251,7 +379,7 @@ ck_download_extension() {
 # it, so an optional integration is pinned in the same place as a hard one.
 ck_extra_extensions() {
     [[ -n "${CIVIKITCHEN_EXTRA_EXTENSIONS}" ]] || return 0
-    echo "[civikitchen] Installing extra extensions: ${CIVIKITCHEN_EXTRA_EXTENSIONS}"
+    echo "[civikitchen] Installing configured extra extensions"
     local ext_spec ext_key pin
     local -a specs
     IFS=',' read -ra specs <<< "${CIVIKITCHEN_EXTRA_EXTENSIONS}"
@@ -261,10 +389,12 @@ ck_extra_extensions() {
         ext_key="${ext_spec%%@*}"
         pin=""
         if [[ "${ext_spec}" == "${ext_key}" ]]; then
-            pin="$(ck_mounted_extension_source "${ext_key}")"
+            if ! pin="$(ck_mounted_extension_source "${ext_key}")"; then
+                return 1
+            fi
             ext_spec="${pin:-${ext_spec}}"
         fi
-        echo "[civikitchen]   - ${ext_key}${pin:+ (pinned: ${pin#*@})}"
+        echo "[civikitchen]   - ${ext_key}${pin:+ (digest-pinned)}"
         ck_download_extension "${ext_spec}" || return 1
         ck_as_web cv ext:enable "${ext_key}"
     done
@@ -295,13 +425,15 @@ ck_extension_key() {
     ' "$1/info.xml"
 }
 
-# The extension_source pin for KEY from any mounted extension's .ckconform.
+# The extension source pin for KEY from any mounted extension's civikitchen.yaml.
 # First hit wins; a key pinned to two different URLs is a repo problem that
 # ckconform reports, not one to resolve here.
 ck_mounted_extension_source() {
     local key="$1" ext_dir spec
     while IFS= read -r ext_dir; do
-        spec="$(ck_extension_source "${ext_dir}" "${key}")"
+        if ! spec="$(ck_extension_source "${ext_dir}" "${key}")"; then
+            return 1
+        fi
         if [[ -n "${spec}" ]]; then
             echo "${spec}"
             return 0
@@ -338,19 +470,23 @@ ck_extension_requires() {
 }
 
 # The pinned download spec for a dependency the registry cannot serve: an
-# `extension_source=<key>@<URL>` line in the extension's own .ckconform,
+# `policy.extension_sources` in the extension's own civikitchen.yaml,
 # read through ckconform so the file has exactly one parser. Prints nothing
 # when there is no pin.
 ck_extension_source() {
-    local ext_dir="$1" key="$2" spec
-    [[ -f "${ext_dir}/.ckconform" ]] || return 0
+    local ext_dir="$1" key="$2" spec sources
+    [[ -f "${ext_dir}/civikitchen.yaml" ]] || return 0
+    if ! sources="$(cd "${ext_dir}" && ckconform --policy extension_source)"; then
+        echo "[civikitchen] ERROR: could not read ${ext_dir}/civikitchen.yaml" >&2
+        return 1
+    fi
     while IFS= read -r spec; do
         spec="${spec%% -- *}"
         if [[ "${spec%%@*}" == "${key}" ]]; then
             echo "${spec}"
             return 0
         fi
-    done < <(cd "${ext_dir}" && ckconform --policy extension_source)
+    done <<< "${sources}"
 }
 
 # Dependencies of a mounted extension, from its info.xml <requires>: what the
@@ -368,8 +504,14 @@ ck_resolve_requires() {
             0) continue ;;
             2) return 1 ;;
         esac
-        spec="$(ck_extension_source "${ext_dir}" "${required}")"
-        echo "[civikitchen]   ${ext_key} requires ${required} — installing ${spec:-it from the registry}"
+        if ! spec="$(ck_extension_source "${ext_dir}" "${required}")"; then
+            return 1
+        fi
+        if [[ -n "${spec}" ]]; then
+            echo "[civikitchen]   ${ext_key} requires ${required} — installing the configured digest-pinned source"
+        else
+            echo "[civikitchen]   ${ext_key} requires ${required} — installing it from the registry"
+        fi
         ck_download_extension "${spec:-${required}}" || return 1
         ck_as_web cv ext:enable "${required}"
     done < <(ck_extension_requires "${ext_dir}")
@@ -468,6 +610,87 @@ ck_locales() {
     fi
 }
 
+# Resolve one profile name across explicit external roots plus the bundled root.
+# Ambiguity is an error rather than an implicit override: selecting `verein`
+# must identify the same scenario on every host regardless of mount order.
+ck_resolve_profile() {
+    local name="$1" root candidate
+    local -a roots=() matches=()
+    [[ "${name}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || {
+        echo "[civikitchen] ERROR: invalid profile name '${name}'." >&2
+        return 1
+    }
+    if [[ -n "${CIVIKITCHEN_PROFILE_PATH:-}" ]]; then
+        IFS=':' read -ra roots <<< "${CIVIKITCHEN_PROFILE_PATH}"
+    fi
+    roots+=("${CK_PROFILE_DIR}")
+    for root in "${roots[@]}"; do
+        [[ -n "${root}" ]] || continue
+        candidate="${root%/}/${name}"
+        [[ -f "${candidate}/profile.json" ]] && matches+=("${candidate}")
+    done
+    if [[ ${#matches[@]} -eq 0 ]]; then
+        echo "[civikitchen] ERROR: unknown profile '${name}' in CIVIKITCHEN_PROFILE_PATH or ${CK_PROFILE_DIR}." >&2
+        return 1
+    fi
+    if [[ ${#matches[@]} -gt 1 ]]; then
+        echo "[civikitchen] ERROR: profile '${name}' is ambiguous: ${matches[*]}" >&2
+        return 1
+    fi
+    printf '%s' "${matches[0]}"
+}
+
+ck_validate_profile() {
+    local dir="$1" validator="${CK_PROFILE_SCHEMA_DIR}/validate.php"
+    local schema="${CK_PROFILE_SCHEMA_DIR}/profile.schema.json"
+    [[ -f "${validator}" && -f "${schema}" ]] || {
+        echo "[civikitchen] ERROR: bundled profile validator/schema missing from ${CK_PROFILE_SCHEMA_DIR}." >&2
+        return 1
+    }
+    php "${validator}" "${schema}" "${dir}/profile.json" >/dev/null
+}
+
+ck_profile_is_bundled() {
+    local dir="$1" bundled candidate
+    bundled="$(cd "${CK_PROFILE_DIR}" && pwd -P)" || return 1
+    candidate="$(cd "${dir}" && pwd -P)" || return 1
+    [[ "${candidate}" == "${bundled}"/* ]]
+}
+
+# External profiles can carry a root/profile apply.sh and seed PHP. Schema
+# validation proves their data shape; it is not a code sandbox. Requiring an
+# explicit trust decision prevents a read-only mount from being mistaken for a
+# data-only security boundary.
+ck_require_profile_trust() {
+    local dir="$1"
+    ck_profile_is_bundled "${dir}" && return 0
+    if [[ "${CIVIKITCHEN_TRUST_EXTERNAL_PROFILES:-0}" != "1" ]]; then
+        echo "[civikitchen] ERROR: external profile ${dir} is executable code; set CIVIKITCHEN_TRUST_EXTERNAL_PROFILES=1 only for a fully trusted root." >&2
+        return 1
+    fi
+}
+
+# One instance has one global AuthX header policy. Missing policy is the AuthX
+# upstream-safe default (JWT + API key), never password. Multiple selected
+# profiles must agree before the first one mutates the site.
+ck_resolve_authx_policy() {
+    local dir policy resolved=""
+    for dir in "$@"; do
+        policy="$(jq -r '
+          if ((.apiUsers // []) | length) == 0 then empty
+          else ((.authx.header_cred // ["jwt", "api_key"]) | sort | join(","))
+          end
+        ' "${dir}/profile.json")" || return 1
+        [[ -z "${policy}" ]] && continue
+        if [[ -n "${resolved}" && "${resolved}" != "${policy}" ]]; then
+            echo "[civikitchen] ERROR: selected profiles declare conflicting AuthX header policies (${resolved} versus ${policy})." >&2
+            return 1
+        fi
+        resolved="${policy}"
+    done
+    printf '%s' "${resolved}"
+}
+
 # Apply named profiles (extensions + seed data + API users) at first boot.
 # Opt-in via CIVIKITCHEN_PROFILE=<name>[,<name>...] — a comma-separated list
 # is applied left to right; profiles ship in CK_PROFILE_DIR (see
@@ -480,27 +703,30 @@ ck_locales() {
 # once, and a failure aborts the boot (no marker) and re-runs on next start.
 ck_apply_profile() {
     [[ -n "${CIVIKITCHEN_PROFILE:-}" ]] || return 0
-    local name dir apply want_cms
-    local -a names
+    local name dir root apply want_cms authx_policy index=0 merged
+    local -a names resolved=()
     IFS=',' read -ra names <<< "${CIVIKITCHEN_PROFILE}"
     # Validate the whole list before applying anything — a typo in the last
     # name must not leave a half-provisioned site behind the failed boot.
     for name in "${names[@]}"; do
         name="${name// /}"
         [[ -z "${name}" ]] && continue
-        if [[ ! -f "${CK_PROFILE_DIR}/${name}/profile.json" ]]; then
-            echo "[civikitchen] ERROR: unknown profile '${name}'." >&2
-            echo "[civikitchen] Available profiles: $(cd "${CK_PROFILE_DIR}" 2>/dev/null && for d in */; do printf '%s ' "${d%/}"; done)" >&2
-            return 1
-        fi
+        dir="$(ck_resolve_profile "${name}")" || return 1
+        ck_validate_profile "${dir}" || return 1
+        ck_require_profile_trust "${dir}" || return 1
+        resolved+=("${dir}")
     done
+    authx_policy="$(ck_resolve_authx_policy "${resolved[@]}")" || return 1
     for name in "${names[@]}"; do
         name="${name// /}"
         [[ -z "${name}" ]] && continue
-        dir="${CK_PROFILE_DIR}/${name}"
-        # Profiles share CK_PROFILE_DIR/apply.sh; a profile can ship its own
-        # apply.sh to override the shared driver.
+        dir="${resolved[${index}]}"
+        index=$((index + 1))
+        root="$(dirname "${dir}")"
+        # An external root can share its own driver; otherwise use the bundled
+        # driver. A profile-local apply.sh is the narrowest override.
         apply="${CK_PROFILE_DIR}/apply.sh"
+        [[ -f "${root}/apply.sh" ]] && apply="${root}/apply.sh"
         [[ -f "${dir}/apply.sh" ]] && apply="${dir}/apply.sh"
         # CMS gate: profile.json declares the CMS family it needs (e.g.
         # "drupal10"); match it as a prefix of the civibuild site type
@@ -516,8 +742,53 @@ ck_apply_profile() {
         # deterministically rather than relying on runuser's preserve-env. Empty
         # when unset -> the script's `?:` falls back to $HOME/api-credentials.txt
         # (no change for profiles that don't set it).
-        ck_as_web env CK_CREDENTIALS_FILE="${CK_CREDENTIALS_FILE:-}" bash "${apply}" "${dir}"
+        ck_as_web env \
+            CK_CREDENTIALS_FILE="${CK_CREDENTIALS_FILE:-}" \
+            CK_CREDENTIALS_OUTPUT="${CK_CREDENTIALS_OUTPUT:-file}" \
+            CK_AUTHX_HEADER_CRED="${authx_policy}" \
+            CK_DEFER_API_USERS=1 \
+            bash "${apply}" "${dir}"
     done
+    # Configure identities once from the complete selected set. This turns
+    # same-role declarations into an exact union and lets the CMS adapters
+    # remove stale CiviKitchen-owned permissions/users safely.
+    merged="$(mktemp)"
+    if ! jq -s --arg policy "${authx_policy}" '
+      [.[].apiUsers[]?] as $users
+      | ($users | sort_by(.username) | group_by(.username) | map(
+          if ([.[].role] | unique | length) != 1
+          then error("same API username declares conflicting roles: " + .[0].username)
+          else {
+            username: .[0].username,
+            role: .[0].role,
+            permissions: ([.[].permissions[]] | unique)
+          } end
+        )) as $by_user
+      | ($by_user | sort_by(.role) | group_by(.role)
+          | map({key: .[0].role, value: ([.[].permissions[]] | unique)})
+          | from_entries) as $role_permissions
+      | {
+          description: "Aggregated CiviKitchen API users",
+          dependencies: [],
+          authx: {header_cred: ($policy | split(",") | map(select(length > 0)))},
+          apiUsers: ($by_user | map(.permissions = $role_permissions[.role]))
+        }
+    ' "${resolved[@]/%//profile.json}" > "${merged}"; then
+        rm -f "${merged}"
+        return 1
+    fi
+    chmod 0644 "${merged}"
+    if ! ck_as_web env \
+        CK_PROFILE_JSON="${merged}" \
+        CK_CREDENTIALS_FILE="${CK_CREDENTIALS_FILE:-}" \
+        CK_CREDENTIALS_OUTPUT="${CK_CREDENTIALS_OUTPUT:-file}" \
+        CK_AUTHX_HEADER_CRED="${authx_policy}" \
+        CK_RECONCILE_API_USERS=1 \
+        cv scr "${CK_PROFILE_DIR}/configure-api-users.php"; then
+        rm -f "${merged}"
+        return 1
+    fi
+    rm -f "${merged}"
 }
 
 # First-boot provisioning hooks mounted into CK_INIT_D, run in lexical order:

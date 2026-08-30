@@ -28,10 +28,14 @@
 #             the deprecation story is already told by the phpunit config's
 #             convertDeprecationsToExceptions and by phpstan.
 #
-# A repo with a legitimate exception declares it in .ckconform, with a reason,
+# A repo with a legitimate exception declares it in civikitchen.yaml, with a reason,
 # the same shape ckinit uses for template deviations:
 #
-#     lifecycle_log_ignore=Unknown column 'is_legacy' -- dropped in the 5.x upgrader
+#     policy:
+#       lifecycle:
+#         log_ignore:
+#           - pattern: "Unknown column 'is_legacy'"
+#             reason: dropped in the 5.x upgrader
 #
 # Run from the extension root, inside a civikitchen container.
 #
@@ -68,6 +72,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 ck_require_extension_root
+ck_policy_load
 
 [ -n "$key" ] || key=$(ck_xml_field info.xml key)
 # The <file> value is civix's short name, and the prefix every hand-named
@@ -152,19 +157,41 @@ hits=$(grep -E -n "$patterns" "$delta" 2>/dev/null)
 # keys, so every occurrence counts, and the reason has to survive the read
 # because checking that it is there is this loop's job.
 ignored=''
+declare -a lifecycle_ignore_rules=()
+if ! lifecycle_policy_rules=$(ck_policy_all lifecycle_log_ignore); then
+  echo "cklifecycle: could not read policy.lifecycle.log_ignore" >&2
+  exit 1
+fi
+while IFS= read -r rule; do
+  [ -z "$rule" ] && continue
+  case "$rule" in
+    *' -- '?*) ;;
+    *) echo "cklifecycle: policy.lifecycle.log_ignore needs a non-empty reason: $rule" >&2; failed=1; continue ;;
+  esac
+  pat=${rule%% -- *}
+  if [ -z "$pat" ]; then
+    echo "cklifecycle: policy.lifecycle.log_ignore pattern must not be empty" >&2
+    failed=1
+    continue
+  fi
+  grep -E -- "$pat" /dev/null >/dev/null 2>&1
+  regex_status=$?
+  if [ "$regex_status" -gt 1 ]; then
+    echo "cklifecycle: invalid policy.lifecycle.log_ignore regex: $pat" >&2
+    failed=1
+    continue
+  fi
+  lifecycle_ignore_rules+=("$rule")
+done <<< "$lifecycle_policy_rules"
+
 if [ -n "$hits" ]; then
-  while IFS= read -r rule; do
-    [ -z "$rule" ] && continue
-    case "$rule" in
-      *' -- '*) ;;
-      *) echo "cklifecycle: lifecycle_log_ignore needs a ' -- <reason>': $rule" >&2; failed=1; continue ;;
-    esac
+  for rule in "${lifecycle_ignore_rules[@]}"; do
     pat=${rule%% -- *}
     kept=$(echo "$hits" | grep -E -v -- "$pat")
     dropped=$(echo "$hits" | grep -E -c -- "$pat")
     [ "$dropped" -gt 0 ] && ignored="${ignored}  ${dropped}x ignored by: ${rule}"$'\n'
     hits="$kept"
-  done < <(ck_policy_all lifecycle_log_ignore)
+  done
 fi
 
 echo
@@ -179,7 +206,7 @@ if [ -n "$hits" ]; then
   echo '```'
   echo
   echo "A swallowed SQL error is still a broken install. Fix the cause, or — if the line is expected —"
-  echo "declare it with a reason in \`.ckconform\`: \`lifecycle_log_ignore=<regex> -- <why>\`."
+  echo "declare it as policy.lifecycle.log_ignore with pattern and reason in civikitchen.yaml."
   failed=1
 else
   echo "No SQL or PHP failure signatures in the lifecycle logs."

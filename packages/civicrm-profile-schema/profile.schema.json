@@ -66,10 +66,6 @@
           "minLength": 1,
           "description": "Git ref (tag/branch/commit) to check out. Only meaningful with `repo`."
         },
-        "track": {
-          "enum": ["pin", "branch"],
-          "description": "Update policy for a git dependency. \"pin\": stay on the exact `version` (a tag or commit). \"branch\": `version` is a moving branch — follow its HEAD on update. Absent: pin when `version` is set, else follow the latest release tag. Requires `version`."
-        },
         "enable": {
           "type": "boolean",
           "description": "Enable the extension after install (cv ext:enable). Absent/false = fetch only."
@@ -93,17 +89,16 @@
         }
       },
       "dependentRequired": {
+        "repo": ["version"],
         "version": ["repo"],
-        "track": ["version"],
         "skipUfReason": ["skipUf"]
       },
       "dependentSchemas": {
         "registry": {
-          "description": "Registry-sourced: no git repo, no git version/track — the release picks its own version.",
+          "description": "Registry-sourced: no git repo or git version — the release picks its own version.",
           "properties": {
             "repo": false,
-            "version": false,
-            "track": false
+            "version": false
           }
         }
       }
@@ -308,10 +303,13 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
+          "contains": {
+            "enum": ["api_key", "pass"]
+          },
           "items": {
             "enum": ["jwt", "api_key", "pass"]
           },
-          "description": "Accepted credential flows in the Authorization header."
+          "description": "Accepted credential flows in the Authorization header. Must include api_key or pass because CiviKitchen does not issue JWTs for generated users."
         }
       }
     },
@@ -322,11 +320,17 @@
       "properties": {
         "username": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "description": "Cross-CMS login name. Delimiters and control characters are forbidden so the credentials record remains unambiguous."
         },
         "role": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^civikitchen_[a-z0-9_]+$",
+          "description": "CiviKitchen-owned CMS role machine name. The reserved prefix permits exact reconciliation without mutating unrelated site roles."
         },
         "permissions": {
           "type": "array",

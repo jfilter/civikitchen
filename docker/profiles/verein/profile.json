@@ -6,7 +6,7 @@
   "apiUsers": [
     {
       "username": "readonly",
-      "role": "api_readonly",
+      "role": "civikitchen_api_readonly",
       "permissions": [
         "access CiviCRM",
         "access AJAX API",
@@ -24,7 +24,7 @@
     },
     {
       "username": "fundraiser",
-      "role": "api_fundraiser",
+      "role": "civikitchen_api_fundraiser",
       "permissions": [
         "access CiviCRM",
         "access AJAX API",
@@ -43,7 +43,7 @@
     },
     {
       "username": "eventmanager",
-      "role": "api_eventmanager",
+      "role": "civikitchen_api_eventmanager",
       "permissions": [
         "access CiviCRM",
         "access AJAX API",
@@ -63,7 +63,7 @@
     },
     {
       "username": "caseworker",
-      "role": "api_caseworker",
+      "role": "civikitchen_api_caseworker",
       "permissions": [
         "access CiviCRM",
         "access AJAX API",
@@ -82,7 +82,7 @@
     },
     {
       "username": "bankimporter",
-      "role": "api_bankimporter",
+      "role": "civikitchen_api_bankimporter",
       "permissions": [
         "access CiviCRM",
         "access AJAX API",
@@ -100,49 +100,49 @@
     {
       "name": "org.project60.banking",
       "repo": "https://github.com/Project60/org.project60.banking.git",
-      "version": "1.4.1",
+      "version": "3d9c0c0008a48ada0271ae7ff8f832403921d5f6",
       "enable": true
     },
     {
       "name": "org.project60.sepa",
       "repo": "https://github.com/Project60/org.project60.sepa.git",
-      "version": "master",
+      "version": "0a82dffd70178be2d37540e5dffe32d8e7857c8b",
       "enable": true
     },
     {
       "name": "de.systopia.contract",
       "repo": "https://github.com/systopia/de.systopia.contract.git",
-      "version": "master",
+      "version": "82250a27835e6af4b32d38af0ebd8faca48753cd",
       "enable": true
     },
     {
       "name": "de.systopia.twingle",
       "repo": "https://github.com/systopia/de.systopia.twingle.git",
-      "version": "master",
+      "version": "a4c0273bb2546f9f18400c127c8c680aeb47efb2",
       "enable": true
     },
     {
       "name": "de.systopia.gdprx",
       "repo": "https://github.com/systopia/de.systopia.gdprx.git",
-      "version": "master",
+      "version": "f63f51fac230459d0fd9fa5cdd58072526934382",
       "enable": true
     },
     {
       "name": "de.systopia.xcm",
       "repo": "https://github.com/systopia/de.systopia.xcm.git",
-      "version": "master",
+      "version": "2eed2d1a38e735444b0ff2ae39903efdd167f196",
       "enable": true
     },
     {
       "name": "de.systopia.identitytracker",
       "repo": "https://github.com/systopia/de.systopia.identitytracker.git",
-      "version": "master",
+      "version": "e8d37e9c7d5f15653b1e308390ef55f3a7899a58",
       "enable": true
     },
     {
       "name": "org.civicrm.contactlayout",
       "repo": "https://lab.civicrm.org/extensions/contactlayout.git",
-      "version": "master",
+      "version": "5825ce7293c4178440fd3268610ff1256ea06dce",
       "enable": true
     }
   ]

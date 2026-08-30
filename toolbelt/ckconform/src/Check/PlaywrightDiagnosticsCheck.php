@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
+use CiviKitchen\Ckconform\Suppressions;
 
 /**
  * A Playwright suite that leaves nothing behind when it fails.
@@ -62,14 +63,21 @@ final class PlaywrightDiagnosticsCheck implements Check
         $problems = [];
         foreach ($configs as $config) {
             $body = $context->read($config) ?? '';
+            $code = $this->javascriptCode($this->exportedConfig($body));
+            $topLevelCode = $this->topLevelObjectCode($code);
+            $useCode = $this->topLevelPropertyObject($code, 'use');
+            $suppressions = Suppressions::ofLineComments($body);
             // 'on' records strictly more than retain-on-failure; the *-retry
             // modes leave the first failing run traceless and don't count.
-            $traceValue = "['\"](?:retain-on-failure|on)['\"]";
-            if (preg_match("/trace:\s*(?:{$traceValue}|\{[^}]*mode:\s*{$traceValue})/", $body) !== 1) {
+            if (!$this->traceRecordsOnFailure($this->topLevelPropertyValue($useCode, 'trace'))
+                && !$suppressions->suppressed($this->name(), 1)
+            ) {
                 $problems[] = $config . ': no retain-on-failure trace';
             }
-            if (preg_match('/reporter:/', $body) !== 1) {
-                $problems[] = $config . ': no reporter, so no playwright-report/ is written';
+            if (!$this->reporterWritesHtml($this->topLevelPropertyValue($code, 'reporter'))
+                && !$suppressions->suppressed($this->name(), 1)
+            ) {
+                $problems[] = $config . ': no reporter that writes HTML, so no playwright-report/ is written';
             }
         }
 
@@ -95,15 +103,21 @@ final class PlaywrightDiagnosticsCheck implements Check
             }
         }
 
-        // Unusual indentation, or a workflow this splitter cannot read: fall back
-        // to the old whole-estate question rather than inventing a problem.
+        // If a workflow actually invokes Playwright but its jobs cannot be
+        // split, fail closed: an estate-wide upload may be on another runner.
         if ($jobs === []) {
-            return $this->flatCiProblems($context);
+            foreach ($context->workflows() as $workflow) {
+                $body = $this->stripComments($context->read($workflow) ?? '');
+                if ($this->runsPlaywright($body, $context)) {
+                    return [$workflow . ': runs playwright but its jobs could not be parsed'];
+                }
+            }
+            return [];
         }
 
         $playwrightJobs = array_filter(
             $jobs,
-            fn (string $t): bool => $this->runsPlaywright($t) && !$this->callsReusableWorkflow($t),
+            fn (string $t): bool => $this->runsPlaywright($t, $context) && !$this->callsReusableWorkflow($t),
         );
         if ($playwrightJobs === []) {
             return [];
@@ -122,28 +136,53 @@ final class PlaywrightDiagnosticsCheck implements Check
         return $problems;
     }
 
-    /**
-     * The pre-job fallback: playwright runs somewhere and a report is uploaded
-     * somewhere. Weaker, but never worse than the check was before.
-     *
-     * @return list<string>
-     */
-    private function flatCiProblems(Context $context): array
+    private function runsPlaywright(string $text, Context $context): bool
     {
-        $runs = false;
-        $uploads = false;
-        foreach ($context->workflows() as $workflow) {
-            $body = $this->stripComments($context->read($workflow) ?? '');
-            $runs = $runs || $this->runsPlaywright($body);
-            $uploads = $uploads || ($this->mentionsUpload($body) && $this->mentionsReport($body));
+        if (str_contains($text, 'playwright')) {
+            return true;
+        }
+        preg_match_all('/(?:npm|yarn|pnpm|bun)\s+(?:run\s+)?([A-Za-z0-9:_-]+)/', $text, $matches);
+        $wanted = array_unique($matches[1]);
+        if ($wanted === []) {
+            return false;
+        }
+        foreach ($context->tracked('package.json', Context::outsideNodeModules(...)) as $manifest) {
+            $scripts = $context->json($manifest)['scripts'] ?? null;
+            if (!is_array($scripts)) {
+                continue;
+            }
+            foreach ($wanted as $name) {
+                $visiting = [];
+                if ($this->scriptRunsPlaywright($name, $scripts, $visiting)) {
+                    return true;
+                }
+            }
         }
 
-        return $runs && !$uploads ? ['CI runs playwright but no workflow uploads the report'] : [];
+        return false;
     }
 
-    private function runsPlaywright(string $text): bool
+    /** @param array<string, mixed> $scripts @param array<string, true> $visiting */
+    private function scriptRunsPlaywright(string $name, array $scripts, array &$visiting): bool
     {
-        return str_contains($text, 'playwright');
+        if (isset($visiting[$name]) || !is_string($scripts[$name] ?? null)) {
+            return false;
+        }
+        $visiting[$name] = true;
+        $command = $scripts[$name];
+        if (str_contains($command, 'playwright')) {
+            unset($visiting[$name]);
+            return true;
+        }
+        preg_match_all('/(?:npm|yarn|pnpm|bun)\s+(?:run\s+)?([A-Za-z0-9:_-]+)/', $command, $matches);
+        foreach (array_unique($matches[1]) as $dependency) {
+            if ($this->scriptRunsPlaywright($dependency, $scripts, $visiting)) {
+                unset($visiting[$name]);
+                return true;
+            }
+        }
+        unset($visiting[$name]);
+        return false;
     }
 
     /**
@@ -151,7 +190,18 @@ final class PlaywrightDiagnosticsCheck implements Check
      */
     private function callsReusableWorkflow(string $jobText): bool
     {
-        return preg_match('/^ {4}uses:\s*\S/m', $jobText) === 1;
+        $minimum = null;
+        foreach (explode("\n", $jobText) as $line) {
+            if (trim($line) === '') continue;
+            $indent = strlen($line) - strlen(ltrim($line));
+            $minimum = $minimum === null ? $indent : min($minimum, $indent);
+        }
+        if ($minimum === null) return false;
+        foreach (explode("\n", $jobText) as $line) {
+            $indent = strlen($line) - strlen(ltrim($line));
+            if ($indent === $minimum && preg_match('/^\s*uses:\s*\S/', $line) === 1) return true;
+        }
+        return false;
     }
 
     private function mentionsUpload(string $text): bool
@@ -159,9 +209,26 @@ final class PlaywrightDiagnosticsCheck implements Check
         return str_contains($text, 'upload-artifact');
     }
 
-    private function mentionsReport(string $text): bool
+    private function mentionsReportPath(string $text): bool
     {
-        return str_contains($text, 'playwright-report') || str_contains($text, 'test-results');
+        $lines = explode("\n", $text);
+        foreach ($lines as $index => $line) {
+            if (preg_match('/^(\s*)path:\s*(.*)$/', $line, $match) !== 1) continue;
+            $value = trim($match[2]);
+            if (preg_match('/^[|>][-+]?$/', $value) === 1) {
+                $indent = strlen($match[1]);
+                $value = '';
+                for ($i = $index + 1, $count = count($lines); $i < $count; $i++) {
+                    $nextIndent = strlen($lines[$i]) - strlen(ltrim($lines[$i]));
+                    if (trim($lines[$i]) !== '' && $nextIndent <= $indent) break;
+                    $value .= "\n" . trim($lines[$i]);
+                }
+            }
+            foreach (preg_split('/\s+/', trim($value, " \t\n\r\0\x0B\"'")) ?: [] as $path) {
+                if (preg_match('#(?:^|/)(?:playwright-report|test-results)(?:/|\*|$)#', $path) === 1) return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -170,7 +237,7 @@ final class PlaywrightDiagnosticsCheck implements Check
     private function reportUploadStep(string $jobText): ?string
     {
         foreach ($this->steps($jobText) as $step) {
-            if ($this->mentionsUpload($step) && $this->mentionsReport($step)) {
+            if ($this->mentionsUpload($step) && $this->mentionsReportPath($step)) {
                 return $step;
             }
         }
@@ -206,26 +273,33 @@ final class PlaywrightDiagnosticsCheck implements Check
     {
         $jobs = [];
         $inJobs = false;
+        $jobsIndent = null;
+        $jobIndent = null;
         $current = null;
         $buffer = [];
         foreach (explode("\n", $body) as $line) {
-            if (preg_match('/^jobs:\s*$/', $line) === 1) {
+            if (preg_match('/^(\s*)jobs:\s*$/', $line, $match) === 1) {
                 $inJobs = true;
+                $jobsIndent = strlen($match[1]);
                 continue;
             }
             if (!$inJobs) {
                 continue;
             }
-            if (preg_match('/^  ([A-Za-z0-9_-]+):\s*$/', $line, $match) === 1) {
+            if (preg_match('/^(\s+)(?:([A-Za-z0-9_-]+)|[\'\"]([^\'\"]+)[\'\"]):\s*$/', $line, $match) === 1
+                && strlen($match[1]) > (int) $jobsIndent
+                && ($jobIndent === null || strlen($match[1]) === $jobIndent)
+            ) {
                 if ($current !== null) {
                     $jobs[$current] = implode("\n", $buffer);
                 }
-                $current = $match[1];
+                $jobIndent = strlen($match[1]);
+                $current = $match[2] !== '' ? $match[2] : $match[3];
                 $buffer = [];
                 continue;
             }
-            // A non-space at column zero ends the jobs block.
-            if ($line !== '' && !ctype_space($line[0])) {
+            $lineIndent = strlen($line) - strlen(ltrim($line));
+            if (trim($line) !== '' && $lineIndent <= (int) $jobsIndent) {
                 break;
             }
             if ($current !== null) {
@@ -251,7 +325,7 @@ final class PlaywrightDiagnosticsCheck implements Check
         $current = null;
         $indent = null;
         foreach (explode("\n", $jobText) as $line) {
-            if (preg_match('/^(\s+)-\s/', $line, $match) === 1
+            if (preg_match('/^(\s+)-(?:\s|$)/', $line, $match) === 1
                 && ($indent === null || strlen($match[1]) === $indent)) {
                 if ($current !== null) {
                     $steps[] = implode("\n", $current);
@@ -285,5 +359,307 @@ final class PlaywrightDiagnosticsCheck implements Check
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Return only the object literal exported as the Playwright config.
+     * Unrelated constants and quoted examples must not satisfy the policy.
+     * Supports ESM direct/variable exports and CommonJS module.exports.
+     */
+    private function exportedConfig(string $body): string
+    {
+        $structure = $this->javascriptStructure($body);
+        $pattern = '/(?:\bexport\s+default\b|\bmodule\.exports\s*=)(?:\s+defineConfig\s*\()?\s*\{/m';
+        if (preg_match($pattern, $structure, $match, PREG_OFFSET_CAPTURE) !== 1) {
+            if (preg_match('/\bexport\s+default\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*;/m', $structure, $export) !== 1) {
+                return '';
+            }
+            $name = preg_quote($export[1], '/');
+            if (preg_match('/\b(?:const|let|var)\s+' . $name . '\s*=\s*(?:defineConfig\s*\()?\s*\{/m', $structure, $match, PREG_OFFSET_CAPTURE) !== 1) {
+                return '';
+            }
+        }
+        $matched = $match[0][0];
+        $offset = $match[0][1];
+        $start = $offset + (int) strrpos($matched, '{');
+        $depth = 0;
+        $length = strlen($structure);
+        for ($i = $start; $i < $length; $i++) {
+            if ($structure[$i] === '{') {
+                $depth++;
+            } elseif ($structure[$i] === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return substr($body, $start, $i - $start + 1);
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /** Keep only properties on the exported object's outermost level. */
+    private function topLevelObjectCode(string $code): string
+    {
+        $structure = $this->javascriptStructure($code);
+        $depth = 0;
+        $result = '';
+        $length = strlen($code);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $structure[$i];
+            if ($char === '{') {
+                $depth++;
+                $result .= $depth === 1 ? $code[$i] : ' ';
+            } elseif ($char === '}') {
+                $result .= $depth === 1 ? $code[$i] : ' ';
+                $depth--;
+            } else {
+                $result .= $depth <= 1 || $code[$i] === "\n" ? $code[$i] : ' ';
+            }
+        }
+        return $result;
+    }
+
+    /** Extract a top-level property expression, stopping at its outer comma. */
+    private function topLevelPropertyValue(string $code, string $property): string
+    {
+        $structure = $this->javascriptStructure($code);
+        $key = preg_quote($property, '/');
+        $pattern = '/(?:\b' . $key . '\b|[\'\"]' . $key . '[\'\"])\s*:/m';
+        if (preg_match_all($pattern, $code, $matches, PREG_OFFSET_CAPTURE) === false) {
+            return '';
+        }
+        foreach ($matches[0] as [$matched, $offset]) {
+            $depth = 0;
+            for ($i = 0; $i < $offset; $i++) {
+                if ($structure[$i] === '{') $depth++;
+                elseif ($structure[$i] === '}') $depth--;
+            }
+            if ($depth !== 1 || trim(substr($structure, $offset, strlen($matched))) === '') continue;
+            $start = $offset + strlen($matched);
+            $brace = $bracket = $paren = 0;
+            for ($i = $start, $length = strlen($code); $i < $length; $i++) {
+                $char = $structure[$i];
+                if ($char === '{') $brace++;
+                elseif ($char === '[') $bracket++;
+                elseif ($char === '(') $paren++;
+                elseif ($char === '}') {
+                    if ($brace === 0 && $bracket === 0 && $paren === 0) return trim(substr($code, $start, $i - $start));
+                    $brace--;
+                } elseif ($char === ']') $bracket--;
+                elseif ($char === ')') $paren--;
+                elseif ($char === ',' && $brace === 0 && $bracket === 0 && $paren === 0) {
+                    return trim(substr($code, $start, $i - $start));
+                }
+            }
+        }
+        return '';
+    }
+
+    /** True for a direct html reporter or an html entry/tuple in its array. */
+    private function reporterWritesHtml(string $value): bool
+    {
+        if ($value === '') return false;
+        $structure = $this->javascriptStructure($value);
+        if (str_contains($structure, '?')) {
+            $question = strpos($structure, '?');
+            $prefix = trim(substr($value, 0, $question));
+            $brace = $bracket = $paren = 0;
+            $colon = null;
+            for ($i = $question + 1, $length = strlen($value); $i < $length; $i++) {
+                $char = $structure[$i];
+                if ($char === '{') $brace++;
+                elseif ($char === '}') $brace--;
+                elseif ($char === '[') $bracket++;
+                elseif ($char === ']') $bracket--;
+                elseif ($char === '(') $paren++;
+                elseif ($char === ')') $paren--;
+                elseif ($char === ':' && $brace === 0 && $bracket === 0 && $paren === 0) { $colon = $i; break; }
+            }
+            if ($colon === null) return false;
+            $whenTrue = substr($value, $question + 1, $colon - $question - 1);
+            $whenFalse = substr($value, $colon + 1);
+            if (preg_match('/^process\.env\.CI$/', $prefix) === 1) return $this->reporterWritesHtml($whenTrue);
+            if (preg_match('/^!\s*process\.env\.CI$/', $prefix) === 1) return $this->reporterWritesHtml($whenFalse);
+            return false;
+        }
+        if (preg_match_all('/[\'\"]html[\'\"]/', $value, $matches, PREG_OFFSET_CAPTURE) === false) {
+            return false;
+        }
+        foreach ($matches[0] as [$matched, $offset]) {
+            $brace = $bracket = 0;
+            for ($i = 0; $i < $offset; $i++) {
+                if ($structure[$i] === '{') $brace++;
+                elseif ($structure[$i] === '}') $brace--;
+                elseif ($structure[$i] === '[') $bracket++;
+                elseif ($structure[$i] === ']') $bracket--;
+            }
+            if ($brace !== 0) continue;
+            if ($bracket === 0 || $bracket === 1) return true;
+            if ($bracket === 2) {
+                $before = rtrim(substr($value, 0, $offset));
+                if ($before !== '' && substr($before, -1) === '[') return true;
+            }
+        }
+        return false;
+    }
+
+    private function traceRecordsOnFailure(string $value): bool
+    {
+        $accepted = '/^[\'\"](?:retain-on-failure|on)[\'\"]$/';
+        $value = trim($value);
+        if (preg_match($accepted, $value) === 1) return true;
+        if (str_starts_with($value, '{')) {
+            return preg_match($accepted, trim($this->topLevelPropertyValue($value, 'mode'))) === 1;
+        }
+        return false;
+    }
+
+    /** Extract an object-valued property from the exported object's top level. */
+    private function topLevelPropertyObject(string $code, string $property): string
+    {
+        $structure = $this->javascriptStructure($code);
+        $key = preg_quote($property, '/');
+        $pattern = '/(?:\b' . $key . '\b|[\'\"]' . $key . '[\'\"])\s*:\s*\{/m';
+        if (preg_match_all($pattern, $code, $matches, PREG_OFFSET_CAPTURE) === false) {
+            return '';
+        }
+        foreach ($matches[0] as [$matched, $offset]) {
+            $depth = 0;
+            for ($i = 0; $i < $offset; $i++) {
+                if ($structure[$i] === '{') $depth++;
+                elseif ($structure[$i] === '}') $depth--;
+            }
+            if ($depth !== 1) continue;
+            $start = $offset + (int) strrpos($matched, '{');
+            if (($structure[$start] ?? '') !== '{') continue;
+            $objectDepth = 0;
+            for ($i = $start, $length = strlen($structure); $i < $length; $i++) {
+                if ($structure[$i] === '{') $objectDepth++;
+                elseif ($structure[$i] === '}' && --$objectDepth === 0) {
+                    return substr($code, $start, $i - $start + 1);
+                }
+            }
+        }
+        return '';
+    }
+
+    /** Mask comments, templates and quoted strings while preserving offsets. */
+    private function javascriptStructure(string $body): string
+    {
+        $code = $this->javascriptCode($body);
+        $result = '';
+        $state = 'code';
+        $length = strlen($code);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $code[$i];
+            if ($state === 'single' || $state === 'double') {
+                if ($char === '\\' && $i + 1 < $length) {
+                    $result .= '  ';
+                    $i++;
+                    continue;
+                }
+                if (($state === 'single' && $char === "'") || ($state === 'double' && $char === '"')) {
+                    $state = 'code';
+                }
+                $result .= $char === "\n" ? "\n" : ' ';
+                continue;
+            }
+            if ($char === "'") {
+                $state = 'single';
+                $result .= ' ';
+            } elseif ($char === '"') {
+                $state = 'double';
+                $result .= ' ';
+            } else {
+                $result .= $char;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Mask JavaScript comments and template literals while preserving code,
+     * quoted string values, newlines, and byte positions. This is enough to
+     * recognize object properties without allowing prose or template content
+     * to satisfy the configuration contract.
+     */
+    private function javascriptCode(string $body): string
+    {
+        $result = '';
+        $state = 'code';
+        $length = strlen($body);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $body[$i];
+            $next = $body[$i + 1] ?? '';
+            if ($state === 'line-comment') {
+                if ($char === "\n") {
+                    $state = 'code';
+                    $result .= "\n";
+                } else {
+                    $result .= ' ';
+                }
+                continue;
+            }
+            if ($state === 'block-comment') {
+                if ($char === '*' && $next === '/') {
+                    $result .= '  ';
+                    $i++;
+                    $state = 'code';
+                } else {
+                    $result .= $char === "\n" ? "\n" : ' ';
+                }
+                continue;
+            }
+            if ($state === 'template') {
+                if ($char === '\\') {
+                    $result .= ' ';
+                    if ($i + 1 < $length) {
+                        $result .= $body[$i + 1] === "\n" ? "\n" : ' ';
+                        $i++;
+                    }
+                } elseif ($char === '`') {
+                    $result .= ' ';
+                    $state = 'code';
+                } else {
+                    $result .= $char === "\n" ? "\n" : ' ';
+                }
+                continue;
+            }
+            if ($state === 'single' || $state === 'double') {
+                $result .= $char;
+                if ($char === '\\' && $i + 1 < $length) {
+                    $result .= $body[++$i];
+                    continue;
+                }
+                if (($state === 'single' && $char === "'") || ($state === 'double' && $char === '"')) {
+                    $state = 'code';
+                }
+                continue;
+            }
+            if ($char === '/' && $next === '/') {
+                $result .= '  ';
+                $i++;
+                $state = 'line-comment';
+            } elseif ($char === '/' && $next === '*') {
+                $result .= '  ';
+                $i++;
+                $state = 'block-comment';
+            } elseif ($char === '`') {
+                $result .= ' ';
+                $state = 'template';
+            } elseif ($char === "'") {
+                $result .= $char;
+                $state = 'single';
+            } elseif ($char === '"') {
+                $result .= $char;
+                $state = 'double';
+            } else {
+                $result .= $char;
+            }
+        }
+
+        return $result;
     }
 }

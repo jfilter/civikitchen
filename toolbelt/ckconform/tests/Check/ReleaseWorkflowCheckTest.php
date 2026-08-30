@@ -32,7 +32,7 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
 
     public function testADeclaredExemptionWithAReasonOptsOut(): void
     {
-        $context = $this->repo(['.ckconform' => "release=none -- internal glue, never installed elsewhere\n"]);
+        $context = $this->repo(['__policy_fixture' => "release=none -- internal glue, never installed elsewhere\n"]);
         $reporter = $this->run_(new ReleaseWorkflowCheck(), $context);
         $this->assertPasses($reporter);
         self::assertSame([], $reporter->messages('warn'));
@@ -41,13 +41,15 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
 
     public function testAnExemptionWithoutAReasonIsItselfAFinding(): void
     {
-        $context = $this->repo(['.ckconform' => "release=none\n"]);
-        $this->assertFails($this->run_(new ReleaseWorkflowCheck(), $context), "only 'release=none -- <reason>' opts out");
+        $context = $this->repo(['__policy_fixture' => "release=none\n"]);
+        $this->expectException(\RuntimeException::class);
+        $this->run_(new ReleaseWorkflowCheck(), $context);
     }
 
     public function testAnUnrecognisedPolicyValueDoesNotSilenceTheRule(): void
     {
-        $context = $this->repo(['.ckconform' => "release=later -- we will get to it\n"]);
-        $this->assertFails($this->run_(new ReleaseWorkflowCheck(), $context), "unrecognised release= policy 'later");
+        $context = $this->repo(['__policy_fixture' => "release=later -- we will get to it\n"]);
+        $this->expectException(\RuntimeException::class);
+        $this->run_(new ReleaseWorkflowCheck(), $context);
     }
 }

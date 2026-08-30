@@ -49,6 +49,21 @@ for bin in composer node npm civix phpunit phpstan phpcs phpcbf cv infection; do
     fi
 done
 
+# The unified commands depend on files copied outside /usr/local/bin. Exercise
+# them in-image so a missing schema/implementation layer cannot pass the host
+# dispatcher tests and then ship broken.
+if ck help 2>&1 | grep -q 'ck scenario'; then ok "ck dispatcher"; else fail "ck dispatcher"; fi
+if ck profile validate /usr/local/share/civikitchen/profiles/verein >/dev/null 2>&1; then
+    ok "ck profile validates a bundled profile"
+else
+    fail "ck profile validates a bundled profile"
+fi
+if ck scenario --help 2>&1 | grep -q 'validate|plan|compose'; then
+    ok "ck scenario implementation boots"
+else
+    fail "ck scenario implementation boots"
+fi
+
 # ---------------------------------------------------------------------------
 # 1b. Standalone base parity. The image stopped building FROM civicrm/civicrm
 #     and mirrors its base itself; these pin the parity points a consumer
@@ -100,6 +115,26 @@ if echo "${STANDARDS}" | grep -q CiviKitchen; then ok "CiviKitchen standard regi
 # 3. phpcs lints a sample file
 echo "== phpcs run =="
 WORKDIR="$(mktemp -d)"
+mkdir -p "${WORKDIR}/scenario/extension"
+cat > "${WORKDIR}/scenario/extension/info.xml" <<'XML'
+<extension key="org.example.scenario" type="module"><file>scenario</file></extension>
+XML
+cat > "${WORKDIR}/scenario/civikitchen.yaml" <<'YAML'
+version: 1
+scenario:
+  name: image-yaml-smoke
+  image: ghcr.io/jfilter/civikitchen:v1
+  database:
+    image: mariadb:10.11
+  extension:
+    key: org.example.scenario
+    path: extension
+YAML
+if (cd "${WORKDIR}/scenario" && ck scenario validate >/dev/null && ck scenario plan >/dev/null); then
+    ok "ck scenario parses canonical civikitchen.yaml in-image"
+else
+    fail "ck scenario could not parse canonical civikitchen.yaml in-image"
+fi
 cat > "${WORKDIR}/Bad.php" <<'PHP'
 <?php
 // Intentionally non-conforming code to force phpcs to find issues.
@@ -422,6 +457,7 @@ XML
 echo '<?php' > "${RELDIR}/greeter.php"
 echo '<?php' > "${RELDIR}/tests/phpunit/GreeterTest.php"
 echo 'x' > "${RELDIR}/phpunit.xml.dist"
+echo 'must-not-ship' > "${RELDIR}/.env.custom"
 # Keep enough entries after info.xml to fill a pipe buffer. This reproduces the
 # Composer-sized archive where `printf entries | grep -q info.xml` used to make
 # printf die with SIGPIPE under pipefail, falsely reporting a missing info.xml.
@@ -447,7 +483,7 @@ fi
 # The whole point of the archive: dev/CI files stay out of what a site installs.
 CKREL_LIST="$(unzip -Z1 "${RELDIR}/.ckrelease/org.example.greeter-1.3.0.zip" 2>/dev/null || true)"
 if grep -q 'org.example.greeter/greeter.php' <<< "${CKREL_LIST}" \
-    && ! grep -qE 'tests/|phpunit.xml.dist' <<< "${CKREL_LIST}"; then
+    && ! grep -qE 'tests/|phpunit.xml.dist|/\.env' <<< "${CKREL_LIST}"; then
     ok "ckrelease excludes dev/CI files from the archive"
 else
     fail "ckrelease archive contents wrong (${CKREL_LIST:0:300})"
@@ -1304,7 +1340,7 @@ rm -f "${XDEBUG_INI}"
 # 5d. ckmutate: the point of mutation testing in one fixture — a test that
 #     COVERS a line without asserting enough to notice it changing. `$n > 10`
 #     asserted only at n = 50 survives the GreaterThanOrEqual mutant, so a 100%
-#     floor must go red. Without the .ckconform key the tool must be a no-op.
+#     floor must go red. Without the civikitchen.yaml key the tool must be a no-op.
 echo "== ckmutate =="
 MUT="${WORKDIR}/ckmutate"
 mkdir -p "${MUT}/Civi" "${MUT}/tests"
@@ -1341,13 +1377,13 @@ cat > "${MUT}/phpunit.xml.dist" <<'XML'
 </phpunit>
 XML
 MUT_OUT="$( (cd "${MUT}" && ckmutate) 2>&1 || true)"
-if (cd "${MUT}" && ckmutate) >/dev/null 2>&1 && echo "${MUT_OUT}" | grep -q 'no mutation_min_msi'; then
-    ok "ckmutate is a no-op without mutation_min_msi in .ckconform"
+if (cd "${MUT}" && ckmutate) >/dev/null 2>&1 && echo "${MUT_OUT}" | grep -q 'no policy.mutation.minimum_msi'; then
+    ok "ckmutate is a no-op without mutation_min_msi in civikitchen.yaml"
 else
     fail "ckmutate without a floor should pass and say so (output: ${MUT_OUT:0:300})"
 fi
 
-printf 'mutation_min_msi=100\nmutation_paths=Civi\n' > "${MUT}/.ckconform"
+printf '%s\n' 'version: 1' 'policy:' '  mutation:' '    minimum_msi: 100' '    paths:' '      - Civi' > "${MUT}/civikitchen.yaml"
 MUT_OUT="$( (cd "${MUT}" && ckmutate) 2>&1 || true)"
 if (cd "${MUT}" && ckmutate) >/dev/null 2>&1; then
     fail "ckmutate passed a 100% floor although a mutant survives (output: ${MUT_OUT:0:300})"
@@ -1365,7 +1401,7 @@ else
     ok "ckmutate removes its generated config"
 fi
 
-printf 'mutation_min_msi=50\nmutation_paths=Civi\n' > "${MUT}/.ckconform"
+printf '%s\n' 'version: 1' 'policy:' '  mutation:' '    minimum_msi: 50' '    paths:' '      - Civi' > "${MUT}/civikitchen.yaml"
 if (cd "${MUT}" && ckmutate) >/dev/null 2>&1; then
     ok "ckmutate passes a floor the suite meets"
 else

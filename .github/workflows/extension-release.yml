@@ -118,6 +118,11 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
 
+      - name: Install the locked CiviKitchen configuration parser
+        run: |
+          composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
+            --working-dir=.civikitchen-ci/packages/civikitchen-scenario-schema
+
       # Branching on the secret in bash — the `secrets` context is not
       # available in `if:`. No app means every required package is public.
       - name: Decide whether a private-dependency token is needed
@@ -229,13 +234,13 @@ jobs:
           CK_POLICY_DIR: ${{ runner.temp }}/ckrelease-policy
         run: |
           set -euo pipefail
-          # The archive carries no .ckconform (a dev file, excluded by the
+          # The archive carries no civikitchen.yaml (a dev file, excluded by the
           # central list), but the <requires> resolver reads extension_source
           # pins from it. Its own directory, not $CK_DIST: that one is uploaded
           # as the release artifact. A directory mount is fine when the file
           # does not exist; a file mount would silently create a directory.
           mkdir -p "$CK_POLICY_DIR"
-          if [ -f .ckconform ]; then cp .ckconform "$CK_POLICY_DIR/"; fi
+          if [ -f civikitchen.yaml ]; then cp civikitchen.yaml "$CK_POLICY_DIR/"; fi
           cat > smoke-compose.yml <<'YAML'
           name: ckrelease-smoke
           services:
@@ -277,8 +282,8 @@ jobs:
             set -eu
             mkdir -p "${CK_EXT_DIR:-/var/www/html/ext}"
             unzip -q -o /ck-dist/*.zip -d "${CK_EXT_DIR:-/var/www/html/ext}"
-            if [ -f /ck-policy/.ckconform ]; then
-              cp /ck-policy/.ckconform "${CK_EXT_DIR:-/var/www/html/ext}/$CK_EXT_KEY/.ckconform"
+            if [ -f /ck-policy/civikitchen.yaml ]; then
+              cp /ck-policy/civikitchen.yaml "${CK_EXT_DIR:-/var/www/html/ext}/$CK_EXT_KEY/civikitchen.yaml"
             fi
             chown -R www-data:www-data "${CK_EXT_DIR:-/var/www/html/ext}"'
 

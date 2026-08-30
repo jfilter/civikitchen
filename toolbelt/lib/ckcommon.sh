@@ -5,7 +5,7 @@
 # there, so `$(dirname "${BASH_SOURCE[0]}")/../lib/ckcommon.sh` resolves in both.
 #
 # Shell plumbing only. Anything with a structure is parsed elsewhere —
-# `.ckconform` by `ckconform --policy-env`, XML and JSON by php.
+# `civikitchen.yaml` by `ckconform --policy-env`, XML and JSON by php.
 #
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # everything defined here is used by the sourcing tool, not here.
@@ -36,7 +36,7 @@ ck_git() { git -c safe.directory="$PWD" "$@"; }
 
 ck_in_git_repo() { ck_git rev-parse --is-inside-work-tree >/dev/null 2>&1; }
 
-# --- .ckconform --------------------------------------------------------------
+# --- civikitchen.yaml --------------------------------------------------------------
 # Read through ckconform, which owns the format; never parsed here. Why that
 # matters: toolbelt/ckconform/src/Policy.php.
 
@@ -44,7 +44,7 @@ _ck_conform_bin() {
     local bin
     bin=$(command -v ckconform || true)
     [ -n "$bin" ] || bin="$ck_root/bin/ckconform"
-    [ -x "$bin" ] || ck_die "cannot find ckconform, which reads .ckconform"
+    [ -x "$bin" ] || ck_die "cannot find ckconform, which reads civikitchen.yaml"
     printf '%s' "$bin"
 }
 
@@ -52,7 +52,7 @@ _ck_conform_bin() {
 # file sets nothing, so callers test for an empty value.
 ck_policy_load() {
     local env
-    env=$("$(_ck_conform_bin)" --policy-env) || ck_die "could not read .ckconform"
+    env=$("$(_ck_conform_bin)" --policy-env) || ck_die "could not read civikitchen.yaml"
     eval "$env"
 }
 
@@ -62,7 +62,7 @@ ck_policy_all() { "$(_ck_conform_bin)" --policy "$1"; }
 
 # What a release archive leaves out, `dir <name>` / `file <name>` per line: the
 # central list ± this repo's dist_exclude/dist_include, already resolved. Read
-# through ckconform for the reason .ckconform is — one owner, in the language
+# through ckconform for the reason civikitchen.yaml is — one owner, in the language
 # that owns the list (toolbelt/ckconform/src/DistPaths.php). Non-zero when a
 # declared value is not a repo-relative path.
 ck_dist_paths() { "$(_ck_conform_bin)" --dist-paths; }
@@ -106,9 +106,9 @@ ck_re_vendored='(^|/)(node_modules|vendor|dist|build|bower_components|packages|\
 # Third-party source a repo carries verbatim outside those conventional
 # directories (a vendored upstream service in .docker/, say). Linting it means
 # either a permanently red gate or "fixing" code that has to stay byte-identical
-# to its upstream — so the repo declares it in .ckconform:
+# to its upstream — so the repo declares it in civikitchen.yaml:
 #
-#   vendored_paths=.docker/civiproxy/proxy -- unmodified SYSTOPIA CiviProxy
+#   policy.vendored_paths: [{path: .docker/civiproxy/proxy, reason: unmodified upstream CiviProxy}]
 #
 # Echoes an alternation of the declared prefixes, or nothing when none are
 # declared; a caller greps with `grep -Ev "$(ck_re_repo_vendored)"` only when

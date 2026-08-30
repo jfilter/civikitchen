@@ -139,6 +139,9 @@ COPY toolbelt/versions.env /tmp/versions.env
 # toolbelt/lib) and here (/usr/local/bin + /usr/local/lib). One source line, no
 # image-vs-checkout branch to keep in sync.
 COPY toolbelt/lib/ckcommon.sh /usr/local/lib/ckcommon.sh
+COPY toolbelt/bin/ck /usr/local/bin/ck
+COPY toolbelt/bin/ckprofile /usr/local/bin/ckprofile
+COPY toolbelt/bin/ckscenario /usr/local/bin/ckscenario
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
 # install-dev-tools.sh) and the cklint linter that runs it.
 COPY toolbelt/phpcs/CiviKitchen /opt/civikitchen-coder/CiviKitchen
@@ -156,7 +159,7 @@ COPY toolbelt/lib/composer-deps.php /opt/civikitchen-composer-deps.php
 # found' the moment CI first ran.
 COPY toolbelt/ckconform /opt/civikitchen-ckconform
 COPY toolbelt/bin/ckconform /usr/local/bin/ckconform
-# coverage gate: runs the suite with clover and enforces .ckconform's min_coverage
+# coverage gate: runs the suite with clover and enforces civikitchen.yaml's min_coverage
 COPY toolbelt/bin/ckcoverage /usr/local/bin/ckcoverage
 # mutation testing (infection): coverage's harder question, nightly-only.
 COPY toolbelt/bin/ckmutate /usr/local/bin/ckmutate
@@ -216,7 +219,7 @@ RUN CODER_REF="${CODER_REF}" \
         MAGO_VERSION="${MAGO_VERSION}" MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64}" \
         MAGO_SHA256_AARCH64="${MAGO_SHA256_AARCH64}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh /tmp/versions.env \
-    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
+    && chmod +x /usr/local/bin/ck /usr/local/bin/ckprofile /usr/local/bin/ckscenario /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
         /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktestreset \
         /usr/local/bin/ckcoretest \
         /usr/local/bin/cktaint \
@@ -260,6 +263,11 @@ COPY docker/runtime/patch-test-db-boot.php /usr/local/share/civikitchen/patch-te
 # applied at first boot after the auto-install (needs an admin user, see
 # docs/images.md).
 COPY docker/profiles /usr/local/share/civikitchen/profiles
+COPY packages/civicrm-profile-schema /usr/local/share/civikitchen/profile-schema
+COPY packages/civikitchen-scenario-schema /usr/local/share/civikitchen/scenario-schema
+RUN composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
+    --working-dir=/usr/local/share/civikitchen/scenario-schema \
+    && composer clear-cache
 
 COPY docker/standalone/entrypoint.sh /usr/local/bin/civikitchen-entrypoint
 RUN chmod +x /usr/local/bin/civikitchen-entrypoint

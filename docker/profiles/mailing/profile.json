@@ -6,7 +6,7 @@
   "apiUsers": [
     {
       "username": "readonly",
-      "role": "api_readonly",
+      "role": "civikitchen_api_readonly",
       "permissions": [
         "access CiviCRM",
         "access AJAX API",
@@ -19,7 +19,7 @@
     },
     {
       "username": "mailer",
-      "role": "api_mailer",
+      "role": "civikitchen_api_mailer",
       "permissions": [
         "access CiviCRM",
         "access AJAX API",

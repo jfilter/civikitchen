@@ -29,7 +29,7 @@ make_extension "$work/clean"
 "$root/scaffold/ckinit.php" "$work/clean" >/dev/null
 grep -q 'acme/example_ext' "$work/clean/composer.json"
 grep -q '"extends": \["config:recommended"\]' "$work/clean/renovate.json"
-if grep -R -q '__EXTKEY__\|__VENDOR__\|__RENOVATE_PRESET__' "$work/clean"; then
+if grep -R -q '__EXTKEY__\|__EXTENSION_KEY__\|__SCENARIO_NAME__\|__VENDOR__\|__RENOVATE_PRESET__' "$work/clean"; then
   echo "placeholder remained after rendering" >&2
   exit 1
 fi
@@ -41,15 +41,15 @@ grep -q 'example/example_ext' "$work/nokey/composer.json"
 
 # renovate_preset from the repo policy, or from the organisation defaults file.
 make_extension "$work/preset"
-printf '%s\n' 'renovate_preset=github>acme/renovate' > "$work/preset/.ckconform"
-"$root/scaffold/ckinit.php" "$work/preset" >/dev/null
+printf '%s\n' 'version: 1' 'policy:' '  renovate_preset: github>acme/renovate' > "$work/preset/civikitchen.yaml"
+"$root/scaffold/ckinit.php" --update "$work/preset" >/dev/null
 grep -q '"extends": \["github>acme/renovate"\]' "$work/preset/renovate.json"
 make_extension "$work/orgpreset"
-printf '%s\n' 'renovate_preset=github>org/renovate' > "$work/org-policy"
-CK_DEFAULT_POLICY="$work/org-policy" "$root/scaffold/ckinit.php" "$work/orgpreset" >/dev/null
+printf '%s\n' 'version: 1' 'policy:' '  renovate_preset: github>org/renovate' > "$work/org-policy"
+CK_DEFAULT_CONFIG="$work/org-policy" "$root/scaffold/ckinit.php" "$work/orgpreset" >/dev/null
 grep -q '"extends": \["github>org/renovate"\]' "$work/orgpreset/renovate.json"
-if CK_DEFAULT_POLICY="$work/missing" "$root/scaffold/ckinit.php" "$work/orgpreset" --update >/dev/null 2>&1; then
-  echo "an unreadable CK_DEFAULT_POLICY must fail" >&2
+if CK_DEFAULT_CONFIG="$work/missing" "$root/scaffold/ckinit.php" "$work/orgpreset" --update >/dev/null 2>&1; then
+  echo "an unreadable CK_DEFAULT_CONFIG must fail" >&2
   exit 1
 fi
 
@@ -107,8 +107,12 @@ grep -q '"edited": true' "$work/drift/composer.json"
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
 echo "$out" | grep -q 'up to date'
 
-# A deviation declared in .ckconform (with its mandatory reason) is respected.
-printf '%s\n' 'template_custom=.github/workflows/ci.yml -- bespoke pipeline' > "$work/drift/.ckconform"
+# A deviation declared in civikitchen.yaml (with its mandatory reason) is respected.
+php -r '
+  require $argv[1]; $f=$argv[2]; $d=ck_scenario_parse_yaml($f);
+  $d["policy"]["template_custom"]=["paths"=>[".github/workflows/ci.yml"],"reason"=>"bespoke pipeline"];
+  file_put_contents($f, ck_scenario_dump_yaml($d));
+' "$root/packages/civikitchen-scenario-schema/scenario.php" "$work/drift/civikitchen.yaml"
 printf '%s\n' '# local edit' >> "$work/drift/.github/workflows/ci.yml"
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
 echo "$out" | grep -q 'custom    .github/workflows/ci.yml'
@@ -116,13 +120,17 @@ echo "$out" | grep -q 'custom    .github/workflows/ci.yml'
 grep -q '# local edit' "$work/drift/.github/workflows/ci.yml"
 
 # ... but the reason is not optional, and only managed files may be listed.
-printf '%s\n' 'template_custom=.github/workflows/ci.yml' > "$work/drift/.ckconform"
+rewrite_with_sed '/reason:/d' "$work/drift/civikitchen.yaml"
 if "$root/scaffold/ckinit.php" --check "$work/drift" >/dev/null 2>&1; then
   echo "template_custom without a reason was accepted" >&2
   exit 1
 fi
 # A typo'd file name must fail loudly, not silently disable nothing.
-printf '%s\n' 'template_custom=composer.jsn -- edited anyway' > "$work/drift/.ckconform"
+php -r '
+  require $argv[1]; $f=$argv[2]; $d=ck_scenario_parse_yaml($f);
+  $d["policy"]["template_custom"]=["paths"=>["composer.jsn"],"reason"=>"edited anyway"];
+  file_put_contents($f, ck_scenario_dump_yaml($d));
+' "$root/packages/civikitchen-scenario-schema/scenario.php" "$work/drift/civikitchen.yaml"
 if "$root/scaffold/ckinit.php" --check "$work/drift" >/dev/null 2>&1; then
   echo "template_custom with a typo'd file name was accepted" >&2
   exit 1
@@ -130,9 +138,13 @@ fi
 
 # A SEEDED file declared custom may be absent: the repo owns its existence.
 # --check accepts the absence and --update must not reseed it.
-/bin/rm "$work/drift/.ckconform"
+/bin/rm "$work/drift/civikitchen.yaml"
 "$root/scaffold/ckinit.php" --update "$work/drift" >/dev/null
-printf '%s\n' 'template_custom=phpunit.xml.dist -- no PHP suite in this repo' > "$work/drift/.ckconform"
+php -r '
+  require $argv[1]; $f=$argv[2]; $d=ck_scenario_parse_yaml($f);
+  $d["policy"]["template_custom"]=["paths"=>["phpunit.xml.dist"],"reason"=>"no PHP suite in this repo"];
+  file_put_contents($f, ck_scenario_dump_yaml($d));
+' "$root/packages/civikitchen-scenario-schema/scenario.php" "$work/drift/civikitchen.yaml"
 /bin/rm "$work/drift/phpunit.xml.dist"
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
 echo "$out" | grep -q 'custom    phpunit.xml.dist'
@@ -144,7 +156,7 @@ fi
 
 # The executable bit is part of the managed contract (the one mode bit git
 # tracks); content-identical but chmod +x must read as drift.
-/bin/rm "$work/drift/.ckconform"
+/bin/rm "$work/drift/civikitchen.yaml"
 "$root/scaffold/ckinit.php" --update "$work/drift" >/dev/null
 chmod +x "$work/drift/phpstanBootstrap.php"
 if out=$("$root/scaffold/ckinit.php" --check "$work/drift" 2>&1); then

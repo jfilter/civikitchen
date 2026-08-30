@@ -148,7 +148,7 @@ else {
   // A repo may render some of its own MessageTemplates itself — token
   // substitution over `{placeholder}` rather than a Smarty pass — in which case
   // the body is not Smarty source and compiling it proves nothing. Declared in
-  // .ckconform (CK_SMARTY_SKIP holds the managed NAMES, comma-separated) so the
+  // civikitchen.yaml (CK_SMARTY_SKIP holds the managed NAMES, comma-separated) so the
   // exception is written down with its reason, next to the code.
   $skip = array_filter(array_map('trim', explode(',', (string) getenv('CK_SMARTY_SKIP'))));
   if ($skip) {

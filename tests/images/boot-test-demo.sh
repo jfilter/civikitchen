@@ -6,7 +6,7 @@
 # of the embedded DB and the demo entrypoint. An optional second argument
 # boots with CIVIKITCHEN_PROFILE=<profile>[,<profile>...] and additionally
 # asserts the runtime profile apply worked (each profile's extension
-# installed, credentials in the logs, one credentials line per apiUser even
+# installed, no credentials in the logs, one credentials line per apiUser even
 # when combined profiles share usernames).
 #
 # Usage:
@@ -103,7 +103,7 @@ fi
 
 # 5+6) Runtime profile apply worked, per profile in the (possibly
 # comma-separated) list: its first enabled extension is installed. Across all
-# of them: credentials were printed to the logs, and the credentials file has
+# of them: credentials stayed out of the logs, and the credentials file has
 # exactly one line per declared apiUser — combined profiles sharing a
 # username (e.g. "readonly") must upsert, not duplicate or drop.
 if [ -n "${PROFILE}" ]; then
@@ -119,9 +119,22 @@ if [ -n "${PROFILE}" ]; then
         else
             echo "  ✗ could not read profile.json for '${prof}' from the image"; fail=1
         fi
+        while IFS=$'\t' read -r git_key git_version; do
+            [ -n "${git_key}" ] || continue
+            git_path=$(docker exec -u buildkit -w "${WEB}" "${APP}" bash -lc \
+                "export PATH=/home/buildkit/buildkit/bin:\$PATH; cv ev 'echo CRM_Extension_System::singleton()->getFullContainer()->getPath(\"${git_key}\");'" \
+                2>/dev/null || true)
+            actual_commit=$(docker exec -u buildkit "${APP}" git -C "${git_path}" rev-parse HEAD 2>/dev/null || true)
+            check "profile extension ${git_key} is exact pinned commit" \
+                "[ '${actual_commit}' = '${git_version}' ]"
+        done < <(docker exec "${APP}" jq -r --arg uf "${UF}" \
+            '.dependencies[] | select(.repo) | select((.skipUf // []) | index($uf) | not) | [.name,.version] | @tsv' \
+            "/usr/local/share/civikitchen/profiles/${prof}/profile.json" 2>/dev/null || true)
     done
-    check "API credentials printed to docker logs" \
-        "grep -q 'API User Credentials' '${LOGFILE}'"
+    check "API credentials are absent from docker logs by default" \
+        "! grep -q 'API User Credentials' '${LOGFILE}'"
+    cred_mode=$(docker exec "${APP}" stat -c '%a' /home/buildkit/api-credentials.txt 2>/dev/null || true)
+    check "credentials file is mode 0600 (got ${cred_mode:-missing})" "[ '${cred_mode}' = 600 ]"
     creds_all=$(docker exec "${APP}" cat /home/buildkit/api-credentials.txt 2>/dev/null || true)
     for prof in "${PROFILES[@]}"; do
         while IFS= read -r u; do
@@ -131,11 +144,11 @@ if [ -n "${PROFILE}" ]; then
         done < <(docker exec "${APP}" jq -r '.apiUsers[].username' \
             "/usr/local/share/civikitchen/profiles/${prof}/profile.json" 2>/dev/null || true)
     done
-    # Seeds are deliberately non-fatal in apply.sh (one flaky seeder must not
-    # block the boot), so a broken seed still turns the container healthy —
-    # catch it here instead.
-    if grep -q 'WARN: .*failed (non-fatal)' "${LOGFILE}"; then
-        echo "  ✗ profile seed failure in logs:"; grep 'WARN: .*failed (non-fatal)' "${LOGFILE}"; fail=1
+    # A seed failure aborts provisioning and therefore prevents a healthy
+    # container. Keep the log assertion as defense in depth against a future
+    # driver accidentally swallowing the error again.
+    if grep -q 'ERROR: profile seed failed:' "${LOGFILE}"; then
+        echo "  ✗ profile seed failure in logs:"; grep 'ERROR: profile seed failed:' "${LOGFILE}"; fail=1
     else
         echo "  ✓ no profile seed failures in logs"
     fi

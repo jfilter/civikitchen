@@ -24,16 +24,17 @@ final class HookStyleCheckTest extends CheckTestCase
     public function testFailsOnAnUnknownStyleValue(): void
     {
         $context = $this->repo([
-            '.ckconform' => "hook_style=events\n",
+            '__policy_fixture' => "hook_style=events\n",
             'fixture.php' => "<?php\n",
         ]);
-        $this->assertFails($this->run_(new HookStyleCheck(), $context), "unknown hook_style 'events'");
+        $this->expectException(\RuntimeException::class);
+        $this->run_(new HookStyleCheck(), $context);
     }
 
     public function testWarnsOnAClassicBusinessHook(): void
     {
         $context = $this->repo([
-            '.ckconform' => "hook_style=listener\n",
+            '__policy_fixture' => "hook_style=listener\n",
             'info.xml' => $this->infoXml(extra: '<mixins><mixin>scan-classes@1.0.0</mixin></mixins>'),
             'fixture.php' => <<<'PHP'
                 <?php
@@ -52,7 +53,7 @@ final class HookStyleCheckTest extends CheckTestCase
         // Pre-boot, lifecycle, the civix config stub and return-value hooks are
         // exactly what the style permits as functions.
         $context = $this->repo([
-            '.ckconform' => "hook_style=listener\n",
+            '__policy_fixture' => "hook_style=listener\n",
             'info.xml' => $this->infoXml(extra: '<mixins><mixin>scan-classes@1.0.0</mixin></mixins>'),
             'fixture.php' => <<<'PHP'
                 <?php
@@ -80,7 +81,7 @@ final class HookStyleCheckTest extends CheckTestCase
         // HookDispatchNameCheck owns the wrong-prefix verdict; reporting it
         // here too would double every message.
         $context = $this->repo([
-            '.ckconform' => "hook_style=listener\n",
+            '__policy_fixture' => "hook_style=listener\n",
             'fixture.php' => <<<'PHP'
                 <?php
                 function otherext_civicrm_post($op) {
@@ -94,7 +95,7 @@ final class HookStyleCheckTest extends CheckTestCase
     {
         // The style's own failure mode: the class registers nothing.
         $context = $this->repo([
-            '.ckconform' => "hook_style=listener\n",
+            '__policy_fixture' => "hook_style=listener\n",
             'Civi/Fixture/Listener.php' => <<<'PHP'
                 <?php
                 namespace Civi\Fixture;
@@ -116,7 +117,7 @@ final class HookStyleCheckTest extends CheckTestCase
     public function testListenerClassesWithTheMixinAreSilent(): void
     {
         $context = $this->repo([
-            '.ckconform' => "hook_style=listener\n",
+            '__policy_fixture' => "hook_style=listener\n",
             'info.xml' => $this->infoXml(extra: '<mixins><mixin>scan-classes@1.0.0</mixin></mixins>'),
             'Civi/Fixture/Listener.php' => <<<'PHP'
                 <?php
@@ -138,7 +139,7 @@ final class HookStyleCheckTest extends CheckTestCase
     {
         // Token-judged: prose in a comment must not trigger the mixin warning.
         $context = $this->repo([
-            '.ckconform' => "hook_style=listener\n",
+            '__policy_fixture' => "hook_style=listener\n",
             'fixture.php' => <<<'PHP'
                 <?php
                 // One day this should become an AutoSubscriber.

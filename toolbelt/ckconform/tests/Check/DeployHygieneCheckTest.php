@@ -91,7 +91,7 @@ final class DeployHygieneCheckTest extends CheckTestCase
     public function testPolicyAllowsDeclaredPaths(): void
     {
         $context = $this->repo([
-            '.ckconform' => "deploy-hygiene=data/plz_wk.csv,spec/interface.pdf -- shipped on purpose\n",
+            '__policy_fixture' => "deploy_hygiene=data/plz_wk.csv,spec/interface.pdf -- shipped on purpose\n",
             'data/plz_wk.csv' => "plz,wk\n",
             'spec/interface.pdf' => '%PDF-1.4',
         ], git: true);
@@ -101,7 +101,7 @@ final class DeployHygieneCheckTest extends CheckTestCase
     public function testPolicyOnlyExemptsTheDeclaredPath(): void
     {
         $context = $this->repo([
-            '.ckconform' => "deploy-hygiene=data/plz_wk.csv -- shipped on purpose\n",
+            '__policy_fixture' => "deploy_hygiene=data/plz_wk.csv -- shipped on purpose\n",
             'data/plz_wk.csv' => "plz,wk\n",
             '.env' => "SECRET=1\n",
         ], git: true);

@@ -13,7 +13,7 @@ use CiviKitchen\Ckconform\Suppressions;
 /**
  * Enforces a repo-declared hook implementation style.
  *
- * Opt-in via `.ckconform`: `hook_style=listener` states that business hook
+ * Opt-in via `civikitchen.yaml`: `hook_style=listener` states that business hook
  * logic lives in scan classes (AutoSubscriber / HookInterface, registered by
  * the scan-classes mixin), and that the classic `<prefix>_civicrm_<suffix>()`
  * function form is reserved for the hooks that technically allow nothing else:
@@ -76,7 +76,7 @@ final class HookStyleCheck implements Check
         }
         if ($style !== 'listener') {
             $reporter->fail(sprintf(
-                ".ckconform: unknown hook_style '%s' — the only supported value is 'listener'",
+                "civikitchen.yaml: unknown hook_style '%s' — the only supported value is 'listener'",
                 $style,
             ));
             return;

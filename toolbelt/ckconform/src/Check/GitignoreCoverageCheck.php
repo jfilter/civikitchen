@@ -43,7 +43,7 @@ final class GitignoreCoverageCheck implements Check
             return;
         }
 
-        // vendor=committed -- <reason> in .ckconform: the repo ships vendor/
+        // vendor=committed -- <reason> in civikitchen.yaml: the repo ships vendor/
         // deliberately, so demanding an ignore pattern for it is nonsense.
         $vendorPolicy = $context->policyValue('vendor');
         $allowVendor = $vendorPolicy !== null && str_starts_with($vendorPolicy, 'committed');

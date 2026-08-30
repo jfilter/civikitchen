@@ -29,7 +29,7 @@ jobs:
           persist-credentials: false
 
       # shellcheck (style level, fails on any finding) + actionlint + zizmor
-      # + php -l + the profile.json schema. actionlint's installer is piped
+      # + php -l + the profile/scenario schemas and their fixtures. actionlint's installer is piped
       # into bash, so the Makefile pins its content hash as well as its tag.
       - name: Static checks
         run: make lint

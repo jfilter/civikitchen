@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 $templateDir = __DIR__ . '/template/extension';
+$yamlAutoload = dirname(__DIR__) . '/packages/civikitchen-scenario-schema/vendor/autoload.php';
+if (!is_file($yamlAutoload)) {
+  fwrite(STDERR, "ckinit: YAML parser dependency is missing; run composer install --working-dir=packages/civikitchen-scenario-schema\n");
+  exit(2);
+}
 
 /**
  * Template files civikitchen OWNS: identical in every conforming repo, safe to
@@ -11,9 +16,9 @@ $templateDir = __DIR__ . '/template/extension';
  * file, .gitignore) and then belongs to the extension — repos edit those, so
  * ckinit never touches them again.
  *
- * A repo that must deviate on a managed file declares it in its .ckconform:
+ * A repo that must deviate on a managed file declares it in civikitchen.yaml:
  *
- *   template_custom=.docker/docker-compose.ci.yml -- sibling mounts for e2e
+ *   policy.template_custom.paths: [.docker/docker-compose.ci.yml]
  */
 const MANAGED_FILES = [
   '.gitattributes',
@@ -36,6 +41,7 @@ const MANAGED_FILES = [
  */
 const SEEDED_FILES = [
   '.gitignore',
+  'civikitchen.yaml',
   '.docker/docker-compose.yml',
   'composer.json',
   // The file calls itself a "project layer" and it means it: repos scope out
@@ -88,9 +94,8 @@ Some managed files carry marked blocks:
   # BEGIN CIVIKITCHEN MANAGED <name> … # END CIVIKITCHEN MANAGED <name>
 Only the blocks are managed (compared, refreshed); what a repo writes outside
 them — extra workflow inputs and jobs, a sibling mount — is its own. A repo
-that must deviate INSIDE a block, or on a file without blocks, lists it in
-.ckconform:
-  template_custom=<file>[,<file>...] -- <reason>
+that must deviate INSIDE a block, or on a file without blocks, lists paths and
+a non-empty reason under policy.template_custom in civikitchen.yaml.
 
 Typical flow:
   civix generate:module org.example.myext
@@ -161,6 +166,8 @@ if ($extensionFile === '' || preg_match('/^[a-zA-Z][a-zA-Z0-9_]*$/', $extensionF
   fwrite(STDERR, "ckinit: info.xml has an invalid or missing <file> value\n");
   exit(2);
 }
+$scenarioName = strtolower((string) preg_replace('/[^a-zA-Z0-9_-]+/', '-', $extensionFile));
+if (preg_match('/^[a-z]/', $scenarioName) !== 1) $scenarioName = 'extension-' . $scenarioName;
 
 // Composer vendor from the reverse-domain key: `org.example.myext` -> `example`.
 $keySegments = explode('.', trim((string) $xml['key']));
@@ -169,7 +176,7 @@ if (preg_match('/^[a-z0-9]([a-z0-9_.-]*[a-z0-9])?$/', $vendor) !== 1) {
   $vendor = 'example';
 }
 
-// Template files the repo has declared custom, from .ckconform (same KEY=VALUE
+// Template files the repo has declared custom, from civikitchen.yaml (same KEY=VALUE
 // format ckconform reads; first occurrence wins). The reason after ' -- ' is
 // mandatory — an unexplained exception is indistinguishable from a stale one.
 // For a MANAGED file, custom means "the content is this repo's own"; for a
@@ -180,22 +187,28 @@ if (preg_match('/^[a-z0-9]([a-z0-9_.-]*[a-z0-9])?$/', $vendor) !== 1) {
 // a typo still fails loudly instead of disabling nothing.
 //
 // The parser is ckconform's, required straight out of the checkout this script
-// runs from: a private copy of the same loop is how .ckconform came to have
+// runs from: a private copy of the same loop is how civikitchen.yaml came to have
 // seven readers that disagreed on whitespace, comments and the reason suffix.
 // ckinit runs on a bare runner with no image, so it cannot shell out to
 // `ckconform --policy-env` the way the ck* tools do — but it is PHP, so it can
 // use the very class that command uses.
+require_once $yamlAutoload;
 require_once dirname(__DIR__) . '/toolbelt/ckconform/src/Policy.php';
 
 $custom = [];
-$policyRaw = is_file($target . '/.ckconform') ? file_get_contents($target . '/.ckconform') : FALSE;
+$legacyPolicy = $target . '/' . \CiviKitchen\Ckconform\Policy::LEGACY_FILE;
+if (is_file($legacyPolicy)) {
+  fwrite(STDERR, "ckinit: legacy policy file is no longer supported; migrate it to civikitchen.yaml\n");
+  exit(2);
+}
+$policyRaw = is_file($target . '/civikitchen.yaml') ? file_get_contents($target . '/civikitchen.yaml') : FALSE;
 if (is_string($policyRaw)) {
   $declared = \CiviKitchen\Ckconform\Policy::parse($policyRaw)['template_custom'] ?? [];
   // First occurrence wins, as before; ckconform's policy-key check is what
   // reports a second line that would silently do nothing.
   foreach (array_slice($declared, 0, 1) as $value) {
     if (preg_match('/\s--\s\S/', $value) !== 1) {
-      fwrite(STDERR, "ckinit: template_custom in .ckconform needs a reason: template_custom=<file>,... -- <reason>\n");
+      fwrite(STDERR, "ckinit: policy.template_custom in civikitchen.yaml needs paths and a reason\n");
       exit(2);
     }
     $value = (string) preg_replace('/\s--\s.*$/', '', $value);
@@ -215,7 +228,7 @@ if (is_string($policyRaw)) {
 }
 
 // The Renovate preset the managed renovate.json extends. An organisation
-// sets it once in the CK_DEFAULT_POLICY file rather than per repo, which is
+// sets it once in the CK_DEFAULT_CONFIG file rather than per repo, which is
 // why this goes through the layered view; the repo file can still override.
 try {
   $effective = \CiviKitchen\Ckconform\Policy::effective(is_string($policyRaw) ? $policyRaw : NULL);
@@ -252,7 +265,11 @@ foreach ($iterator as $item) {
     $destination,
     $relative,
     $item->getPerms() & 0777,
-    str_replace(['__EXTKEY__', '__VENDOR__', '__RENOVATE_PRESET__'], [$extensionFile, $vendor, $renovatePreset], $content),
+    str_replace(
+      ['__EXTKEY__', '__EXTENSION_KEY__', '__SCENARIO_NAME__', '__VENDOR__', '__RENOVATE_PRESET__'],
+      [$extensionFile, trim((string) $xml['key']), $scenarioName, $vendor, $renovatePreset],
+      $content,
+    ),
   ];
   if ($mode === 'seed' && (file_exists($destination) || is_link($destination)) && !$force) {
     $conflicts[] = $relative;
@@ -416,7 +433,7 @@ $missing = [];
 foreach ($files as [$destination, $relative, $perms, $content]) {
   $managed = in_array($relative, MANAGED_FILES, TRUE);
   if (isset($custom[$relative])) {
-    fwrite(STDOUT, "custom    {$relative} (.ckconform template_custom)\n");
+    fwrite(STDOUT, "custom    {$relative} (civikitchen.yaml template_custom)\n");
     continue;
   }
   assertRegular($destination, $relative);
@@ -485,5 +502,5 @@ if ($drifted === [] && $missing === []) {
 }
 fwrite(STDERR, "\nckinit: " . count($drifted) . " drifted / " . count($missing)
   . " missing template file(s). Run scaffold/ckinit.php --update <dir> to refresh,\n"
-  . "or declare a deliberate deviation in .ckconform: template_custom=<file> -- <reason>\n");
+  . "or declare a deliberate deviation under policy.template_custom in civikitchen.yaml\n");
 exit(1);

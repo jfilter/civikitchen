@@ -75,7 +75,7 @@ final class CiCoverageCheckTest extends CheckTestCase
     public function testADeclaredFloorWithoutCkcoverageFails(): void
     {
         $context = $this->repo([
-            '.ckconform' => "min_coverage=54\n",
+            '__policy_fixture' => "min_coverage=54\n",
             'tests/phpunit/SomeTest.php' => '<?php',
             '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: phpunit --coverage-text tests/phpunit\n",
         ]);
@@ -85,7 +85,7 @@ final class CiCoverageCheckTest extends CheckTestCase
     public function testADeclaredFloorWithCkcoveragePasses(): void
     {
         $context = $this->repo([
-            '.ckconform' => "min_coverage=54\n",
+            '__policy_fixture' => "min_coverage=54\n",
             'tests/phpunit/SomeTest.php' => '<?php',
             '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: ckcoverage tests/phpunit\n",
         ]);
@@ -96,7 +96,7 @@ final class CiCoverageCheckTest extends CheckTestCase
     public function testCallingTheSharedCiCountsAsRunningCkcoverage(): void
     {
         $context = $this->repo([
-            '.ckconform' => "min_coverage=54\n",
+            '__policy_fixture' => "min_coverage=54\n",
             'tests/phpunit/SomeTest.php' => '<?php',
             '.github/workflows/ci.yml' => "jobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n    with:\n      key: x\n",
         ]);

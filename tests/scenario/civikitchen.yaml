@@ -1,0 +1,20 @@
+version: 1
+scenario:
+  name: ckscenario-runtime
+  image: ghcr.io/jfilter/civikitchen:standalone
+  database:
+    image: mariadb:10.11
+  extension:
+    key: ckbootfixture
+    path: ../images/fixtures/ckbootfixture
+  trust_external_extension: true
+  site_url: http://localhost:8290
+  http_port: 8290
+  profiles:
+    - minimal
+  profile_paths:
+    - ../images/fixtures/external-profile
+  trust_external_profiles: true
+  credentials_output: file
+  checks:
+    - javascript

@@ -6,7 +6,6 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
-use CiviKitchen\Ckconform\HookSurface;
 use CiviKitchen\Ckconform\Registry;
 use CiviKitchen\Ckconform\Reporter;
 use CiviKitchen\Ckconform\Suppressions;
@@ -43,15 +42,18 @@ final class SuppressionHygieneCheck implements Check
     {
         $known = null;
 
-        foreach (HookSurface::candidates($context) as $file) {
+        $files = $context->isGitRepo() ? $context->trackedFiles() : $context->findFiles('');
+        foreach ($files as $file) {
             $contents = $context->read($file);
             if ($contents === null || !str_contains($contents, 'ckconform-ignore')) {
                 continue;
             }
-            $suppressions = Suppressions::of($contents);
+            $suppressions = preg_match('/\.(?:[cm]?[jt]sx?)$/', $file) === 1
+                ? Suppressions::ofLineComments($contents)
+                : Suppressions::of($contents);
 
             foreach ($suppressions->missingReason() as $line) {
-                $reporter->warn(sprintf(
+                $reporter->warnAt($file, $line, sprintf(
                     '%s:%d: ckconform-ignore without a reason suppresses nothing — write `ckconform-ignore <check> -- <reason>`',
                     $file,
                     $line,
@@ -61,7 +63,7 @@ final class SuppressionHygieneCheck implements Check
             $known ??= array_map(static fn (Check $c): string => $c->name(), Registry::all());
             foreach ($suppressions->entries() as $entry) {
                 foreach (array_diff($entry['names'], $known) as $unknown) {
-                    $reporter->warn(sprintf(
+                    $reporter->warnAt($file, $entry['line'], sprintf(
                         "%s:%d: ckconform-ignore names an unknown check '%s' — a dead ignore never matches",
                         $file,
                         $entry['line'],
@@ -77,7 +79,7 @@ final class SuppressionHygieneCheck implements Check
                 ) {
                     continue;
                 }
-                $reporter->warn(sprintf(
+                $reporter->warnAt($file, $unused['line'], sprintf(
                     "%s:%d: ckconform-ignore%s for '%s' suppressed nothing — the finding it silenced is gone, remove it",
                     $file,
                     $unused['line'],

@@ -16,11 +16,18 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # The floor is a decision about which images keep their tools, see
 # toolbelt/psalm/README.md. Raising it drops the older CiviCRM lines.
 FLOOR=8.1.31
-ROOTS=(phpcs-root phpstan-root rector psalm)
+ROOTS=(
+    toolbelt/phpcs-root
+    toolbelt/phpstan-root
+    toolbelt/rector
+    toolbelt/psalm
+    packages/civikitchen-scenario-schema
+)
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-for r in "${ROOTS[@]}"; do
-    dir="$root/toolbelt/$r"
+for relative in "${ROOTS[@]}"; do
+    r="$(basename "$relative")"
+    dir="$root/$relative"
     [ -f "$dir/composer.json" ] || fail "$r: no composer.json"
     [ -f "$dir/composer.lock" ] || fail "$r: no composer.lock — the image installs from it"
 
@@ -33,7 +40,7 @@ for r in "${ROOTS[@]}"; do
     [ "$got" = "$FLOOR" ] || fail "$r: lock was resolved against '${got:-no override}', expected $FLOOR — re-lock it"
 
     composer validate --working-dir="$dir" --no-check-publish --no-check-all --quiet \
-        || fail "$r: composer.json and composer.lock disagree — run composer update --working-dir=toolbelt/$r"
+        || fail "$r: composer.json and composer.lock disagree — run composer update --working-dir=$relative"
 done
 
 echo "tool lock suite OK (${#ROOTS[@]} roots, floor $FLOOR)"

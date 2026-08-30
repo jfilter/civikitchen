@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `vendored_paths` in .ckconform keeps third-party source a repo carries
+# `policy.vendored_paths` in civikitchen.yaml keeps third-party source a repo carries
 # verbatim out of the file lists cklint/ckfmt/ckeslint build. Without it a repo
 # can only choose between a permanently red gate and reformatting code that has
 # to stay byte-identical to its upstream.
@@ -30,12 +30,17 @@ list() {
     | ck_drop_repo_vendored || true; }
 }
 
-# No .ckconform at all: the filter must be a no-op, not a filter that drops
+# No civikitchen.yaml at all: the filter must be a no-op, not a filter that drops
 # everything (an empty `grep -Ev` pattern matches every line).
 [ "$(list | wc -l | tr -d ' ')" = 2 ] \
-  || fail "without .ckconform the file list should hold both files, got: $(list | tr '\n' ' ')"
+  || fail "without civikitchen.yaml the file list should hold both files, got: $(list | tr '\n' ' ')"
 
-printf '%s\n' 'vendored_paths=.docker/upstream/proxy -- unmodified upstream, must stay byte-identical' > .ckconform
+printf '%s\n' \
+  'version: 1' \
+  'policy:' \
+  '  vendored_paths:' \
+  '    - path: .docker/upstream/proxy' \
+  '      reason: unmodified upstream, must stay byte-identical' > civikitchen.yaml
 list | grep -q '^own/Thing.php$' || fail "the repo's own file was dropped"
 list | grep -q 'upstream/proxy' && fail "the declared vendored path was still listed"
 
@@ -49,7 +54,9 @@ list | grep -q '^other/.docker/upstream/proxy/proxy.php$' \
 # the same path, not just a nested one like .docker/upstream/proxy.
 mkdir -p mixin
 printf '<?php\n' > mixin/polyfill.php
-printf '%s\n' 'vendored_paths=mixin -- upstream polyfill, copied verbatim' >> .ckconform
+printf '%s\n' \
+  '    - path: mixin' \
+  '      reason: upstream polyfill, copied verbatim' >> civikitchen.yaml
 list | grep -q '^mixin/polyfill.php$' && fail "a top-level vendored prefix was still listed"
 
 # phpcs keeps only the FIRST --ignore it is given and discards every later one.

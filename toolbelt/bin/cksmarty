@@ -56,6 +56,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 ck_require_extension_root
+ck_policy_load
 
 # The extension KEY from its own info.xml, not the directory name: that is the
 # name CiviCRM registered the templates and managed entities under.
@@ -79,7 +80,7 @@ fi
 # the environment — `cv scr` forwards no argv of its own, and runuser (the cv
 # wrapper's drop to www-data) keeps the environment.
 # MessageTemplates the repo renders itself (token substitution, not a Smarty
-# pass) are declared in .ckconform with a reason; compiling them proves nothing.
+# pass) are declared in civikitchen.yaml with a reason; compiling them proves nothing.
 ck_smarty_skip=''
 while IFS= read -r ck_line; do
   [ -n "$ck_line" ] || continue

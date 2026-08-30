@@ -60,6 +60,14 @@ if [ ! -d "${BK_CONFIG}/drupal11-demo" ]; then
     chown -R buildkit:buildkit "${BK_CONFIG}/drupal11-demo"
 fi
 
+# Configuration mistakes are deterministic and must not enter the network
+# retry loop below (which would waste over 45 seconds and misreport the cause
+# as a transient download failure).
+if [ ! -f "${BK_CONFIG}/${DEFAULT_SITE_TYPE}/download.sh" ]; then
+    echo "bake.sh: unknown or incomplete civibuild site type '${DEFAULT_SITE_TYPE}' (missing ${BK_CONFIG}/${DEFAULT_SITE_TYPE}/download.sh)" >&2
+    exit 1
+fi
+
 # Run civibuild as the buildkit user (it owns the site tree). The heredoc is
 # expanded by THIS shell (so ${DEFAULT_SITE_TYPE}/${CIVICRM_CREATE_VERSION}
 # resolve); \$PATH is escaped so it expands inside the buildkit shell.

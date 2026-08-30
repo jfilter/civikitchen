@@ -234,8 +234,8 @@ final class Context
     }
 
     /**
-     * Repo policy from the optional `.ckconform`: KEY=VALUE, '#' comments,
-     * over the organisation-wide defaults file CK_DEFAULT_POLICY names.
+     * Repo policy from civikitchen.yaml over the organisation-wide defaults
+     * file CK_DEFAULT_CONFIG names.
      * The mechanism is public (it ships in this image), the values are not —
      * they live in the consuming repo, so a private licence policy stays private.
      *
@@ -244,12 +244,9 @@ final class Context
     public function policy(): array
     {
         if ($this->policy === null) {
-            // First occurrence wins, which is the scalar view of Policy::parse.
-            // The parser itself lives there because it has other readers now:
-            // ckinit, and every ck* tool through `ckconform --policy-env`.
             $this->policy = array_map(
                 static fn (array $values): string => $values[0],
-                Policy::effective($this->read('.ckconform')),
+                Policy::effective($this->read(Policy::CONFIG_FILE)),
             );
         }
 
@@ -286,6 +283,12 @@ final class Context
         $value = $this->policy()[$key] ?? null;
 
         return ($value === null || $value === '') ? null : $value;
+    }
+
+    /** @return list<string> */
+    public function policyValues(string $key): array
+    {
+        return Policy::effective($this->read(Policy::CONFIG_FILE))[$key] ?? [];
     }
 
     public function isGitRepo(): bool

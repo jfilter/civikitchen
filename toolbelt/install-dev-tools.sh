@@ -61,7 +61,7 @@ PHPUNIT_VERSION="${PHPUNIT_VERSION:-$CK_PHPUNIT_VERSION}"
 # Applied as a CEILING (see the require below), because images for older
 # CiviCRM lines run on PHP 8.1/8.2 and recent infection rejects those. The
 # ceiling still holds the SCORE: an engine that gained mutators would push a
-# repo through its .ckconform floor with no code change.
+# repo through its civikitchen.yaml floor with no code change.
 INFECTION_VERSION="${INFECTION_VERSION:-0.34.1}"
 # mago powers the PHP half of `ckfmt`. A formatter that changes its output
 # after an unrelated rebuild would turn every repo's format gate red, so the

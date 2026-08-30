@@ -22,6 +22,7 @@ Testing a CiviCRM extension properly means running it against a real CiviCRM —
 - **A fast dev loop** — mount your extension, `docker compose up`, edit, reload, `phpunit`.
 - **Shared workflow across CMS flavors** — profiles, dev tools, SMTP capture, extension provisioning, and init hooks work consistently on Standalone, Drupal 10/11, WordPress, and Joomla; CMS-specific install knobs are documented per image.
 - **Batteries included** — composer, node, civix, phpunit 9, phpstan, phpcs + civicrm/coder, xdebug, pcov, plus the `ck*` tool belt: `cklint` (opinionated extension linting — phpcs standard + mago bug-pattern rules), `ckconform` (repo-structure conformance), `ckcoverage` (coverage with an enforced floor), `ckrelease` (version check + the installable dist zip), `ckmodernize` (civix + Rector modernization, incl. opt-in assisted API3→API4 rewrites), `cktaint` (taint analysis: request input reaching a query, shell, path or redirect — SQL/shell/include/unserialize/SSRF block), `cksmarty` (compile every template with the real CRM_Core_Smarty), `ckeslint` (pinned oxlint baseline for extension JS/TS), `ckfmt` (code formatting — mago for PHP, oxfmt for JS/TS, tuned to agree with the phpcs standard), `ckschemadiff` (install-vs-upgrade schema parity), `cktestreset` (reset the headless-test scratch DB), and `ckcoretest` (run CiviCRM core's own phpunit suites against the installed core).
+- **One entry point** — `ck help` exposes the toolbelt as subcommands (`ck conform`, `ck lint`, `ck test`, `ck lifecycle`, `ck release`, …); the established `ck*` command names remain compatible.
 - **Realistic demo data via profiles** — one env var installs a curated extension stack, seed data, and API users (e.g. a German Verein with SEPA mandates and membership history).
 
 ## Pick an image
@@ -72,7 +73,13 @@ docker run -d -p 80:80 --name civicrm \
 docker logs -f civicrm            # first boot clones extensions — needs network, takes a few minutes
 ```
 
-Available profiles: [`verein`, `fundraising`, `events`, `mailing`](docs/images.md#profiles-civikitchen_profile) — each with seed data and least-privilege API users (credentials land in the logs and in the container). One thing to know about demo images: the database lives inside the container — great for demos and screenshots, wrong for data you want to keep. To run on a port other than 80, set `CIVIKITCHEN_SITE_URL` to match (e.g. `-p 8080:80 -e CIVIKITCHEN_SITE_URL=http://localhost:8080`).
+Available profiles: [`verein`, `fundraising`, `events`, `mailing`](docs/images.md#profiles-civikitchen_profile) — each with seed data and least-privilege API users (credentials are kept in a mode-`0600` container file, not logs). One thing to know about demo images: the database lives inside the container — great for demos and screenshots, wrong for data you want to keep. To run on a port other than 80, set `CIVIKITCHEN_SITE_URL` to match (e.g. `-p 8080:80 -e CIVIKITCHEN_SITE_URL=http://localhost:8080`).
+
+Mount custom profile roots read-only, set `CIVIKITCHEN_PROFILE_PATH`, and make
+the execution boundary explicit with `CIVIKITCHEN_TRUST_EXTERNAL_PROFILES=1`;
+external profiles may contain shell drivers and admin-level PHP seeds. `ck
+profile validate <dir>` validates their data shape locally and at boot, but is
+not a code sandbox.
 
 ## CI usage
 
@@ -98,6 +105,7 @@ Details in [Custom or older CiviCRM versions](docs/images.md#custom-or-older-civ
 - [Releases](docs/releases.md) — the versioned contract extension repos pin (`@v1` / `:v1`), how a release is cut
 - [Releasing an extension](docs/extension-releases.md) — the other direction: how a consuming extension repo cuts *its* release (`ckrelease`, the shared `extension-release.yml`)
 - [Reusable CI building blocks](docs/reusable-workflows.md) — frontend, standalone Playwright, and lightweight repository checks beside `extension-ci.yml`
+- [Unified configuration](docs/scenarios.md) — one validated `civikitchen.yaml` for repository policy, image, DB, locale, profile selection, mounts, and checks; profile definitions remain in `profile.json`
 
 ## Reliability
 

@@ -144,7 +144,7 @@ final class GitignoreCoverageCheckTest extends CheckTestCase
     public function testVendorPolicySkipsVendorIgnoreDemand(): void
     {
         $context = $this->repo([
-            '.ckconform' => "vendor=committed -- extensions deploy without composer install\n",
+            '__policy_fixture' => "vendor=committed -- extensions deploy without composer install\n",
             '.gitignore' => "node_modules/\n",
             'composer.json' => '{}',
             'vendor/autoload.php' => "<?php\n",

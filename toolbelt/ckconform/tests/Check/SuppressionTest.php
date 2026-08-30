@@ -39,7 +39,7 @@ final class SuppressionTest extends CheckTestCase
     public function testAFileIgnoreSilencesEveryFindingInTheFile(): void
     {
         $context = $this->repo([
-            '.ckconform' => "hook_style=listener\n",
+            '__policy_fixture' => "hook_style=listener\n",
             'info.xml' => $this->infoXml(extra: '<mixins><mixin>scan-classes@1.0.0</mixin></mixins>'),
             'fixture.php' => <<<'PHP'
                 <?php

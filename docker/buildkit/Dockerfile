@@ -108,6 +108,9 @@ COPY toolbelt/versions.env /tmp/versions.env
 # toolbelt/lib) and here (/usr/local/bin + /usr/local/lib). One source line, no
 # image-vs-checkout branch to keep in sync.
 COPY toolbelt/lib/ckcommon.sh /usr/local/lib/ckcommon.sh
+COPY toolbelt/bin/ck /usr/local/bin/ck
+COPY toolbelt/bin/ckprofile /usr/local/bin/ckprofile
+COPY toolbelt/bin/ckscenario /usr/local/bin/ckscenario
 # The bundled CiviKitchen phpcs standard (registered into installed_paths by
 # install-dev-tools.sh) and the cklint linter that runs it.
 COPY toolbelt/phpcs/CiviKitchen /opt/civikitchen-coder/CiviKitchen
@@ -124,7 +127,7 @@ COPY toolbelt/lib/composer-deps.php /opt/civikitchen-composer-deps.php
 # stays a thin shim so every caller and CI job is unaffected.
 COPY toolbelt/ckconform /opt/civikitchen-ckconform
 COPY toolbelt/bin/ckconform /usr/local/bin/ckconform
-# coverage gate: runs the suite with clover and enforces .ckconform's min_coverage
+# coverage gate: runs the suite with clover and enforces civikitchen.yaml's min_coverage
 COPY toolbelt/bin/ckcoverage /usr/local/bin/ckcoverage
 # mutation testing (infection): coverage's harder question, nightly-only.
 COPY toolbelt/bin/ckmutate /usr/local/bin/ckmutate
@@ -170,7 +173,7 @@ RUN CODER_REF="${CODER_REF}" \
         MAGO_VERSION="${MAGO_VERSION}" MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64}" \
         MAGO_SHA256_AARCH64="${MAGO_SHA256_AARCH64}" \
         bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh /tmp/versions.env \
-    && chmod +x /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
+    && chmod +x /usr/local/bin/ck /usr/local/bin/ckprofile /usr/local/bin/ckscenario /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
        /usr/local/bin/ckphpunit /usr/local/bin/cklifecycle \
         /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktaint \
         /usr/local/bin/cksmarty /usr/local/bin/ckschemadiff /usr/local/bin/ckeslint \
@@ -205,6 +208,14 @@ COPY docker/buildkit/ext/ckjoomlaidentity /usr/local/share/civikitchen/ext/ckjoo
 # before `civibuild create`; shipped in the base stage so the builder bake and
 # any runtime `civibuild` invocation see the same definition.
 COPY docker/buildkit/site-types /usr/local/share/civikitchen/site-types
+
+# The scenario CLI parses the canonical civikitchen.yaml with Symfony's
+# maintained YAML component. Install it once in the shared base so both final
+# and demo targets inherit the exact locked parser without runtime downloads.
+COPY packages/civikitchen-scenario-schema /usr/local/share/civikitchen/scenario-schema
+RUN composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
+    --working-dir=/usr/local/share/civikitchen/scenario-schema \
+    && composer clear-cache
 
 # buildkit user owns the site tree so civibuild can write to it. Apache is
 # reconfigured to run as buildkit so the served files match the writer's uid
@@ -336,6 +347,8 @@ COPY docker/runtime/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.
 COPY docker/runtime/provision.sh /usr/local/share/civikitchen/provision.sh
 COPY docker/buildkit/entrypoint-common.sh /usr/local/share/civikitchen/entrypoint-common.sh
 COPY docker/profiles /usr/local/share/civikitchen/profiles
+COPY packages/civicrm-profile-schema /usr/local/share/civikitchen/profile-schema
+COPY packages/civikitchen-scenario-schema /usr/local/share/civikitchen/scenario-schema
 
 COPY docker/buildkit/entrypoint-demo.sh /home/buildkit/entrypoint.sh
 RUN chmod +x /home/buildkit/entrypoint.sh
@@ -396,6 +409,8 @@ COPY docker/runtime/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.
 COPY docker/runtime/provision.sh /usr/local/share/civikitchen/provision.sh
 COPY docker/buildkit/entrypoint-common.sh /usr/local/share/civikitchen/entrypoint-common.sh
 COPY docker/profiles /usr/local/share/civikitchen/profiles
+COPY packages/civicrm-profile-schema /usr/local/share/civikitchen/profile-schema
+COPY packages/civikitchen-scenario-schema /usr/local/share/civikitchen/scenario-schema
 
 COPY docker/buildkit/entrypoint.sh /home/buildkit/entrypoint.sh
 RUN chmod +x /home/buildkit/entrypoint.sh

@@ -94,7 +94,7 @@ extension key, minus the development layer:
 
 ```
 .github/ .docker/ .claude/ tests/ node_modules/
-.gitattributes .gitignore .editorconfig .ckconform .phpunit.result.cache
+.gitattributes .gitignore .editorconfig civikitchen.yaml .phpunit.result.cache
 phpcs.xml(.dist) phpstan.neon(.dist) phpstanBootstrap.php phpunit.xml(.dist)
 playwright.config.ts package-lock.json bun.lock(b) tsconfig.json
 ```
@@ -115,11 +115,17 @@ Because the archive is built from tracked files, everything a `.gitignore`
 already covers is absent for free; the list above is only about files that are
 committed on purpose and still have no business on a production site.
 
-Per repo, in `.ckconform` (where every other repo-level policy lives):
+Per repo, in `civikitchen.yaml` (where every other repo-level policy lives):
 
-```
-dist_exclude=build,docs/internal   # additionally kept out
-dist_include=tests                 # kept in despite the central list
+```yaml
+policy:
+  dist:
+    exclude:
+      - build
+      - docs/internal
+    include:
+      - path: tests
+        reason: release fixture needed by this extension
 ```
 
 `ckrelease verify` re-checks the built archive: one top-level directory named
@@ -135,7 +141,7 @@ every repo's CI compares them. Putting the exclude list there means (a) shipping
 packaging costs a fleet-wide drift round and a contract version bump, and (b) the
 list then exists in as many copies as there are repos, free to drift apart —
 the exact state the shared tooling exists to end. The central list plus
-`.ckconform` gives one source of truth and a declared, reasoned per-repo
+`civikitchen.yaml` gives one source of truth and a declared, reasoned per-repo
 exception, which is the pattern already used for coverage floors and template
 deviations.
 
@@ -172,8 +178,8 @@ installed with `cv en` — no source mount, so the site sees exactly what a user
 downloads. Before the install, the `info.xml` `<requires>` are resolved the way
 the image entrypoint resolves them for a mounted extension: a dependency the
 fresh site lacks is downloaded from the registry, or from the
-`extension_source=<key>@<URL>` pin in the repo's `.ckconform` (copied in for
-that step — the archive itself carries no `.ckconform`), and enabled first. The
+digest-pinned `policy.extension_sources` entry in the repo's `civikitchen.yaml` (copied in for
+that step — the archive itself carries no `civikitchen.yaml`), and enabled first. The
 smoke test catches the failure class that no amount of green CI does: a PHP
 file that the exclude list swallowed, a `<requires>` on an extension that no
 pin and no registry serves, an upgrader that fatals on a first install.

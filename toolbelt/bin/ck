@@ -1,0 +1,70 @@
+#!/bin/bash
+# Unified, discoverable entry point for the CiviKitchen toolbelt. The existing
+# ck* commands remain the stable implementation and compatibility surface;
+# this dispatcher gives them one help screen and consistent subcommand names.
+set -euo pipefail
+
+bin_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+usage() {
+  cat <<'EOF'
+ck — CiviKitchen extension-development toolbelt
+
+  ck conform [args]       repository conformance (ckconform)
+  ck lint [args]          PHP lint and bug patterns (cklint)
+  ck format [args]        PHP/JS formatting (ckfmt)
+  ck compatibility       declared PHP-floor compatibility (ckcompat)
+  ck dependencies        Composer dependency audit (ckdeps)
+  ck javascript          JS/TS linting (ckeslint)
+  ck test [args]          headless PHPUnit with transaction canary (ckphpunit)
+  ck coverage [args]      PHPUnit coverage floor (ckcoverage)
+  ck lifecycle [args]     install/disable/enable/uninstall checks (cklifecycle)
+  ck schema [args]        install-vs-upgrade schema parity (ckschemadiff)
+  ck smarty [args]        compile shipped Smarty templates (cksmarty)
+  ck taint [args]         taint analysis (cktaint)
+  ck mutate [args]        mutation testing (ckmutate)
+  ck modernize [args]     civix/Rector modernization (ckmodernize)
+  ck release [args]       extension release artifact (ckrelease)
+  ck profile [args]       validate/list runtime profiles (ckprofile)
+  ck config [args]        validate civikitchen.yaml (ckscenario)
+  ck scenario [args]      validate/render a reproducible scenario (ckscenario)
+  ck civix [args]         civix scaffold drift (ckcivix)
+  ck core-test [args]     CiviCRM core PHPUnit suites (ckcoretest)
+  ck test-reset [args]    reset the standalone scratch DB (cktestreset)
+
+Use `ck <command> --help` for the implementation's full contract. Existing
+ck* command names remain supported.
+EOF
+}
+
+command_name=${1:-help}
+[ "$#" -eq 0 ] || shift
+case "$command_name" in
+  help|-h|--help) usage; exit 0 ;;
+  conform) tool=ckconform ;;
+  lint) tool=cklint ;;
+  format|fmt) tool=ckfmt ;;
+  compatibility|compat) tool=ckcompat ;;
+  dependencies|deps) tool=ckdeps ;;
+  javascript|js|eslint) tool=ckeslint ;;
+  test|phpunit) tool=ckphpunit ;;
+  coverage) tool=ckcoverage ;;
+  lifecycle) tool=cklifecycle ;;
+  schema) tool=ckschemadiff ;;
+  smarty) tool=cksmarty ;;
+  taint) tool=cktaint ;;
+  mutate) tool=ckmutate ;;
+  modernize) tool=ckmodernize ;;
+  release) tool=ckrelease ;;
+  profile) tool=ckprofile ;;
+  config|scenario) tool=ckscenario ;;
+  civix) tool=ckcivix ;;
+  core-test) tool=ckcoretest ;;
+  test-reset) tool=cktestreset ;;
+  *) echo "ck: unknown command: ${command_name}" >&2; usage >&2; exit 2 ;;
+esac
+
+if [ -x "${bin_dir}/${tool}" ]; then
+  exec "${bin_dir}/${tool}" "$@"
+fi
+exec "$tool" "$@"

@@ -58,6 +58,7 @@ export CK_EXT_DIR
 . /usr/local/share/civikitchen/provision.sh
 
 # Auto-composer runs every boot (picks up newly bind-mounted extensions).
+ck_attach_scenario_extension
 ck_auto_composer
 
 if [[ ! -f "${CK_PROVISIONED_MARKER}" ]]; then

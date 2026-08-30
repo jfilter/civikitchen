@@ -30,6 +30,7 @@ SHELL := bash
 # `make clean` has one thing to remove. CI overrides nothing: same paths.
 CACHE := .cache
 PHPUNIT := $(CACHE)/phpunit-$(CK_PHPUNIT_VERSION).phar
+SCENARIO_YAML_STAMP := packages/civikitchen-scenario-schema/vendor/.civikitchen-installed
 
 # The pinned release IN the path: a catalog bump must invalidate the cached
 # tree, or the drift gates keep testing the old core until a `make clean`.
@@ -84,14 +85,15 @@ SHELLCHECK := $(CACHE)/shellcheck-$(CK_SHELLCHECK_VERSION)
 # AND-list and kills the loop, silently and short. An `if` condition is exempt.
 # `(*.sh)`, balanced: bash 3.2 cannot parse an unbalanced case paren inside
 # `$( )` and dies on the whole substitution.
-SHELL_FILES = git ls-files | while read -r f; do \
+WORKTREE_FILES = git ls-files --cached --others --exclude-standard
+SHELL_FILES = $(WORKTREE_FILES) | while read -r f; do \
 	  case "$$f" in (*.sh) printf '%s\n' "$$f"; continue ;; esac ; \
 	  if head -1 "$$f" 2>/dev/null \
 	      | grep -qaE '^\#!.*(\bsh\b|\bbash\b)|^\# shellcheck shell=' ; then \
 	    printf '%s\n' "$$f" ; \
 	  fi ; \
 	done
-PHP_FILES = git ls-files '*.php'
+PHP_FILES = $(WORKTREE_FILES) -- '*.php'
 
 # A selector that matches nothing must be an error, not a pass. Otherwise the
 # fail-open bug just moves up a level: a broken pattern would lint zero files
@@ -102,9 +104,10 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-parity \
+.PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-profiles test-scenario test-parity \
 	test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
 	test-ck-headless test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
+	test-database-matrix \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
 help: ## Show this help
@@ -123,13 +126,13 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-database-matrix test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
 # typos. The drift tests regenerate and diff — but they SKIP without a core
 # checkout, so without $(CORE) the suite goes green while the gate never runs.
-test-ckconform: $(PHPUNIT) $(CORE) ## ckconform's check fixtures + catalog drift gates
+test-ckconform: $(PHPUNIT) $(CORE) $(SCENARIO_YAML_STAMP) ## ckconform's check fixtures + catalog drift gates
 	CIVICRM_CORE_DIR=$(abspath $(CORE)) \
 	  php $(PHPUNIT) -c toolbelt/ckconform/phpunit.xml.dist
 
@@ -143,15 +146,27 @@ test-phpstan: $(PHPUNIT) $(CORE) ## The phpstan extension's rule tests + catalog
 # ckinit stamps the template into every extension repo and its --check mode
 # gates those repos' CI, so a silent regression here either rewrites files it
 # must not touch or waves drift through.
-test-ckinit: ## ckinit seed/update/check integration checks, ckup port picking
+test-ckinit: $(SCENARIO_YAML_STAMP) ## ckinit seed/update/check integration checks, ckup port picking
 	bash tests/ckinit/test-ckinit.sh
 	bash tests/ckinit/test-ckup.sh
 
-test-ckcreate: ## ckcreate orchestration and atomic-output checks (fake Docker)
+test-ckcreate: $(SCENARIO_YAML_STAMP) ## ckcreate orchestration and atomic-output checks (fake Docker)
 	bash tests/ckcreate/test-ckcreate.sh
 
 test-ckcivix: ## ckcivix current/behind/missing/update checks (fake civix)
 	bash tests/toolbelt/test-ckcivix.sh
+
+test-ck: ## Unified ck dispatcher and compatibility aliases
+	bash tests/toolbelt/test-ck.sh
+
+test-profiles: ## Profile schema, external resolution, credentials modes and file permissions
+	php tests/profiles/test-credentials.php
+	php tests/profiles/test-validator.php
+	bash tests/profiles/test-external-profiles.sh
+	bash tests/profiles/test-profile-clone.sh
+
+test-scenario: $(SCENARIO_YAML_STAMP) ## Declarative scenario schema, plan, Compose render and fixed checks
+	bash tests/scenario/test-scenario.sh
 
 # The entrypoint's <requires> resolution decides what a CI stack installs before
 # `ext:enable`; a regression here surfaces as every dependent repo's boot failing.
@@ -177,7 +192,7 @@ test-parity: ## Toolbelt components vs. Dockerfile COPY parity
 # `vendored_paths` decides what the linters never see; a regression there is
 # silent by construction — the run says "clean" about files it skipped, or
 # reformats third-party source that must stay byte-identical.
-test-vendored-paths: ## .ckconform vendored_paths file-list exclusion
+test-vendored-paths: ## civikitchen.yaml vendored_paths file-list exclusion
 	bash tests/toolbelt/test-vendored-paths.sh
 
 test-ckcoverage: ## ckcoverage uses collision-free temporary logs
@@ -201,6 +216,9 @@ test-tool-locks: ## Tool lockfiles: in sync, and resolved against the PHP floor
 test-compose-isolation: ## Per-job compose project names in the workflows
 	bash tests/parity/test-compose-project-isolation.sh
 
+test-database-matrix: ## Supported database images gate standalone promotion
+	bash tests/parity/test-database-matrix.sh
+
 test-shell-portability: ## Shell portability lint accepts portable edits and rejects BSD-only sed -i
 	bash tests/parity/test-shell-portability.sh
 
@@ -211,7 +229,7 @@ test-install-trivy: ## Trivy installer architecture selection and release checks
 
 lint: lint-shell lint-shell-portability lint-actions lint-php lint-schema ## Every static check CI runs
 
-lint-shell: $(SHELLCHECK) ## shellcheck (pinned) at style level over every tracked shell file
+lint-shell: $(SHELLCHECK) ## shellcheck (pinned) over every tracked or untracked, non-ignored shell file
 	@files=$$($(SHELL_FILES)) ; \
 	  $(call require_nonempty,$$files,shell) ; \
 	  printf '%s\n' "$$files" | xargs $(SHELLCHECK) -S style ; \
@@ -235,19 +253,29 @@ lint-actions: $(CACHE)/actionlint ## actionlint + zizmor over the workflows
 dupcheck: ## Copy-paste clone report (jscpd), advisory
 	bunx jscpd@$(CK_JSCPD_VERSION) --config .jscpd.json
 
-lint-php: ## php -l over every tracked PHP file
+lint-php: ## php -l over every tracked or untracked, non-ignored PHP file
 	@files=$$($(PHP_FILES)) ; \
 	  $(call require_nonempty,$$files,PHP) ; \
 	  rc=0 ; \
 	  while IFS= read -r f; do php -l "$$f" >/dev/null || rc=1; done <<< "$$files" ; \
 	  [ "$$rc" = 0 ] && echo "php syntax clean ($$(printf '%s\n' "$$files" | wc -l) files)"
 
-# profile.schema.json is the canonical spec for the profile format, published
-# as @jfilter/civicrm-profile-schema.
-lint-schema: ## Validate every profile.json against the published schema
+# The schemas are published contracts, so validate both the schemas themselves
+# and every repository-owned example/fixture. Keeping fixtures in this gate is
+# important: runtime tests must not be the first place an external profile or
+# scenario discovers that it drifted from its canonical format.
+lint-schema: ## Validate the profile/scenario schemas and every repository-owned instance
+	$(call pyrun,check-jsonschema) --check-metaschema \
+	  packages/civicrm-profile-schema/profile.schema.json \
+	  packages/civikitchen-scenario-schema/scenario.schema.json
 	$(call pyrun,check-jsonschema) \
 	  --schemafile packages/civicrm-profile-schema/profile.schema.json \
-	  docker/profiles/*/profile.json
+	  docker/profiles/*/profile.json \
+	  tests/images/fixtures/external-profile/*/profile.json
+	$(call pyrun,check-jsonschema) \
+	  --schemafile packages/civikitchen-scenario-schema/scenario.schema.json \
+	  examples/scenario/civikitchen.yaml \
+	  tests/scenario/civikitchen.yaml
 
 # --- the slow loop (needs Docker) --------------------------------------------
 
@@ -262,7 +290,11 @@ e2e: ## Playwright smoke tests against a running compose stack
 
 # --- fetched inputs ----------------------------------------------------------
 
-tools: $(PHPUNIT) $(CACHE)/actionlint $(SHELLCHECK) ## Pre-fetch the pinned tools into .cache/
+$(SCENARIO_YAML_STAMP): packages/civikitchen-scenario-schema/composer.json packages/civikitchen-scenario-schema/composer.lock
+	composer install --no-interaction --no-progress --working-dir=packages/civikitchen-scenario-schema
+	@touch $(SCENARIO_YAML_STAMP)
+
+tools: $(PHPUNIT) $(CACHE)/actionlint $(SHELLCHECK) $(SCENARIO_YAML_STAMP) ## Pre-fetch the pinned tools and YAML parser
 
 $(SHELLCHECK):
 	@mkdir -p $(CACHE)

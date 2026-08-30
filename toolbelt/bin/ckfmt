@@ -55,6 +55,7 @@ done
 while [ "$#" -gt 0 ]; do paths+=("$1"); shift; done
 
 ck_require_extension_root
+ck_policy_load
 
 ck_in_git_repo \
   || ck_die "not a git checkout — the file list comes from git ls-files."

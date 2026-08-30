@@ -80,7 +80,7 @@ final class CommittedArtifactCheckTest extends CheckTestCase
     public function testVendorPolicyAllowsCommittedVendor(): void
     {
         $context = $this->repo([
-            '.ckconform' => "vendor=committed -- extensions deploy without composer install\n",
+            '__policy_fixture' => "vendor=committed -- extensions deploy without composer install\n",
             'vendor/autoload.php' => "<?php\n",
         ], git: true);
         $reporter = $this->run_(new CommittedArtifactCheck(), $context);

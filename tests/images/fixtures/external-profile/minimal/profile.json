@@ -1,0 +1,14 @@
+{
+  "description": "Minimal external-profile smoke fixture",
+  "authx": {
+    "header_cred": ["api_key"]
+  },
+  "apiUsers": [
+    {
+      "username": "smokeapi",
+      "role": "civikitchen_smoke_api",
+      "permissions": ["access CiviCRM"]
+    }
+  ],
+  "dependencies": []
+}

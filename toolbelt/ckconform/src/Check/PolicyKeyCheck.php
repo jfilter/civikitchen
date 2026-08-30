@@ -10,7 +10,7 @@ use CiviKitchen\Ckconform\Policy;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
- * Keeps `.ckconform` itself honest — the policy-file counterpart to
+ * Keeps the `policy:` mapping in civikitchen.yaml honest.
  * SuppressionHygieneCheck.
  *
  * The asymmetry it closes: a typo'd check name in an inline `ckconform-ignore`
@@ -38,7 +38,7 @@ use CiviKitchen\Ckconform\Reporter;
  *                 entrypoint falls back to the registry — the exact download
  *                 the pin was declared to avoid.
  *
- * Both layers are checked — the repo's `.ckconform` and the CK_DEFAULT_POLICY
+ * Both layers are checked — the repo config and the CK_DEFAULT_CONFIG
  * file — each finding named after the file it came from.
  *
  * What is deliberately NOT here: whether a value means the right thing. The
@@ -55,6 +55,9 @@ final class PolicyKeyCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
+        if ($context->exists(Policy::LEGACY_FILE)) {
+            $reporter->fail(Policy::LEGACY_FILE . ' is no longer supported; migrate its policy to ' . Policy::CONFIG_FILE);
+        }
         // The defaults file is judged by the same rules, under its own name:
         // a typo there disables a policy for the whole fleet at once.
         try {
@@ -65,11 +68,11 @@ final class PolicyKeyCheck implements Check
         }
         if ($defaults !== null) {
             $source = Policy::DEFAULTS_ENV . ' (' . getenv(Policy::DEFAULTS_ENV) . ')';
-            $this->validate($source, $defaults, $reporter);
-            foreach (array_keys(Policy::parse($defaults)) as $key) {
+            $parsedDefaults = $this->validate($source, $defaults, $reporter);
+            foreach (array_keys($parsedDefaults ?? []) as $key) {
                 if (isset(Policy::KEYS[$key]) && !in_array($key, Policy::SHARED, true)) {
                     $reporter->fail(sprintf(
-                        '%s: %s is read by a gate the defaults do not reach — set it in the repo .ckconform (shareable: %s)',
+                        '%s: %s is read by a gate the defaults do not reach — set it in the repo civikitchen.yaml (shareable: %s)',
                         $source,
                         $key,
                         implode(', ', Policy::SHARED),
@@ -78,24 +81,22 @@ final class PolicyKeyCheck implements Check
             }
         }
 
-        $raw = $context->read('.ckconform');
+        $raw = $context->read(Policy::CONFIG_FILE);
         if ($raw !== null) {
-            $this->validate('.ckconform', $raw, $reporter);
+            $this->validate(Policy::CONFIG_FILE, $raw, $reporter);
         }
     }
 
-    private function validate(string $source, string $raw, Reporter $reporter): void
+    /** @return array<string, list<string>>|null */
+    private function validate(string $source, string $raw, Reporter $reporter): ?array
     {
-        foreach (Policy::malformed($raw) as $lineNo => $line) {
-            $reporter->fail(sprintf(
-                "%s:%d: no KEY=VALUE in '%s' — the line declares nothing",
-                $source,
-                $lineNo,
-                $line,
-            ));
+        try {
+            $policy = Policy::parse($raw);
+        } catch (\RuntimeException $e) {
+            $reporter->fail($source . ': ' . $e->getMessage());
+            return null;
         }
-
-        foreach (Policy::parse($raw) as $key => $values) {
+        foreach ($policy as $key => $values) {
             if (!isset(Policy::KEYS[$key])) {
                 $reporter->fail(sprintf(
                     "%s: unknown key '%s' — nothing reads it, so the policy it declares does not apply%s",
@@ -107,24 +108,13 @@ final class PolicyKeyCheck implements Check
                 continue;
             }
 
-            if (count($values) > 1 && !in_array($key, Policy::REPEATABLE, true)) {
-                $reporter->fail(sprintf(
-                    "%s: %s is declared %d times but only the first is read — %s takes a comma-separated value on one line",
-                    $source,
-                    $key,
-                    count($values),
-                    $key,
-                ));
-            }
-
             if ($key === 'extension_source') {
                 foreach ($values as $value) {
                     $spec = Policy::stripReason($value);
-                    if (preg_match('#^[A-Za-z0-9][A-Za-z0-9._-]*@https?://\S+$#', $spec) !== 1) {
+                    if (preg_match('#^[A-Za-z0-9][A-Za-z0-9._-]*@https://[^/?\#@]+(?:/[^?\#]*)?\#sha256=[a-f0-9]{64}$#', $spec) !== 1) {
                         $reporter->fail(sprintf(
-                            "%s: extension_source must be <key>@<http URL> (what cv ext:download takes), got '%s'",
+                            "%s: extension source must use HTTPS without credentials/query/fragment and include a SHA-256 digest",
                             $source,
-                            $spec,
                         ));
                     }
                 }
@@ -146,6 +136,7 @@ final class PolicyKeyCheck implements Check
                 }
             }
         }
+        return $policy;
     }
 
     /**

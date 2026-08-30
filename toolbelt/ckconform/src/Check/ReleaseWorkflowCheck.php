@@ -32,7 +32,7 @@ final class ReleaseWorkflowCheck implements Check
             // optional: an exemption nobody has to justify is how a rule ends
             // up declared away everywhere.
             if (preg_match('/^none\s+--\s+\S/', $declared) === 1) {
-                $reporter->ok("no releases — declared deliberate in .ckconform ({$declared})");
+                $reporter->ok("no releases — declared deliberate in civikitchen.yaml ({$declared})");
 
                 return;
             }

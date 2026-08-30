@@ -30,7 +30,7 @@ ckcreate — create a new CiviCRM extension with civix scaffold + civikitchen te
   --author <name>         author/organisation for info.xml
   --email <address>       author email
   --license <id>          civix license ID or Proprietary (default: Proprietary)
-  --copyright <text>      copyright line seeded into .ckconform
+  --copyright <text>      copyright policy seeded into civikitchen.yaml
   --compatibility <ver>   minimum CiviCRM version (default: 6.12)
   --php <ver>             minimum PHP version (default: template floor)
   --keep-stack            leave the throwaway stack running (for debugging)
@@ -114,6 +114,8 @@ command -v docker >/dev/null 2>&1 || die "docker is required (civix needs a boot
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -f "$here/ckinit.php" ] || die "cannot find ckinit.php next to this script"
+[ -f "$here/../packages/civikitchen-scenario-schema/vendor/autoload.php" ] \
+  || die "YAML parser dependency is missing; run composer install --working-dir=packages/civikitchen-scenario-schema"
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/ckcreate.XXXXXX")"
 # The generated tree has to live somewhere Docker can mount. macOS VMs do not
@@ -296,15 +298,16 @@ php -r '
   file_put_contents($argv[3], $next);
 ' "$generated/composer.json" "$generated/info.xml" "$generated/phpstan.neon.dist"
 
-# The policy VALUES belong to the org, not to this repo — ckconform only checks
-# that the declarations agree with each other.
-if [ ! -f "$generated/.ckconform" ]; then
-  {
-    echo "license=$license"
-    echo "copyright=$copyright"
-  } > "$generated/.ckconform"
-  echo "$tool: wrote .ckconform (license, copyright)"
-fi
+# Add the repository policy to the one generated CiviKitchen config.
+php -r '
+  require $argv[1];
+  $file = $argv[2];
+  $document = ck_scenario_parse_yaml($file);
+  $document["policy"]["license"] = $argv[3];
+  $document["policy"]["copyright"] = $argv[4];
+  if (file_put_contents($file, ck_scenario_dump_yaml($document), LOCK_EX) === false) exit(2);
+' "$here/../packages/civikitchen-scenario-schema/scenario.php" "$generated/civikitchen.yaml" "$license" "$copyright"
+echo "$tool: wrote civikitchen.yaml policy (license, copyright)"
 
 php "$here/ckinit.php" --check "$generated" >/dev/null
 

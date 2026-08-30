@@ -1,0 +1,10 @@
+#!/bin/bash
+set -euo pipefail
+bin_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+checkout_root=$(cd "${bin_dir}/../.." && pwd)
+implementation=/usr/local/share/civikitchen/scenario-schema/scenario.php
+if [ -f "${checkout_root}/packages/civikitchen-scenario-schema/scenario.php" ]; then
+  implementation="${checkout_root}/packages/civikitchen-scenario-schema/scenario.php"
+fi
+[ -f "$implementation" ] || { echo "ckscenario: scenario implementation not installed" >&2; exit 2; }
+exec php "$implementation" "$@"

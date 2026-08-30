@@ -102,7 +102,7 @@ final class HookDispatchNameCheck implements Check
         // A <requires> extension present on disk publishes them by dispatching
         // them — its call sites are read directly. What that cannot reach (a
         // dependency not mounted, this repo's own hooks) a repo declares in
-        // its .ckconform policy: known_hooks=acmeConnectors,otherHook
+        // its civikitchen.yaml policy: known_hooks=acmeConnectors,otherHook
         $policyHooks = array_filter(array_map('trim', explode(',', $context->policyValue('known_hooks') ?? '')));
         foreach ($context->requiredExtensionDirs() as $dir) {
             $policyHooks = array_merge($policyHooks, HookSurface::dispatchedSuffixes($dir));
@@ -172,7 +172,7 @@ final class HookDispatchNameCheck implements Check
      */
     private function suffixVerdict(string $file, string $subject, string $suffix, array $policyHooks): ?array
     {
-        // A repo that declares a suffix in .ckconform is asserting a live
+        // A repo that declares a suffix in civikitchen.yaml is asserting a live
         // third-party hook under that name; core's history about a same-named
         // hook then says nothing about this code.
         if (in_array($suffix, $policyHooks, true)) {
@@ -202,7 +202,7 @@ final class HookDispatchNameCheck implements Check
 
         if (!in_array($suffix, HookCatalog::LIVE, true)) {
             return [false, sprintf(
-                '%s: %s — unknown hook suffix \'%s\'; a typo never fires, a third-party hook is fine (a <requires> extension present under the ext dir publishes the hooks it dispatches; otherwise declare it via known_hooks= in .ckconform)',
+                '%s: %s — unknown hook suffix \'%s\'; a typo never fires, a third-party hook is fine (a <requires> extension present under the ext dir publishes the hooks it dispatches; otherwise declare it via known_hooks= in civikitchen.yaml)',
                 $file,
                 $subject,
                 $suffix,

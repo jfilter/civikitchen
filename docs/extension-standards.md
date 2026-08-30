@@ -59,9 +59,9 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   entities from bundled extensions (`ext/civi_mail` …), which then belong in
   `<requires>`. `ckconform` verifies each referenced entity exists in the core
   it runs against. An entity supplied by a required third-party extension is
-  declared narrowly as
-  `known_api4_entities=ExternalEntity -- supplied by required example.ext` in
-  `.ckconform`; unused entries and declarations without a provider fail.
+  declared narrowly under `policy.known_api4_entities` in `civikitchen.yaml`,
+  with `entities: [ExternalEntity]` and a reason naming the required provider;
+  unused entries and declarations without a provider fail.
 - **The strings inside an APIv4 call are a contract, and phpstan now reads
   it.** Entity, action and field names are literals nothing checks until the
   call runs — a typo in a select survives the whole pipeline and then returns
@@ -331,7 +331,7 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   the released major (`@v1`) and the CI stack the matching `:v1` image —
   workflow, template, tools and images are one versioned contract, so they move
   together and deliberately ([releases.md](releases.md)). One canary repo
-  tracks `@main` and declares that in its `.ckconform`.
+  tracks `@main` and declares that in its `civikitchen.yaml`.
 - Releases through the shared `extension-release.yml` — a tag push builds the
   installable zip (dev/CI files excluded), installs it into a fresh CiviCRM and
   publishes the GitHub release. The version lives in `info.xml` and
@@ -378,10 +378,13 @@ directories are skipped by every ck* file list already; a path like
 options: a permanently red gate, or a formatter run that destroys the property
 that made the copy worth having.
 
-Declare it instead, with a reason, in `.ckconform`:
+Declare it instead, with a reason, in `civikitchen.yaml`:
 
-```ini
-vendored_paths=.docker/civiproxy/proxy -- unmodified SYSTOPIA CiviProxy 1.0.0-beta, must stay byte-identical to production
+```yaml
+policy:
+  vendored_paths:
+    - path: .docker/civiproxy/proxy
+      reason: Unmodified SYSTOPIA CiviProxy 1.0.0-beta
 ```
 
 `cklint` (both engines), `ckfmt` and `ckeslint` then skip it. The key is
@@ -572,7 +575,7 @@ in the history is not.
 ## Tests and coverage
 
 - Every extension with PHP source needs `tests/phpunit`. A config-only
-  extension may opt out in `.ckconform` — `tests=optional -- <reason>` — and
+  extension may opt out in `civikitchen.yaml` — `policy.tests` with `mode: optional` and a reason — and
   the reason is not optional.
 - `phpunit.xml.dist` must declare a `<coverage>` section scoped to real
   extension code (exclude the civix shim and DAO/BAO boilerplate). Without it
@@ -602,8 +605,8 @@ in the history is not.
 - CI runs the suite **with** coverage: `ckcoverage` (or at minimum
   `phpunit --coverage-text`). `ckcoverage` runs through `ckphpunit`, so the
   canary above comes with it; nothing in the repo has to reference it.
-- `ckcoverage` reports line coverage and fails below the `min_coverage` floor
-  in `.ckconform`. Adopt it in that order: **measure first, set the floor to
+- `ckcoverage` reports line coverage and fails below the `policy.coverage.minimum` floor
+  in `civikitchen.yaml`. Adopt it in that order: **measure first, set the floor to
   what you actually have, then ratchet it up.** A floor nobody measured only
   teaches people to ignore a red build — and a floor must never be lowered to
   turn one green.
@@ -612,15 +615,15 @@ in the history is not.
   test that asserts nothing about it. `ckmutate` (infection) rewrites the code
   under the suite — flips a comparison, drops a return — and reports the
   mutants no test killed; each survivor is a covered line the suite does not
-  actually check. It reads `mutation_min_msi` from `.ckconform` (optionally
-  `mutation_min_covered_msi`) and is a **no-op that exits 0** without that key,
+  actually check. It reads `policy.mutation.minimum_msi` from `civikitchen.yaml` (optionally
+  `policy.mutation.minimum_covered_msi`) and is a **no-op that exits 0** without that key,
   so adopt it the same way as coverage: measure, set the floor to what you
   have, ratchet.
 
   **Recommendation: switch it on in the scheduled `compat.yml` caller
   (`mutation: true`), never in the push run**, and scope it with
-  `mutation_paths` to the domain logic and the exporters — the code where a
-  surviving mutant means something. Without `mutation_paths` it mutates only
+  `policy.mutation.paths` to the domain logic and the exporters — the code where a
+  surviving mutant means something. Without `policy.mutation.paths` it mutates only
   the lines changed against `CK_MUTATE_BASE` (default `origin/main`), which is
   the useful mode on a branch but not the one a weekly reading wants. A
   mutation run costs a suite run per mutant batch and its score moves with
@@ -629,24 +632,33 @@ in the history is not.
 
 Licence declarations (`info.xml`, `composer.json`, every `package.json`) must
 agree with each other. *Which* licence is your policy, not this standard's, so
-pin the expected values in an optional `.ckconform` in the extension root and
+pin the expected values in an optional `civikitchen.yaml` in the extension root and
 `ckconform` will enforce them — that file lives in your repo, so a private
 policy never has to be published here:
 
-```
-license=Proprietary          # info.xml <license> + composer.json
-npm_license=UNLICENSED       # every tracked package.json
-copyright=Example Ltd        # must appear in LICENSE.txt
-template_custom=phpcs.xml.dist -- <reason>   # deliberate template deviation (ckinit --check/--update)
-renovate_preset=github>example/renovate   # what the managed renovate.json extends (default config:recommended); usually an organisation default
-extension_source=org.example.dep@https://example.org/dep-1.2.0.zip -- <reason>   # where the image entrypoint downloads a <requires> dependency the registry does not serve (one line per dependency)
+```yaml
+version: 1
+policy:
+  license: Proprietary
+  npm_license: UNLICENSED
+  copyright: Example Ltd
+  template_custom:
+    paths:
+      - phpcs.xml.dist
+    reason: Deliberate template deviation
+  renovate_preset: github>example/renovate
+  extension_sources:
+    - key: org.example.dep
+      url: https://example.org/dep-1.2.0.zip
+      sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      reason: Dependency is not served by the registry
 ```
 
 Values shared across an organisation's repos can sit once in a file of the same
-format named by `CK_DEFAULT_POLICY`; a repo's own `.ckconform` overrides per
+format named by `CK_DEFAULT_CONFIG`; a repo's own `civikitchen.yaml` overrides per
 key. In CI the `policy_defaults` input of `extension-ci.yml` — or, set once
 for the whole organisation, the `CK_POLICY_DEFAULTS` Actions variable — names
-the `owner/repo` whose root `.ckconform` is that file; on a developer machine
+the `owner/repo` whose root `civikitchen.yaml` is that file; on a developer machine
 export the variable (ckinit reads it too, for `renovate_preset`).
 
 SPDX disjunctive licensing (`"license": ["MIT", "GPL-2.0"]`) is allowed in both
@@ -796,6 +808,20 @@ on `extension-ci.yml`, all off by default:
 | `bun` | Uses Bun for all of the above instead of npm: `bun install --frozen-lockfile`, `bun run test`, `bun run test:e2e`. Implies the install, the way `js_tests` implies `npm_ci`. Needs a committed `bun.lock` and `"packageManager": "bun@x.y.z"` in `package.json` — that is the Bun the jobs install, so a Bun release cannot change a green run on its own. |
 | `playwright` | Own job: boots the stack with port 8080 published and an `admin` / `admin` demo user, then runs `npm run test:e2e` from the runner. Report and traces are uploaded on failure. |
 | `node_version` | Node for all of the above. Default `'24'` — the major the dev images ship, so a browser job tests the Node the image actually serves. Still applies under `bun` — see below. |
+
+Playwright traces are retained on failure by default because they are the most
+useful diagnosis of a browser-only failure. They can also contain action
+parameters, request data, tokens, cookies, and authenticated browser state. A
+manual live-provider suite that uses reusable credentials should therefore set
+`trace: 'off'` and put a reason-required file suppression in that one config:
+
+```ts
+// ckconform-ignore-file playwright-diagnostics -- live-provider credentials must not persist in traces
+```
+
+The exception does not cover another Playwright config in the same repository;
+missing reasons, unknown check names, and suppressions whose finding is gone
+are reported by the normal suppression-hygiene check.
 
 **Linting the JS needs none of them.** `ckeslint` runs in the `ci` job on every
 push, from inside the container, with a toolchain pinned in the image — no Node
@@ -1077,10 +1103,14 @@ job and never to the suite — a negative test that asserts an API call fails is
 supposed to log an error.
 
 The findings land in the job summary. A line that is genuinely expected is
-declared in `.ckconform`, with a reason, the same shape `ckinit` uses:
+declared in `civikitchen.yaml`, with a reason, the same shape `ckinit` uses:
 
-```ini
-lifecycle_log_ignore=Unknown column 'is_legacy' -- dropped in the 5.x upgrader
+```yaml
+policy:
+  lifecycle:
+    log_ignore:
+      - pattern: "Unknown column 'is_legacy'"
+        reason: Dropped in the 5.x upgrader
 ```
 
 ### Schema parity: does the upgrader arrive where install() does?
@@ -1238,7 +1268,7 @@ jobs:
       # boot, which is exactly why it lives here and not in ci.yml.
       # playwright: true
       # Mutation testing (ckmutate): does the suite assert on what it covers.
-      # A no-op until .ckconform sets mutation_min_msi — and set
+      # A no-op until civikitchen.yaml sets policy.mutation.minimum_msi — and set
       # mutation_paths there too, or a weekly run mutates the whole tree.
       mutation: true
       # The drift job already runs on every push in ci.yml.

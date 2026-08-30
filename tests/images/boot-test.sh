@@ -31,7 +31,7 @@ APP="${SLUG}-app"
 HEALTH_TIMEOUT=600   # seconds; fast reinstall path is ~60s, allow slack
 
 cleanup() {
-    docker rm -f "${APP}" "${DB}" >/dev/null 2>&1 || true
+    docker rm -fv "${APP}" "${DB}" >/dev/null 2>&1 || true
     docker network rm "${NET}" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT

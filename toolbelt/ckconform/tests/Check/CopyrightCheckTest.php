@@ -12,19 +12,19 @@ final class CopyrightCheckTest extends CheckTestCase
     public function testFailsWhenTheHolderIsMissingFromTheLicenseFile(): void
     {
         $context = $this->repo([
-            '.ckconform' => "copyright=Example Ltd\n",
+            '__policy_fixture' => "copyright=Example Ltd\n",
             'LICENSE.txt' => "Copyright (C) 2026 Somebody Else\n",
         ]);
         $this->assertFails(
             $this->run_(new CopyrightCheck(), $context),
-            "LICENSE.txt does not name the copyright holder 'Example Ltd' from .ckconform"
+            "LICENSE.txt does not name the copyright holder 'Example Ltd' from civikitchen.yaml"
         );
     }
 
     public function testSilentWhenTheHolderAppears(): void
     {
         $context = $this->repo([
-            '.ckconform' => "copyright=Example Ltd\n",
+            '__policy_fixture' => "copyright=Example Ltd\n",
             'LICENSE.txt' => "Copyright (C) 2026 Example Ltd. All rights reserved.\n",
         ]);
         $this->assertSilent($this->run_(new CopyrightCheck(), $context));
@@ -40,7 +40,7 @@ final class CopyrightCheckTest extends CheckTestCase
 
     public function testSilentWithoutALicenseFile(): void
     {
-        $context = $this->repo(['.ckconform' => "copyright=Example Ltd\n"]);
+        $context = $this->repo(['__policy_fixture' => "copyright=Example Ltd\n"]);
         $this->assertSilent($this->run_(new CopyrightCheck(), $context));
     }
 
@@ -48,7 +48,7 @@ final class CopyrightCheckTest extends CheckTestCase
     public function testTheMatchIsCaseSensitive(): void
     {
         $context = $this->repo([
-            '.ckconform' => "copyright=Example Ltd\n",
+            '__policy_fixture' => "copyright=Example Ltd\n",
             'LICENSE.txt' => "Copyright (C) 2026 EXAMPLE LTD\n",
         ]);
         $this->assertFails($this->run_(new CopyrightCheck(), $context));

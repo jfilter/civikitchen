@@ -9,6 +9,7 @@ use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
 use CiviKitchen\Ckconform\Suppressions;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Builds a throwaway extension directory per test and runs a single check
@@ -55,6 +56,10 @@ abstract class CheckTestCase extends TestCase
 
         $files['info.xml'] ??= $this->infoXml();
         foreach ($files as $path => $contents) {
+            if ($path === '__policy_fixture') {
+                $path = 'civikitchen.yaml';
+                $contents = $this->policyFixture($contents);
+            }
             $full = $this->dir . '/' . $path;
             $parent = dirname($full);
             if (!is_dir($parent)) {
@@ -69,6 +74,47 @@ abstract class CheckTestCase extends TestCase
         }
 
         return new Context($this->dir, $this->coreDir());
+    }
+
+    /** Compact fixture adapter; production accepts YAML only. */
+    protected function policyFixture(string $lines): string
+    {
+        $policy = [];
+        foreach (explode("\n", $lines) as $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
+            [$key, $value] = array_map('trim', explode('=', $line, 2));
+            [$plain, $reason] = array_pad(explode(' -- ', $value, 2), 2, '');
+            $list = array_values(array_filter(array_map('trim', explode(',', $plain)), static fn ($v) => $v !== ''));
+            switch ($key) {
+                case 'min_coverage': $policy['coverage']['minimum'] = ctype_digit($plain) ? (int) $plain : $plain; break;
+                case 'tests': $policy['tests'] = ['mode' => $plain, 'reason' => $reason]; break;
+                case 'ignore_checks': $policy['ignore_checks'] = ['checks' => $list, 'reason' => $reason]; break;
+                case 'vendor': $policy['vendor'] = $plain === 'committed' ? ['mode' => $plain, 'reason' => $reason] : $value; break;
+                case 'known_hooks': $policy['known_hooks'] = $list; break;
+                case 'known_api4_entities': $policy['known_api4_entities'] = ['entities' => $list, 'reason' => $reason]; break;
+                case 'bundles': $policy['bundles'] = ['mode' => $plain, 'reason' => $reason]; break;
+                case 'deploy_hygiene':
+                case 'deploy_hygiene': $policy['deploy_hygiene'] = ['paths' => $list, 'reason' => $reason]; break;
+                case 'vendored_paths': $policy['vendored_paths'][] = ['path' => $plain, 'reason' => $reason]; break;
+                case 'smarty_skip_templates': $policy['smarty_skip_templates'][] = ['template' => $plain, 'reason' => $reason]; break;
+                case 'release': $policy['release'] = ['mode' => $plain, 'reason' => $reason]; break;
+                case 'max_unreleased_days': $policy[$key] = ctype_digit($plain) ? (int) $plain : $plain; break;
+                case 'mutation_min_msi': $policy['mutation']['minimum_msi'] = ctype_digit($plain) ? (int) $plain : $plain; break;
+                case 'mutation_min_covered_msi': $policy['mutation']['minimum_covered_msi'] = ctype_digit($plain) ? (int) $plain : $plain; break;
+                case 'mutation_paths': $policy['mutation']['paths'] = $list; break;
+                case 'dist_exclude': $policy['dist']['exclude'] = $list; break;
+                case 'dist_include': $policy['dist']['include'] = array_map(static fn ($path) => ['path' => $path, 'reason' => $reason], $list); break;
+                case 'lifecycle_log_ignore': $policy['lifecycle']['log_ignore'][] = ['pattern' => $plain, 'reason' => $reason]; break;
+                case 'template_custom': $policy['template_custom'] = ['paths' => $list, 'reason' => $reason]; break;
+                case 'extension_source':
+                    [$sourceKey, $url] = array_pad(explode('@', $plain, 2), 2, '');
+                    $policy['extension_sources'][] = ['key' => $sourceKey, 'url' => $url, 'sha256' => str_repeat('a', 64), 'reason' => $reason];
+                    break;
+                default: $policy[$key] = $value; break;
+            }
+        }
+        return Yaml::dump(['version' => 1, 'policy' => $policy], 8, 2) . "\n";
     }
 
     /**

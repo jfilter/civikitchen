@@ -18,31 +18,31 @@ final class NpmLicenseCheckTest extends CheckTestCase
     public function testFailsWhenAManifestDeclaresTheWrongLicence(): void
     {
         $context = $this->repo([
-            '.ckconform' => "npm_license=UNLICENSED\n",
+            '__policy_fixture' => "npm_license=UNLICENSED\n",
             'package.json' => '{"name": "fixture", "license": "ISC"}',
         ], git: true);
         $this->assertFails(
             $this->run_(new NpmLicenseCheck(), $context),
-            "package.json license is 'ISC', .ckconform expects 'UNLICENSED'"
+            "package.json license is 'ISC', civikitchen.yaml expects 'UNLICENSED'"
         );
     }
 
     public function testAMissingLicenceFieldReportsAsUnset(): void
     {
         $context = $this->repo([
-            '.ckconform' => "npm_license=UNLICENSED\n",
+            '__policy_fixture' => "npm_license=UNLICENSED\n",
             'package.json' => '{"name": "fixture"}',
         ], git: true);
         $this->assertFails(
             $this->run_(new NpmLicenseCheck(), $context),
-            "package.json license is 'unset', .ckconform expects 'UNLICENSED'"
+            "package.json license is 'unset', civikitchen.yaml expects 'UNLICENSED'"
         );
     }
 
     public function testSilentWhenEveryTrackedManifestMatches(): void
     {
         $context = $this->repo([
-            '.ckconform' => "npm_license=UNLICENSED\n",
+            '__policy_fixture' => "npm_license=UNLICENSED\n",
             'package.json' => '{"license": "UNLICENSED"}',
             'js/build/package.json' => '{"license": "unlicensed"}',
         ], git: true);
@@ -52,20 +52,20 @@ final class NpmLicenseCheckTest extends CheckTestCase
     public function testNestedManifestsAreCheckedToo(): void
     {
         $context = $this->repo([
-            '.ckconform' => "npm_license=UNLICENSED\n",
+            '__policy_fixture' => "npm_license=UNLICENSED\n",
             'package.json' => '{"license": "UNLICENSED"}',
             'js/build/package.json' => '{"license": "MIT"}',
         ], git: true);
         $this->assertFails(
             $this->run_(new NpmLicenseCheck(), $context),
-            "js/build/package.json license is 'MIT', .ckconform expects 'UNLICENSED'"
+            "js/build/package.json license is 'MIT', civikitchen.yaml expects 'UNLICENSED'"
         );
     }
 
     public function testVendoredManifestsUnderNodeModulesAreIgnored(): void
     {
         $context = $this->repo([
-            '.ckconform' => "npm_license=UNLICENSED\n",
+            '__policy_fixture' => "npm_license=UNLICENSED\n",
             'package.json' => '{"license": "UNLICENSED"}',
             'node_modules/left-pad/package.json' => '{"license": "WTFPL"}',
         ], git: true);
@@ -76,7 +76,7 @@ final class NpmLicenseCheckTest extends CheckTestCase
     public function testUntrackedManifestsAreIgnored(): void
     {
         $context = $this->repo([
-            '.ckconform' => "npm_license=UNLICENSED\n",
+            '__policy_fixture' => "npm_license=UNLICENSED\n",
             'package.json' => '{"license": "UNLICENSED"}',
         ], git: true);
         file_put_contents($context->path('later.package.json'), '{"license": "MIT"}');
@@ -86,7 +86,7 @@ final class NpmLicenseCheckTest extends CheckTestCase
     public function testADisjunctiveListIsAcceptedWhenItContainsTheExpectedLicence(): void
     {
         $context = $this->repo([
-            '.ckconform' => "npm_license=UNLICENSED\n",
+            '__policy_fixture' => "npm_license=UNLICENSED\n",
             'package.json' => '{"name": "x", "license": ["UNLICENSED", "MIT"]}',
         ], git: true);
         $this->assertPasses($this->run_(new NpmLicenseCheck(), $context));
@@ -95,7 +95,7 @@ final class NpmLicenseCheckTest extends CheckTestCase
     public function testADisjunctiveListWithoutTheExpectedLicenceFails(): void
     {
         $context = $this->repo([
-            '.ckconform' => "npm_license=UNLICENSED\n",
+            '__policy_fixture' => "npm_license=UNLICENSED\n",
             'package.json' => '{"name": "x", "license": ["MIT", "Apache-2.0"]}',
         ], git: true);
         $this->assertFails($this->run_(new NpmLicenseCheck(), $context), "is 'MIT or Apache-2.0'");

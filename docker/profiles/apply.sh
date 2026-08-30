@@ -20,6 +20,28 @@
 #   apply.sh <profile-dir>     # e.g. /usr/local/share/civikitchen/profiles/verein
 set -euo pipefail
 
+# Packaged code replaced by an immutable Git pin remains recoverable until the
+# complete profile succeeds. A failed enable/seed/user step restores the prior
+# filesystem state; installed packaged extensions are refused below because a
+# database upgrade cannot be rolled back safely by swapping PHP files.
+PROFILE_SUCCEEDED=0
+declare -a REPLACED_TARGETS=() REPLACED_BACKUPS=()
+ck_profile_cleanup() {
+    local index target backup
+    for index in "${!REPLACED_TARGETS[@]}"; do
+        target="${REPLACED_TARGETS[${index}]}"
+        backup="${REPLACED_BACKUPS[${index}]}"
+        if [ "${PROFILE_SUCCEEDED}" = 1 ]; then
+            rm -rf "${backup}"
+        elif [ -e "${backup}" ]; then
+            rm -rf "${target}"
+            mv "${backup}" "${target}"
+            echo "  restored packaged extension after failed profile: ${target}" >&2
+        fi
+    done
+}
+trap ck_profile_cleanup EXIT
+
 PROFILE_DIR="${1:?usage: apply.sh <profile-dir>}"
 PROFILE_NAME="$(basename "${PROFILE_DIR}")"
 JSON="${PROFILE_DIR}/profile.json"
@@ -42,8 +64,15 @@ mkdir -p "${EXT_DIR}"
 # (e.g. org.civicoop.civirules on drupal10-demo). Cloning a second copy of a
 # known key is fatal (PHP redeclares the module functions), so both fetch
 # steps below skip keys from this list.
-LOCAL_KEYS="$(cv ev 'foreach (CRM_Extension_System::singleton()->getFullContainer()->getKeys() as $k) { echo $k . PHP_EOL; }')"
+LOCAL_EXTENSIONS="$(cv ev '$c=CRM_Extension_System::singleton()->getFullContainer(); foreach ($c->getKeys() as $k) { echo $k . "\t" . $c->getPath($k) . PHP_EOL; }')"
+LOCAL_KEYS="$(cut -f1 <<<"${LOCAL_EXTENSIONS}")"
 ext_present() { grep -qx "$1" <<<"${LOCAL_KEYS}" || [ -d "${EXT_DIR}/$1" ]; }
+extension_key() {
+    php -r '
+      $xml = @simplexml_load_file($argv[1]);
+      echo $xml instanceof SimpleXMLElement ? (string) $xml["key"] : "";
+    ' "$1/info.xml" 2>/dev/null || true
+}
 
 # The UF (CMS framework) this site runs on — "Standalone", "WordPress",
 # "Drupal8", ... A dependency may declare `"skipUf": ["Standalone"]` (values
@@ -54,6 +83,19 @@ ext_present() { grep -qx "$1" <<<"${LOCAL_KEYS}" || [ -d "${EXT_DIR}/$1" ]; }
 # session storage on Standalone, after which every web request fatals
 # (https://github.com/systopia/de.systopia.remoteevent/issues/128).
 UF="$(cv ev 'echo CIVICRM_UF;')"
+# Generated users receive passwords and API keys, but CiviKitchen does not mint
+# JWTs. Validate the effective merged policy before fetching or replacing code.
+if jq -e '(.apiUsers // []) | length > 0' "${JSON}" >/dev/null; then
+    AUTHX_POLICY="${CK_AUTHX_HEADER_CRED:-$(jq -r '(.authx.header_cred // ["jwt", "api_key"]) | join(",")' "${JSON}")}"
+    if [[ ",${AUTHX_POLICY}," != *,api_key,* && ",${AUTHX_POLICY}," != *,pass,* ]]; then
+        echo "apply.sh: API users need an AuthX policy containing api_key or pass; JWT credentials are not generated" >&2
+        exit 1
+    fi
+    if [ "${UF}" = Joomla ] && [[ ",${AUTHX_POLICY}," != *,api_key,* ]]; then
+        echo "apply.sh: Joomla API users require api_key authentication" >&2
+        exit 1
+    fi
+fi
 # jq filter fragment: dependencies NOT skipped on this UF.
 NOT_SKIPPED='select((.skipUf // []) | index($uf) | not)'
 jq -r --arg uf "${UF}" \
@@ -64,16 +106,98 @@ jq -r --arg uf "${UF}" \
 echo "==> [${PROFILE_NAME}] cloning extensions into ${EXT_DIR}"
 # Tab-separated so URLs/names never collide with the field separator. A failed
 # clone/checkout aborts the apply (loud) — a missing extension must not ship.
-jq -r --arg uf "${UF}" ".dependencies[] | ${NOT_SKIPPED} | select(.repo) | \"\(.repo)\t\(.name)\t\(.version)\"" "${JSON}" \
-| while IFS=$'\t' read -r repo name version; do
-    if ext_present "${name}"; then echo "  ${name} already present"; continue; fi
+while IFS=$'\t' read -r repo name version; do
+    target="${EXT_DIR}/${name}"
+    # A civibuild image can expose bundled extensions from another scanned
+    # directory. Converge the discovered code in place; silently accepting it
+    # would bypass the profile's immutable commit pin.
+    if [ ! -d "${target}" ]; then
+        discovered="$(awk -F '\t' -v key="${name}" '$1 == key {sub(/^[^\t]*\t/, ""); print; exit}' <<<"${LOCAL_EXTENSIONS}")"
+        [ -z "${discovered}" ] || target="${discovered}"
+    fi
+    if [ -d "${target}" ]; then
+        if [ ! -d "${target}/.git" ]; then
+            # civibuild may bake a release archive directly into the primary
+            # extension directory and then strip every .git directory. A
+            # profile with a pinned Git source must still converge that code
+            # to the requested commit. Only replace a directory which CiviCRM
+            # already recognizes under this exact extension key; arbitrary or
+            # half-created directories remain a hard error.
+            existing_key="$(extension_key "${target}")"
+            if ! grep -qx "${name}" <<<"${LOCAL_KEYS}" || [ "${existing_key}" != "${name}" ]; then
+                echo "  ERROR: ${target} already exists but is not a verifiable git checkout" >&2
+                exit 1
+            fi
+            if ! db_installed_keys="$(cv ext:list --statuses=installed,disabled --columns=key --out=list 2>/dev/null)"; then
+                echo "  ERROR: could not determine database lifecycle status for ${name}" >&2
+                exit 1
+            fi
+            if grep -qx "${name}" <<<"${db_installed_keys}"; then
+                echo "  ERROR: refusing to replace database-installed packaged extension ${name}; its lifecycle cannot be rolled back safely" >&2
+                exit 1
+            fi
+            if ! uninstalled_keys="$(cv ext:list --statuses=uninstalled --columns=key --out=list 2>/dev/null)"; then
+                echo "  ERROR: could not determine uninstalled extension status for ${name}" >&2
+                exit 1
+            fi
+            if ! grep -qx "${name}" <<<"${uninstalled_keys}"; then
+                echo "  ERROR: refusing to replace ${name} with unknown extension lifecycle status" >&2
+                exit 1
+            fi
+            echo "  replacing packaged ${name} with pinned commit ${version}"
+            temporary="$(mktemp -d "${EXT_DIR}/.${name}.clone.XXXXXX")"
+            if ! git clone --quiet "${repo}" "${temporary}" \
+              || ! git -C "${temporary}" checkout --quiet "${version}"; then
+                rm -rf "${temporary}"
+                echo "  ERROR: could not clone ${name} at requested ref ${version}" >&2
+                exit 1
+            fi
+            if [ "$(extension_key "${temporary}")" != "${name}" ]; then
+                rm -rf "${temporary}"
+                echo "  ERROR: cloned repository does not declare extension key ${name}" >&2
+                exit 1
+            fi
+            packaged="$(dirname "${target}")/.$(basename "${target}").packaged.$$"
+            mv "${target}" "${packaged}"
+            if ! mv "${temporary}" "${target}"; then
+                mv "${packaged}" "${target}"
+                rm -rf "${temporary}"
+                echo "  ERROR: could not install pinned ${name}" >&2
+                exit 1
+            fi
+            REPLACED_TARGETS+=("${target}")
+            REPLACED_BACKUPS+=("${packaged}")
+            continue
+        fi
+        expected="$(git -C "${target}" rev-parse --verify "${version}^{commit}" 2>/dev/null || true)"
+        actual="$(git -C "${target}" rev-parse --verify HEAD 2>/dev/null || true)"
+        if [ -z "${expected}" ] || [ "${actual}" != "${expected}" ]; then
+            echo "  ERROR: ${target} exists at ${actual:-unknown}, not requested ref ${version}" >&2
+            exit 1
+        fi
+        echo "  ${name} already present at ${version}"
+        continue
+    fi
+    # A bundled/alternate extension path can satisfy this key without owning
+    # EXT_DIR/name. Do not clone a duplicate copy into the primary directory.
+    if grep -qx "${name}" <<<"${LOCAL_KEYS}"; then echo "  ${name} already present"; continue; fi
     echo "  cloning ${name} @ ${version}"
-    git clone --quiet "${repo}" "${EXT_DIR}/${name}"
-    # Strict checkout of the ref named in profile.json — a missing ref aborts
-    # the apply. No silent fallback: a wrong pin must fail loudly, not ship
-    # something else.
-    git -C "${EXT_DIR}/${name}" checkout --quiet "${version}"
-done
+    temporary="$(mktemp -d "${EXT_DIR}/.${name}.clone.XXXXXX")"
+    # Clone and verify away from the discovery path. If checkout fails, no
+    # partial directory can make the next boot believe the dependency exists.
+    if ! git clone --quiet "${repo}" "${temporary}" \
+      || ! git -C "${temporary}" checkout --quiet "${version}"; then
+        rm -rf "${temporary}"
+        echo "  ERROR: could not clone ${name} at requested ref ${version}" >&2
+        exit 1
+    fi
+    if [ "$(extension_key "${temporary}")" != "${name}" ]; then
+        rm -rf "${temporary}"
+        echo "  ERROR: cloned repository does not declare extension key ${name}" >&2
+        exit 1
+    fi
+    mv "${temporary}" "${target}"
+done < <(jq -r --arg uf "${UF}" ".dependencies[] | ${NOT_SKIPPED} | select(.repo) | \"\(.repo)\t\(.name)\t\(.version)\"" "${JSON}")
 
 echo "==> [${PROFILE_NAME}] downloading registry extensions"
 jq -r --arg uf "${UF}" ".dependencies[] | ${NOT_SKIPPED} | select(.registry == true) | .name" "${JSON}" \
@@ -81,7 +205,7 @@ jq -r --arg uf "${UF}" ".dependencies[] | ${NOT_SKIPPED} | select(.registry == t
     [ -n "${name}" ] || continue
     if ext_present "${name}"; then echo "  ${name} already present"; continue; fi
     echo "  downloading ${name}"
-    cv ext:download "${name}"
+    cv ext:download -n --no-install "${name}"
 done
 
 echo "==> [${PROFILE_NAME}] enabling extensions"
@@ -116,20 +240,20 @@ echo "==> [${PROFILE_NAME}] seeding demo data"
 # seed instead of one per API call, with real loops + error handling. Run as
 # the admin CMS user — extensions like CiviSEPA make internal API calls that
 # re-check permissions regardless of the caller's check_permissions flag.
-# Ordered by filename prefix; each seed is best-effort — one flaky seeder must
-# not abort the apply (everything before the seeds is hard-fail). The boot
-# test fails on the WARN line, so CI still catches a broken seed.
+# Ordered by filename prefix. A failed seed aborts the apply so the caller does
+# not write its provisioning marker; the next boot can then retry the complete
+# idempotent profile instead of preserving a partially seeded healthy site.
 for seed in "${PROFILE_DIR}/seeds/"*.php; do
     [ -e "${seed}" ] || continue
     echo "  -> $(basename "${seed}")"
-    # The WARN wording is load-bearing: tests/images/boot-test-demo.sh and
-    # external consumers grep the logs for `WARN: .*failed \(non-fatal\)` —
-    # don't reword without updating them.
-    cv scr --user=admin "${seed}" || echo "  WARN: $(basename "${seed}") failed (non-fatal)"
+    if ! cv scr --user=admin "${seed}"; then
+        echo "  ERROR: profile seed failed: $(basename "${seed}")" >&2
+        exit 1
+    fi
 done
 
 if jq -e '.apiUsers' "${JSON}" >/dev/null 2>&1; then
-    echo "==> [${PROFILE_NAME}] configuring API users + AuthX"
+    echo "==> [${PROFILE_NAME}] preparing API users + AuthX"
     # authx powers the api_key / basic-auth the API users rely on. It ships with
     # core but isn't enabled on every CMS build (civibuild's joomla-demo leaves
     # it uninstalled), so enable it here — in its own process, before the script
@@ -137,8 +261,12 @@ if jq -e '.apiUsers' "${JSON}" >/dev/null 2>&1; then
     cv ext:enable authx
     # PHP via cv scr: cv boots CiviCRM + the host CMS, so user/role creation
     # uses the native CMS APIs on every flavor (no drush/wp-cli dependency).
-    CK_PROFILE_JSON="${JSON}" cv scr "$(dirname "$0")/configure-api-users.php"
+    if [ "${CK_DEFER_API_USERS:-0}" != 1 ]; then
+        CK_PROFILE_JSON="${JSON}" CK_AUTHX_HEADER_CRED="${CK_AUTHX_HEADER_CRED:-}" \
+          cv scr "$(dirname "$0")/configure-api-users.php"
+    fi
 fi
 
 cv flush
+PROFILE_SUCCEEDED=1
 echo "==> [${PROFILE_NAME}] profile applied"

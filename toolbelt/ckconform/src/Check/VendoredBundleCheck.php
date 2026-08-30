@@ -44,10 +44,10 @@ final class VendoredBundleCheck implements Check
         }
 
         // Some repos ship bundles deliberately (e.g. no npm on the deploy
-        // path). Declared in .ckconform: bundles=committed -- <reason>
+        // path). Declared in civikitchen.yaml: bundles=committed -- <reason>
         $policy = $context->policyValue('bundles');
         if ($policy !== null && str_starts_with($policy, 'committed')) {
-            $reporter->ok("bundles committed — declared deliberate in .ckconform ({$policy})");
+            $reporter->ok("bundles committed — declared deliberate in civikitchen.yaml ({$policy})");
 
             return;
         }

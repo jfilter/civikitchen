@@ -4,24 +4,26 @@ declare(strict_types=1);
 
 namespace CiviKitchen\Ckconform;
 
+use Symfony\Component\Yaml\Exception\ParseException;
+use Symfony\Component\Yaml\Yaml;
+
 /**
- * The `.ckconform` policy file: its parser, and the inventory of what may be in
- * it. The only parser — the shell side reads it through
- * `ckconform --policy-env` / `--policy <key>` (there used to be five sed-based
- * readers here, which disagreed on indentation, whitespace and the reason
- * suffix; see README, "One file, one parser").
+ * The `policy:` section of civikitchen.yaml: its single parser and the
+ * inventory of what may be in it. Shell tools read it only through
+ * `ckconform --policy-env` / `--policy <key>`.
  *
- * FORMAT: `KEY=VALUE` per line, `#` comments and blank lines ignored,
- * whitespace trimmed, first occurrence of a scalar key wins. The ` -- <reason>`
- * suffix is part of the VALUE — checks match on it, so whether a reason is
- * mandatory is decided by the check that owns each key, not here.
+ * The public YAML uses typed nested objects. This class normalizes them to the
+ * stable scalar/list view consumed by existing PHP and shell checks.
  */
 final class Policy
 {
+    public const CONFIG_FILE = 'civikitchen.yaml';
+
+    public const LEGACY_FILE = '.ckconform';
+
     /**
-     * Every key `.ckconform` may carry, and who reads it. PolicyKeyCheck
-     * reports anything not listed here, so a new key is added HERE as well as
-     * read.
+     * Every normalized key a consumer may read, and its owner. Public YAML
+     * property names are enforced by the JSON Schema before normalization.
      *
      * @var array<string, string>
      */
@@ -37,6 +39,7 @@ final class Policy
         'known_hooks' => 'ckconform: hook names this repo defines itself',
         'known_api4_entities' => 'ckconform: APIv4 entities supplied by required third-party extensions, reason mandatory',
         'bundles' => 'ckconform: vendored front-end bundles that are not repo source',
+        'deploy_hygiene' => 'ckconform: deploy-only files deliberately shipped, reason mandatory',
         'vendored_paths' => 'cklint + ckfmt + ckeslint: third-party source this repo carries verbatim, reason mandatory',
         'smarty_skip_templates' => 'cksmarty: managed MessageTemplates this repo renders without Smarty, reason mandatory',
         'npm_license' => 'ckconform: accepted npm licence identifiers',
@@ -53,7 +56,7 @@ final class Policy
         'template_custom' => 'ckinit: template-managed files this repo owns instead',
         'renovate_preset' => 'ckinit: the Renovate preset the managed renovate.json extends',
         // read by the image entrypoint (docker/runtime/provision.sh)
-        'extension_source' => 'entrypoint: key@URL to download a <requires> dependency the registry does not serve, one per line',
+        'extension_source' => 'entrypoint: key@HTTPS-URL#sha256=digest for a dependency, one per source',
     ];
 
     /**
@@ -66,7 +69,7 @@ final class Policy
      *
      * @var list<string>
      */
-    public const REPEATABLE = ['lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates', 'extension_source'];
+    public const REPEATABLE = ['dist_exclude', 'dist_include', 'lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates', 'extension_source'];
 
     /** @var list<string> */
     public const PERCENT = ['min_coverage', 'mutation_min_msi', 'mutation_min_covered_msi'];
@@ -74,9 +77,9 @@ final class Policy
     /**
      * Environment variable naming an organisation-wide defaults file in the
      * same format. Its keys apply to every repo whose tools see the variable;
-     * the repo's own `.ckconform` overrides per key.
+     * the repo's own `civikitchen.yaml` overrides per key.
      */
-    public const DEFAULTS_ENV = 'CK_DEFAULT_POLICY';
+    public const DEFAULTS_ENV = 'CK_DEFAULT_CONFIG';
 
     /**
      * The keys a defaults file may set: those read by ckconform and ckinit
@@ -128,7 +131,7 @@ final class Policy
     }
 
     /**
-     * The view every reader gets: the repo file over the CK_DEFAULT_POLICY
+     * The view every reader gets: the repo config over the CK_DEFAULT_CONFIG
      * layer. Context::policy() and the CLI read-outs go through here, so the
      * merge happens in exactly one place.
      *
@@ -140,51 +143,118 @@ final class Policy
     }
 
     /**
-     * Unknown keys are returned like any other — reporting them is
-     * PolicyKeyCheck's job, and dropping them here would leave it nothing.
+     * Parse the policy mapping from a civikitchen.yaml document. Unknown keys
+     * are returned so PolicyKeyCheck can produce the focused diagnostic.
      *
      * @return array<string, list<string>> key => values, in file order
      */
     public static function parse(?string $raw): array
     {
-        $out = [];
-        foreach (explode("\n", $raw ?? '') as $line) {
-            $line = trim($line);
-            if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
-                continue;
-            }
-            [$key, $value] = explode('=', $line, 2);
-            $key = trim($key);
-            if ($key === '') {
-                continue;
-            }
-            $out[$key][] = trim($value);
+        if ($raw === null || trim($raw) === '') {
+            return [];
         }
-
+        if (strlen($raw) > 1024 * 1024) {
+            throw new \RuntimeException(self::CONFIG_FILE . ' exceeds the 1 MiB configuration limit');
+        }
+        self::loadYaml();
+        $first = ltrim($raw)[0] ?? '';
+        if ($first === '{' || $first === '[') {
+            throw new \RuntimeException(self::CONFIG_FILE . ' must use YAML mapping syntax, not JSON syntax');
+        }
+        try {
+            $document = Yaml::parse($raw, Yaml::PARSE_EXCEPTION_ON_INVALID_TYPE);
+        } catch (ParseException $e) {
+            throw new \RuntimeException('invalid ' . self::CONFIG_FILE . ': ' . $e->getMessage(), 0, $e);
+        }
+        if (!is_array($document) || array_is_list($document)) {
+            throw new \RuntimeException(self::CONFIG_FILE . ' root must be a YAML mapping');
+        }
+        self::validateDocument($document);
+        $policy = $document['policy'] ?? [];
+        $out = [];
+        foreach (['license', 'copyright', 'hook_style', 'npm_license', 'max_unreleased_days', 'renovate_preset'] as $key) {
+            if (array_key_exists($key, $policy)) $out[$key] = [(string) $policy[$key]];
+        }
+        if (isset($policy['coverage']['minimum'])) $out['min_coverage'] = [(string) $policy['coverage']['minimum']];
+        if (isset($policy['ignore_checks'])) $out['ignore_checks'] = [implode(',', $policy['ignore_checks']['checks']) . ' -- ' . $policy['ignore_checks']['reason']];
+        if (isset($policy['tests'])) $out['tests'] = [$policy['tests']['mode'] . ' -- ' . $policy['tests']['reason']];
+        if (isset($policy['vendor'])) $out['vendor'] = [is_array($policy['vendor']) ? $policy['vendor']['mode'] . ' -- ' . $policy['vendor']['reason'] : $policy['vendor']];
+        if (isset($policy['known_hooks'])) $out['known_hooks'] = [implode(',', $policy['known_hooks'])];
+        if (isset($policy['known_api4_entities'])) $out['known_api4_entities'] = [implode(',', $policy['known_api4_entities']['entities']) . ' -- ' . $policy['known_api4_entities']['reason']];
+        if (isset($policy['bundles'])) $out['bundles'] = [$policy['bundles']['mode'] . ' -- ' . $policy['bundles']['reason']];
+        if (isset($policy['deploy_hygiene'])) $out['deploy_hygiene'] = [implode(',', $policy['deploy_hygiene']['paths']) . ' -- ' . $policy['deploy_hygiene']['reason']];
+        foreach ($policy['vendored_paths'] ?? [] as $item) $out['vendored_paths'][] = $item['path'] . ' -- ' . $item['reason'];
+        foreach ($policy['smarty_skip_templates'] ?? [] as $item) $out['smarty_skip_templates'][] = $item['template'] . ' -- ' . $item['reason'];
+        if (isset($policy['release'])) $out['release'] = [$policy['release']['mode'] . ' -- ' . $policy['release']['reason']];
+        if (isset($policy['mutation']['minimum_msi'])) $out['mutation_min_msi'] = [(string) $policy['mutation']['minimum_msi']];
+        if (isset($policy['mutation']['minimum_covered_msi'])) $out['mutation_min_covered_msi'] = [(string) $policy['mutation']['minimum_covered_msi']];
+        if (isset($policy['mutation']['paths'])) $out['mutation_paths'] = [implode(',', $policy['mutation']['paths'])];
+        foreach ($policy['dist']['exclude'] ?? [] as $path) $out['dist_exclude'][] = $path;
+        if (isset($policy['dist']['include'])) {
+            foreach ($policy['dist']['include'] as $item) $out['dist_include'][] = $item['path'] . ' -- ' . $item['reason'];
+        }
+        foreach ($policy['lifecycle']['log_ignore'] ?? [] as $item) $out['lifecycle_log_ignore'][] = $item['pattern'] . ' -- ' . $item['reason'];
+        if (isset($policy['template_custom'])) $out['template_custom'] = [implode(',', $policy['template_custom']['paths']) . ' -- ' . $policy['template_custom']['reason']];
+        $sourceKeys = [];
+        foreach ($policy['extension_sources'] ?? [] as $item) {
+            if (isset($sourceKeys[$item['key']])) {
+                throw new \RuntimeException(self::CONFIG_FILE . ': policy.extension_sources repeats key ' . $item['key']);
+            }
+            $sourceKeys[$item['key']] = true;
+            $out['extension_source'][] = $item['key'] . '@' . $item['url'] . '#sha256=' . strtolower($item['sha256']) . ' -- ' . $item['reason'];
+        }
         return $out;
     }
 
-    /**
-     * The lines parse() skips over: not blank, not a comment, but carrying no
-     * `KEY=` either — `min_coverage 70` is one, and it never becomes a key, so
-     * checking parsed keys alone can never see it.
-     *
-     * @return array<int, string> 1-based line number => the offending line
-     */
-    public static function malformed(?string $raw): array
+    /** @param array<string, mixed> $document */
+    private static function validateDocument(array $document): void
     {
-        $out = [];
-        foreach (explode("\n", $raw ?? '') as $i => $line) {
-            $line = trim($line);
-            if ($line === '' || str_starts_with($line, '#')) {
-                continue;
-            }
-            if (!str_contains($line, '=') || trim(explode('=', $line, 2)[0]) === '') {
-                $out[$i + 1] = $line;
+        if (!class_exists('CkProfileSchemaValidator')) {
+            foreach ([
+                dirname(__DIR__, 3) . '/packages/civicrm-profile-schema/validate.php',
+                '/usr/local/share/civikitchen/profile-schema/validate.php',
+            ] as $validator) {
+                if (is_file($validator)) {
+                    require_once $validator;
+                    break;
+                }
             }
         }
+        if (!class_exists('CkProfileSchemaValidator')) {
+            throw new \RuntimeException('CiviKitchen configuration validator is missing');
+        }
+        foreach ([
+            dirname(__DIR__, 3) . '/packages/civikitchen-scenario-schema/scenario.schema.json',
+            '/usr/local/share/civikitchen/scenario-schema/scenario.schema.json',
+        ] as $schemaFile) {
+            if (is_file($schemaFile)) break;
+        }
+        if (!isset($schemaFile) || !is_file($schemaFile)) {
+            throw new \RuntimeException('CiviKitchen configuration schema is missing');
+        }
+        $schema = json_decode((string) file_get_contents($schemaFile), true, 512, JSON_THROW_ON_ERROR);
+        $object = json_decode(json_encode($document, JSON_THROW_ON_ERROR), false, 512, JSON_THROW_ON_ERROR);
+        $errors = (new \CkProfileSchemaValidator($schema))->validate($object);
+        if ($errors !== []) throw new \RuntimeException(implode("\n", $errors));
+    }
 
-        return $out;
+    private static function loadYaml(): void
+    {
+        if (class_exists(Yaml::class)) {
+            return;
+        }
+        foreach ([
+            dirname(__DIR__, 3) . '/packages/civikitchen-scenario-schema/vendor/autoload.php',
+            '/usr/local/share/civikitchen/scenario-schema/vendor/autoload.php',
+        ] as $autoload) {
+            if (is_file($autoload)) {
+                require_once $autoload;
+                if (class_exists(Yaml::class)) {
+                    return;
+                }
+            }
+        }
+        throw new \RuntimeException('CiviKitchen YAML parser dependency is missing');
     }
 
     /**

@@ -92,7 +92,7 @@ final class UnreleasedShippedChangesCheck implements Check
         }
         if (preg_match('/^[1-9]\d*$/', $declared) !== 1) {
             $reporter->fail(
-                ".ckconform: max_unreleased_days must be a whole number of days, got '{$declared}'"
+                "civikitchen.yaml: max_unreleased_days must be a whole number of days, got '{$declared}'"
             );
 
             return null;

@@ -119,7 +119,7 @@ on:
           Mutation testing (infection via `ckmutate`) as its own job: does the
           suite ASSERT on what it covers. Slow and its score moves with
           unrelated refactors, so it is a SCHEDULED signal, never a push gate.
-          A no-op unless the repo sets mutation_min_msi in .ckconform.
+          A no-op unless the repo sets mutation_min_msi in civikitchen.yaml.
         type: boolean
         default: false
       playwright:
@@ -165,7 +165,7 @@ on:
         default: false
       policy_defaults:
         description: >-
-          Repo (`owner/repo`) whose root `.ckconform` holds the organisation's
+          Repo (`owner/repo`) whose root `civikitchen.yaml` holds the organisation's
           default policy — the keys every repo shares (license, copyright,
           vendor, ...). Checked out to .civikitchen-siblings/policy and read
           by ckconform under the repo's own file, which overrides per key. A
@@ -258,7 +258,7 @@ jobs:
   # Template drift: the tooling files civikitchen owns (CI caller, test
   # bootstraps, CI compose stack) must match the template, or
   # eleven repos quietly diverge again — the exact state the shared workflow
-  # exists to end. Deliberate deviations are declared in the repo's .ckconform
+  # exists to end. Deliberate deviations are declared in the repo's civikitchen.yaml
   # (template_custom=<file> -- <reason>); the fix for everything else is one
   # `scaffold/ckinit.php --update` away.
   template:
@@ -331,8 +331,10 @@ jobs:
         env:
           CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
         run: |
+          composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
+            --working-dir=.civikitchen-ci/packages/civikitchen-scenario-schema
           if [ -n "$CK_POLICY_DEFAULTS" ]; then
-            export CK_DEFAULT_POLICY="$PWD/.civikitchen-siblings/policy/.ckconform"
+            export CK_DEFAULT_CONFIG="$PWD/.civikitchen-siblings/policy/civikitchen.yaml"
           fi
           php .civikitchen-ci/scaffold/ckinit.php --check .
 
@@ -720,7 +722,7 @@ jobs:
           token: ${{ steps.app.outputs.token || github.token }}
           path: ${{ steps.sibling.outputs.path }}
 
-      # The organisation's default .ckconform, next to the sibling for the
+      # The organisation's default civikitchen.yaml, next to the sibling for the
       # same two reasons (dot-prefixed: invisible to the extension scanner and
       # to cklint). It reaches ckconform through the extension's own mount.
       - name: Check out the organisation policy defaults
@@ -851,9 +853,9 @@ jobs:
           # checkout above sits below the extension's mount. Empty = no layer.
           defaults=""
           if [ -n "$CK_POLICY_DEFAULTS" ]; then
-            defaults="/var/www/html/ext/$CK_EXT_KEY/.civikitchen-siblings/policy/.ckconform"
+            defaults="/var/www/html/ext/$CK_EXT_KEY/.civikitchen-siblings/policy/civikitchen.yaml"
           fi
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data -e "CK_DEFAULT_POLICY=$defaults" app bash -c \
+          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data -e "CK_DEFAULT_CONFIG=$defaults" app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && cklint --all && ckconform && ckcivix --check"
 
       # Formatting gate (mago for PHP, oxfmt for JS/TS). Hard by design: the
@@ -1374,7 +1376,7 @@ jobs:
   # it is a weekly reading. Belongs in the compat caller — see
   # docs/extension-standards.md.
   #
-  # The floor is the repo's own (.ckconform: mutation_min_msi), so there is
+  # The floor is the repo's own (civikitchen.yaml: mutation_min_msi), so there is
   # nothing to configure here. Without that key ckmutate exits 0 with a line
   # saying so, which is what makes switching the input on safe before the
   # number is known.

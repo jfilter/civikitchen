@@ -8,10 +8,11 @@
 #
 # The floor is POLICY, so it lives in the consuming repo, not in this tool:
 #
-#     # .ckconform
-#     min_coverage=70
+#     policy:
+#       coverage:
+#         minimum: 70
 #
-# Without min_coverage the percentage is reported and the run always passes —
+# Without policy.coverage.minimum the percentage is reported and the run always passes —
 # that is the intended way to adopt this: measure first, then set the floor to
 # what you actually have, then ratchet it up. A floor that was never measured
 # only teaches people to ignore a red build.
@@ -28,13 +29,13 @@ set -uo pipefail
 ck_require_extension_root
 ck_policy_load
 if [ ! -f phpunit.xml.dist ] && [ ! -f phpunit.xml ]; then
-  # A repo may have no PHP suite BY POLICY (tests=optional in .ckconform, the
+  # A repo may have no PHP suite by policy.tests.mode=optional.
   # file where every other policy lives) — a generator-driven theme whose
   # behaviour is covered by another harness, say. For those the shared CI's
   # unconditional ckcoverage step must be a documented no-op, not exit 2:
   # otherwise the policy exists but no pipeline can honour it.
   if [ "${CK_POLICY_TESTS:-}" = optional ]; then
-    echo "ckcoverage: no phpunit config, and .ckconform declares tests=optional — nothing to measure, by policy."
+    echo "ckcoverage: no phpunit config, and policy.tests declares it optional — nothing to measure."
     exit 0
   fi
   echo "ckcoverage: no phpunit config." >&2
@@ -82,7 +83,7 @@ echo "ckcoverage: ${pct}% line coverage (${covered}/${total} statements)"
 
 floor="${CK_POLICY_MIN_COVERAGE:-}"
 if [ -z "$floor" ]; then
-  echo "ckcoverage: no min_coverage in .ckconform — reporting only. Set it to what you have now, then ratchet."
+  echo "ckcoverage: no policy.coverage.minimum in civikitchen.yaml — reporting only."
   exit 0
 fi
 
@@ -91,12 +92,12 @@ fi
 # ckconform's policy-key check catches it in the shared CI, which runs before
 # this step; this makes the tool correct on its own too.
 case "$floor" in
-  ''|*[!0-9]*) ck_die "min_coverage in .ckconform is not a whole percentage: '$floor'" ;;
+  ''|*[!0-9]*) ck_die "policy.coverage.minimum is not a whole percentage: '$floor'" ;;
 esac
 
 if php -r 'exit($argv[1] + 0 >= $argv[2] + 0 ? 0 : 1);' "$pct" "$floor"; then
   echo "ckcoverage: floor ${floor}% met."
 else
-  echo "ckcoverage: FAIL — ${pct}% is below the ${floor}% floor from .ckconform." >&2
+  echo "ckcoverage: FAIL — ${pct}% is below policy.coverage.minimum (${floor}%)." >&2
   exit 1
 fi

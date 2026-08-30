@@ -128,8 +128,11 @@ if grep -q 'MIT' "$proprietary/README.md"; then
 fi
 grep -q '^Copyright (C) .* Acme Collective\. All rights reserved\.$' "$proprietary/LICENSE.txt"
 grep -q $'^\tphpVersion: 80100$' "$proprietary/phpstan.neon.dist"
-printf '%s\n' 'license=Proprietary' 'copyright=Acme Collective' > "$work/expected-policy"
-diff -u "$work/expected-policy" "$proprietary/.ckconform"
+php -r '
+  require $argv[1]; $d=ck_config_load($argv[2]);
+  assert($d["policy"]["license"] === "Proprietary");
+  assert($d["policy"]["copyright"] === "Acme Collective");
+' "$root/packages/civikitchen-scenario-schema/scenario.php" "$proprietary/civikitchen.yaml"
 "$root/scaffold/ckinit.php" --check "$proprietary" | grep -q 'up to date'
 grep -q -- '--license MIT --compatibility 6.12' "$FAKE_DOCKER_LOG"
 grep -q -- '--enable=no' "$FAKE_DOCKER_LOG"
@@ -151,8 +154,11 @@ php -r '
 grep -q 'licensed under \[MIT\](LICENSE.txt)' "$mit/README.md"
 grep -q '^Copyright (C) .* Acme Collective$' "$mit/LICENSE.txt"
 grep -q $'^\tphpVersion: 80300$' "$mit/phpstan.neon.dist"
-printf '%s\n' 'license=MIT' 'copyright=Acme Collective' > "$work/expected-policy"
-diff -u "$work/expected-policy" "$mit/.ckconform"
+php -r '
+  require $argv[1]; $d=ck_config_load($argv[2]);
+  assert($d["policy"]["license"] === "MIT");
+  assert($d["policy"]["copyright"] === "Acme Collective");
+' "$root/packages/civikitchen-scenario-schema/scenario.php" "$mit/civikitchen.yaml"
 
 # A failed civix run leaves no partial extension and cleans its bind mount.
 failed="$work/output/failed"

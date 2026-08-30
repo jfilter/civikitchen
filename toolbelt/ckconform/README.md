@@ -32,7 +32,7 @@ JSON, walk directories recursively, and — the actual point — **have tests**.
 3. `tests/Check/YourCheckTest.php` extending `CheckTestCase`.
 
 `Context` is the only thing that touches the filesystem: `infoXml()` (SimpleXML),
-`json()`, `policy()`/`policyValue()` (the repo's `.ckconform`), `findFiles()`
+`json()`, `policy()`/`policyValue()` (the repo's `civikitchen.yaml`), `findFiles()`
 (recursive), `tracked()`/`isTracked()`/`trackedFiles()` (git), `workflows()`.
 If you find yourself reaching for a regex over a structured file, add a method
 there instead.
@@ -57,24 +57,35 @@ already carries PHP and PHPUnit.
 ## Policy lives in the consuming repo
 
 Which licence, which coverage floor, whether tests may be skipped — none of that
-is this tool's business. It reads an optional `.ckconform` from the extension
+is this tool's business. It reads an optional `civikitchen.yaml` from the extension
 root, so a private policy never has to be published here:
 
-```
-license=Proprietary          # info.xml <license> + composer.json
-npm_license=UNLICENSED       # every tracked package.json
-copyright=Example Ltd        # must appear in LICENSE.txt
-tests=optional -- <reason>   # the reason is not optional
-min_coverage=70              # enforced by ckcoverage
-mutation_min_msi=60          # enforced by ckmutate (nightly), absent = no-op
-mutation_min_covered_msi=75  # optional second floor, covered code only
-mutation_paths=Civi          # optional: what ckmutate mutates (default: changed lines)
-known_hooks=acmeConnectors   # hook names HookDispatchNameCheck should trust beyond core's and those a present <requires> extension dispatches
-hook_style=listener          # business hooks in scan classes; classic form only for pre-boot/lifecycle/return-value hooks
-template_custom=<file>,...  -- <reason>   # read by ckinit --check/--update, not by ckconform
+```yaml
+version: 1
+policy:
+  license: Proprietary
+  npm_license: UNLICENSED
+  copyright: Example Ltd
+  tests:
+    mode: optional
+    reason: Configuration-only extension
+  coverage:
+    minimum: 70
+  mutation:
+    minimum_msi: 60
+    minimum_covered_msi: 75
+    paths:
+      - Civi
+  known_hooks:
+    - acmeConnectors
+  hook_style: listener
+  template_custom:
+    paths:
+      - .github/workflows/ci.yml
+    reason: Bespoke pipeline
 ```
 
-`.ckconform` is the one policy file for the whole ck* family — ckconform,
+`civikitchen.yaml` is the one policy file for the whole ck* family — ckconform,
 ckcoverage, ckmutate, ckrelease, cklifecycle and ckinit all read it, so a repo's
 deviations from the standard live in one place with their reasons attached.
 
@@ -82,16 +93,16 @@ deviations from the standard live in one place with their reasons attached.
 
 Keys every repo of an organisation shares (`license`, `npm_license`,
 `copyright`, `vendor`) can live once, in a file of the same format that
-`CK_DEFAULT_POLICY` names. Only the keys ckconform and ckinit read
+`CK_DEFAULT_CONFIG` names. Only the keys ckconform and ckinit read
 (`Policy::SHARED`) are taken from it — a key another gate reads would apply in
 one run and not the next, so `PolicyKeyCheck` rejects it there. Its keys apply
 to every repo the variable reaches;
-a key the repo's own `.ckconform` sets replaces the default's values — for the
+a key the repo's own `civikitchen.yaml` sets replaces the default's values — for the
 repeatable keys too, a repo's lines never inherit a fleet-wide one. The merge
 happens in `Policy::effective()`, so every reader (the checks, `--policy-env`,
 `--policy`) sees the same view. A variable naming an unreadable file is an
 error, not an absent layer, and `PolicyKeyCheck` validates the defaults file
-under its own name. `ckinit` reads `template_custom` from the repo file alone
+under its own name. `ckinit` reads `policy.template_custom` from the repo file alone
 (which managed files a repo owns is per-repo by nature) and `renovate_preset`
 from the layered view.
 
@@ -105,18 +116,31 @@ eval "$(ckconform --policy-env)"   # CK_POLICY_MIN_COVERAGE='70', … (scalars, 
 ckconform --policy lifecycle_log_ignore   # every value of one key, one per line, verbatim
 ```
 
-That is not ceremony. The format previously had **seven** readers — two in PHP,
-five in shell — and they disagreed on every edge it has: an indented line was
-honoured by PHP and invisible to `sed -n 's/^min_coverage=//p'`, so a declared
-coverage floor silently stopped being enforced; only one of the five stripped
-the mandatory ` -- <reason>`, so a reason on a numeric key reached a comparison
-as a sentence. `src/Policy.php` is now the only parser, and it also carries
-`KEYS` — the inventory of every key any tool reads. `PolicyKeyCheck` reports a
-key that is in no tool's vocabulary, which is what makes `min_covrage=70` a red
-build instead of a floor that quietly does not apply.
+That is not ceremony. The predecessor format had seven readers which disagreed
+on whitespace and reason suffixes. `src/Policy.php` is now the single normalized
+view over the schema-validated YAML. Unknown keys and wrong types fail before a
+tool can silently proceed without the intended policy.
 
 A new key is added in three places, in this order: `Policy::KEYS`, the tool that
 reads it, and the list above.
+
+## Output formats
+
+Human output remains the default. Automation can request stable structured
+results without parsing prose:
+
+```bash
+ck conform --format=human
+ck conform --format=json
+ck conform --format=github
+ck conform --format=sarif > ckconform.sarif
+```
+
+JSON carries the rule name, severity, message, summary counts, and any location
+reported structurally by a check. GitHub mode emits escaped workflow commands
+with those locations. SARIF 2.1.0 carries the same structured rules and
+locations; it never guesses a path from prose. Passing checks are intentionally
+omitted from GitHub and SARIF output.
 
 ## Suppressing a finding
 
@@ -127,8 +151,11 @@ Three escape levels, from narrow to broad — the reason is never optional:
 // ckconform-ignore-file <check-name> -- <reason>   the whole file
 ```
 
-```
-ignore_checks=<check-name>,... -- <reason>          .ckconform: skips the checks repo-wide
+```yaml
+policy:
+  ignore_checks:
+    checks: [<check-name>, ...]
+    reason: <reason>
 ```
 
 Several checks may be listed comma-separated. A marker without a reason
@@ -136,8 +163,21 @@ suppresses nothing and is itself reported, and one naming a check that does
 not exist is reported as a dead ignore — a typo'd check name would otherwise
 silently narrow nothing.
 
+Playwright configs may use the file form as a standalone `//` comment too. The
+narrow legitimate case is a manual live-provider suite with reusable
+credentials: traces can contain action parameters, request data, tokens,
+cookies, and authenticated browser state, so retaining a failed trace would
+persist the very credentials the suite is meant to protect. Suppress only that
+config, state the security reason, and leave ordinary mock/CI configs subject
+to `playwright-diagnostics`:
+
+```ts
+// ckconform-ignore-file playwright-diagnostics -- manual live-provider suite uses reusable credentials; traces must not persist them
+export default { reporter: 'list', use: { trace: 'off' } };
+```
+
 An inline ignore that silenced nothing in the whole run is reported too
 (phpstan's `reportUnmatchedIgnoredErrors`): the finding it covered is gone, so
 the ignore now only waits to swallow the next one unnoticed — delete it. Each
 listed check name is judged on its own. Not reported: a name whose check
-`ignore_checks=` skipped repo-wide, since nothing ever looked for its finding.
+`policy.ignore_checks` skipped repo-wide, since nothing ever looked for its finding.

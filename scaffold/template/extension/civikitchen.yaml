@@ -1,0 +1,23 @@
+"$schema": https://raw.githubusercontent.com/jfilter/civikitchen/main/packages/civikitchen-scenario-schema/scenario.schema.json
+version: 1
+scenario:
+  name: __SCENARIO_NAME__
+  image: ghcr.io/jfilter/civikitchen:v1
+  database:
+    image: mariadb:11.4
+  extension:
+    key: __EXTENSION_KEY__
+    path: .
+  credentials_output: file
+  checks:
+    - conform
+    - lint
+    - format
+    - compatibility
+    - dependencies
+    - javascript
+    - test
+    - coverage
+    - lifecycle
+    - smarty
+    - taint

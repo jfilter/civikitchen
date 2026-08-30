@@ -6,7 +6,7 @@
   "apiUsers": [
     {
       "username": "readonly",
-      "role": "api_readonly",
+      "role": "civikitchen_api_readonly",
       "permissions": [
         "access CiviCRM",
         "access AJAX API",
@@ -20,7 +20,7 @@
     },
     {
       "username": "fundraiser",
-      "role": "api_fundraiser",
+      "role": "civikitchen_api_fundraiser",
       "permissions": [
         "access CiviCRM",
         "access AJAX API",
@@ -44,13 +44,13 @@
     {
       "name": "org.civicoop.civirules",
       "repo": "https://lab.civicrm.org/extensions/civirules.git",
-      "version": "master",
+      "version": "848521359f64c413d0bc8c3e20e155a79f370e55",
       "enable": true
     },
     {
       "name": "de.systopia.donrec",
       "repo": "https://github.com/systopia/de.systopia.donrec.git",
-      "version": "master",
+      "version": "c9be29ae1cdd03c251dd92e5ca6a29f54d775de1",
       "enable": true
     }
   ]

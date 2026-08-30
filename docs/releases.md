@@ -175,10 +175,14 @@ jobs:
 ```
 
 Its `.github/workflows/ci.yml` is a template-managed file, so the deviation is
-declared where every deviation is declared, in the repo's `.ckconform`:
+declared where every deviation is declared, in the repo's `civikitchen.yaml`:
 
-```
-template_custom=.github/workflows/ci.yml -- canary: tracks @main ahead of the fleet
+```yaml
+policy:
+  template_custom:
+    paths:
+      - .github/workflows/ci.yml
+    reason: Canary tracks main ahead of the fleet
 ```
 
 The canary exists so that a change is exercised by a real repo before it is
@@ -201,7 +205,7 @@ release does. So the first time through, the order is not negotiable:
    whose whole purpose is to notice exactly this.
 3. Only now update the repos: `scaffold/ckinit.php --update <repo>` rewrites the
    caller and the CI compose stack to the released refs.
-4. Leave the canary on `@main` with the `template_custom` line above.
+4. Leave the canary on `@main` with the `policy.template_custom` line above.
 
 Pointing a repo at `@v1` before step 2 does not produce a red run — it produces
 a run that cannot start at all, because the ref does not resolve.

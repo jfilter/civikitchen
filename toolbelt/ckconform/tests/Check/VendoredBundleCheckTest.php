@@ -54,12 +54,12 @@ final class VendoredBundleCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'js/lib/charting.min.js' => '',
-            '.ckconform' => "bundles=committed -- deploy path has no npm\n",
+            '__policy_fixture' => "bundles=committed -- deploy path has no npm\n",
         ], git: true);
         $reporter = $this->run_(new VendoredBundleCheck(), $context);
         self::assertSame(0, $reporter->failures());
         self::assertSame(
-            ['bundles committed — declared deliberate in .ckconform (committed -- deploy path has no npm)'],
+            ['bundles committed — declared deliberate in civikitchen.yaml (committed -- deploy path has no npm)'],
             $reporter->messages('ok'),
         );
     }

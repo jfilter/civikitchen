@@ -1,0 +1,27 @@
+"$schema": https://raw.githubusercontent.com/jfilter/civikitchen/main/packages/civikitchen-scenario-schema/scenario.schema.json
+version: 1
+scenario:
+  name: example-extension
+  image: ghcr.io/jfilter/civikitchen:v1
+  database:
+    image: mariadb:10.11
+  extension:
+    key: ckbootfixture
+    path: ../../tests/images/fixtures/ckbootfixture
+  trust_external_extension: true
+  site_url: http://localhost:8080
+  http_port: 8080
+  locales:
+    - de_DE
+  default_locale: de_DE
+  profiles:
+    - verein
+  credentials_output: file
+  checks:
+    - conform
+    - lint
+    - format
+    - compatibility
+    - javascript
+    - test
+    - lifecycle

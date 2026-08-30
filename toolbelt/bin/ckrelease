@@ -33,10 +33,14 @@
 # packaging. It would also put the list in as many copies as there are repos,
 # which is the state the shared tooling exists to end. A repo that needs more
 # (or less) declares it where every other per-repo policy is declared, in
-# .ckconform:
+# civikitchen.yaml:
 #
-#     dist_exclude=build,docs/internal   # additionally kept out of the zip
-#     dist_include=tests                 # kept IN despite the central list
+#     policy:
+#       dist:
+#         exclude: [build, docs/internal]
+#         include:
+#           - path: tests
+#             reason: release fixture needed by this extension
 #
 # `git archive` still honours a repo's own export-ignore attributes on top of
 # this; nothing here forbids them, they are just not where the standard lives.
@@ -89,12 +93,12 @@ die() {
 DIST_EXCLUDE_DIRS=()
 DIST_EXCLUDE_FILES=()
 
-# Central list ± the repo's .ckconform, as two global arrays.
+# Central list ± the repo's civikitchen.yaml, as two global arrays.
 #
-# Neither the list nor the .ckconform read is this tool's own: both come from
+# Neither the list nor the civikitchen.yaml read is this tool's own: both come from
 # ckconform, which owns them in the language that owns them —
 # toolbelt/ckconform/src/DistPaths.php, next to the Policy parser that ended the
-# five disagreeing shell readers of .ckconform. A second copy of the exclusion
+# five disagreeing shell readers of civikitchen.yaml. A second copy of the exclusion
 # list here would drift, and its drift ships dev files to production sites.
 resolve_excludes() {
   local line paths
@@ -181,7 +185,11 @@ run_dist() {
 
   for item in ${DIST_EXCLUDE_DIRS[@]+"${DIST_EXCLUDE_DIRS[@]}"} \
               ${DIST_EXCLUDE_FILES[@]+"${DIST_EXCLUDE_FILES[@]}"}; do
-    pathspec+=(":(exclude)$item")
+    if [ "$item" = '.env.*' ]; then
+      pathspec+=(":(glob,exclude)$item")
+    else
+      pathspec+=(":(exclude)$item")
+    fi
   done
 
   mkdir -p "$outdir"
@@ -252,10 +260,16 @@ run_verify() {
             | grep -v '^$' | sed -e 's/[].[^$*\\+?(){}|]/\\&/g' | paste -sd'|' -)
   offenders=''
   [ -z "$names" ] || offenders=$(printf '%s\n' "$entries" | grep -E "/(${names})(/|\$)" || true)
+  # This guard is intentionally independent of configurable dist paths: no
+  # policy may turn an environment-secret file into a release artifact.
+  env_offenders=$(printf '%s\n' "$entries" | grep -E '/\.env(\.[^/]*)?(/|$)' || true)
+  if [ -n "$env_offenders" ]; then
+    offenders="${offenders}${offenders:+$'\n'}${env_offenders}"
+  fi
   if [ -n "$offenders" ]; then
     echo "ckrelease: FAIL — dev/CI paths in the archive:" >&2
     printf '%s\n' "$offenders" | while IFS= read -r entry; do echo "  $entry" >&2; done
-    echo "  Keep them out with .ckconform dist_exclude=, or in on purpose with dist_include=." >&2
+    echo "  Configure policy.dist.exclude/include in civikitchen.yaml." >&2
     ok=1
   fi
 

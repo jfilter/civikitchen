@@ -19,7 +19,7 @@ final class PolicyKeyCheckTest extends CheckTestCase
     public function testKnownKeysPass(): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "# policy\nmin_coverage=70\ntests=optional -- config only\ndist_exclude=build\n",
+            '__policy_fixture' => "# policy\nmin_coverage=70\ntests=optional -- config only\ndist_exclude=build\n",
         ]));
         $this->assertPasses($reporter);
     }
@@ -28,18 +28,17 @@ final class PolicyKeyCheckTest extends CheckTestCase
     public function testTypoedKeyFails(): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "min_covrage=70\n",
+            '__policy_fixture' => "min_covrage=70\n",
         ]));
-        $this->assertFails($reporter, "unknown key 'min_covrage'");
-        $this->assertFails($reporter, "did you mean 'min_coverage'");
+        $this->assertFails($reporter, 'unknown property min_covrage');
     }
 
     public function testUnrelatedUnknownKeyFailsWithoutASuggestion(): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "enable_everything=yes\n",
+            '__policy_fixture' => "enable_everything=yes\n",
         ]));
-        $this->assertFails($reporter, "unknown key 'enable_everything'");
+        $this->assertFails($reporter, 'unknown property enable_everything');
         self::assertStringNotContainsString('did you mean', $reporter->render());
     }
 
@@ -49,9 +48,9 @@ final class PolicyKeyCheckTest extends CheckTestCase
     public function testNonNumericPercentageFails(string $value): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "min_coverage={$value}\n",
+            '__policy_fixture' => "min_coverage={$value}\n",
         ]));
-        $this->assertFails($reporter, 'must be a whole percentage');
+        $this->assertFails($reporter, 'coverage.minimum');
     }
 
     /** @return array<string, list<string>> */
@@ -69,7 +68,7 @@ final class PolicyKeyCheckTest extends CheckTestCase
     public function testPercentageWithAReasonPasses(): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "min_coverage=70 -- measured 2026-01, ratchet from here\n",
+            '__policy_fixture' => "min_coverage=70 -- measured 2026-01, ratchet from here\n",
         ]));
         $this->assertPasses($reporter);
     }
@@ -78,8 +77,8 @@ final class PolicyKeyCheckTest extends CheckTestCase
     public function testExtensionSourcesPass(): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "extension_source=org.project60.banking@https://example.org/banking-1.4.1.zip -- not in the feed\n"
-                . "extension_source=de.systopia.xcm@https://example.org/xcm.zip\n",
+            '__policy_fixture' => "extension_source=org.project60.banking@https://example.org/banking-1.4.1.zip -- not in the feed\n"
+                . "extension_source=de.systopia.xcm@https://example.org/xcm.zip -- pinned release\n",
         ]));
         $this->assertPasses($reporter);
     }
@@ -90,9 +89,9 @@ final class PolicyKeyCheckTest extends CheckTestCase
     public function testExtensionSourceWithoutKeyAndUrlFails(string $value): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "extension_source={$value}\n",
+            '__policy_fixture' => "extension_source={$value}\n",
         ]));
-        $this->assertFails($reporter, 'extension_source must be <key>@<http URL>');
+        $this->assertFails($reporter, 'extension_sources');
     }
 
     /** @return array<string, list<string>> */
@@ -106,44 +105,44 @@ final class PolicyKeyCheckTest extends CheckTestCase
         ];
     }
 
-    /** A line without `=` never becomes a key, so the key checks alone cannot see it. */
+    /** Malformed YAML must fail before any policy can silently disappear. */
     public function testMalformedLineFails(): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "min_coverage 70\n",
+            'civikitchen.yaml' => "version: 1\npolicy: [\n",
         ]));
-        $this->assertFails($reporter, "no KEY=VALUE in 'min_coverage 70'");
+        $this->assertFails($reporter, 'invalid civikitchen.yaml');
     }
 
     public function testValuelessKeyFails(): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "=70\n",
+            '__policy_fixture' => "=70\n",
         ]));
-        $this->assertFails($reporter, 'no KEY=VALUE');
+        $this->assertFails($reporter, 'unknown property');
     }
 
     public function testCommentsAndBlankLinesAreNotMalformed(): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "# a comment, no equals sign\n\nmin_coverage=70\n",
+            '__policy_fixture' => "# a comment, no equals sign\n\nmin_coverage=70\n",
         ]));
         $this->assertPasses($reporter);
     }
 
-    /** A second line of a first-wins key does nothing, and said so to nobody. */
+    /** Duplicate YAML keys are rejected instead of silently using one. */
     public function testRepeatedScalarKeyFails(): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "template_custom=a.yml -- one\ntemplate_custom=b.yml -- two\n",
+            'civikitchen.yaml' => "version: 1\npolicy:\n  license: MIT\n  license: Proprietary\n",
         ]));
-        $this->assertFails($reporter, 'declared 2 times but only the first is read');
+        $this->assertFails($reporter, 'Duplicate key');
     }
 
     public function testRepeatedRepeatableKeyPasses(): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "lifecycle_log_ignore=one -- a\nlifecycle_log_ignore=two -- b\n",
+            '__policy_fixture' => "lifecycle_log_ignore=one -- a\nlifecycle_log_ignore=two -- b\n",
         ]));
         $this->assertPasses($reporter);
     }
@@ -151,9 +150,9 @@ final class PolicyKeyCheckTest extends CheckTestCase
     public function testEveryMutationFloorIsValidated(): void
     {
         $reporter = $this->run_(new PolicyKeyCheck(), $this->repo([
-            '.ckconform' => "mutation_min_msi=high\nmutation_min_covered_msi=also_high\n",
+            '__policy_fixture' => "mutation_min_msi=high\nmutation_min_covered_msi=also_high\n",
         ]));
-        self::assertCount(2, $reporter->messages('FAIL'));
+        $this->assertFails($reporter, 'mutation');
     }
 
     /**

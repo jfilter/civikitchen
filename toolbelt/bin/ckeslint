@@ -67,6 +67,7 @@ done
 while [ "$#" -gt 0 ]; do paths+=("$1"); shift; done
 
 ck_require_extension_root
+ck_policy_load
 
 toolchain=/opt/civikitchen-oxlint
 if [ ! -x "$toolchain/node_modules/.bin/oxlint" ]; then

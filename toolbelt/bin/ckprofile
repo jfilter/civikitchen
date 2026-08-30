@@ -1,0 +1,60 @@
+#!/bin/bash
+set -euo pipefail
+
+bin_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+checkout_root=$(cd "${bin_dir}/../.." && pwd)
+validator=/usr/local/share/civikitchen/profile-schema/validate.php
+schema=/usr/local/share/civikitchen/profile-schema/profile.schema.json
+if [ -f "${checkout_root}/packages/civicrm-profile-schema/validate.php" ]; then
+  validator="${checkout_root}/packages/civicrm-profile-schema/validate.php"
+  schema="${checkout_root}/packages/civicrm-profile-schema/profile.schema.json"
+fi
+
+usage() {
+  cat <<'EOF'
+ck profile — validate and discover CiviKitchen profiles
+
+  ck profile validate <profile-dir|profile.json>
+  ck profile list [profile-root ...]
+
+list searches explicit roots, then CIVIKITCHEN_PROFILE_PATH (colon-separated),
+then the bundled profile root when available. validate applies the canonical
+published JSON Schema without network access.
+EOF
+}
+
+command_name=${1:-help}
+[ "$#" -eq 0 ] || shift
+case "$command_name" in
+  help|-h|--help) usage ;;
+  validate)
+    target=${1:-}
+    [ -n "$target" ] || { usage >&2; exit 2; }
+    [ -d "$target" ] && target="${target%/}/profile.json"
+    [ -f "$target" ] || { echo "ckprofile: no profile JSON at ${target}" >&2; exit 2; }
+    exec php "$validator" "$schema" "$target"
+    ;;
+  list)
+    roots=("$@")
+    if [ -n "${CIVIKITCHEN_PROFILE_PATH:-}" ]; then
+      IFS=: read -ra env_roots <<<"${CIVIKITCHEN_PROFILE_PATH}"
+      roots+=("${env_roots[@]}")
+    fi
+    for bundled in "${checkout_root}/docker/profiles" /usr/local/share/civikitchen/profiles; do
+      [ -d "$bundled" ] && roots+=("$bundled")
+    done
+    seen=$'\n'
+    for root in "${roots[@]}"; do
+      [ -d "$root" ] || continue
+      for json in "$root"/*/profile.json; do
+        [ -f "$json" ] || continue
+        name=$(basename "$(dirname "$json")")
+        if [[ "$seen" != *$'\n'"$name"$'\n'* ]]; then
+          printf '%s\t%s\n' "$name" "$(dirname "$json")"
+          seen+="${name}"$'\n'
+        fi
+      done
+    done
+    ;;
+  *) echo "ckprofile: unknown command: ${command_name}" >&2; usage >&2; exit 2 ;;
+esac

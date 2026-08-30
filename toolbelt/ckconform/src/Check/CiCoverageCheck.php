@@ -57,7 +57,7 @@ final class CiCoverageCheck implements Check
         // percentage and always exits 0.
         if ($context->policyValue('min_coverage') !== null && $ran !== 'ckcoverage') {
             $reporter->fail(
-                '.ckconform sets min_coverage but no workflow runs ckcoverage — '
+                'civikitchen.yaml sets min_coverage but no workflow runs ckcoverage — '
                 . ($ran === 'report-only'
                     ? 'phpunit --coverage-* only reports, it never fails'
                     : 'nothing measures coverage at all')

@@ -9,7 +9,7 @@ use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
- * The copyright holder named in `.ckconform` must actually appear in LICENSE.txt.
+ * The copyright holder named in `civikitchen.yaml` must actually appear in LICENSE.txt.
  * A relicensing that edits info.xml but leaves the licence file naming the
  * previous holder is the failure mode.
  *
@@ -32,7 +32,7 @@ final class CopyrightCheck implements Check
 
         if (!str_contains($context->read('LICENSE.txt') ?? '', $want)) {
             $reporter->fail(
-                "LICENSE.txt does not name the copyright holder '{$want}' from .ckconform"
+                "LICENSE.txt does not name the copyright holder '{$want}' from civikitchen.yaml"
             );
         }
     }

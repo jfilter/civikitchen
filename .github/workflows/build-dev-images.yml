@@ -6,8 +6,22 @@ on:
     paths:
       - 'docker/**'
       - 'toolbelt/**'
+      - 'packages/**'
       - 'tests/images/**'
+      - 'tests/scenario/**'
+      - 'tests/e2e/**'
+      - 'examples/standalone/docker-compose.yml'
+      - 'examples/drupal10/docker-compose.yml'
+      - 'examples/drupal11/docker-compose.yml'
+      - 'examples/wordpress/docker-compose.yml'
+      - 'examples/joomla/docker-compose.yml'
+      - 'examples/scenario/**'
+      - 'playwright.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.dockerignore'
       - '.github/workflows/build-dev-images.yml'
+      - '.github/workflows/merge-manifest.yml'
       - '.github/scripts/**'
       # Changes the scan verdict directly, so it must re-run the scan jobs.
       - 'trivyignore.yaml'
@@ -266,11 +280,71 @@ jobs:
         if: always()
         run: docker compose -f examples/standalone/docker-compose.yml down -v
 
+  database-compat-standalone:
+    # One current-stable amd64 candidate against the baseline and both database
+    # families CiviCRM recommends. This gates promotion: Dependabot may propose
+    # a new sidecar tag, but the default moves only after install, provisioning,
+    # locale rendering, and the isolated headless DB all pass here.
+    needs: [resolve-civicrm, smoke-test-standalone]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        database:
+          - mariadb:10.11
+          - mariadb:11.4
+          - mysql:8.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: First boot and headless scratch DB
+        env:
+          CK_DATABASE_IMAGE: ${{ matrix.database }}
+          IMG: ${{ env.IMAGE_PREFIX }}:standalone-${{ needs.resolve-civicrm.outputs.stable }}-${{ github.sha }}
+        run: bash tests/images/boot-test-standalone.sh "$IMG"
+
+  scenario-test-standalone:
+    needs: [resolve-civicrm, smoke-test-standalone]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Boot generated scenario with external profile
+        env:
+          IMG: ${{ env.IMAGE_PREFIX }}:standalone-${{ needs.resolve-civicrm.outputs.stable }}-${{ github.sha }}
+        run: bash tests/scenario/boot-scenario.sh "$IMG"
+
   promote-standalone:
     # Stable tags only move once the candidate passed smoke + e2e.
     # `imagetools create` from an existing manifest list copies it intact,
     # so the promoted tag stays multi-arch.
-    needs: [resolve-civicrm, smoke-test-standalone, e2e-test-standalone]
+    needs: [resolve-civicrm, smoke-test-standalone, e2e-test-standalone, database-compat-standalone, scenario-test-standalone]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -392,7 +466,10 @@ jobs:
     strategy:
       matrix:
         variant: [drupal10, drupal11, wordpress, joomla]
+        platform: [linux/arm64, linux/amd64]
         include:
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
           - platform: linux/amd64
             runner: ubuntu-24.04
 
@@ -509,9 +586,36 @@ jobs:
         if: always()
         run: docker compose -f ${{ matrix.variant.compose }} down -v
 
+  scenario-test-buildkit:
+    # Exercise the generated extension/profile contract on every CMS family;
+    # this is distinct from the fixed example stacks above.
+    needs: smoke-test-buildkit
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      matrix:
+        variant: [drupal10, drupal11, wordpress, joomla]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Boot generated scenario
+        env:
+          IMG: ${{ env.IMAGE_PREFIX }}:${{ matrix.variant }}-${{ github.sha }}
+        run: bash tests/scenario/boot-scenario.sh "$IMG"
+
   promote-buildkit:
     # Stable tags only move once the candidate passed smoke + e2e.
-    needs: e2e-test-buildkit
+    needs: [e2e-test-buildkit, scenario-test-buildkit]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -627,7 +731,7 @@ jobs:
 
   smoke-test-demo:
     needs: merge-demo
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: read
@@ -667,6 +771,12 @@ jobs:
           - { tag: joomla-demo,     profile: fundraising }
           - { tag: joomla-demo,     profile: events }
           - { tag: joomla-demo,     profile: mailing }
+        platform: [linux/arm64, linux/amd64]
+        include:
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - platform: linux/amd64
+            runner: ubuntu-24.04
 
     steps:
       - name: Log in to GHCR
