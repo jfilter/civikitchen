@@ -141,8 +141,6 @@
     },
     {
       "name": "org.civicrm.contactlayout",
-      "repo": "https://lab.civicrm.org/extensions/contactlayout.git",
-      "version": "5825ce7293c4178440fd3268610ff1256ea06dce",
       "enable": true
     }
   ]

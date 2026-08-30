@@ -60,4 +60,20 @@ foreach (glob(dirname(__DIR__, 2) . '/docker/profiles/*/profile.json') ?: [] as 
   }
 }
 
+$verein = json_decode(
+  (string) file_get_contents(dirname(__DIR__, 2) . '/docker/profiles/verein/profile.json'),
+  TRUE,
+  512,
+  JSON_THROW_ON_ERROR,
+);
+$contactLayout = array_values(array_filter(
+  $verein['dependencies'],
+  static fn(array $dependency): bool => $dependency['name'] === 'org.civicrm.contactlayout',
+));
+validator_expect(count($contactLayout) === 1, 'verein declares Contact Layout exactly once');
+validator_expect(
+  !isset($contactLayout[0]['repo']) && !isset($contactLayout[0]['version']) && ($contactLayout[0]['enable'] ?? false) === true,
+  'verein enables the core-packaged Contact Layout without replacing its installed code',
+);
+
 echo "profile validator tests passed\n";
