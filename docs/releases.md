@@ -112,6 +112,12 @@ it from the Actions tab with **allow_image_drift** when the difference is
 genuinely irrelevant to the built image, e.g. a comment-only change under
 `docker/` or `toolbelt/`.
 
+The retag command uses `--prefer-index=false`. This matters when its source is
+digest-qualified: without it, Buildx may wrap a source manifest in a new
+single-entry index if registry media-type discovery is inconclusive. The
+layers and platforms would still be the same, but the top-level digest would
+change, breaking both the immutable-tag check and idempotent release reruns.
+
 The flip side: `:v1` does **not** follow the weekly rebuild. Between releases
 the fleet keeps running the CiviCRM the last release blessed, while
 `:standalone` moves on. That is the point — one mechanism, and image content
