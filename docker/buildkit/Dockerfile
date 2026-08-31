@@ -107,7 +107,7 @@ COPY toolbelt/versions.env /tmp/versions.env
 # location, which then works unchanged in a checkout (toolbelt/bin +
 # toolbelt/lib) and here (/usr/local/bin + /usr/local/lib). One source line, no
 # image-vs-checkout branch to keep in sync.
-COPY toolbelt/lib/ckcommon.sh /usr/local/lib/ckcommon.sh
+COPY toolbelt/lib /usr/local/lib
 COPY toolbelt/bin/ck /usr/local/bin/ck
 COPY toolbelt/bin/ckprofile /usr/local/bin/ckprofile
 COPY toolbelt/bin/ckscenario /usr/local/bin/ckscenario

@@ -649,10 +649,16 @@ policy:
   renovate_preset: github>example/renovate
   extension_sources:
     - key: org.example.dep
+      version: ^1.2
       url: https://example.org/dep-1.2.0.zip
       sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       reason: Dependency is not served by the registry
 ```
+
+`version` uses Composer's version-constraint syntax (`1.2.3`, `^1.2`,
+`~1.2.3`, or an explicit bounded range). The downloaded archive's `info.xml`
+version must satisfy it; the SHA-256 pin still identifies the exact tested
+bytes.
 
 Values shared across an organisation's repos can sit once in a file of the same
 format named by `CK_DEFAULT_CONFIG`; a repo's own `civikitchen.yaml` overrides per

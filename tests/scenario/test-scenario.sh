@@ -44,19 +44,27 @@ if "$root/toolbelt/bin/ck" config validate "$work/embedded-profiles.yaml" >/dev/
 fi
 printf '%s\n' \
   'version: 1' 'policy:' '  extension_sources:' \
-  '    - key: org.example.dep' '      url: https://user:secret@example.org/dep.zip?token=x' \
+  '    - key: org.example.dep' "      version: '^1.0'" '      url: https://user:secret@example.org/dep.zip?token=x' \
   '      sha256: deadbeef' '      reason: invalid fixture' > "$work/unsafe-source.yaml"
 if "$root/toolbelt/bin/ck" config validate "$work/unsafe-source.yaml" >/dev/null 2>&1; then
   echo "configuration accepted an unsafe or non-digest-pinned extension source" >&2; exit 1
 fi
 printf '%s\n' \
   'version: 1' 'policy:' '  extension_sources:' \
-  '    - key: org.example.dep' '      url: https://example.org/one.zip' \
+  '    - key: org.example.dep' "      version: '^1.0'" '      url: https://example.org/one.zip' \
   "      sha256: $(printf a%.0s {1..64})" '      reason: first' \
-  '    - key: org.example.dep' '      url: https://example.org/two.zip' \
+  '    - key: org.example.dep' "      version: '^2.0'" '      url: https://example.org/two.zip' \
   "      sha256: $(printf b%.0s {1..64})" '      reason: duplicate' > "$work/duplicate-source.yaml"
 if "$root/toolbelt/bin/ck" config validate "$work/duplicate-source.yaml" >/dev/null 2>&1; then
   echo "configuration accepted duplicate extension source keys" >&2; exit 1
+fi
+printf '%s\n' \
+  'version: 1' 'policy:' '  extension_sources:' \
+  '    - key: org.example.dep' "      version: 'not a constraint ???'" \
+  '      url: https://example.org/dep.zip' \
+  "      sha256: $(printf a%.0s {1..64})" '      reason: invalid constraint' > "$work/invalid-version-constraint.yaml"
+if "$root/toolbelt/bin/ck" config validate "$work/invalid-version-constraint.yaml" >/dev/null 2>&1; then
+  echo "configuration accepted an invalid Composer version constraint" >&2; exit 1
 fi
 printf '%s\n' 'version: 1' 'policy:' '  release:' '    mode: none' '    reason: |' '      first line' '      second line' > "$work/multiline-reason.yaml"
 if "$root/toolbelt/bin/ck" config validate "$work/multiline-reason.yaml" >/dev/null 2>&1; then

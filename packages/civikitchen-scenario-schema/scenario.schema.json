@@ -45,7 +45,7 @@
         "lifecycle": {"type": "object", "additionalProperties": false, "properties": {"log_ignore": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["pattern", "reason"], "properties": {"pattern": {"$ref": "#/$defs/nonEmptyString"}, "reason": {"$ref": "#/$defs/reason"}}}}}},
         "template_custom": {"type": "object", "additionalProperties": false, "required": ["paths", "reason"], "properties": {"paths": {"$ref": "#/$defs/stringList"}, "reason": {"$ref": "#/$defs/reason"}}},
         "renovate_preset": {"$ref": "#/$defs/nonEmptyString"},
-        "extension_sources": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["key", "url", "sha256", "reason"], "properties": {"key": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"}, "url": {"type": "string", "format": "uri", "pattern": "^https://[^/?\\x23@]+(?:/[^?\\x23]*)?$"}, "sha256": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"}, "reason": {"$ref": "#/$defs/reason"}}}}
+        "extension_sources": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["key", "version", "url", "sha256", "reason"], "properties": {"key": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"}, "version": {"$ref": "#/$defs/nonEmptyString"}, "url": {"type": "string", "format": "uri", "pattern": "^https://[^/?\\x23@]+(?:/[^?\\x23]*)?$"}, "sha256": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"}, "reason": {"$ref": "#/$defs/reason"}}}}
       }
     },
     "scenario": {

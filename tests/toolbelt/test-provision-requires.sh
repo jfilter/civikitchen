@@ -51,6 +51,7 @@ curl() {
   cp "$ARCHIVE_FIXTURE" "$output"
 }
 export CK_EXT_DIR="$work/ext"
+export CK_SCENARIO_AUTOLOAD="$root/packages/civikitchen-scenario-schema/vendor/autoload.php"
 export CIVIKITCHEN_ENABLE_EXTENSIONS=fixture
 # shellcheck source=../../docker/runtime/provision.sh
 . "$root/docker/runtime/provision.sh"
@@ -78,7 +79,7 @@ expect_log() {
 # A pinned dependency: downloaded from the pin, enabled, then the extension.
 write_info '<requires><ext>org.example.dep</ext></requires>'
 mkdir -p "$work/archive/org.example.dep"
-printf '%s\n' '<extension key="org.example.dep" type="module"><file>dep</file></extension>' > "$work/archive/org.example.dep/info.xml"
+printf '%s\n' '<extension key="org.example.dep" type="module"><file>dep</file><version>1.2.3</version></extension>' > "$work/archive/org.example.dep/info.xml"
 (cd "$work/archive" && zip -qr "$work/dep.zip" org.example.dep)
 export ARCHIVE_FIXTURE="$work/dep.zip"
 digest=$(sha256sum < "$ARCHIVE_FIXTURE" | cut -d' ' -f1)
@@ -93,9 +94,14 @@ fi
 ck_install_verified_archive "$ARCHIVE_FIXTURE" 'org.example.dep'
 [ -f "$work/ext/org.example.dep/info.xml" ] || fail "digest installer could not retry after rollback"
 /bin/rm -rf "$work/ext/org.example.dep"
+if ck_install_verified_archive "$ARCHIVE_FIXTURE" 'org.example.dep' '^2.0' >/dev/null 2>&1; then
+  fail "digest installer accepted an extension version outside its Composer constraint"
+fi
+[ ! -e "$work/ext/org.example.dep" ] || fail "version mismatch left an extracted extension behind"
 printf '%s\n' \
   'version: 1' 'policy:' '  extension_sources:' \
   '    - key: org.example.dep' \
+  "      version: '^1.2'" \
   '      url: https://example.org/dep-1.0.zip' \
   "      sha256: $digest" \
   '      reason: not in the feed' > "$work/ext/fixture/civikitchen.yaml"
@@ -132,9 +138,20 @@ fi
 cp "$work/good-digest.yaml" "$work/ext/fixture/civikitchen.yaml"
 
 # Already present (even if not enabled): nothing to download, cv enables it as a requirement.
+mkdir -p "$work/ext/org.example.dep"
+printf '%s\n' '<extension key="org.example.dep" type="module"><file>dep</file><version>1.3.0</version></extension>' > "$work/ext/org.example.dep/info.xml"
 reset_site '[{"key":"org.example.dep","status":"uninstalled"}]'
 ck_enable_extensions
 expect_log 'ext:enable fixture;' 'present dependency'
+
+sed -E "s/version: '\^1\.2'/version: '^2.0'/" "$work/ext/fixture/civikitchen.yaml" > "$work/bad-version.yaml"
+cp "$work/bad-version.yaml" "$work/ext/fixture/civikitchen.yaml"
+reset_site '[{"key":"org.example.dep","status":"uninstalled"}]'
+if ck_enable_extensions >/dev/null 2>&1; then
+  fail "an installed dependency outside its Composer constraint was accepted"
+fi
+cp "$work/good-digest.yaml" "$work/ext/fixture/civikitchen.yaml"
+/bin/rm -rf "$work/ext/org.example.dep"
 
 # No pin: the bare key goes to the registry.
 /bin/rm "$work/ext/fixture/civikitchen.yaml"

@@ -2,21 +2,41 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-script="$root/toolbelt/bin/ckcoverage"
+test -L "$root/toolbelt/bin/ckcoverage"
+test "$(readlink "$root/toolbelt/bin/ckcoverage")" = ck
+php -l "$root/toolbelt/lib/php/src/Cli/CoverageCommand.php" >/dev/null
+"$root/toolbelt/bin/ckcoverage" --help >/dev/null 2>&1 || true
 
-fail() {
-  echo "FAIL: $*" >&2
-  exit 1
-}
+grep -q "tempnam(sys_get_temp_dir(), 'ckcoverage-run-')" \
+  "$root/toolbelt/lib/php/src/Cli/CoverageCommand.php"
 
-grep -q 'run_log=$(mktemp /tmp/ckcoverage-run-XXXXXX.log)' "$script" \
-  || fail 'ckcoverage must allocate a unique run log'
-grep -q '>"$run_log" 2>&1' "$script" \
-  || fail 'phpunit output must go to the unique run log'
-grep -q 'tail -25 "$run_log"' "$script" \
-  || fail 'failure output must read the unique run log'
-if grep -q '/tmp/ckcoverage-run.log' "$script"; then
-  fail 'the shared fixed run-log path can collide or retain foreign ownership'
-fi
+work=$(mktemp -d)
+trap '/bin/rm -rf "$work"' EXIT
+mkdir -p "$work/bin" "$work/ext"
+cat > "$work/ext/info.xml" <<'EOF'
+<extension key="fixture" type="module"><file>fixture</file></extension>
+EOF
+cat > "$work/ext/phpunit.xml.dist" <<'EOF'
+<phpunit><coverage/></phpunit>
+EOF
+cat > "$work/bin/ckphpunit" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = --coverage-clover ]; then
+    shift
+    cat > "$1" <<'XML'
+<coverage><project><metrics statements="8" coveredstatements="6"/></project></coverage>
+XML
+    exit 0
+  fi
+  shift
+done
+exit 2
+EOF
+chmod +x "$work/bin/ckphpunit"
+out=$(cd "$work/ext" && PATH="$work/bin:$PATH" "$root/toolbelt/bin/ckcoverage")
+echo "$out" | grep -q '75.00% line coverage (6/8 statements)'
+echo "$out" | grep -q 'reporting only'
 
-echo 'ok   ckcoverage uses a unique temporary run log'
+echo 'ok   ckcoverage uses the shared PHP CLI and a unique temporary run log'

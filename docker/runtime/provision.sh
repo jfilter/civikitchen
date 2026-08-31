@@ -264,60 +264,10 @@ ck_setup_test_db() {
 # (GitHub et al.) fail transiently often enough that one cURL timeout
 # shouldn't abort the whole first-boot provisioning — retry before giving up.
 ck_install_verified_archive() {
-    local archive="$1" ext_key="$2" target
-    if [[ ! "${ext_key}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
-        echo "[civikitchen] ERROR: unsafe extension key in digest-pinned source" >&2
-        return 1
-    fi
+    local archive="$1" ext_key="$2" version_constraint="${3:-}" target
     target="${CK_EXT_DIR}/${ext_key}"
-    php -r '
-      [$archive, $expected, $target] = array_slice($argv, 1);
-      if (!class_exists("ZipArchive")) { fwrite(STDERR, "ZipArchive is unavailable\n"); exit(2); }
-      $zip = new ZipArchive();
-      if ($zip->open($archive) !== TRUE) { fwrite(STDERR, "invalid extension ZIP\n"); exit(2); }
-      $top = NULL; $total = 0;
-      for ($i = 0; $i < $zip->numFiles; $i++) {
-        $stat = $zip->statIndex($i);
-        $name = $zip->getNameIndex($i);
-        if (!is_string($name) || $name === "" || str_contains($name, "\\") || str_starts_with($name, "/")) {
-          fwrite(STDERR, "unsafe extension ZIP path\n"); exit(2);
-        }
-        $parts = explode("/", rtrim($name, "/"));
-        if (in_array("", $parts, TRUE) || in_array(".", $parts, TRUE) || in_array("..", $parts, TRUE)) {
-          fwrite(STDERR, "unsafe extension ZIP path\n"); exit(2);
-        }
-        $top ??= $parts[0];
-        if ($top !== $parts[0]) { fwrite(STDERR, "extension ZIP needs one root directory\n"); exit(2); }
-        $total += (int) ($stat["size"] ?? 0);
-        if ($zip->numFiles > 10000 || $total > 268435456) { fwrite(STDERR, "extension ZIP exceeds extraction limits\n"); exit(2); }
-        if ($zip->getExternalAttributesIndex($i, $opsys, $attr)) {
-          $kind = ($attr >> 16) & 0170000;
-          if ($kind === 0120000) { fwrite(STDERR, "extension ZIP contains a symlink\n"); exit(2); }
-        }
-      }
-      if ($top === NULL || file_exists($target)) { fwrite(STDERR, "extension target exists or ZIP is empty\n"); exit(2); }
-      $tmp = dirname($target) . "/.civikitchen-extract-" . bin2hex(random_bytes(8));
-      if (!mkdir($tmp, 0700)) exit(2);
-      $cleanup = static function(string $dir): void {
-        if (!is_dir($dir)) return;
-        $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
-        foreach ($it as $entry) { $entry->isDir() && !$entry->isLink() ? rmdir($entry->getPathname()) : unlink($entry->getPathname()); }
-        rmdir($dir);
-      };
-      try {
-        if (!$zip->extractTo($tmp)) throw new RuntimeException("could not extract extension ZIP");
-        $info = $tmp . "/" . $top . "/info.xml";
-        libxml_use_internal_errors(TRUE);
-        $xml = is_file($info) ? simplexml_load_file($info) : FALSE;
-        if ($xml === FALSE || trim((string) $xml["key"]) !== $expected) throw new RuntimeException("extension ZIP key does not match {$expected}");
-        if (!rename($tmp . "/" . $top, $target)) throw new RuntimeException("could not install extension ZIP");
-      } catch (Throwable $e) {
-        fwrite(STDERR, $e->getMessage() . "\n");
-        $cleanup($tmp);
-        exit(2);
-      }
-      $cleanup($tmp);
-    ' "${archive}" "${ext_key}" "${target}" || return 1
+    ck internal install-extension-archive \
+        "${archive}" "${ext_key}" "${target}" "${version_constraint}" || return 1
     if ! chown -R "${CK_WEB_USER}:${CK_WEB_GROUP}" "${target}" \
         || ! chmod -R u=rwX,go=rX "${target}" \
         || ! ck_as_web cv ev 'CRM_Extension_System::singleton()->getFullContainer()->refresh();'; then
@@ -331,7 +281,7 @@ ck_install_verified_archive() {
 }
 
 ck_download_extension() {
-    local ext_spec="$1" ext_key="${1%%@*}" attempt source digest archive got
+    local ext_spec="$1" version_constraint="${2:-}" ext_key="${1%%@*}" attempt source digest archive got
     if [[ "${ext_spec}" == *@*#sha256=* ]]; then
         source="${ext_spec#*@}"
         digest="${source##*#sha256=}"
@@ -348,7 +298,7 @@ ck_download_extension() {
                 # Hash and extract as root without handing the verified file
                 # to the web process between those two operations.
                 chmod 600 "${archive}"
-                if ck_install_verified_archive "${archive}" "${ext_key}"; then
+                if ck_install_verified_archive "${archive}" "${ext_key}" "${version_constraint}"; then
                     rm -f "${archive}"
                     return 0
                 fi
@@ -380,7 +330,7 @@ ck_download_extension() {
 ck_extra_extensions() {
     [[ -n "${CIVIKITCHEN_EXTRA_EXTENSIONS}" ]] || return 0
     echo "[civikitchen] Installing configured extra extensions"
-    local ext_spec ext_key pin
+    local ext_spec ext_key pin version_constraint
     local -a specs
     IFS=',' read -ra specs <<< "${CIVIKITCHEN_EXTRA_EXTENSIONS}"
     for ext_spec in "${specs[@]}"; do
@@ -388,14 +338,18 @@ ck_extra_extensions() {
         [[ -z "${ext_spec}" ]] && continue
         ext_key="${ext_spec%%@*}"
         pin=""
+        version_constraint=""
         if [[ "${ext_spec}" == "${ext_key}" ]]; then
             if ! pin="$(ck_mounted_extension_source "${ext_key}")"; then
                 return 1
             fi
+            if [[ -n "${pin}" ]]; then
+                version_constraint="$(ck_mounted_extension_version "${ext_key}")" || return 1
+            fi
             ext_spec="${pin:-${ext_spec}}"
         fi
         echo "[civikitchen]   - ${ext_key}${pin:+ (digest-pinned)}"
-        ck_download_extension "${ext_spec}" || return 1
+        ck_download_extension "${ext_spec}" "${version_constraint}" || return 1
         ck_as_web cv ext:enable "${ext_key}"
     done
 }
@@ -417,12 +371,7 @@ ck_mounted_extension_dirs() {
 
 # The extension key an info.xml declares, or nothing when it cannot be read.
 ck_extension_key() {
-    php -r '
-      libxml_use_internal_errors(TRUE);
-      $xml = simplexml_load_file($argv[1]);
-      if ($xml === FALSE) { exit(0); }
-      echo trim((string) $xml["key"]);
-    ' "$1/info.xml"
+    ck internal extension-key "$1/info.xml"
 }
 
 # The extension source pin for KEY from any mounted extension's civikitchen.yaml.
@@ -441,6 +390,20 @@ ck_mounted_extension_source() {
     done < <(ck_mounted_extension_dirs)
 }
 
+# Composer version constraint paired with a mounted extension source pin.
+ck_mounted_extension_version() {
+    local key="$1" ext_dir constraint
+    while IFS= read -r ext_dir; do
+        if ! constraint="$(ck_extension_version "${ext_dir}" "${key}")"; then
+            return 1
+        fi
+        if [[ -n "${constraint}" ]]; then
+            echo "${constraint}"
+            return 0
+        fi
+    done < <(ck_mounted_extension_dirs)
+}
+
 # Does the site know KEY — core, downloaded, or mounted? Asked through
 # APIv4 Extension.get, which reads the local extension container only:
 # `cv ext:list` also contacts the extensions feed for download URLs and dies
@@ -452,21 +415,13 @@ ck_extension_present() {
         echo "[civikitchen] ERROR: could not query the extension list for $1" >&2
         return 2
     fi
-    php -r '
-      $list = json_decode((string) $argv[1], TRUE);
-      exit(is_array($list) && $list !== [] ? 0 : 1);
-    ' "${out}"
+    printf '%s' "${out}" | ck internal extension-list-contains "$1"
 }
 
 # <requires><ext> keys of an extension directory, one per line. simplexml,
 # like ck_xml_field in the toolbelt — never a regex over XML.
 ck_extension_requires() {
-    php -r '
-      libxml_use_internal_errors(TRUE);
-      $xml = simplexml_load_file($argv[1]);
-      if ($xml === FALSE) { exit(0); }
-      foreach ($xml->requires->ext ?? [] as $ext) { echo trim((string) $ext), "\n"; }
-    ' "$1/info.xml"
+    ck internal extension-requires "$1/info.xml"
 }
 
 # The pinned download spec for a dependency the registry cannot serve: an
@@ -489,30 +444,58 @@ ck_extension_source() {
     done <<< "${sources}"
 }
 
+# Composer version constraint for a dependency source pin.
+ck_extension_version() {
+    local ext_dir="$1" key="$2" spec versions
+    [[ -f "${ext_dir}/civikitchen.yaml" ]] || return 0
+    if ! versions="$(cd "${ext_dir}" && ckconform --policy extension_version)"; then
+        echo "[civikitchen] ERROR: could not read ${ext_dir}/civikitchen.yaml" >&2
+        return 1
+    fi
+    while IFS= read -r spec; do
+        if [[ "${spec%%@*}" == "${key}" ]]; then
+            echo "${spec#*@}"
+            return 0
+        fi
+    done <<< "${versions}"
+}
+
+# Verify an already-present extension against the configured Composer constraint.
+ck_assert_extension_version() {
+    local key="$1" constraint="$2" info="${CK_EXT_DIR}/$1/info.xml"
+    ck internal assert-extension-version "${info}" "${key}" "${constraint}"
+}
+
 # Dependencies of a mounted extension, from its info.xml <requires>: what the
 # site does not have yet is downloaded — pinned via extension_source, else
 # from the registry — and enabled before the extension itself, so its
 # `cv ext:enable` finds them. One level deep: a dependency's own <requires>
 # are core or registry extensions cv resolves on enable.
 ck_resolve_requires() {
-    local ext_key="$1" ext_dir="${2:-${CK_EXT_DIR}/$1}" required spec
+    local ext_key="$1" ext_dir="${2:-${CK_EXT_DIR}/$1}" required spec version_constraint
     [[ -f "${ext_dir}/info.xml" ]] || return 0
     while IFS= read -r required; do
         [[ -z "${required}" ]] && continue
-        ck_extension_present "${required}"
-        case $? in
-            0) continue ;;
-            2) return 1 ;;
-        esac
-        if ! spec="$(ck_extension_source "${ext_dir}" "${required}")"; then
+        if ! spec="$(ck_extension_source "${ext_dir}" "${required}")" \
+            || ! version_constraint="$(ck_extension_version "${ext_dir}" "${required}")"; then
             return 1
         fi
+        ck_extension_present "${required}"
+        case $? in
+            0)
+                if [[ -n "${version_constraint}" ]]; then
+                    ck_assert_extension_version "${required}" "${version_constraint}" || return 1
+                fi
+                continue
+                ;;
+            2) return 1 ;;
+        esac
         if [[ -n "${spec}" ]]; then
             echo "[civikitchen]   ${ext_key} requires ${required} — installing the configured digest-pinned source"
         else
             echo "[civikitchen]   ${ext_key} requires ${required} — installing it from the registry"
         fi
-        ck_download_extension "${spec:-${required}}" || return 1
+        ck_download_extension "${spec:-${required}}" "${version_constraint}" || return 1
         ck_as_web cv ext:enable "${required}"
     done < <(ck_extension_requires "${ext_dir}")
 }

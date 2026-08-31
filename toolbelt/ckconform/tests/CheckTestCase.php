@@ -109,7 +109,7 @@ abstract class CheckTestCase extends TestCase
                 case 'template_custom': $policy['template_custom'] = ['paths' => $list, 'reason' => $reason]; break;
                 case 'extension_source':
                     [$sourceKey, $url] = array_pad(explode('@', $plain, 2), 2, '');
-                    $policy['extension_sources'][] = ['key' => $sourceKey, 'url' => $url, 'sha256' => str_repeat('a', 64), 'reason' => $reason];
+                    $policy['extension_sources'][] = ['key' => $sourceKey, 'version' => '^1.0', 'url' => $url, 'sha256' => str_repeat('a', 64), 'reason' => $reason];
                     break;
                 default: $policy[$key] = $value; break;
             }

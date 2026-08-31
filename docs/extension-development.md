@@ -242,7 +242,8 @@ policy:
 
 A third-party `<requires>` is not a reason to deviate: the entrypoint reads
 `info.xml` and installs missing dependencies before `ext:enable` (from the
-registry, or from a digest-pinned `policy.extension_sources` entry in
+registry, or from a Composer-version-constrained, digest-pinned
+`policy.extension_sources` entry in
 `civikitchen.yaml` for a
 release the registry does not serve — see [Configuration](configuration.md)).
 

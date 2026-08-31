@@ -38,6 +38,7 @@ curl() {
   cp "$ARCHIVE_FIXTURE" "$output"
 }
 export CK_EXT_DIR="$work/ext"
+export CK_SCENARIO_AUTOLOAD="$root/packages/civikitchen-scenario-schema/vendor/autoload.php"
 export CK_MOUNTINFO="$work/mountinfo"
 export CIVIKITCHEN_ENABLE_EXTENSIONS=""
 export CIVIKITCHEN_EXTRA_EXTENSIONS=""
@@ -92,13 +93,14 @@ expect_log '' 'nothing to enable'
 # A bare key in CIVIKITCHEN_EXTRA_EXTENSIONS takes a mounted extension's pin;
 # an explicit key@URL and an unpinned key pass through.
 mkdir -p "$work/archive/de.example.opt"
-printf '%s\n' '<extension key="de.example.opt" type="module"><file>opt</file></extension>' > "$work/archive/de.example.opt/info.xml"
+printf '%s\n' '<extension key="de.example.opt" type="module"><file>opt</file><version>2.0.1</version></extension>' > "$work/archive/de.example.opt/info.xml"
 (cd "$work/archive" && zip -qr "$work/opt.zip" de.example.opt)
 export ARCHIVE_FIXTURE="$work/opt.zip"
 digest=$(sha256sum < "$ARCHIVE_FIXTURE" | cut -d' ' -f1)
 printf '%s\n' \
   'version: 1' 'policy:' '  extension_sources:' \
   '    - key: de.example.opt' \
+  "      version: '^2.0'" \
   '      url: https://example.org/opt-2.0.zip' \
   "      sha256: $digest" \
   '      reason: not in the feed' > "$work/ext/alpha/civikitchen.yaml"

@@ -106,6 +106,7 @@ Details in [Custom or older CiviCRM versions](docs/images.md#custom-or-older-civ
 - [Releasing an extension](docs/extension-releases.md) — the other direction: how a consuming extension repo cuts *its* release (`ckrelease`, the shared `extension-release.yml`)
 - [Reusable CI building blocks](docs/reusable-workflows.md) — frontend, standalone Playwright, and lightweight repository checks beside `extension-ci.yml`
 - [Unified configuration](docs/scenarios.md) — one validated `civikitchen.yaml` for repository policy, image, DB, locale, profile selection, mounts, and checks; profile definitions remain in `profile.json`
+- [Implementation architecture](docs/implementation-architecture.md) — shared PHP core, thin shell boot boundaries, and Playwright-only TypeScript
 
 ## Reliability
 

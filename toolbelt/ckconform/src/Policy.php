@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CiviKitchen\Ckconform;
 
+use Composer\Semver\VersionParser;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -57,6 +58,7 @@ final class Policy
         'renovate_preset' => 'ckinit: the Renovate preset the managed renovate.json extends',
         // read by the image entrypoint (docker/runtime/provision.sh)
         'extension_source' => 'entrypoint: key@HTTPS-URL#sha256=digest for a dependency, one per source',
+        'extension_version' => 'entrypoint: key@Composer-version-constraint for a pinned dependency',
     ];
 
     /**
@@ -69,7 +71,7 @@ final class Policy
      *
      * @var list<string>
      */
-    public const REPEATABLE = ['dist_exclude', 'dist_include', 'lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates', 'extension_source'];
+    public const REPEATABLE = ['dist_exclude', 'dist_include', 'lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates', 'extension_source', 'extension_version'];
 
     /** @var list<string> */
     public const PERCENT = ['min_coverage', 'mutation_min_msi', 'mutation_min_covered_msi'];
@@ -201,7 +203,13 @@ final class Policy
                 throw new \RuntimeException(self::CONFIG_FILE . ': policy.extension_sources repeats key ' . $item['key']);
             }
             $sourceKeys[$item['key']] = true;
+            try {
+                (new VersionParser())->parseConstraints($item['version']);
+            } catch (\UnexpectedValueException $e) {
+                throw new \RuntimeException(self::CONFIG_FILE . ': policy.extension_sources has invalid Composer version constraint for ' . $item['key'] . ': ' . $item['version'], 0, $e);
+            }
             $out['extension_source'][] = $item['key'] . '@' . $item['url'] . '#sha256=' . strtolower($item['sha256']) . ' -- ' . $item['reason'];
+            $out['extension_version'][] = $item['key'] . '@' . $item['version'];
         }
         return $out;
     }

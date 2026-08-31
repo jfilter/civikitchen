@@ -38,8 +38,10 @@ php -r '
   if (($v["version"] ?? NULL) !== "2.1.0" || !isset($v["runs"][0]["tool"]["driver"])) exit(1);
 ' "${work}/report.sarif"
 "${root}/toolbelt/bin/ck" profile validate "${root}/docker/profiles/mailing" >/dev/null
+"${root}/toolbelt/bin/ckprofile" validate "${root}/docker/profiles/mailing" >/dev/null
 profiles=$("${root}/toolbelt/bin/ck" profile list)
 grep -q $'^mailing\t' <<<"${profiles}"
+"${root}/toolbelt/bin/ckdeps" --help | grep -q 'ck dependencies'
 if "${root}/toolbelt/bin/ck" no-such-command >/dev/null 2>&1; then
   echo "unknown ck command passed" >&2
   exit 1

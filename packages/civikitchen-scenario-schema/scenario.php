@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
+use Composer\Semver\VersionParser;
 
 $validator = dirname(__DIR__) . '/civicrm-profile-schema/validate.php';
 if (!is_file($validator)) $validator = dirname(__DIR__) . '/profile-schema/validate.php';
@@ -67,6 +68,12 @@ function ck_config_load(string $file): array {
       throw new RuntimeException('$.policy.extension_sources: repeated key ' . $source['key']);
     }
     $sourceKeys[$source['key']] = TRUE;
+    try {
+      (new VersionParser())->parseConstraints($source['version']);
+    }
+    catch (UnexpectedValueException $e) {
+      throw new RuntimeException('$.policy.extension_sources: invalid Composer version constraint for ' . $source['key'] . ': ' . $source['version'], 0, $e);
+    }
   }
   return $document;
 }

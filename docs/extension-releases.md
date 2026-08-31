@@ -178,7 +178,7 @@ installed with `cv en` — no source mount, so the site sees exactly what a user
 downloads. Before the install, the `info.xml` `<requires>` are resolved the way
 the image entrypoint resolves them for a mounted extension: a dependency the
 fresh site lacks is downloaded from the registry, or from the
-digest-pinned `policy.extension_sources` entry in the repo's `civikitchen.yaml` (copied in for
+version-constrained, digest-pinned `policy.extension_sources` entry in the repo's `civikitchen.yaml` (copied in for
 that step — the archive itself carries no `civikitchen.yaml`), and enabled first. The
 smoke test catches the failure class that no amount of green CI does: a PHP
 file that the exclude list swallowed, a `<requires>` on an extension that no

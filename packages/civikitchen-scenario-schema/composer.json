@@ -3,6 +3,7 @@
   "description": "Validated YAML scenario loader for CiviKitchen",
   "license": "AGPL-3.0-or-later",
   "require": {
+    "composer/semver": "^3.4",
     "php": ">=8.1",
     "symfony/yaml": "^6.4.44"
   },
