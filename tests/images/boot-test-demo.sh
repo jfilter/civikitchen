@@ -187,9 +187,8 @@ if [ -n "${PROFILE}" ]; then
         # stack, which Joomla doesn't run for a headless API request, so it only
         # works on Standalone/Drupal/WP. (api_key above is Joomla's path.)
         if [ "${UF}" != Joomla ]; then
-            basic=$(printf '%s:%s' "${api_user}" "${api_pass}" | base64)
             auth_out=$(docker exec "${APP}" curl -s -w '\n%{http_code}' -X POST "${API_URL}" \
-                -H "Authorization: Basic ${basic}" \
+                --user "${api_user}:${api_pass}" \
                 -H 'X-Requested-With: XMLHttpRequest' \
                 --data-urlencode 'params={"limit":1}' 2>/dev/null || true)
             auth_code="${auth_out##*$'\n'}"

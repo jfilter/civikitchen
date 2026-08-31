@@ -107,7 +107,7 @@ endef
 .PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-profiles test-scenario test-parity \
 	test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
 	test-ck-headless test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
-	test-database-matrix \
+	test-database-matrix test-demo-basic-auth \
         lint-actions lint-php lint-schema build test-images e2e tools clean
 
 help: ## Show this help
@@ -126,7 +126,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-database-matrix test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
+test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-database-matrix test-demo-basic-auth test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as
@@ -218,6 +218,9 @@ test-compose-isolation: ## Per-job compose project names in the workflows
 
 test-database-matrix: ## Supported database images gate standalone promotion
 	bash tests/parity/test-database-matrix.sh
+
+test-demo-basic-auth: ## Demo smoke test delegates long Basic Auth credentials to curl
+	bash tests/parity/test-demo-basic-auth.sh
 
 test-shell-portability: ## Shell portability lint accepts portable edits and rejects BSD-only sed -i
 	bash tests/parity/test-shell-portability.sh
