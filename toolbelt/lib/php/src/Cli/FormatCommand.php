@@ -19,14 +19,16 @@ final class FormatCommand implements Command
     {
         $check = false;
         $paths = [];
+        $literal = false;
         foreach ($arguments as $argument) {
-            if (in_array($argument, ['-h', '--help'], true)) {
+            if (!$literal && $argument === '--') {
+                $literal = true;
+            } elseif (!$literal && in_array($argument, ['-h', '--help'], true)) {
                 echo $this->usage();
                 return 0;
-            }
-            if ($argument === '--check') {
+            } elseif (!$literal && $argument === '--check') {
                 $check = true;
-            } elseif (str_starts_with($argument, '-')) {
+            } elseif (!$literal && str_starts_with($argument, '-')) {
                 return $this->error("unknown option: {$argument}");
             } else {
                 $paths[] = $argument;

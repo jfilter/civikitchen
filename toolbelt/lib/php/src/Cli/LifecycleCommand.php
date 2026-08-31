@@ -46,6 +46,9 @@ final class LifecycleCommand implements Command
         if ($key === '' || $prefix === '') {
             return $this->error('could not read the extension key and <file> from info.xml.', 2);
         }
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $key) !== 1) {
+            return $this->error('extension key contains unsafe characters.', 2);
+        }
 
         $extensionDirectory = (string) getcwd();
         $work = sys_get_temp_dir() . '/cklifecycle-' . bin2hex(random_bytes(6));
@@ -89,8 +92,8 @@ final class LifecycleCommand implements Command
         $this->step('re-enable', ['cv', 'ext:enable', $key], $transcript);
 
         $status = preg_replace('/\s+/', '', $this->runner->capture([
-            'cv', 'ev', "echo CRM_Extension_System::singleton()->getManager()->getStatus('{$key}');",
-        ])['output']);
+            'cv', 'ev', "echo CRM_Extension_System::singleton()->getManager()->getStatus((string) getenv('CK_LC_KEY'));",
+        ], $environment)['output']);
         if ($status !== 'installed') {
             fwrite(STDERR, "cklifecycle: extension ended up '{$status}', expected 'installed'\n");
             $this->failed = true;

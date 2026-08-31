@@ -31,7 +31,7 @@ SHELL := bash
 CACHE := .cache
 PHPUNIT := $(CACHE)/phpunit-$(CK_PHPUNIT_VERSION).phar
 SHARED_PHP_COVERAGE := $(CACHE)/shared-php-coverage.xml
-SHARED_PHP_COVERAGE_MIN := 25
+SHARED_PHP_COVERAGE_MIN := 36
 SCENARIO_YAML_STAMP := packages/civikitchen-scenario-schema/vendor/.civikitchen-installed
 
 # The pinned release IN the path: a catalog bump must invalidate the cached
@@ -139,6 +139,7 @@ test-shared-php-coverage: $(PHPUNIT) ## Shared PHP unit tests and measured line-
 	  echo 'shared PHP coverage requires phpdbg, pcov, or xdebug' >&2; exit 2; \
 	fi
 	php tests/shared-php/assert-coverage.php $(SHARED_PHP_COVERAGE) $(SHARED_PHP_COVERAGE_MIN)
+	php tests/shared-php/test-assert-coverage.php
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as

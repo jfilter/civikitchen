@@ -36,30 +36,36 @@ final class ReleaseCommand implements Command
         }
         $options = ['version' => '', 'ref' => 'HEAD', 'output' => '.ckrelease', 'requireChangelog' => false];
         $positionals = [];
+        $literal = false;
         while ($arguments !== []) {
             $argument = array_shift($arguments);
-            if (in_array($argument, ['-h', '--help'], true)) {
+            if (!$literal && $argument === '--') {
+                $literal = true;
+                continue;
+            }
+            if (!$literal && in_array($argument, ['-h', '--help'], true)) {
                 echo $this->usage();
                 return 0;
             }
-            if ($argument === '--require-changelog') {
+            if (!$literal && $argument === '--require-changelog') {
                 $options['requireChangelog'] = true;
                 continue;
             }
             $names = ['--version' => 'version', '--ref' => 'ref', '--output' => 'output'];
-            if (isset($names[$argument])) {
+            if (!$literal && isset($names[$argument])) {
                 if ($arguments === []) {
                     return $this->error("{$argument} needs a value");
                 }
                 $options[$names[$argument]] = (string) array_shift($arguments);
                 continue;
             }
-            if (str_starts_with($argument, '-')) {
+            if (!$literal && str_starts_with($argument, '-')) {
                 return $this->error("unknown option: {$argument}");
             }
             $positionals[] = $argument;
         }
-        $options['version'] = ltrim((string) $options['version'], 'v');
+        $version = (string) $options['version'];
+        $options['version'] = str_starts_with($version, 'v') ? substr($version, 1) : $version;
         if (!$this->loadContext()) {
             return 1;
         }

@@ -19,13 +19,18 @@ final class CompatibilityCommand implements Command
     {
         $testVersion = '';
         $paths = [];
+        $literal = false;
         while ($arguments !== []) {
             $argument = array_shift($arguments);
-            if (in_array($argument, ['-h', '--help'], true)) {
+            if (!$literal && $argument === '--') {
+                $literal = true;
+                continue;
+            }
+            if (!$literal && in_array($argument, ['-h', '--help'], true)) {
                 echo $this->usage();
                 return 0;
             }
-            if (in_array($argument, ['--php', '--range'], true)) {
+            if (!$literal && in_array($argument, ['--php', '--range'], true)) {
                 if ($arguments === []) {
                     return $this->error("{$argument} needs a value");
                 }
@@ -33,11 +38,11 @@ final class CompatibilityCommand implements Command
                 $testVersion = $argument === '--php' ? "{$value}-" : $value;
                 continue;
             }
-            if (str_starts_with($argument, '--php=')) {
+            if (!$literal && str_starts_with($argument, '--php=')) {
                 $testVersion = substr($argument, 6) . '-';
-            } elseif (str_starts_with($argument, '--range=')) {
+            } elseif (!$literal && str_starts_with($argument, '--range=')) {
                 $testVersion = substr($argument, 8);
-            } elseif (str_starts_with($argument, '-')) {
+            } elseif (!$literal && str_starts_with($argument, '-')) {
                 return $this->error("unknown option: {$argument}");
             } else {
                 $paths[] = $argument;

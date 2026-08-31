@@ -42,6 +42,10 @@ php -r '
 profiles=$("${root}/toolbelt/bin/ck" profile list)
 grep -q $'^mailing\t' <<<"${profiles}"
 "${root}/toolbelt/bin/ckdeps" --help | grep -q 'ck dependencies'
+for alias in ckcivix ckcompat ckconform ckcoverage ckdeps ckeslint ckfmt cklifecycle cklint ckmutate ckphpunit ckprofile ckrelease ckscenario ckschemadiff cksmarty; do
+  [ -L "${root}/toolbelt/bin/${alias}" ] || { echo "${alias} is not a symlink" >&2; exit 1; }
+  [ "$(readlink "${root}/toolbelt/bin/${alias}")" = ck ] || { echo "${alias} does not target ck" >&2; exit 1; }
+done
 if "${root}/toolbelt/bin/ck" no-such-command >/dev/null 2>&1; then
   echo "unknown ck command passed" >&2
   exit 1

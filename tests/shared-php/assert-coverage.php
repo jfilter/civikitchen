@@ -16,7 +16,7 @@ if ($total === 0) {
     fwrite(STDERR, "shared PHP coverage: no executable statements measured\n");
     exit(2);
 }
-$source = realpath(dirname(__DIR__, 2) . '/toolbelt/lib/php/src');
+$source = realpath($argv[3] ?? dirname(__DIR__, 2) . '/toolbelt/lib/php/src');
 $measured = [];
 $untested = [];
 foreach ($xml->project->file as $file) {

@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use CiviKitchen\Toolbelt\Cli\Application;
+use CiviKitchen\Toolbelt\Cli\CompatibilityCommand;
+use CiviKitchen\Toolbelt\Cli\FormatCommand;
+use CiviKitchen\Toolbelt\Cli\ReleaseCommand;
 use CiviKitchen\Toolbelt\Process\Runner;
 use CiviKitchen\Toolbelt\Repository\Files;
 use CiviKitchen\Toolbelt\Runtime\ExtensionInspector;
@@ -67,6 +70,19 @@ final class SharedPhpTest extends TestCase
         self::assertSame(0, $runner->redirect(['printf', 'redirected'], $output));
         self::assertSame('redirected', file_get_contents($output));
         self::assertSame(0, $runner->passthrough(['true']));
+    }
+
+    public function testRunnerDrainsLargeStdoutAndStderrWithoutDeadlock(): void
+    {
+        $php = PHP_SAPI === 'phpdbg' ? dirname(PHP_BINARY) . '/php' : PHP_BINARY;
+        $result = (new Runner())->captureSeparate([
+            $php,
+            '-r',
+            'fwrite(STDERR, str_repeat("e", 200000)); fwrite(STDOUT, str_repeat("o", 200000));',
+        ]);
+        self::assertSame(0, $result['status']);
+        self::assertSame(200000, strlen($result['stdout']));
+        self::assertSame(200000, strlen($result['stderr']));
     }
 
     public function testProfileDataReadsFiltersAndMergesProfiles(): void
@@ -161,6 +177,74 @@ final class SharedPhpTest extends TestCase
             ->install($badArchive, 'org.example.safe', $this->temporary . '/bad-target', '');
     }
 
+    public function testLifecycleRejectsUnsafeKeyBeforeStartingCv(): void
+    {
+        file_put_contents($this->temporary . '/info.xml', '<extension key="org.example.safe"><file>safe</file></extension>');
+        $before = getcwd();
+        chdir($this->temporary);
+        try {
+            $runner = new RecordingRunner();
+            $application = new Application(dirname(__DIR__, 2) . '/toolbelt/bin', dirname(__DIR__, 2), $runner);
+            self::assertSame(2, $application->run(['lifecycle', '--key', "x');phpinfo();//"], 'ck'));
+            self::assertSame([], $runner->commands);
+        } finally {
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
+    public function testLiteralOptionTerminatorPreservesDashPrefixedPaths(): void
+    {
+        file_put_contents($this->temporary . '/info.xml', '<extension key="org.example.safe"><file>safe</file></extension>');
+        file_put_contents($this->temporary . '/composer.json', '{"require":{"php":">=8.1"}}');
+        file_put_contents($this->temporary . '/-odd.php', '<?php');
+        $before = getcwd();
+        chdir($this->temporary);
+        try {
+            $formatRunner = new RecordingRunner();
+            self::assertSame(0, (new FormatCommand(dirname(__DIR__, 2), $formatRunner))->run(['--check', '--', '-odd.php']));
+            self::assertTrue($formatRunner->passedArgument('-odd.php'));
+
+            $compatibilityRunner = new RecordingRunner();
+            self::assertSame(0, (new CompatibilityCommand($compatibilityRunner))->run(['--php', '8.1', '--', '-odd.php']));
+            self::assertTrue($compatibilityRunner->passedArgument('-odd.php'));
+        } finally {
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
+    public function testReleaseVersionStripsExactlyOneVPrefix(): void
+    {
+        file_put_contents($this->temporary . '/info.xml', '<extension key="org.example.safe"><file>safe</file><version>1.2.3</version></extension>');
+        $before = getcwd();
+        chdir($this->temporary);
+        try {
+            self::assertSame(0, (new ReleaseCommand(dirname(__DIR__, 2), new RecordingRunner()))
+                ->run(['check', '--version', 'v1.2.3']));
+            self::assertSame(1, (new ReleaseCommand(dirname(__DIR__, 2), new RecordingRunner()))
+                ->run(['check', '--version', 'vv1.2.3']));
+        } finally {
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
+    public function testReleaseAcceptsDashPrefixedArchiveAfterOptionTerminator(): void
+    {
+        file_put_contents($this->temporary . '/info.xml', '<extension key="org.example.safe"><file>safe</file><version>1.2.3</version></extension>');
+        $archive = $this->temporary . '/-archive.zip';
+        $zip = new ZipArchive();
+        self::assertTrue($zip->open($archive, ZipArchive::CREATE));
+        $zip->addFromString('org.example.safe/info.xml', '<extension key="org.example.safe"><version>1.2.3</version></extension>');
+        $zip->close();
+        $before = getcwd();
+        chdir($this->temporary);
+        try {
+            self::assertSame(0, (new ReleaseCommand(dirname(__DIR__, 2), new RecordingRunner()))
+                ->run(['verify', '--', '-archive.zip']));
+        } finally {
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
     public function testExtensionEditorUpdatesOpenAndProprietaryMetadata(): void
     {
         $directory = $this->temporary . '/extension';
@@ -220,5 +304,48 @@ final class SharedPhpTest extends TestCase
         $file = $this->temporary . '/' . $name;
         file_put_contents($file, json_encode($contents, JSON_THROW_ON_ERROR));
         return $file;
+    }
+}
+
+final class RecordingRunner extends Runner
+{
+    /** @var list<list<string>> */
+    public array $commands = [];
+
+    public function capture(array $command, ?array $environment = null, ?string $workingDirectory = null): array
+    {
+        $this->commands[] = $command;
+        if ($command[0] === 'sh') {
+            return ['status' => 0, 'output' => '/fake/mago'];
+        }
+        if ($command[0] === 'git') {
+            $joined = implode(' ', $command);
+            if (str_contains($joined, 'rev-parse')) {
+                return ['status' => 0, 'output' => "true\n"];
+            }
+            return str_contains($joined, '*.php') || in_array('-odd.php', $command, true)
+                ? ['status' => 0, 'output' => "-odd.php\n"]
+                : ['status' => 0, 'output' => ''];
+        }
+        if (str_ends_with($command[0], 'ckconform')) {
+            return ['status' => 0, 'output' => "dir tests\n"];
+        }
+        return ['status' => 0, 'output' => ''];
+    }
+
+    public function passthrough(array $command, ?array $environment = null, ?string $workingDirectory = null): int
+    {
+        $this->commands[] = $command;
+        return 0;
+    }
+
+    public function passedArgument(string $argument): bool
+    {
+        foreach ($this->commands as $command) {
+            if (in_array($argument, $command, true)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

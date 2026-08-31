@@ -106,23 +106,15 @@ final class SchemaDiffCommand implements Command
             '--no-data', '--compact', '--skip-comments', '--skip-add-drop-table', '--skip-set-charset',
             $database, ...$tables,
         ];
-        $process = proc_open($command, [0 => STDIN, 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-        if (!is_resource($process)) {
-            return $this->error('could not start mysqldump');
-        }
-        $ddl = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $status = proc_close($process);
-        $stderr = preg_replace('/^.*Using a password on the command line.*\R?/m', '', $stderr ?: '') ?? '';
+        $result = $this->runner->captureSeparate($command);
+        $stderr = preg_replace('/^.*Using a password on the command line.*\R?/m', '', $result['stderr']) ?? '';
         if ($stderr !== '') {
             fwrite(STDERR, $stderr);
         }
-        if ($status !== 0) {
-            return $status;
+        if ($result['status'] !== 0) {
+            return $result['status'];
         }
-        $normalized = $this->normalize($ddl ?: '');
+        $normalized = $this->normalize($result['stdout']);
         if ($normalized === '' || file_put_contents($output, $normalized) === false) {
             return $this->error("mysqldump produced nothing for {$database} (are the tables installed?)");
         }
