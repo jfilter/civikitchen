@@ -665,10 +665,43 @@ final class Context
      */
     public function workflows(): array
     {
+        $repositoryRoot = $this->repositoryRoot();
+        if ($repositoryRoot !== rtrim($this->root, '/')) {
+            $directory = $repositoryRoot . '/.github/workflows';
+            if (!is_dir($directory)) {
+                return [];
+            }
+            $prefix = str_repeat('../', count(array_filter(explode('/', substr(rtrim($this->root, '/'), strlen($repositoryRoot))))));
+            $workflows = [];
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
+                if (!$file instanceof \SplFileInfo || !$file->isFile() || !in_array($file->getExtension(), ['yml', 'yaml'], true)) {
+                    continue;
+                }
+                $workflows[] = $prefix . substr($file->getPathname(), strlen($repositoryRoot) + 1);
+            }
+            sort($workflows);
+
+            return $workflows;
+        }
+
         return array_values(array_filter(
             $this->findFiles('.github/workflows', ['.yml', '.yaml']),
             static fn (string $f): bool => true,
         ));
+    }
+
+    private function repositoryRoot(): string
+    {
+        $directory = rtrim((string) realpath($this->root), '/');
+        $fallback = $directory;
+        while ($directory !== '' && $directory !== dirname($directory)) {
+            if (file_exists($directory . '/.git')) {
+                return $directory;
+            }
+            $directory = dirname($directory);
+        }
+
+        return $fallback;
     }
 
     private function git(array $args): ?string
@@ -678,7 +711,7 @@ final class Context
         // ownership") — which silently degraded every tracked-files check to
         // the disk-walk fallback. This tool only ever READS the repo, so
         // trusting the one directory it was pointed at is sound.
-        $command = 'git -c ' . escapeshellarg('safe.directory=' . rtrim($this->root, '/'))
+        $command = 'git -c ' . escapeshellarg('safe.directory=' . $this->repositoryRoot())
             . ' -C ' . escapeshellarg($this->root);
         foreach ($args as $arg) {
             $command .= ' ' . escapeshellarg($arg);

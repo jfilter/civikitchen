@@ -76,6 +76,30 @@ abstract class CheckTestCase extends TestCase
         return new Context($this->dir, $this->coreDir());
     }
 
+    /**
+     * @param array<string, string> $rootFiles
+     * @param array<string, string> $extensionFiles
+     */
+    protected function monorepoExtension(array $rootFiles, array $extensionFiles): Context
+    {
+        $this->dir = sys_get_temp_dir() . '/ckconform-' . bin2hex(random_bytes(6));
+        mkdir($this->dir . '/extensions/example', 0777, true);
+        $extensionFiles['info.xml'] ??= $this->infoXml();
+        foreach (['' => $rootFiles, 'extensions/example/' => $extensionFiles] as $prefix => $files) {
+            foreach ($files as $path => $contents) {
+                $full = $this->dir . '/' . $prefix . $path;
+                if (!is_dir(dirname($full))) {
+                    mkdir(dirname($full), 0777, true);
+                }
+                file_put_contents($full, $contents);
+            }
+        }
+        $this->git('init -q');
+        $this->git('add -A');
+
+        return new Context($this->dir . '/extensions/example', $this->coreDir());
+    }
+
     /** Compact fixture adapter; production accepts YAML only. */
     protected function policyFixture(string $lines): string
     {

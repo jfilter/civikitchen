@@ -44,4 +44,14 @@ final class CiWorkflowCheckTest extends CheckTestCase
         $reporter = $this->run_(new CiWorkflowCheck(), $context);
         $this->assertWarns($reporter, 'CI has no lint step (cklint/phpcs)');
     }
+
+    public function testUsesRepositoryRootWorkflowForNestedExtension(): void
+    {
+        $context = $this->monorepoExtension([
+            '.github/workflows/ci.yml' => "name: CI\njobs:\n  lint:\n    steps:\n      - run: cklint && ckconform\n",
+        ], []);
+        $reporter = $this->run_(new CiWorkflowCheck(), $context);
+        $this->assertPasses($reporter);
+        self::assertSame([], $reporter->messages('warn'));
+    }
 }
