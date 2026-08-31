@@ -51,19 +51,7 @@ echo "Site URL: ${CIVIKITCHEN_SITE_URL}"
 # mariadb-client builds apply to plain dev sidecars.
 echo "Waiting for database at ${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}..."
 attempt=0
-until php -r '
-    // mysqli_report() must be OFF or PHP 8.1+ throws on every failed
-    // connect attempt during the wait loop, which is just noise here.
-    mysqli_report(MYSQLI_REPORT_OFF);
-    $m = @new mysqli(
-        getenv("CIVICRM_DB_HOST"),
-        "root",
-        getenv("CIVICRM_DB_ROOT_PASSWORD"),
-        "",
-        (int) getenv("CIVICRM_DB_PORT")
-    );
-    exit($m->connect_errno ? 1 : 0);
-' 2>/dev/null; do
+until ck internal database-ready root 2>/dev/null; do
     attempt=$((attempt + 1))
     if [[ "${attempt}" -ge 60 ]]; then
         echo "ERROR: database not reachable after 120s" >&2
@@ -84,14 +72,8 @@ if [[ ! -f "${MARKER_FILE}" ]]; then
     # the site databases. Refuse to wipe data that survived us: a sentinel
     # row written after every successful install marks the external DB as
     # carrying a civikitchen site.
-    if [[ "${CIVIKITCHEN_REINSTALL:-0}" != "1" ]] && php -r '
-        mysqli_report(MYSQLI_REPORT_OFF);
-        $m = @new mysqli(getenv("CIVICRM_DB_HOST"), "root",
-            getenv("CIVICRM_DB_ROOT_PASSWORD"), "", (int) getenv("CIVICRM_DB_PORT"));
-        if ($m->connect_errno) { exit(1); }
-        $r = @$m->query("SELECT 1 FROM civikitchen_state.site_installed LIMIT 1");
-        exit(($r && $r->num_rows > 0) ? 0 : 1);
-    ' 2>/dev/null; then
+    if [[ "${CIVIKITCHEN_REINSTALL:-0}" != "1" ]] \
+        && ck internal database-sentinel-exists 2>/dev/null; then
         echo "ERROR: this container is fresh, but the database at ${CIVICRM_DB_HOST} already holds a civikitchen site." >&2
         echo "       Rebuilding the site would DROP those databases (your dev data)." >&2
         echo "       Either set CIVIKITCHEN_REINSTALL=1 to rebuild anyway (drops the site DBs)," >&2
@@ -149,16 +131,8 @@ MYCNF
 
     # Sentinel for the fresh-container guard above: mark the external DB as
     # holding an installed site (survives container recreation).
-    php -r '
-        mysqli_report(MYSQLI_REPORT_OFF);
-        $m = @new mysqli(getenv("CIVICRM_DB_HOST"), "root",
-            getenv("CIVICRM_DB_ROOT_PASSWORD"), "", (int) getenv("CIVICRM_DB_PORT"));
-        if ($m->connect_errno) { exit(1); }
-        $m->query("CREATE DATABASE IF NOT EXISTS civikitchen_state");
-        $m->query("CREATE TABLE IF NOT EXISTS civikitchen_state.site_installed (
-            id TINYINT UNSIGNED PRIMARY KEY, installed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)");
-        $m->query("REPLACE INTO civikitchen_state.site_installed (id) VALUES (1)");
-    ' || echo "WARNING: could not record the install sentinel in civikitchen_state" >&2
+    ck internal database-sentinel-write \
+        || echo "WARNING: could not record the install sentinel in civikitchen_state" >&2
 
     touch "${MARKER_FILE}"
     echo "Site installed."

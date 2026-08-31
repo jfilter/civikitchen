@@ -114,6 +114,8 @@ command -v docker >/dev/null 2>&1 || die "docker is required (civix needs a boot
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -f "$here/ckinit.php" ] || die "cannot find ckinit.php next to this script"
+ck_cli="$here/../toolbelt/bin/ck"
+[ -x "$ck_cli" ] || die "cannot find the shared ck PHP CLI"
 [ -f "$here/../packages/civikitchen-scenario-schema/vendor/autoload.php" ] \
   || die "YAML parser dependency is missing; run composer install --working-dir=packages/civikitchen-scenario-schema"
 
@@ -194,119 +196,26 @@ generated="$mount_root/$key"
 docker compose -p "$project" -f "$work/compose.yml" exec -T app \
   chown -R "$(id -u):$(id -g)" "/out/$key" 2>/dev/null || true
 
-if [ "$rewrite_license" = "1" ]; then
-  php -r '
-    $file = $argv[1];
-    $xml = new DOMDocument();
-    $xml->preserveWhiteSpace = true;
-    if (!$xml->load($file)) { fwrite(STDERR, "could not parse info.xml\n"); exit(2); }
-    $xpath = new DOMXPath($xml);
-    $licenses = $xpath->query("/extension/license");
-    if ($licenses === false || $licenses->length !== 1) { fwrite(STDERR, "info.xml needs one <license>\n"); exit(2); }
-    $licenses->item(0)->textContent = "Proprietary";
-    $urls = $xpath->query("/extension/urls/url[@desc=\"Licensing\"]");
-    if ($urls !== false) {
-      foreach (iterator_to_array($urls) as $url) { $url->parentNode->removeChild($url); }
-    }
-    if ($xml->save($file) === false) { fwrite(STDERR, "could not write info.xml\n"); exit(2); }
-  ' "$generated/info.xml"
-  cat > "$generated/LICENSE.txt" <<EOF
-Copyright (C) $(date +%Y) $copyright. All rights reserved.
-
-This software is proprietary. It is not licensed for redistribution or use
-outside the terms agreed with the copyright holder.
-EOF
-  php -r '
-    $file = $argv[1];
-    $text = file_get_contents($file);
-    $next = preg_replace(
-      "/, licensed under \\[[^]]+\\]\\(LICENSE\\.txt\\)\\./",
-      ", distributed as proprietary software under the terms in [LICENSE.txt](LICENSE.txt).",
-      $text,
-      1,
-      $count,
-    );
-    if ($count !== 1 || $next === null) { fwrite(STDERR, "could not rewrite the README license line\n"); exit(2); }
-    file_put_contents($file, $next);
-  ' "$generated/README.md"
-  echo "$tool: rewrote the license to '$license' (civix cannot generate it)"
-else
-  php -r '
-    $file = $argv[1];
-    $holder = $argv[2];
-    $year = date("Y");
-    $text = file_get_contents($file);
-    $line = "Copyright (C) $year $holder";
-    $next = preg_replace("/^Copyright[^\\r\\n]*$/mi", $line, $text, 1, $count);
-    if ($next === null) { fwrite(STDERR, "could not update LICENSE.txt\n"); exit(2); }
-    if ($count === 0) { $next = $line . "\n\n" . $text; }
-    file_put_contents($file, $next);
-  ' "$generated/LICENSE.txt" "$copyright"
-fi
+"$ck_cli" internal scaffold-license "$generated" "$license" "$copyright"
+[ "$rewrite_license" = "0" ] \
+  || echo "$tool: rewrote the license to '$license' (civix cannot generate it)"
 
 echo "$tool: seeding the civikitchen template …"
 php "$here/ckinit.php" --update "$generated"
 
 # ckinit owns the initial composer.json, but the licence comes from this
 # command. Keep both declarations consistent before the directory appears.
-php -r '
-  $file = $argv[1];
-  $license = $argv[2];
-  $phpFloor = $argv[3];
-  $json = json_decode(file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
-  $json["license"] = $license === "Proprietary" ? "proprietary" : $license;
-  if ($license === "Proprietary") { $json["private"] = true; }
-  else { unset($json["private"]); }
-  if ($phpFloor !== "") { $json["require"]["php"] = ">=$phpFloor"; }
-  file_put_contents($file, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
-' "$generated/composer.json" "$license" "$php_floor"
+"$ck_cli" internal scaffold-composer "$generated/composer.json" "$license" "$php_floor"
 
 # The template's composer constraint is the installation floor. Trim civix's
 # broad default list to the same value so package and extension metadata agree.
-php -r '
-  $composer = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
-  $constraint = $composer["require"]["php"] ?? "";
-  if (!preg_match("/^>=\\s*([0-9]+\\.[0-9]+)$/", $constraint, $match)) {
-    fwrite(STDERR, "composer require.php must be a simple >=major.minor floor\n");
-    exit(2);
-  }
-  $floor = $match[1];
-  $xml = new DOMDocument();
-  $xml->preserveWhiteSpace = true;
-  if (!$xml->load($argv[2])) { fwrite(STDERR, "could not parse info.xml\n"); exit(2); }
-  $xpath = new DOMXPath($xml);
-  $versions = $xpath->query("/extension/php_compatibility/ver");
-  if ($versions === false || $versions->length === 0) { fwrite(STDERR, "info.xml has no PHP compatibility list\n"); exit(2); }
-  $kept = 0;
-  for ($i = $versions->length - 1; $i >= 0; $i--) {
-    $version = $versions->item($i);
-    if (version_compare(trim($version->textContent), $floor, "<")) { $version->parentNode->removeChild($version); }
-    else { $kept++; }
-  }
-  if ($kept === 0) { fwrite(STDERR, "PHP floor $floor is newer than the civix compatibility list\n"); exit(2); }
-  if ($xml->save($argv[2]) === false) { fwrite(STDERR, "could not write info.xml\n"); exit(2); }
-  $phpstan = file_get_contents($argv[3]);
-  $versionId = sprintf("%d%02d00", ...array_map("intval", explode(".", $floor)));
-  $next = preg_replace_callback(
-    "/^(\\s*phpVersion:\\s*)\\d+$/m",
-    static fn(array $match): string => $match[1] . $versionId,
-    $phpstan,
-    1,
-    $count,
-  );
-  if ($next === null || $count !== 1) { fwrite(STDERR, "phpstan.neon.dist needs one phpVersion value\n"); exit(2); }
-  file_put_contents($argv[3], $next);
-' "$generated/composer.json" "$generated/info.xml" "$generated/phpstan.neon.dist"
+"$ck_cli" internal scaffold-php-floor \
+  "$generated/composer.json" "$generated/info.xml" "$generated/phpstan.neon.dist"
 
 # Add the repository policy to the one generated CiviKitchen config.
-php -r '
-  require $argv[1];
-  $file = $argv[2];
-  $document = ck_scenario_parse_yaml($file);
-  $document["policy"]["license"] = $argv[3];
-  $document["policy"]["copyright"] = $argv[4];
-  if (file_put_contents($file, ck_scenario_dump_yaml($document), LOCK_EX) === false) exit(2);
-' "$here/../packages/civikitchen-scenario-schema/scenario.php" "$generated/civikitchen.yaml" "$license" "$copyright"
+"$ck_cli" internal scaffold-policy \
+  "$here/../packages/civikitchen-scenario-schema/scenario.php" \
+  "$generated/civikitchen.yaml" "$license" "$copyright"
 echo "$tool: wrote civikitchen.yaml policy (license, copyright)"
 
 php "$here/ckinit.php" --check "$generated" >/dev/null

@@ -81,7 +81,8 @@ while [ "$#" -gt 0 ]; do paths+=("$1"); shift; done
 # -------------------------------------------------------------------------
 # 1. Structure — civix (writes; civix has no dry-run, so we only run it on --fix
 #    and otherwise just announce the plan).
-if [ "${do_civix}" -eq 1 ] && [ -f info.xml ] && grep -q '<civix>' info.xml; then
+if [ "${do_civix}" -eq 1 ] && [ -f info.xml ] \
+    && "$(_ck_main_bin)" internal xml-has-child info.xml civix; then
   if [ "${fix}" -eq 1 ]; then
     echo "== civix: modernizing scaffolding =="
     civix upgrade -n || echo "ckmodernize: civix upgrade reported issues (continuing)" >&2

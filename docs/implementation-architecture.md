@@ -18,14 +18,34 @@ CiviKitchen has three implementation boundaries:
 `toolbelt/bin/ck` is the one executable implementation entrypoint. Command
 classes share path discovery, process execution, errors, and output under
 `toolbelt/lib/php`. Historical executable names such as `ckprofile`, `ckdeps`,
-`ckconform`, and `ckscenario` are symlinks to `ck`; they are compatibility
-names, not separate programs.
+`ckconform`, `ckscenario`, `cklint`, `ckfmt`, `ckeslint`, `ckcompat`,
+`ckphpunit`, `ckcoverage`, `ckmutate`, `cklifecycle`, `ckschemadiff`,
+`cksmarty`, `ckcivix`, and `ckrelease` are symlinks to `ck`; they are
+compatibility names, not separate programs.
 
-Commands not migrated yet are dispatched to their existing executable. Move
-them behind the shared PHP application incrementally, with the existing CLI
-contract and focused regression tests held constant. Do not replace a shell
-file with an isolated PHP script: the point of migration is shared ownership,
-not a different suffix.
+The remaining shell commands are deliberate operating-system adapters:
+
+- `cktaint` invokes the isolated Psalm runtime with its memory and baseline
+  flags.
+- `ckmodernize` sequences two independent external rewriters, civix and
+  Rector.
+- `ckcoretest` materializes a sparse external Git checkout into an installed
+  core tree before invoking its suite.
+- `cktestreset` streams `mysqldump` directly into `mysql` and removes runtime
+  cache artifacts.
+
+These commands contain no structured-format parser of their own. If reusable
+policy, XML, JSON, archive, file-selection, or validation logic is added to
+them, that logic belongs in `toolbelt/lib/php` and is called through `ck`.
+Do not replace a shell file with an isolated PHP script: the point of migration
+is shared ownership, not a different suffix.
+
+The same boundary applies outside `toolbelt/bin`: image entrypoints, profile
+application, `ckcreate`, `ckup`, GitHub workflow adapters, and integration-test
+drivers remain shell because they primarily manage processes, users,
+containers, pipes, or host ports. Their structured operations call the shared
+PHP runtime. Test-only PHP snippets may create fixtures or probe a PHP runtime;
+they are test inputs, not duplicated product logic.
 
 ## Runtime layout
 

@@ -19,13 +19,14 @@ final class Runner
     }
 
     /** @param non-empty-list<string> $command @return array{status: int, output: string} */
-    public function capture(array $command): array
+    /** @param array<string, string>|null $environment */
+    public function capture(array $command, ?array $environment = null, ?string $workingDirectory = null): array
     {
         $process = proc_open($command, [
             0 => ['file', '/dev/null', 'r'],
             1 => ['pipe', 'w'],
             2 => ['redirect', 1],
-        ], $pipes);
+        ], $pipes, $workingDirectory, $environment);
         if (!is_resource($process)) {
             return ['status' => 2, 'output' => 'ck: could not start ' . $command[0] . "\n"];
         }

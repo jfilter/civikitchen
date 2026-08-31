@@ -91,19 +91,7 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
     echo "[civikitchen] Waiting for database at ${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}..."
 
     attempt=0
-    until php -r '
-        // mysqli_report() must be OFF or PHP 8.1+ throws on every failed
-        // connect attempt during the wait loop, which is just noise here.
-        mysqli_report(MYSQLI_REPORT_OFF);
-        $m = @new mysqli(
-            getenv("CIVICRM_DB_HOST"),
-            getenv("CIVICRM_DB_USER"),
-            getenv("CIVICRM_DB_PASSWORD"),
-            getenv("CIVICRM_DB_NAME"),
-            (int) getenv("CIVICRM_DB_PORT")
-        );
-        exit($m->connect_errno ? 1 : 0);
-    ' 2>/dev/null; do
+    until ck internal database-ready configured 2>/dev/null; do
         attempt=$((attempt + 1))
         if [[ "${attempt}" -ge 30 ]]; then
             echo "[civikitchen] ERROR: database not reachable after 60s" >&2

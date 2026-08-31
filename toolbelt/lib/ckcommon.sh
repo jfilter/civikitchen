@@ -36,6 +36,13 @@ ck_git() { git -c safe.directory="$PWD" "$@"; }
 
 ck_in_git_repo() { ck_git rev-parse --is-inside-work-tree >/dev/null 2>&1; }
 
+_ck_main_bin() {
+    local bin="$ck_root/bin/ck"
+    [ -x "$bin" ] || bin=$(command -v ck || true)
+    [ -n "$bin" ] && [ -x "$bin" ] || ck_die "cannot find the shared ck PHP CLI"
+    printf '%s' "$bin"
+}
+
 # --- civikitchen.yaml --------------------------------------------------------------
 # Read through ckconform, which owns the format; never parsed here. Why that
 # matters: toolbelt/ckconform/src/Policy.php.
@@ -76,25 +83,12 @@ ck_dist_paths() { "$(_ck_conform_bin)" --dist-paths; }
 
 # $1 = file, $2 = 'key' (the root attribute) or a child element name.
 ck_xml_field() {
-    php -r '
-      libxml_use_internal_errors(TRUE);
-      $xml = simplexml_load_file($argv[1]);
-      if ($xml === FALSE) { fwrite(STDERR, "cannot parse {$argv[1]}\n"); exit(2); }
-      echo trim($argv[2] === "key" ? (string) $xml["key"] : (string) $xml->{$argv[2]});
-    ' "$1" "$2"
+    "$(_ck_main_bin)" internal xml-field "$1" "$2"
 }
 
 # $1 = file, $2 = top-level key. A missing file or key prints nothing.
 ck_json_field() {
-    php -r '
-      if (!is_file($argv[1])) { exit(0); }
-      $raw = file_get_contents($argv[1]);
-      if ($raw === FALSE) { exit(0); }
-      $data = json_decode($raw, TRUE);
-      if (!is_array($data)) { fwrite(STDERR, "invalid JSON: {$argv[1]}\n"); exit(2); }
-      $value = $data[$argv[2]] ?? NULL;
-      echo is_string($value) ? $value : "";
-    ' "$1" "$2"
+    "$(_ck_main_bin)" internal json-field "$1" "$2"
 }
 
 # --- file-selection patterns -------------------------------------------------

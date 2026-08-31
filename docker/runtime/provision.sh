@@ -52,6 +52,19 @@
 
 # --- functions -------------------------------------------------------------
 
+ck_runtime_cli() {
+    local bin
+    bin="$(command -v ck 2>/dev/null || true)"
+    if [[ -z "${bin}" ]]; then
+        bin="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/toolbelt/bin/ck"
+    fi
+    [[ -x "${bin}" ]] || {
+        echo "[civikitchen] ERROR: cannot find the shared ck PHP CLI." >&2
+        return 1
+    }
+    printf '%s' "${bin}"
+}
+
 # Attach the scenario's flavor-neutral source mount to the extension directory
 # discovered/configured by the current image. This keeps generated scenarios
 # portable across Standalone, Drupal, WordPress and Joomla layouts without
@@ -659,11 +672,7 @@ ck_require_profile_trust() {
 ck_resolve_authx_policy() {
     local dir policy resolved=""
     for dir in "$@"; do
-        policy="$(jq -r '
-          if ((.apiUsers // []) | length) == 0 then empty
-          else ((.authx.header_cred // ["jwt", "api_key"]) | sort | join(","))
-          end
-        ' "${dir}/profile.json")" || return 1
+        policy="$("$(ck_runtime_cli)" internal profile-authx-policy "${dir}/profile.json" --sort)" || return 1
         [[ -z "${policy}" ]] && continue
         if [[ -n "${resolved}" && "${resolved}" != "${policy}" ]]; then
             echo "[civikitchen] ERROR: selected profiles declare conflicting AuthX header policies (${resolved} versus ${policy})." >&2
@@ -714,7 +723,7 @@ ck_apply_profile() {
         # CMS gate: profile.json declares the CMS family it needs (e.g.
         # "drupal10"); match it as a prefix of the civibuild site type
         # (drupal10-demo, ...).
-        want_cms="$(jq -r '.cms // empty' "${dir}/profile.json" 2>/dev/null || true)"
+        want_cms="$("$(ck_runtime_cli)" internal profile-cms "${dir}/profile.json" 2>/dev/null || true)"
         if [[ -n "${want_cms}" && "${CIVICRM_SITE_TYPE:-}" != "${want_cms}"* ]]; then
             echo "[civikitchen] ERROR: profile '${name}' requires a ${want_cms} site; this site is '${CIVICRM_SITE_TYPE:-unknown}'." >&2
             return 1
@@ -736,27 +745,8 @@ ck_apply_profile() {
     # same-role declarations into an exact union and lets the CMS adapters
     # remove stale CiviKitchen-owned permissions/users safely.
     merged="$(mktemp)"
-    if ! jq -s --arg policy "${authx_policy}" '
-      [.[].apiUsers[]?] as $users
-      | ($users | sort_by(.username) | group_by(.username) | map(
-          if ([.[].role] | unique | length) != 1
-          then error("same API username declares conflicting roles: " + .[0].username)
-          else {
-            username: .[0].username,
-            role: .[0].role,
-            permissions: ([.[].permissions[]] | unique)
-          } end
-        )) as $by_user
-      | ($by_user | sort_by(.role) | group_by(.role)
-          | map({key: .[0].role, value: ([.[].permissions[]] | unique)})
-          | from_entries) as $role_permissions
-      | {
-          description: "Aggregated CiviKitchen API users",
-          dependencies: [],
-          authx: {header_cred: ($policy | split(",") | map(select(length > 0)))},
-          apiUsers: ($by_user | map(.permissions = $role_permissions[.role]))
-        }
-    ' "${resolved[@]/%//profile.json}" > "${merged}"; then
+    if ! "$(ck_runtime_cli)" internal profiles-merge "${merged}" "${authx_policy}" \
+        "${resolved[@]/%//profile.json}"; then
         rm -f "${merged}"
         return 1
     fi

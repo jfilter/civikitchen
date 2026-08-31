@@ -45,6 +45,11 @@ trap ck_profile_cleanup EXIT
 PROFILE_DIR="${1:?usage: apply.sh <profile-dir>}"
 PROFILE_NAME="$(basename "${PROFILE_DIR}")"
 JSON="${PROFILE_DIR}/profile.json"
+CK_PROFILE_CLI="$(command -v ck 2>/dev/null || true)"
+if [ -z "${CK_PROFILE_CLI}" ]; then
+    CK_PROFILE_CLI="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/toolbelt/bin/ck"
+fi
+[ -x "${CK_PROFILE_CLI}" ] || { echo "apply.sh: cannot find the shared ck PHP CLI" >&2; exit 1; }
 # civibuild layout if present (demo + buildkit dev images); on the standalone
 # dev image cv is on the global PATH and finds the site via env, no cd needed.
 SITE_WEB="/home/buildkit/buildkit/build/site/web"
@@ -68,10 +73,7 @@ LOCAL_EXTENSIONS="$(cv ev '$c=CRM_Extension_System::singleton()->getFullContaine
 LOCAL_KEYS="$(cut -f1 <<<"${LOCAL_EXTENSIONS}")"
 ext_present() { grep -qx "$1" <<<"${LOCAL_KEYS}" || [ -d "${EXT_DIR}/$1" ]; }
 extension_key() {
-    php -r '
-      $xml = @simplexml_load_file($argv[1]);
-      echo $xml instanceof SimpleXMLElement ? (string) $xml["key"] : "";
-    ' "$1/info.xml" 2>/dev/null || true
+    "${CK_PROFILE_CLI}" internal extension-key "$1/info.xml" 2>/dev/null || true
 }
 
 # The UF (CMS framework) this site runs on — "Standalone", "WordPress",
@@ -85,8 +87,8 @@ extension_key() {
 UF="$(cv ev 'echo CIVICRM_UF;')"
 # Generated users receive passwords and API keys, but CiviKitchen does not mint
 # JWTs. Validate the effective merged policy before fetching or replacing code.
-if jq -e '(.apiUsers // []) | length > 0' "${JSON}" >/dev/null; then
-    AUTHX_POLICY="${CK_AUTHX_HEADER_CRED:-$(jq -r '(.authx.header_cred // ["jwt", "api_key"]) | join(",")' "${JSON}")}"
+if "${CK_PROFILE_CLI}" internal profile-api-users-present "${JSON}"; then
+    AUTHX_POLICY="${CK_AUTHX_HEADER_CRED:-$("${CK_PROFILE_CLI}" internal profile-authx-policy "${JSON}")}"
     if [[ ",${AUTHX_POLICY}," != *,api_key,* && ",${AUTHX_POLICY}," != *,pass,* ]]; then
         echo "apply.sh: API users need an AuthX policy containing api_key or pass; JWT credentials are not generated" >&2
         exit 1
@@ -96,12 +98,7 @@ if jq -e '(.apiUsers // []) | length > 0' "${JSON}" >/dev/null; then
         exit 1
     fi
 fi
-# jq filter fragment: dependencies NOT skipped on this UF.
-NOT_SKIPPED='select((.skipUf // []) | index($uf) | not)'
-jq -r --arg uf "${UF}" \
-    '.dependencies[] | select((.skipUf // []) | index($uf))
-     | "  SKIP \(.name) on \($uf): \(.skipUfReason // "declared incompatible in profile.json")"' \
-    "${JSON}"
+"${CK_PROFILE_CLI}" internal profile-skipped "${JSON}" "${UF}"
 
 echo "==> [${PROFILE_NAME}] cloning extensions into ${EXT_DIR}"
 # Tab-separated so URLs/names never collide with the field separator. A failed
@@ -197,10 +194,10 @@ while IFS=$'\t' read -r repo name version; do
         exit 1
     fi
     mv "${temporary}" "${target}"
-done < <(jq -r --arg uf "${UF}" ".dependencies[] | ${NOT_SKIPPED} | select(.repo) | \"\(.repo)\t\(.name)\t\(.version)\"" "${JSON}")
+done < <("${CK_PROFILE_CLI}" internal profile-dependencies "${JSON}" "${UF}" repo)
 
 echo "==> [${PROFILE_NAME}] downloading registry extensions"
-jq -r --arg uf "${UF}" ".dependencies[] | ${NOT_SKIPPED} | select(.registry == true) | .name" "${JSON}" \
+"${CK_PROFILE_CLI}" internal profile-dependencies "${JSON}" "${UF}" registry \
 | while IFS= read -r name; do
     [ -n "${name}" ] || continue
     if ext_present "${name}"; then echo "  ${name} already present"; continue; fi
@@ -213,7 +210,7 @@ echo "==> [${PROFILE_NAME}] enabling extensions"
 # guarantee install order, and extension installers may depend on artifacts
 # (option groups etc.) created by an earlier dependency's installer. Also
 # covers bundled core extensions like flexmailer (no repo, no registry).
-jq -r --arg uf "${UF}" ".dependencies[] | ${NOT_SKIPPED} | select(.enable) | .name" "${JSON}" \
+"${CK_PROFILE_CLI}" internal profile-dependencies "${JSON}" "${UF}" enable \
 | while IFS= read -r name; do
     [ -n "${name}" ] || continue
     cv ext:enable "${name}"
@@ -252,7 +249,7 @@ for seed in "${PROFILE_DIR}/seeds/"*.php; do
     fi
 done
 
-if jq -e '.apiUsers' "${JSON}" >/dev/null 2>&1; then
+if "${CK_PROFILE_CLI}" internal profile-api-users-declared "${JSON}"; then
     echo "==> [${PROFILE_NAME}] preparing API users + AuthX"
     # authx powers the api_key / basic-auth the API users rely on. It ships with
     # core but isn't enabled on every CMS build (civibuild's joomla-demo leaves

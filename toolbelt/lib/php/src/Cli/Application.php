@@ -10,12 +10,8 @@ final class Application
 {
     /** @var array<string, string> */
     private const LEGACY_TOOLS = [
-        'lint' => 'cklint', 'format' => 'ckfmt', 'fmt' => 'ckfmt',
-        'compatibility' => 'ckcompat', 'compat' => 'ckcompat', 'javascript' => 'ckeslint',
-        'js' => 'ckeslint', 'eslint' => 'ckeslint', 'test' => 'ckphpunit', 'phpunit' => 'ckphpunit',
-        'lifecycle' => 'cklifecycle',
-        'taint' => 'cktaint', 'mutate' => 'ckmutate',
-        'modernize' => 'ckmodernize', 'release' => 'ckrelease',
+        'taint' => 'cktaint',
+        'modernize' => 'ckmodernize',
         'core-test' => 'ckcoretest',
         'test-reset' => 'cktestreset',
     ];
@@ -40,6 +36,14 @@ final class Application
             'cksmarty' => 'smarty',
             'ckcoverage' => 'coverage',
             'ckschemadiff' => 'schema',
+            'ckrelease' => 'release',
+            'cklifecycle' => 'lifecycle',
+            'ckcompat' => 'compatibility',
+            'ckfmt' => 'format',
+            'cklint' => 'lint',
+            'ckeslint' => 'javascript',
+            'ckphpunit' => 'test',
+            'ckmutate' => 'mutate',
         ];
         if (isset($aliases[$name])) {
             array_unshift($arguments, $aliases[$name]);
@@ -83,6 +87,30 @@ final class Application
         }
         if ($command === 'schema') {
             return (new SchemaDiffCommand($this->runner))->run($arguments);
+        }
+        if ($command === 'release') {
+            return (new ReleaseCommand($this->checkoutRoot, $this->runner))->run($arguments);
+        }
+        if ($command === 'lifecycle') {
+            return (new LifecycleCommand($this->checkoutRoot, $this->runner))->run($arguments);
+        }
+        if (in_array($command, ['compatibility', 'compat'], true)) {
+            return (new CompatibilityCommand($this->runner))->run($arguments);
+        }
+        if (in_array($command, ['format', 'fmt'], true)) {
+            return (new FormatCommand($this->checkoutRoot, $this->runner))->run($arguments);
+        }
+        if ($command === 'lint') {
+            return (new LintCommand($this->checkoutRoot, $this->runner))->run($arguments);
+        }
+        if (in_array($command, ['javascript', 'js', 'eslint'], true)) {
+            return (new JavaScriptLintCommand($this->checkoutRoot, $this->runner))->run($arguments);
+        }
+        if (in_array($command, ['test', 'phpunit'], true)) {
+            return (new PhpUnitCommand($this->checkoutRoot, $this->runner))->run($arguments);
+        }
+        if ($command === 'mutate') {
+            return (new MutationCommand($this->checkoutRoot, $this->runner))->run($arguments);
         }
         $tool = self::LEGACY_TOOLS[$command] ?? null;
         if ($tool === null) {

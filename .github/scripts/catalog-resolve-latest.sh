@@ -8,8 +8,7 @@ latest=$(git ls-remote --tags https://github.com/civicrm/civicrm-core.git \
   | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
   | sort -V | tail -1)
 [ -n "$latest" ] || { echo "could not resolve a latest release" >&2; exit 1; }
-pinned=$(php -r 'require "toolbelt/ckconform/src/HookCatalog.php";
-  echo CiviKitchen\Ckconform\HookCatalog::CORE_VERSION;')
+pinned=$(toolbelt/bin/ck internal hook-catalog-core-version)
 echo "latest=$latest" >> "$GITHUB_OUTPUT"
 echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
 echo "pinned $pinned, latest $latest"

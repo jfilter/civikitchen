@@ -162,6 +162,7 @@ test-ck: ## Unified ck dispatcher and compatibility aliases
 test-profiles: ## Profile schema, external resolution, credentials modes and file permissions
 	php tests/profiles/test-credentials.php
 	php tests/profiles/test-validator.php
+	php -d zend.assertions=1 -d assert.exception=1 tests/profiles/test-profile-data.php
 	bash tests/profiles/test-external-profiles.sh
 	bash tests/profiles/test-profile-clone.sh
 
