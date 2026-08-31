@@ -125,6 +125,16 @@ check_version php 8.0 \
   'brew install php' \
   'apt install php-cli'
 
+if command -v phpdbg >/dev/null 2>&1; then
+  say_ok phpdbg 'present (shared PHP coverage driver)'
+elif php -m 2>/dev/null | grep -qiE '^(pcov|xdebug)$'; then
+  say_ok coverage 'PCOV or Xdebug is enabled'
+else
+  say_missing 'coverage' 'make test-shared-php-coverage needs phpdbg, PCOV, or Xdebug' \
+    'brew install php' \
+    'apt install php-phpdbg   # or install PCOV/Xdebug'
+fi
+
 check_present git 'fetching the pinned CiviCRM source tree, and every repo-aware check' \
   'xcode-select --install' 'apt install git'
 check_present curl 'downloading the pinned phpunit/shellcheck/actionlint into .cache/' \

@@ -30,6 +30,8 @@ SHELL := bash
 # `make clean` has one thing to remove. CI overrides nothing: same paths.
 CACHE := .cache
 PHPUNIT := $(CACHE)/phpunit-$(CK_PHPUNIT_VERSION).phar
+SHARED_PHP_COVERAGE := $(CACHE)/shared-php-coverage.xml
+SHARED_PHP_COVERAGE_MIN := 25
 SCENARIO_YAML_STAMP := packages/civikitchen-scenario-schema/vendor/.civikitchen-installed
 
 # The pinned release IN the path: a catalog bump must invalidate the cached
@@ -104,7 +106,7 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor test test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-profiles test-scenario test-parity \
+.PHONY: help doctor test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-profiles test-scenario test-parity \
 	test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
 	test-ck-headless test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
 	test-database-matrix test-demo-basic-auth test-release-retag \
@@ -126,7 +128,17 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-database-matrix test-demo-basic-auth test-release-retag test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-database-matrix test-demo-basic-auth test-release-retag test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
+
+test-shared-php-coverage: $(PHPUNIT) ## Shared PHP unit tests and measured line-coverage floor
+	if command -v phpdbg >/dev/null 2>&1; then \
+	  phpdbg -qrr $(PHPUNIT) -c tests/shared-php/phpunit.xml.dist --coverage-clover $(SHARED_PHP_COVERAGE); \
+	elif php -m | grep -qiE '^(pcov|xdebug)$$'; then \
+	  XDEBUG_MODE=coverage php $(PHPUNIT) -c tests/shared-php/phpunit.xml.dist --coverage-clover $(SHARED_PHP_COVERAGE); \
+	else \
+	  echo 'shared PHP coverage requires phpdbg, pcov, or xdebug' >&2; exit 2; \
+	fi
+	php tests/shared-php/assert-coverage.php $(SHARED_PHP_COVERAGE) $(SHARED_PHP_COVERAGE_MIN)
 
 # The catalogs are generated from a CiviCRM release and rot on their own: core
 # adds hooks and namespaces every release, and a stale catalog reports them as

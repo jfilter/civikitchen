@@ -43,6 +43,7 @@ COMPLETE=(
   'make=GNU Make 4.4.1'
   'bash=GNU bash, version 5.2.15(1)-release'
   'php=PHP 8.3.10 (cli)'
+  'phpdbg=PHP 8.3.10 (phpdbg)'
   'git=git version 2.45.0'
   'curl=curl 8.7.1'
   'composer=Composer version 2.7.6'
@@ -116,6 +117,15 @@ done
 run_doctor "$(host no-php "${without_php[@]}")"
 [ "$status" -eq 1 ] || fail "no php: expected exit 1, got $status"
 expect 'no php' 'MISSING  php' "$out"
+
+# --- line coverage is a hard prerequisite of the fast PHP suite -------------
+without_coverage=()
+for entry in "${COMPLETE[@]}"; do
+  [ "${entry%%=*}" = phpdbg ] || without_coverage+=("$entry")
+done
+run_doctor "$(host no-coverage "${without_coverage[@]}")"
+[ "$status" -eq 1 ] || fail "no coverage driver: expected exit 1, got $status"
+expect 'no coverage driver' 'MISSING  coverage' "$out"
 
 # --- Docker is the slow loop only: absent must not fail the fast one ---------
 without_docker=()

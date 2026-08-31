@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="bootstrap.php" colors="true" cacheResult="false">
+  <testsuites>
+    <testsuite name="shared-php">
+      <directory suffix="Test.php">.</directory>
+    </testsuite>
+  </testsuites>
+  <coverage processUncoveredFiles="true">
+    <include>
+      <directory suffix=".php">../../toolbelt/lib/php/src</directory>
+    </include>
+  </coverage>
+</phpunit>
