@@ -143,9 +143,10 @@
       "name": "org.civicrm.contactlayout",
       "enable": true,
       "skipUf": [
+        "Standalone",
         "Joomla"
       ],
-      "skipUfReason": "Contact Layout is not bundled with the Joomla image"
+      "skipUfReason": "Contact Layout is only bundled with the CMS images that expose it"
     }
   ]
 }

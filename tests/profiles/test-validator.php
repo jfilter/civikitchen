@@ -75,7 +75,7 @@ validator_expect(
   !isset($contactLayout[0]['repo'])
     && !isset($contactLayout[0]['version'])
     && ($contactLayout[0]['enable'] ?? false) === true
-    && ($contactLayout[0]['skipUf'] ?? []) === ['Joomla']
+    && ($contactLayout[0]['skipUf'] ?? []) === ['Standalone', 'Joomla']
     && trim((string) ($contactLayout[0]['skipUfReason'] ?? '')) !== '',
   'verein enables the core-packaged Contact Layout without replacing it and skips Joomla where it is absent',
 );
