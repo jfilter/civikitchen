@@ -82,22 +82,46 @@ function classloaderPrefixes(string $root, array &$crm, array &$civi): void
     }
 }
 
+/**
+ * The key a core-shipped extension declares in its info.xml, or null for
+ * core itself and roots without a parseable key.
+ */
+function extensionKey(string $root): ?string
+{
+    $infoXml = $root . '/info.xml';
+    if (!is_file($infoXml)) {
+        return null;
+    }
+    $info = @simplexml_load_file($infoXml);
+    $key = $info === false ? '' : trim((string) $info['key']);
+
+    return $key === '' ? null : $key;
+}
+
 $crm = [];
 $civi = [];
+$keys = [];
 foreach (classloaderRoots($coreDir) as $root) {
     $crm = array_merge($crm, topLevelNames($root . '/CRM'));
     $civi = array_merge($civi, topLevelNames($root . '/Civi'));
     classloaderPrefixes($root, $crm, $civi);
+    $key = extensionKey($root);
+    if ($key !== null) {
+        $keys[] = $key;
+    }
 }
 
 $crm = array_values(array_unique($crm));
 $civi = array_values(array_unique($civi));
+$keys = array_values(array_unique($keys));
 sort($crm);
 sort($civi);
+sort($keys);
 
 $version = coreVersion($coreDir);
 $crmList = renderCatalogList($crm, 5);
 $civiList = renderCatalogList($civi, 5);
+$keyList = renderCatalogList($keys, 3);
 
 $out = <<<PHP
 <?php
@@ -142,6 +166,17 @@ final class CoreNamespaceCatalog
      */
     public const CIVI_NAMESPACES = [
 {$civiList}    ];
+
+    /**
+     * info.xml keys of the extensions core ships in ext/.
+     *
+     * A <requires> on one of these needs no lookup by the boundary rule —
+     * their namespaces are already in the two lists above.
+     *
+     * @var list<string>
+     */
+    public const CORE_EXTENSION_KEYS = [
+{$keyList}    ];
 }
 
 PHP;
@@ -153,9 +188,10 @@ if (file_put_contents($target, $out) === false) {
 }
 
 fwrite(STDOUT, sprintf(
-    "%s: %d CRM components, %d Civi namespaces (CiviCRM %s)\n",
+    "%s: %d CRM components, %d Civi namespaces, %d core extension keys (CiviCRM %s)\n",
     $target,
     count($crm),
     count($civi),
+    count($keys),
     $version,
 ));

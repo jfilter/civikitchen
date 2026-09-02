@@ -54,4 +54,7 @@ parameters:
 		# strictActionParams: true
 	# ignoreErrors: only ever narrowly scoped (identifier + path + count) and
 	# carrying a comment that says WHY the report is wrong — never blanket
-	# patterns, never a baseline file.
+	# patterns, never a baseline file. A boundary report
+	# (phpat.testOnlyCoreAndOwnCivicrmDependencies) on an extension this one
+	# <requires> means its checkout was not found beside this repo — mount
+	# it (sibling_repo in CI); it is not an ignoreErrors case.

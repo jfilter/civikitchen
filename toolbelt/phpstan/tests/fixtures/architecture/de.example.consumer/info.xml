@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<extension key="de.example.consumer" type="module">
+  <name>Consumer</name>
+  <requires>
+    <ext>de.example.provider</ext>
+    <ext>de.example.cisibling</ext>
+    <ext>de.example.mounted</ext>
+    <ext>de.example.missing</ext>
+    <ext>de.example.mismatch</ext>
+    <ext>org.civicrm.search_kit</ext>
+  </requires>
+  <classloader>
+    <psr0 prefix="CRM_" path="."/>
+    <psr4 prefix="Civi\" path="Civi"/>
+  </classloader>
+  <civix>
+    <namespace>CRM/Consumer</namespace>
+  </civix>
+</extension>

@@ -1,0 +1,17 @@
+# Fixture config for ArchitectureTestTest: the real extension.neon plus phpat,
+# analysed with this directory as the working directory.
+includes:
+	- ../../../../vendor/phpat/phpat/extension.neon
+	- ../../../../extension.neon
+
+parameters:
+	level: 0
+	paths:
+		- CRM
+	scanDirectories:
+		- ../de.example.provider
+		- ../de.example.unrelated
+		- ../ext-dir/de.example.mounted
+		- .civikitchen-siblings/de.example.cisibling
+	scanFiles:
+		- ../stubs.php

@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<extension key="de.example.mounted" type="module">
+  <name>Mounted under the image's extension directory</name>
+</extension>

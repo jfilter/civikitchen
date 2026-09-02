@@ -61,4 +61,31 @@ final class CoreNamespaceCatalog
         'Search', 'Standalone', 'Test', 'Token', 'UserDashboard',
         'UserJob', 'Util', 'Visual', 'WorkflowMessage',
     ];
+
+    /**
+     * info.xml keys of the extensions core ships in ext/.
+     *
+     * A <requires> on one of these needs no lookup by the boundary rule —
+     * their namespaces are already in the two lists above.
+     *
+     * @var list<string>
+     */
+    public const CORE_EXTENSION_KEYS = [
+        'afform_login_token', 'authx', 'batch_entry',
+        'chart_kit', 'civi_campaign', 'civi_case',
+        'civi_contribute', 'civi_event', 'civi_mail',
+        'civi_member', 'civi_pledge', 'civi_report',
+        'civicrm_admin_ui', 'civicrm_search_ui', 'civigrant',
+        'civiimport', 'ckeditor4', 'contributioncancelactions',
+        'elavon', 'eventcart', 'ewaysingle',
+        'financialacls', 'greenwich', 'iframe',
+        'legacybatchentry', 'legacycustomsearches', 'legacydedupefinder',
+        'legacyprofiles', 'message_admin', 'oauth-client',
+        'oembed', 'org.civicrm.afform', 'org.civicrm.afform-html',
+        'org.civicrm.afform-mock', 'org.civicrm.afform_admin', 'org.civicrm.flexmailer',
+        'org.civicrm.search_kit', 'payflowpro', 'postbox',
+        'recaptcha', 'riverlea', 'scheduled_communications',
+        'search_kit_reports', 'sequentialcreditnotes', 'standaloneusers',
+        'tellafriend', 'user_dashboard',
+    ];
 }

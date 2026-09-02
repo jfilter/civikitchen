@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<extension key="de.example.somethingelse" type="module">
+  <name>Directory named like the required key, declaring another one</name>
+</extension>

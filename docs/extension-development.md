@@ -263,7 +263,11 @@ mount and download target of the images). A class extended from a required
 extension therefore resolves without a repo-specific bootstrap or
 `scanDirectories` entry; a required extension that is not present is noted on
 stderr and its classes stay unresolved, which phpstan then reports where the
-code touches them. Run:
+code touches them. The same `<requires>` list tells the fleet-wide phpat
+boundary rule which extensions the repo may use directly — a required
+extension found beside the repo (`../<key>`, `.civikitchen-siblings/<key>` or
+`CK_EXT_DIR/<key>`, matched by its `info.xml` key) is allowed like own code;
+one that is not found is reported, with the message naming it. Run:
 
 ```bash
 docker compose exec app bash -c \

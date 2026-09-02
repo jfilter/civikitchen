@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<extension key="de.example.provider" type="module">
+  <name>Provider</name>
+</extension>

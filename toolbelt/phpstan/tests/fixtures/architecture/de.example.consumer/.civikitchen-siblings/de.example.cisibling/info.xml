@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<extension key="de.example.cisibling" type="module">
+  <name>CI sibling</name>
+</extension>

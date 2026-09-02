@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<extension key="de.example.unrelated" type="module">
+  <name>Unrelated</name>
+</extension>

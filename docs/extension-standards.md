@@ -276,12 +276,23 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   the normal `phpstan analyse`, and the fleet-wide rules ship in the image
   (`civikitchen/phpstan-ck-legacy`, `ArchitectureTest`): the extension
   boundary — an extension may depend on core (per the generated
-  `CoreNamespaceCatalog`) and on itself; every other `CRM_`/`Civi\` symbol is
+  `CoreNamespaceCatalog`), on itself, and on every extension its `info.xml`
+  declares in `<requires><ext>`; every other `CRM_`/`Civi\` symbol is
   another extension's internals, and the supported way across is APIv4 —
   plus the legacy-UI-base ban and the APIv4 contract rules above. All derive
   the extension from its own
   `info.xml`/classloader layout, so no repo configures anything. A repo can
   still add its own `phpat.test`-tagged classes for repo-specific boundaries.
+- A declared requirement counts as own code for the boundary rule
+  (`phpat.testOnlyCoreAndOwnCivicrmDependencies`) only when its checkout is
+  found: as a sibling directory `../<key>`, under the CI sibling mount
+  `.civikitchen-siblings/<key>` (`sibling_repo`), or under the image's ext dir
+  (`CK_EXT_DIR`, default `/var/www/html/ext`) — each identified by the `key`
+  of its `info.xml`, not by the directory name. Core-shipped extensions
+  (`org.civicrm.search_kit`, `civi_mail`, …) need no checkout. A required
+  extension that is not found is still reported, and the message names it:
+  the fix is mounting it, not an `ignoreErrors` entry. `ignoreErrors` stays
+  for couplings to extensions the repo deliberately does *not* require.
 - `ckdeps` checks `composer.json` against what the code really uses (shadow /
   unused / dev-in-prod dependencies). Extensions depending on core alone pass
   silently — CiviCRM is not a composer dependency, and the bundled config
@@ -986,7 +997,10 @@ and is not what CiviCRM registers it under. That is the directory the managed
 `phpstanBootstrap.php` autoloads it from, provided the sibling is also in
 `info.xml` `<requires>` — the bootstrap reads the requires list and registers
 every required extension present under the ext dir, so no `scanDirectories`
-entry is needed for it.
+entry is needed for it. The phpat boundary rule reads the same list and finds
+the sibling under `.civikitchen-siblings/<key>` on the runner, so using the
+sibling's classes directly is allowed rather than reported as reaching into
+another extension's internals.
 
 The sibling is mounted **as is**, read-only: no `composer install` runs in it.
 A sibling that keeps its own `vendor/` out of git is not supported yet — say
