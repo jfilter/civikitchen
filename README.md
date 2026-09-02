@@ -110,7 +110,7 @@ Details in [Custom or older CiviCRM versions](docs/images.md#custom-or-older-civ
 
 ## Reliability
 
-Images rebuild **weekly** and on image-pipeline changes, against the current CiviCRM stable, and every tag is test-then-promote: dev tags move only after dev-tool checks, first-boot tests against an external DB, and real-browser smoke tests of the compose examples; demo tags move only after single-container boot tests, including every profile on every demo flavor. If a candidate fails its gate, the previous stable tag stays in place.
+Images rebuild **daily** and on image-pipeline changes, against the current CiviCRM stable, and every tag is test-then-promote: dev tags move only after dev-tool checks, first-boot tests against an external DB, and real-browser smoke tests of the compose examples; demo tags move only after single-container boot tests, including every profile on every demo flavor. If a candidate fails its gate, the previous stable tag stays in place.
 
 ## License
 

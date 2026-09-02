@@ -269,12 +269,14 @@ isolated `CIVICRM_UF=UnitTests` scratch database. The examples keep MariaDB
 merely that a UnitTests process can boot. Changing the default still requires
 passing this matrix; automated database-image PRs are not compatibility proof.
 
-All images rebuild **weekly** (and on every `docker/**` or `toolbelt/**` change) against the
+All images rebuild **daily** (and on every `docker/**` or `toolbelt/**` change) against the
 current CiviCRM stable release, resolved from
 [latest.civicrm.org](https://latest.civicrm.org/stable.php) at build time. The
 pipeline is test-then-promote: a release that breaks the build or the boot
 tests never reaches the stable tags — they keep serving the last good image
-until the breakage is fixed.
+until the breakage is fixed. The cron run builds with the layer cache disabled,
+so `apt-get upgrade` in the Dockerfiles actually re-runs and Debian security
+updates reach the images within a day of their release.
 
 Two axes cross here. The **moving** tags below track current CiviCRM and move
 whenever a build passes its gate — the right choice for local development and

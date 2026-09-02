@@ -58,7 +58,10 @@ FROM php:${PHP_VERSION}-apache-bookworm
 #   past what the distro package ships in install-dev-tools.sh (NPM_VERSION),
 #   which is what keeps npm's own bundled dependency tree out of the image scan.
 # - jq: the profile driver (CIVIKITCHEN_PROFILE) parses profile.json with it
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# apt-get upgrade: security updates come from Debian at build time; the base
+# image ships none. The daily rebuild runs without cache, so they land.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
         ca-certificates curl git unzip zip jq \
         libfreetype-dev libicu-dev libjpeg62-turbo-dev libpng-dev libwebp-dev \
         libzip-dev imagemagick libmagickwand-dev mariadb-client \

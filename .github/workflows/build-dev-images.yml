@@ -26,12 +26,12 @@ on:
       # Changes the scan verdict directly, so it must re-run the scan jobs.
       - 'trivyignore.yaml'
   schedule:
-    # Weekly (Mondays 04:00 UTC, an hour before the GHCR cleanup cron): the
-    # resolve-civicrm job picks up the current upstream stable release each
-    # run, so a new CiviCRM patch/minor is at most a week away. Unchanged
-    # weeks are cheap (full layer-cache hit) and still refresh base-image
-    # security patches.
-    - cron: '0 4 * * 1'
+    # Daily (04:00 UTC, an hour before the GHCR cleanup cron): Debian security
+    # updates arrive daily and the cron build runs uncached, so a fixed package
+    # is in the images a day later. resolve-civicrm picks up the current
+    # upstream stable each run; test-then-promote keeps the stable tags on the
+    # last good image when a build or its gates fail.
+    - cron: '0 4 * * *'
   workflow_dispatch:
     inputs:
       extra_standalone_minors:
@@ -138,6 +138,9 @@ jobs:
             ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}-${{ matrix.arch }}
           cache-from: type=gha,scope=standalone-${{ matrix.version }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=standalone-${{ matrix.version }}-${{ matrix.arch }}
+          # The daily cron rebuilds from scratch: a cached apt layer would keep
+          # serving the base image's outdated packages past their security fix.
+          no-cache: ${{ github.event_name == 'schedule' }}
 
   # The per-arch candidates become one multi-platform tag. Three callers, one
   # implementation — see .github/workflows/merge-manifest.yml. The matrix here
@@ -449,6 +452,7 @@ jobs:
             CIVICRM_BUILD_VERSION=${{ needs.resolve-civicrm.outputs.minor }}
           cache-from: type=gha,scope=buildkit-${{ matrix.php }}-${{ matrix.suffix }}
           cache-to: type=gha,mode=max,scope=buildkit-${{ matrix.php }}-${{ matrix.suffix }}
+          no-cache: ${{ github.event_name == 'schedule' }}
 
   merge-buildkit:
     needs: build-buildkit
@@ -724,6 +728,7 @@ jobs:
             CIVICRM_BUILD_VERSION=${{ needs.resolve-civicrm.outputs.minor }}
           cache-from: type=gha,scope=demo-${{ matrix.variant.name }}-${{ matrix.suffix }}
           cache-to: type=gha,mode=max,scope=demo-${{ matrix.variant.name }}-${{ matrix.suffix }}
+          no-cache: ${{ github.event_name == 'schedule' }}
 
   merge-demo:
     needs: build-demo
@@ -954,14 +959,14 @@ jobs:
         run: .github/scripts/trivy-report-summary.sh
 
   notify-scheduled-failure:
-    # The weekly cron rebuild fails SILENTLY otherwise: test-then-promote
+    # The daily cron rebuild fails SILENTLY otherwise: test-then-promote
     # keeps serving the last good stable tags, so nothing user-visible breaks
     # and a broken pipeline can go unnoticed for weeks. Open (or bump) an
     # issue so the failure has a place to be seen. failure() is transitive
     # over the needs chain, so any failed job anywhere in the pipeline
     # triggers this — push-triggered runs are excluded (those failures are
     # visible on the commit/PR already).
-    # scan-images is in the list even though it gates nothing: the weekly cron
+    # scan-images is in the list even though it gates nothing: the daily cron
     # is the run that finds a base-image CVE nobody pushed a commit for, and
     # without this edge that finding would sit in a job summary nobody opens.
     needs: [promote-standalone, promote-buildkit, promote-demo, scan-images]

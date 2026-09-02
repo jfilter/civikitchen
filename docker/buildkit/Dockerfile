@@ -53,7 +53,10 @@ ARG DEBIAN_FRONTEND=noninteractive
 #   civi-download-tools. 24.x is the current LTS line (Node 20 went
 #   end-of-life 2026-04-30); npm is upgraded past what the distro package
 #   ships in install-dev-tools.sh (NPM_VERSION).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# apt-get upgrade: security updates come from Debian at build time; the base
+# image ships none. The daily rebuild runs without cache, so they land.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
         ca-certificates curl git unzip zip rsync patch acl bzip2 jq \
         default-mysql-client \
         libpng-dev libjpeg-dev libfreetype6-dev \

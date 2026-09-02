@@ -45,7 +45,7 @@ renamed managed file, a tool that starts failing what it used to pass) has to
 announce itself as `v2` and be adopted deliberately.
 
 The moving tags stay exactly as they are. They are the development and canary
-edge, and the weekly rebuild keeps pointing them at current CiviCRM.
+edge, and the daily rebuild keeps pointing them at current CiviCRM.
 
 ### The honest cost of the moving `@v1`
 
@@ -118,7 +118,7 @@ single-entry index if registry media-type discovery is inconclusive. The
 layers and platforms would still be the same, but the top-level digest would
 change, breaking both the immutable-tag check and idempotent release reruns.
 
-The flip side: `:v1` does **not** follow the weekly rebuild. Between releases
+The flip side: `:v1` does **not** follow the daily rebuild. Between releases
 the fleet keeps running the CiviCRM the last release blessed, while
 `:standalone` moves on. That is the point — one mechanism, and image content
 changes when someone decides it does — but it means a CiviCRM refresh reaches
