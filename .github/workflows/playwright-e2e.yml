@@ -61,6 +61,37 @@ on:
         description: Runner label override
         type: string
         default: ''
+      sibling_repo:
+        description: >-
+          Second extension repo (`owner/repo`) checked out to
+          .civikitchen-siblings/ and mounted read-only beside this one, under
+          the key from ITS info.xml — for extensions implementing a sibling's
+          interfaces. Mounted as-is (no composer install there); private
+          sibling needs the composer_app_* secrets. Empty mounts nothing.
+        type: string
+        default: ''
+      composer_app_repositories:
+        description: >-
+          Comma- or newline-separated repository names within the caller's
+          owner that the GitHub App token may read. Required whenever the app
+          secrets are supplied for private Composer packages or a private
+          sibling; list only the repositories actually needed by this run.
+        type: string
+        default: ''
+
+    secrets:
+      composer_app_id:
+        description: >-
+          App ID of a GitHub App with `contents: read`, installed on the
+          private dependency repos (composer packages, sibling). Optional —
+          without it composer resolves what is public and the sibling checkout
+          uses the caller-scoped token (404 for private).
+        required: false
+      composer_app_private_key:
+        description: >-
+          Private key (PEM) of that app. Used once on the runner to mint a
+          short-lived installation token; never enters a container.
+        required: false
 
 permissions:
   contents: read
@@ -90,6 +121,103 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+
+      - name: Validate inputs
+        if: ${{ inputs.sibling_repo != '' }}
+        env:
+          CK_SIBLING_REPO: ${{ inputs.sibling_repo }}
+        run: |
+          [[ "$CK_SIBLING_REPO" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
+            || { echo "invalid sibling_repo (expected owner/repo): $CK_SIBLING_REPO" >&2; exit 1; }
+
+      # Branching on the secret in bash, not the step's `if:` — the `secrets`
+      # context is not available there.
+      - name: Decide whether a private-dependency token is needed
+        id: need-token
+        if: ${{ inputs.sibling_repo != '' }}
+        env:
+          CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
+          CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
+          CK_COMPOSER_APP_REPOSITORIES: ${{ inputs.composer_app_repositories }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CK_COMPOSER_APP_ID:-}" ] && [ -n "${CK_COMPOSER_APP_PRIVATE_KEY:-}" ]; then
+            if [ -z "${CK_COMPOSER_APP_REPOSITORIES//[[:space:],]/}" ]; then
+              echo "composer_app_repositories must list the repositories readable by the app token" >&2
+              exit 1
+            fi
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # `repositories:` scopes the token to composer_app_repositories, the
+      # caller-declared least-privilege set — never the app's full install.
+      - name: Mint a read token for private dependencies
+        id: app
+        if: ${{ steps.need-token.outputs.app == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.composer_app_id }}
+          private-key: ${{ secrets.composer_app_private_key }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ inputs.composer_app_repositories }}
+          # The token only ever reads the sibling checkout over HTTPS.
+          permission-contents: read
+
+      - name: Resolve the sibling checkout path
+        id: sibling
+        if: ${{ inputs.sibling_repo != '' }}
+        env:
+          CK_SIBLING_REPO: ${{ inputs.sibling_repo }}
+        run: |
+          set -euo pipefail
+          echo "path=.civikitchen-siblings/${CK_SIBLING_REPO##*/}" >> "$GITHUB_OUTPUT"
+
+      # Leading dot: CiviCRM's extension scanner skips dot-directories, so the
+      # sibling is not discovered a second time through the caller's own mount.
+      - name: Check out the sibling extension
+        if: ${{ inputs.sibling_repo != '' }}
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.sibling_repo }}
+          token: ${{ steps.app.outputs.token || github.token }}
+          path: ${{ steps.sibling.outputs.path }}
+
+      # Mounts the sibling read-only; CIVIKITCHEN_ENABLE_EXTENSIONS is
+      # caller-owned since this workflow does not know the stack's own list.
+      - name: Compose override — mount the sibling
+        if: ${{ inputs.sibling_repo != '' }}
+        env:
+          CK_SIBLING_DIR: ${{ steps.sibling.outputs.path }}
+        run: |
+          set -euo pipefail
+          info="$GITHUB_WORKSPACE/$CK_SIBLING_DIR/info.xml"
+          [ -f "$info" ] \
+            || { echo "sibling_repo: no info.xml in $CK_SIBLING_DIR — that repo is not a CiviCRM extension" >&2; exit 1; }
+          # shellcheck disable=SC2016  # the $vars belong to PHP, not the shell.
+          sibling_key=$(php -r '
+            libxml_use_internal_errors(TRUE);
+            $xml = simplexml_load_file($argv[1]);
+            if ($xml === FALSE) { fwrite(STDERR, "cannot parse {$argv[1]}\n"); exit(2); }
+            echo trim((string) $xml["key"]);
+          ' "$info")
+          [[ "$sibling_key" =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]] \
+            || { echo "sibling_repo: could not read a usable extension key from $CK_SIBLING_DIR/info.xml (got: '$sibling_key')" >&2; exit 1; }
+          echo "sibling extension: $sibling_key (from $CK_SIBLING_DIR)"
+          override="$RUNNER_TEMP/civikitchen-sibling-override.yml"
+          cat > "$override" <<YAML
+          services:
+            app:
+              volumes:
+                - $GITHUB_WORKSPACE/$CK_SIBLING_DIR:/var/www/html/ext/$sibling_key:ro
+          YAML
+          {
+            echo "CK_SIBLING_DIR=$GITHUB_WORKSPACE/$CK_SIBLING_DIR"
+            echo "CK_SIBLING_KEY=$sibling_key"
+            echo "CK_SIBLING_OVERRIDE=$override"
+          } >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
