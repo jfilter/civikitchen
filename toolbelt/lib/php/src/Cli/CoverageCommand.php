@@ -22,7 +22,10 @@ final class CoverageCommand implements Command
         }
         $config = is_file('phpunit.xml') ? 'phpunit.xml' : (is_file('phpunit.xml.dist') ? 'phpunit.xml.dist' : null);
         if ($config === null) {
-            if ($this->policyValue('tests') === 'optional') {
+            // policy.tests always carries a reason, so the value is
+            // 'optional -- <reason>', never the bare word (TestSuiteRequiredCheck
+            // reads the same key the same way).
+            if (preg_match('/^optional\s+--\s+\S/', $this->policyValue('tests')) === 1) {
                 echo "ckcoverage: no phpunit config, and policy.tests declares it optional - nothing to measure.\n";
                 return 0;
             }
