@@ -231,7 +231,7 @@ jobs:
     env:
       CK_EXT_KEY_INPUT: ${{ inputs.key }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Read the extension key from info.xml
@@ -274,7 +274,7 @@ jobs:
     if: ${{ inputs.check_template }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # Pinned to the SHA this very workflow was resolved from, so the template
@@ -282,7 +282,7 @@ jobs:
       # an unpinned second checkout could race a push to main in between.
       # job.workflow_sha (not github.workflow_sha, which is the CALLER's file)
       # is the official way for a reusable workflow to reach its own repo.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
@@ -321,7 +321,7 @@ jobs:
           permission-contents: read
       - name: Check out the organisation policy defaults
         if: ${{ (inputs.policy_defaults || vars.CK_POLICY_DEFAULTS) != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
@@ -366,7 +366,7 @@ jobs:
       cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -458,7 +458,7 @@ jobs:
       cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -466,7 +466,7 @@ jobs:
       # floating main checkout. The helper checkout itself is excluded from the
       # scan below: callers are responsible for their tree, CiviKitchen scans
       # its own source in its own pipeline.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
@@ -528,7 +528,7 @@ jobs:
       # file's `name:`, so consuming repos need no change.
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-ci
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           # ckconform's release checks compare HEAD with the newest reachable
@@ -715,7 +715,7 @@ jobs:
       # is the right behaviour for a public sibling.
       - name: Check out the sibling extension
         if: ${{ inputs.sibling_repo != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: ${{ inputs.sibling_repo }}
@@ -727,7 +727,7 @@ jobs:
       # to cklint). It reaches ckconform through the extension's own mount.
       - name: Check out the organisation policy defaults
         if: ${{ (inputs.policy_defaults || vars.CK_POLICY_DEFAULTS) != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
@@ -1087,7 +1087,7 @@ jobs:
           exit 1
 
       # Full history: the previous release tag has to be checkoutable.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -1225,7 +1225,7 @@ jobs:
           exit 1
 
       # Full history: the previous release tag has to be checkoutable.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1402,7 +1402,7 @@ jobs:
     steps:
       # Full history: without mutation_paths ckmutate mutates the lines changed
       # against CK_MUTATE_BASE, and a shallow clone has no base to diff.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1489,7 +1489,7 @@ jobs:
           echo "composer_install / sibling_repo are wired into the ci job only — this job would boot the extension without them. Turn this job off, or open an issue to have it wired up too." >&2
           exit 1
 
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -1772,7 +1772,7 @@ jobs:
           echo "sibling_repo is wired into the ci job only — the compatibility stack would boot without the sibling. Turn this job off, or add sibling support here." >&2
           exit 1
 
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -1909,7 +1909,7 @@ jobs:
           echo "composer_install / sibling_repo are wired into the ci job only — this job would boot the extension without them. Turn this job off, or open an issue to have it wired up too." >&2
           exit 1
 
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
