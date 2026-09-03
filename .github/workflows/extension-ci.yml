@@ -672,8 +672,8 @@ jobs:
             echo "app=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # No `repositories:` — the token covers every repo the app is installed
-      # on, which is the least-privilege set by construction.
+      # `repositories:` scopes the token to composer_app_repositories, the
+      # caller-declared least-privilege set — never the app's full install.
       - name: Mint a read token for private dependencies
         id: app
         if: ${{ steps.need-token.outputs.app == 'true' }}
