@@ -188,7 +188,7 @@ jobs:
                 find vendor -type f -path "*/$relpath" -delete
                 ;;
             esac
-          done < <(bash .civikitchen-ci/toolbelt/bin/ckconform --dist-paths)
+          done < <(php .civikitchen-ci/toolbelt/bin/ckconform --dist-paths)
 
           # A package composer installed from source carries its own .git;
           # `git add` would record that as a gitlink (an empty entry in the
@@ -216,11 +216,11 @@ jobs:
           fi
           # dist runs the consistency check itself and refuses to build without
           # it, so there is no way to publish an archive that skipped it.
-          bash .civikitchen-ci/toolbelt/bin/ckrelease dist \
+          php .civikitchen-ci/toolbelt/bin/ckrelease dist \
             --version "$GITHUB_REF_NAME" --ref "$CK_RELEASE_REF" --output "$CK_DIST" "${args[@]}"
           {
-            echo "key=$(bash .civikitchen-ci/toolbelt/bin/ckrelease info key)"
-            echo "zip=$CK_DIST/$(bash .civikitchen-ci/toolbelt/bin/ckrelease info dist-name)"
+            echo "key=$(php .civikitchen-ci/toolbelt/bin/ckrelease info key)"
+            echo "zip=$CK_DIST/$(php .civikitchen-ci/toolbelt/bin/ckrelease info dist-name)"
           } >> "$GITHUB_OUTPUT"
 
       # A release archive that has never been installed is a guess. This is the
