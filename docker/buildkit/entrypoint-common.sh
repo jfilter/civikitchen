@@ -51,7 +51,10 @@ export CK_SETTINGS_D=/home/buildkit/buildkit/app/civicrm.settings.d
 # Discover the extension dir from cv (CMS-agnostic; Joomla uses CIVICRM_SETTINGS above).
 CK_EXT_DIR="$(ck_as_web cv ev 'echo rtrim(CRM_Core_Config::singleton()->extensionsDir, "/");' 2>/dev/null || true)"
 if [[ -z "${CK_EXT_DIR}" ]]; then
-    echo "[civikitchen] WARN: could not discover the extension dir from cv — auto-composer and extension enabling may silently no-op" >&2
+    # Without it every provisioning step below would skip quietly and the
+    # container would still report healthy — with none of the extensions in.
+    echo "[civikitchen] ERROR: could not discover the extension dir from cv; refusing to provision blind" >&2
+    exit 1
 fi
 export CK_EXT_DIR
 
