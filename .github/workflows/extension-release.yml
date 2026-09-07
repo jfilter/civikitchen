@@ -372,6 +372,17 @@ jobs:
           [ -f smoke-compose.yml ] || exit 0
           docker compose -f smoke-compose.yml logs app | tail -200
 
+      # On a self-hosted runner the stack outlives the job otherwise — with its
+      # database — and the next job on that host inherits the memory pressure.
+      # By label rather than `compose down`: the compose file may not exist yet
+      # when an earlier step failed.
+      - name: Tear down the smoke stack
+        if: ${{ always() && inputs.smoke_test }}
+        run: |
+          docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker rm -f -v
+          docker network ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker network rm
+          docker volume ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker volume rm
+
       - name: Upload the archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
