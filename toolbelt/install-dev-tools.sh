@@ -102,7 +102,7 @@ MAGO_SHA256_AARCH64="${MAGO_SHA256_AARCH64:-4b97298b31e294b0c17928a788392b6dfaaa
 # download straight through.
 fetch_phar() {
     local url="$1" dest="$2" want="$3" got
-    curl -LsS "${url}" -o "${dest}"
+    curl -LsS --fail --retry 3 --retry-all-errors "${url}" -o "${dest}"
     got=$(sha256sum < "${dest}" | cut -d' ' -f1)
     if [ "${got}" != "${want}" ]; then
         echo "checksum mismatch for ${url}: expected ${want}, got ${got}" >&2
@@ -126,7 +126,7 @@ case "$(uname -m)" in
     aarch64) MAGO_ARCH=aarch64; MAGO_SHA256="${MAGO_SHA256_AARCH64}" ;;
     *) echo "unsupported architecture for mago: $(uname -m)" >&2; exit 1 ;;
 esac
-curl -LsS -o /tmp/mago.tar.gz \
+curl -LsS --fail --retry 3 --retry-all-errors -o /tmp/mago.tar.gz \
     "https://github.com/carthage-software/mago/releases/download/${MAGO_VERSION}/mago-${MAGO_VERSION}-${MAGO_ARCH}-unknown-linux-gnu.tar.gz"
 got=$(sha256sum < /tmp/mago.tar.gz | cut -d' ' -f1)
 if [ "${got}" != "${MAGO_SHA256}" ]; then
