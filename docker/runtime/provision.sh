@@ -293,28 +293,68 @@ ck_install_verified_archive() {
     return 0
 }
 
+# Verify a local archive against its pinned digest and install it. The
+# caller owns the file: it is chmod'ed and left for the caller to remove.
+# Exit 2 is the digest mismatch specifically — the pin doing its job, which a
+# caller must not retry; 1 is an install that may be worth another attempt.
+ck_install_pinned_archive() {
+    local archive="$1" ext_key="$2" digest="$3" version_constraint="${4:-}" got
+    got="$(sha256sum < "${archive}" | cut -d' ' -f1)"
+    if [[ "${got}" != "${digest}" ]]; then
+        echo "[civikitchen] ERROR: checksum mismatch for ${ext_key}" >&2
+        return 2
+    fi
+    # Hash and extract as root without handing the verified file
+    # to the web process between those two operations.
+    chmod 600 "${archive}"
+    ck_install_verified_archive "${archive}" "${ext_key}" "${version_constraint}"
+}
+
+# Install a dependency whose release archive was staged by the runner. No
+# network and no credential in here: the container is handed the bytes, and
+# the pin's digest is what decides whether they are the right ones. A missing
+# archive is an error, never a quiet fall back to the registry.
+ck_install_staged_extension() {
+    local ext_key="$1" tag="$2" asset="$3" digest="$4" version_constraint="${5:-}" staged archive rc
+    if [[ -z "${CK_DEP_ARCHIVE_DIR:-}" ]]; then
+        echo "[civikitchen] ERROR: ${ext_key} is pinned to release ${tag}, which has to be staged — set CK_DEP_ARCHIVE_DIR, or mount ${ext_key} into the ext dir" >&2
+        return 1
+    fi
+    staged="${CK_DEP_ARCHIVE_DIR}/${asset}"
+    if [[ ! -f "${staged}" ]]; then
+        echo "[civikitchen] ERROR: ${ext_key} is pinned to release ${tag}, but ${staged} is not there" >&2
+        return 1
+    fi
+    # A copy, because the staging directory is mounted read-only and the
+    # installer takes ownership of the file it verifies.
+    archive="$(mktemp /tmp/civikitchen-extension.XXXXXX.zip)"
+    if ! cp -- "${staged}" "${archive}"; then
+        rm -f "${archive}"
+        return 1
+    fi
+    ck_install_pinned_archive "${archive}" "${ext_key}" "${digest}" "${version_constraint}"
+    rc=$?
+    rm -f "${archive}"
+    [[ "${rc}" -eq 0 ]] || return 1
+}
+
 ck_download_extension() {
-    local ext_spec="$1" version_constraint="${2:-}" ext_key="${1%%@*}" attempt source digest archive got
+    local ext_spec="$1" version_constraint="${2:-}" ext_key="${1%%@*}" attempt source digest archive
     if [[ "${ext_spec}" == *@*#sha256=* ]]; then
         source="${ext_spec#*@}"
         digest="${source##*#sha256=}"
         source="${source%%#sha256=*}"
         archive="$(mktemp /tmp/civikitchen-extension.XXXXXX.zip)"
         for attempt in 1 2 3; do
-            if curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-redirs 3 --max-filesize 134217728 "${source}" -o "${archive}"; then
-                got="$(sha256sum < "${archive}" | cut -d' ' -f1)"
-                if [[ "${got}" != "${digest}" ]]; then
-                    echo "[civikitchen] ERROR: checksum mismatch for ${ext_key}" >&2
-                    rm -f "${archive}"
-                    return 1
-                fi
-                # Hash and extract as root without handing the verified file
-                # to the web process between those two operations.
-                chmod 600 "${archive}"
-                if ck_install_verified_archive "${archive}" "${ext_key}" "${version_constraint}"; then
-                    rm -f "${archive}"
-                    return 0
-                fi
+            # Timeouts, because three attempts only bound the job when each of
+            # them returns: a stalled transfer would otherwise hang the boot.
+            if curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-redirs 3 --max-filesize 134217728 --connect-timeout 20 --max-time 300 "${source}" -o "${archive}"; then
+                ck_install_pinned_archive "${archive}" "${ext_key}" "${digest}" "${version_constraint}"
+                case $? in
+                    0) rm -f "${archive}"; return 0 ;;
+                    # Wrong bytes stay wrong: a retry would fetch them again.
+                    2) rm -f "${archive}"; return 1 ;;
+                esac
             fi
             if [[ "${attempt}" != "3" ]]; then sleep 5; fi
         done
@@ -343,7 +383,8 @@ ck_download_extension() {
 ck_extra_extensions() {
     [[ -n "${CIVIKITCHEN_EXTRA_EXTENSIONS}" ]] || return 0
     echo "[civikitchen] Installing configured extra extensions"
-    local ext_spec ext_key pin version_constraint
+    local ext_spec ext_key pin release version_constraint
+    local rel_repo rel_tag rel_asset rel_digest
     local -a specs
     IFS=',' read -ra specs <<< "${CIVIKITCHEN_EXTRA_EXTENSIONS}"
     for ext_spec in "${specs[@]}"; do
@@ -351,18 +392,26 @@ ck_extra_extensions() {
         [[ -z "${ext_spec}" ]] && continue
         ext_key="${ext_spec%%@*}"
         pin=""
+        release=""
         version_constraint=""
         if [[ "${ext_spec}" == "${ext_key}" ]]; then
-            if ! pin="$(ck_mounted_extension_source "${ext_key}")"; then
+            if ! pin="$(ck_mounted_extension_source "${ext_key}")" \
+                || ! release="$(ck_mounted_extension_release "${ext_key}")"; then
                 return 1
             fi
-            if [[ -n "${pin}" ]]; then
+            if [[ -n "${pin}" || -n "${release}" ]]; then
                 version_constraint="$(ck_mounted_extension_version "${ext_key}")" || return 1
             fi
             ext_spec="${pin:-${ext_spec}}"
         fi
-        echo "[civikitchen]   - ${ext_key}${pin:+ (digest-pinned)}"
-        ck_download_extension "${ext_spec}" "${version_constraint}" || return 1
+        if [[ -n "${release}" ]]; then
+            read -r rel_repo rel_tag rel_asset rel_digest <<< "${release}"
+            echo "[civikitchen]   - ${ext_key} (staged ${rel_repo} release ${rel_tag})"
+            ck_install_staged_extension "${ext_key}" "${rel_tag}" "${rel_asset}" "${rel_digest}" "${version_constraint}" || return 1
+        else
+            echo "[civikitchen]   - ${ext_key}${pin:+ (digest-pinned)}"
+            ck_download_extension "${ext_spec}" "${version_constraint}" || return 1
+        fi
         ck_as_web cv ext:enable "${ext_key}"
     done
 }
@@ -394,6 +443,20 @@ ck_mounted_extension_source() {
     local key="$1" ext_dir spec
     while IFS= read -r ext_dir; do
         if ! spec="$(ck_extension_source "${ext_dir}" "${key}")"; then
+            return 1
+        fi
+        if [[ -n "${spec}" ]]; then
+            echo "${spec}"
+            return 0
+        fi
+    done < <(ck_mounted_extension_dirs)
+}
+
+# The release pin for a key, from any mounted extension that declares one.
+ck_mounted_extension_release() {
+    local key="$1" ext_dir spec
+    while IFS= read -r ext_dir; do
+        if ! spec="$(ck_extension_release "${ext_dir}" "${key}")"; then
             return 1
         fi
         if [[ -n "${spec}" ]]; then
@@ -457,6 +520,26 @@ ck_extension_source() {
     done <<< "${sources}"
 }
 
+# The staged-release pin for a dependency in a private repository: the
+# archive cannot be fetched from inside the container (that would need a
+# credential in here), so it is downloaded and verified on the runner and
+# handed in through CK_DEP_ARCHIVE_DIR. Prints "repo tag asset digest".
+ck_extension_release() {
+    local ext_dir="$1" key="$2" spec releases
+    [[ -f "${ext_dir}/civikitchen.yaml" ]] || return 0
+    if ! releases="$(cd "${ext_dir}" && ckconform --policy extension_release)"; then
+        echo "[civikitchen] ERROR: could not read ${ext_dir}/civikitchen.yaml" >&2
+        return 1
+    fi
+    while IFS= read -r spec; do
+        spec="${spec%% -- *}"
+        if [[ "${spec%% *}" == "${key}" ]]; then
+            echo "${spec#* }"
+            return 0
+        fi
+    done <<< "${releases}"
+}
+
 # Composer version constraint for a dependency source pin.
 ck_extension_version() {
     local ext_dir="$1" key="$2" spec versions
@@ -485,11 +568,13 @@ ck_assert_extension_version() {
 # `cv ext:enable` finds them. One level deep: a dependency's own <requires>
 # are core or registry extensions cv resolves on enable.
 ck_resolve_requires() {
-    local ext_key="$1" ext_dir="${2:-${CK_EXT_DIR}/$1}" required spec version_constraint
+    local ext_key="$1" ext_dir="${2:-${CK_EXT_DIR}/$1}" required spec release version_constraint
+    local rel_repo rel_tag rel_asset rel_digest
     [[ -f "${ext_dir}/info.xml" ]] || return 0
     while IFS= read -r required; do
         [[ -z "${required}" ]] && continue
         if ! spec="$(ck_extension_source "${ext_dir}" "${required}")" \
+            || ! release="$(ck_extension_release "${ext_dir}" "${required}")" \
             || ! version_constraint="$(ck_extension_version "${ext_dir}" "${required}")"; then
             return 1
         fi
@@ -503,12 +588,18 @@ ck_resolve_requires() {
                 ;;
             2) return 1 ;;
         esac
-        if [[ -n "${spec}" ]]; then
-            echo "[civikitchen]   ${ext_key} requires ${required} — installing the configured digest-pinned source"
+        if [[ -n "${release}" ]]; then
+            read -r rel_repo rel_tag rel_asset rel_digest <<< "${release}"
+            echo "[civikitchen]   ${ext_key} requires ${required} — installing the staged ${rel_repo} release ${rel_tag}"
+            ck_install_staged_extension "${required}" "${rel_tag}" "${rel_asset}" "${rel_digest}" "${version_constraint}" || return 1
         else
-            echo "[civikitchen]   ${ext_key} requires ${required} — installing it from the registry"
+            if [[ -n "${spec}" ]]; then
+                echo "[civikitchen]   ${ext_key} requires ${required} — installing the configured digest-pinned source"
+            else
+                echo "[civikitchen]   ${ext_key} requires ${required} — installing it from the registry"
+            fi
+            ck_download_extension "${spec:-${required}}" "${version_constraint}" || return 1
         fi
-        ck_download_extension "${spec:-${required}}" "${version_constraint}" || return 1
         ck_as_web cv ext:enable "${required}"
     done < <(ck_extension_requires "${ext_dir}")
 }

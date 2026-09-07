@@ -60,8 +60,9 @@ on:
       composer_app_repositories:
         description: >-
           Comma- or newline-separated repository names within the caller's
-          owner that the GitHub App token may read. Required whenever the app
-          secrets are supplied for private Composer packages.
+          owner that the GitHub App token may read: private Composer packages,
+          and the repositories a `policy.extension_sources` release pin names.
+          Required whenever the app secrets are supplied.
         type: string
         default: ''
 
@@ -69,13 +70,16 @@ on:
       composer_app_id:
         description: >-
           App ID of a GitHub App with `contents: read`, installed on the
-          private Composer package repos. Optional — without it composer
-          resolves what is public.
+          private dependency repos — Composer packages, and any repository a
+          release pin downloads a dependency archive from. Optional — without
+          it only what is public resolves.
         required: false
       composer_app_private_key:
         description: >-
           Private key (PEM) of that app. Used on the runner only to mint a
-          short-lived token; never copied into the archive or smoke container.
+          short-lived token; neither key nor token is ever copied into the
+          archive or the smoke container — the container gets the fetched
+          bytes, never the credential that fetched them.
         required: false
 
 permissions:
@@ -123,11 +127,26 @@ jobs:
           composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
             --working-dir=.civikitchen-ci/packages/civikitchen-scenario-schema
 
+      # Read once, here, so the token gate, the staging step and the smoke
+      # stack all agree on whether this release has a dependency that only a
+      # credential can reach. ckconform is the one parser for civikitchen.yaml.
+      - name: Read the staged-release dependency pins
+        id: pins
+        run: |
+          set -euo pipefail
+          php .civikitchen-ci/toolbelt/bin/ckconform --policy extension_release \
+            > "$RUNNER_TEMP/release-pins.txt"
+          if [ -s "$RUNNER_TEMP/release-pins.txt" ]; then
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Branching on the secret in bash — the `secrets` context is not
       # available in `if:`. No app means every required package is public.
       - name: Decide whether a private-dependency token is needed
         id: need-token
-        if: ${{ inputs.composer_install }}
+        if: ${{ inputs.composer_install || steps.pins.outputs.any == 'true' }}
         env:
           CK_COMPOSER_APP_ID: ${{ secrets.composer_app_id }}
           CK_COMPOSER_APP_PRIVATE_KEY: ${{ secrets.composer_app_private_key }}
@@ -140,6 +159,11 @@ jobs:
               exit 1
             fi
             echo "app=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "${CK_COMPOSER_APP_ID:-}" ] || [ -n "${CK_COMPOSER_APP_PRIVATE_KEY:-}" ]; then
+            # Half a credential is a configuration mistake, and it would
+            # surface much later as an unexplained 404 on a private read.
+            echo "composer_app_id and composer_app_private_key go together — one without the other is not an app" >&2
+            exit 1
           else
             echo "app=false" >> "$GITHUB_OUTPUT"
           fi
@@ -153,9 +177,32 @@ jobs:
           private-key: ${{ secrets.composer_app_private_key }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ inputs.composer_app_repositories }}
-          # The token only ever reads: a sibling checkout and composer's
-          # private packages over HTTPS. Nothing here writes with it.
+          # The token only ever reads: composer's private packages and the
+          # pinned dependency releases. Nothing here writes with it.
           permission-contents: read
+
+      # The credential stays on the runner. The smoke container is handed the
+      # verified bytes and never the token that fetched them — the same rule
+      # the sibling checkout follows in extension-ci.yml. Resolving by tag and
+      # asset name rather than by asset id matters: `gh release upload
+      # --clobber` in the publish job replaces an asset, and a replaced asset
+      # has a new id while tag, name and digest are unchanged.
+      - name: Stage the pinned dependency releases
+        if: ${{ steps.pins.outputs.any == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          CK_DEPS: ${{ runner.temp }}/ckrelease-deps
+        run: |
+          set -euo pipefail
+          mkdir -p "$CK_DEPS"
+          while read -r key repo tag asset digest _; do
+            [ -n "$key" ] || continue
+            gh release download "$tag" --repo "$repo" --pattern "$asset" --dir "$CK_DEPS" \
+              || { echo "could not download $asset from $repo $tag — for a private repository the app has to be installed on it and listed in composer_app_repositories" >&2; exit 1; }
+            printf '%s  %s\n' "$digest" "$CK_DEPS/$asset" | sha256sum --check --status \
+              || { echo "checksum mismatch for the pinned $key release $tag" >&2; exit 1; }
+            echo "staged $key from $repo $tag"
+          done < "$RUNNER_TEMP/release-pins.txt"
 
       - name: Bundle locked production dependencies
         if: ${{ inputs.composer_install }}
@@ -232,8 +279,12 @@ jobs:
           CK_EXT_KEY: ${{ steps.build.outputs.key }}
           CK_DIST: ${{ runner.temp }}/ckrelease
           CK_POLICY_DIR: ${{ runner.temp }}/ckrelease-policy
+          CK_DEPS: ${{ runner.temp }}/ckrelease-deps
         run: |
           set -euo pipefail
+          # Always a directory, even with no pins: compose interpolates the
+          # path on every call, and an unset variable is an invalid mount.
+          mkdir -p "$CK_DEPS"
           # The archive carries no civikitchen.yaml (a dev file, excluded by the
           # central list), but the <requires> resolver reads extension_source
           # pins from it. Its own directory, not $CK_DIST: that one is uploaded
@@ -260,6 +311,7 @@ jobs:
               volumes:
                 - ${CK_DIST}:/ck-dist:ro
                 - ${CK_POLICY_DIR}:/ck-policy:ro
+                - ${CK_DEPS}:/ck-deps:ro
             db:
               image: mariadb:10.11
               environment:
@@ -295,7 +347,7 @@ jobs:
           # actually shows up. provision.sh is sourced for its functions only;
           # this exec already runs as the web user, so ck_as_web is a no-op.
           docker compose -f smoke-compose.yml exec -T -u www-data \
-            -e "CK_EXT_KEY=$CK_EXT_KEY" app bash -c '
+            -e "CK_EXT_KEY=$CK_EXT_KEY" -e CK_DEP_ARCHIVE_DIR=/ck-deps app bash -c '
             set -eu
             cv ev "CRM_Extension_System::singleton()->getFullContainer()->refresh();"
             ck_as_web() { "$@"; }

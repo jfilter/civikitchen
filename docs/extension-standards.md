@@ -671,6 +671,23 @@ policy:
 version must satisfy it; the SHA-256 pin still identifies the exact tested
 bytes.
 
+A dependency in a private repository has no URL that a container can fetch, so
+it names the release instead of a location — same digest, same constraint:
+
+```yaml
+    - key: org.example.dep
+      version: ^1.2
+      release:
+        repository: example-org/dep
+        tag: v1.2.0
+        asset: dep-1.2.0.zip
+      reason: Private repository, no registry serves it
+```
+
+Whoever holds the credential downloads the asset and hands the archive in
+through `CK_DEP_ARCHIVE_DIR`; the entrypoint verifies it against the pin. An
+entry carries a `url` or a `release`, never both and never neither.
+
 Values shared across an organisation's repos can sit once in a file of the same
 format named by `CK_DEFAULT_CONFIG`; a repo's own `civikitchen.yaml` overrides per
 key. In CI the `policy_defaults` input of `extension-ci.yml` — or, set once

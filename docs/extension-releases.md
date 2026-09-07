@@ -65,7 +65,7 @@ file can be promoted into the template later, when it has earned it.
 | `draft` | `false` | publish the GitHub release as a draft |
 | `composer_install` | `false` | install the lockfile with `--no-dev` and bundle the generated `vendor/` tree |
 | `composer_app_repositories` | unset | comma- or newline-separated repository names within the caller's owner; required with the App secrets and used as the token allowlist |
-| `composer_app_id`, `composer_app_private_key` | unset | GitHub App (`contents: read`, installed on the private package repos) for private Composer packages; pass both explicitly under `secrets:` |
+| `composer_app_id`, `composer_app_private_key` | unset | GitHub App (`contents: read`, installed on the private dependency repos) for private Composer packages and for staged dependency releases; pass both explicitly under `secrets:`. One without the other fails the run rather than resolving as "no app" |
 
 ## Cutting one
 
@@ -183,6 +183,39 @@ that step — the archive itself carries no `civikitchen.yaml`), and enabled fir
 smoke test catches the failure class that no amount of green CI does: a PHP
 file that the exclude list swallowed, a `<requires>` on an extension that no
 pin and no registry serves, an upgrader that fatals on a first install.
+
+### A dependency only a credential can reach
+
+A `<requires>` on an extension in a private repository has no public URL to
+pin: the browser download path answers 404 without a session, and the
+authenticated REST endpoint addresses the asset by an id that changes whenever
+the asset is replaced — which `--clobber` does on every re-run of a release.
+Such a dependency is pinned by *what it is* rather than by where it happens to
+sit today:
+
+```yaml
+policy:
+  extension_sources:
+    - key: exampleframe
+      version: '^0.1'
+      release:
+        repository: example-org/exampleframe
+        tag: v0.1.0
+        asset: exampleframe-0.1.0.zip
+      sha256: <the release's own .sha256>
+      reason: private repository, no registry serves it
+```
+
+The runner resolves that by tag and asset name, verifies the SHA-256, and
+mounts **only the verified bytes** into the smoke container, which verifies
+them again against the same pin before installing. The App token stays on the
+runner — the container never sees the credential, only its result, the same
+rule the sibling checkout follows in `extension-ci.yml`. List the dependency's
+repository in `composer_app_repositories`, or the download is a 404.
+
+Outside the release workflow the archive comes from `CK_DEP_ARCHIVE_DIR`
+([configuration](configuration.md)); in a dev stack you normally mount the
+dependency into the ext dir instead and no pin is consulted at all.
 
 It costs a CiviCRM boot (a few minutes) per release. If it turns out to be
 flaky rather than informative, `smoke_test: false` is one line — but turn it off

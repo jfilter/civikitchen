@@ -66,6 +66,36 @@ printf '%s\n' \
 if "$root/toolbelt/bin/ck" config validate "$work/invalid-version-constraint.yaml" >/dev/null 2>&1; then
   echo "configuration accepted an invalid Composer version constraint" >&2; exit 1
 fi
+printf '%s\n' \
+  'version: 1' 'policy:' '  extension_sources:' \
+  '    - key: org.example.dep' "      version: '^1.0'" \
+  '      release:' '        repository: example-org/dep' '        tag: v1.0.0' '        asset: dep-1.0.0.zip' \
+  "      sha256: $(printf a%.0s {1..64})" '      reason: private repository' > "$work/release-source.yaml"
+"$root/toolbelt/bin/ck" config validate "$work/release-source.yaml" >/dev/null \
+  || { echo "configuration rejected a valid staged-release pin" >&2; exit 1; }
+printf '%s\n' \
+  'version: 1' 'policy:' '  extension_sources:' \
+  '    - key: org.example.dep' "      version: '^1.0'" '      url: https://example.org/dep.zip' \
+  '      release:' '        repository: example-org/dep' '        tag: v1.0.0' '        asset: dep-1.0.0.zip' \
+  "      sha256: $(printf a%.0s {1..64})" '      reason: two ways to fetch one thing' > "$work/both-sources.yaml"
+if "$root/toolbelt/bin/ck" config validate "$work/both-sources.yaml" >/dev/null 2>&1; then
+  echo "configuration accepted an extension source with both a url and a release" >&2; exit 1
+fi
+printf '%s\n' \
+  'version: 1' 'policy:' '  extension_sources:' \
+  '    - key: org.example.dep' "      version: '^1.0'" \
+  "      sha256: $(printf a%.0s {1..64})" '      reason: no way to fetch it' > "$work/no-source.yaml"
+if "$root/toolbelt/bin/ck" config validate "$work/no-source.yaml" >/dev/null 2>&1; then
+  echo "configuration accepted an extension source with neither a url nor a release" >&2; exit 1
+fi
+printf '%s\n' \
+  'version: 1' 'policy:' '  extension_sources:' \
+  '    - key: org.example.dep' "      version: '^1.0'" \
+  '      release:' '        repository: example-org/dep' '        tag: v1.0.0' "        asset: 'dep 1.0.0.zip'" \
+  "      sha256: $(printf a%.0s {1..64})" '      reason: a space breaks the line protocol' > "$work/spaced-asset.yaml"
+if "$root/toolbelt/bin/ck" config validate "$work/spaced-asset.yaml" >/dev/null 2>&1; then
+  echo "configuration accepted a release asset name containing a space" >&2; exit 1
+fi
 printf '%s\n' 'version: 1' 'policy:' '  release:' '    mode: none' '    reason: |' '      first line' '      second line' > "$work/multiline-reason.yaml"
 if "$root/toolbelt/bin/ck" config validate "$work/multiline-reason.yaml" >/dev/null 2>&1; then
   echo "configuration accepted a multiline reason that cannot use the line protocol" >&2; exit 1

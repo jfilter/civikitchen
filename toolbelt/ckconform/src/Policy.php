@@ -58,6 +58,7 @@ final class Policy
         'renovate_preset' => 'ckinit: the Renovate preset the managed renovate.json extends',
         // read by the image entrypoint (docker/runtime/provision.sh)
         'extension_source' => 'entrypoint: key@HTTPS-URL#sha256=digest for a dependency, one per source',
+        'extension_release' => 'entrypoint + extension-release.yml: key repo tag asset sha256 for a dependency staged from a GitHub release',
         'extension_version' => 'entrypoint: key@Composer-version-constraint for a pinned dependency',
     ];
 
@@ -71,7 +72,7 @@ final class Policy
      *
      * @var list<string>
      */
-    public const REPEATABLE = ['dist_exclude', 'dist_include', 'lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates', 'extension_source', 'extension_version'];
+    public const REPEATABLE = ['dist_exclude', 'dist_include', 'lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates', 'extension_source', 'extension_release', 'extension_version'];
 
     /** @var list<string> */
     public const PERCENT = ['min_coverage', 'mutation_min_msi', 'mutation_min_covered_msi'];
@@ -208,7 +209,19 @@ final class Policy
             } catch (\UnexpectedValueException $e) {
                 throw new \RuntimeException(self::CONFIG_FILE . ': policy.extension_sources has invalid Composer version constraint for ' . $item['key'] . ': ' . $item['version'], 0, $e);
             }
-            $out['extension_source'][] = $item['key'] . '@' . $item['url'] . '#sha256=' . strtolower($item['sha256']) . ' -- ' . $item['reason'];
+            if (isset($item['url'])) {
+                $out['extension_source'][] = $item['key'] . '@' . $item['url'] . '#sha256=' . strtolower($item['sha256']) . ' -- ' . $item['reason'];
+            } else {
+                // Space-separated: the schema forbids a space in every field, and
+                // both consumers (bash `read`, the release workflow) split on it.
+                $out['extension_release'][] = implode(' ', [
+                    $item['key'],
+                    $item['release']['repository'],
+                    $item['release']['tag'],
+                    $item['release']['asset'],
+                    strtolower($item['sha256']),
+                ]) . ' -- ' . $item['reason'];
+            }
             $out['extension_version'][] = $item['key'] . '@' . $item['version'];
         }
         return $out;

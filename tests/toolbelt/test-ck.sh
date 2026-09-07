@@ -51,4 +51,27 @@ if "${root}/toolbelt/bin/ck" no-such-command >/dev/null 2>&1; then
   exit 1
 fi
 
+# The staged-release pin's line format is a contract: provision.sh reads it
+# with `read -r`, and extension-release.yml splits it the same way. Its own
+# directory, so the policy above stays the one the conform run saw.
+pins=$(mktemp -d)
+trap 'rm -rf "$work" "$pins"' EXIT
+digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+printf '%s\n' 'version: 1' 'policy:' '  extension_sources:' \
+  '    - key: org.example.dep' "      version: '^1.2'" \
+  '      release:' \
+  '        repository: example-org/dep' \
+  '        tag: v1.2.3' \
+  '        asset: dep-1.2.3.zip' \
+  "      sha256: ${digest}" \
+  '      reason: private repository, no registry serves it' > "${pins}/civikitchen.yaml"
+line=$(cd "${pins}" && "${root}/toolbelt/bin/ckconform" --policy extension_release)
+expected="org.example.dep example-org/dep v1.2.3 dep-1.2.3.zip ${digest} -- private repository, no registry serves it"
+[ "${line}" = "${expected}" ] || { echo "unexpected extension_release line: ${line}" >&2; exit 1; }
+# The two pin forms are separate keys: a release pin has no URL to download.
+[ -z "$(cd "${pins}" && "${root}/toolbelt/bin/ckconform" --policy extension_source)" ] \
+  || { echo "a release pin must not also emit an extension_source" >&2; exit 1; }
+version=$(cd "${pins}" && "${root}/toolbelt/bin/ckconform" --policy extension_version)
+[ "${version}" = 'org.example.dep@^1.2' ] || { echo "unexpected extension_version: ${version}" >&2; exit 1; }
+
 echo "ck dispatcher tests passed"

@@ -48,8 +48,11 @@ curl() {
     [[ "$previous" == '-o' ]] && output="$arg"
     previous="$arg"
   done
+  printf '%s\n' "$*" >> "$CURL_LOG"
   cp "$ARCHIVE_FIXTURE" "$output"
 }
+export CURL_LOG="$work/curl.log"
+: > "$CURL_LOG"
 export CK_EXT_DIR="$work/ext"
 export CK_SCENARIO_AUTOLOAD="$root/packages/civikitchen-scenario-schema/vendor/autoload.php"
 export CIVIKITCHEN_ENABLE_EXTENSIONS=fixture
@@ -177,6 +180,75 @@ fi
 if grep -q 'ext:download' "$CV_LOG"; then
   fail "a failed extension query must not turn into a download"
 fi
+
+# A staged release pin: the runner downloaded and verified the dependency's
+# release archive, so the container installs it without any network call — and
+# without ever seeing the credential that fetched it.
+write_info '<requires><ext>org.example.dep</ext></requires>'
+mkdir -p "$work/staged"
+cp "$ARCHIVE_FIXTURE" "$work/staged/dep-1.2.3.zip"
+write_release_pin() {
+  printf '%s\n' \
+    'version: 1' 'policy:' '  extension_sources:' \
+    '    - key: org.example.dep' \
+    "      version: '^1.2'" \
+    '      release:' \
+    '        repository: example-org/dep' \
+    '        tag: v1.2.3' \
+    "        asset: $1" \
+    "      sha256: $2" \
+    '      reason: private repository, no registry serves it' > "$work/ext/fixture/civikitchen.yaml"
+}
+write_release_pin 'dep-1.2.3.zip' "$digest"
+export CK_DEP_ARCHIVE_DIR="$work/staged"
+reset_site '[]'
+: > "$CURL_LOG"
+ck_enable_extensions
+expect_log 'ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:enable org.example.dep;ext:enable fixture;' 'staged release dependency'
+[ -f "$work/ext/org.example.dep/info.xml" ] || fail "staged dependency archive was not installed"
+[ ! -s "$CURL_LOG" ] || fail "a staged dependency must not be fetched from inside the container"
+/bin/rm -rf "$work/ext/org.example.dep"
+
+# The staged bytes are still checked against the pin: the runner's verification
+# is not taken on trust, and a mismatch never becomes a registry download.
+write_release_pin 'dep-1.2.3.zip' '0000000000000000000000000000000000000000000000000000000000000000'
+reset_site '[]'
+if ck_enable_extensions >/dev/null 2>&1; then
+  fail "a staged archive whose checksum does not match the pin was accepted"
+fi
+[ ! -e "$work/ext/org.example.dep" ] || fail "a mismatching staged archive was installed anyway"
+if grep -q '^ext:download' "$CV_LOG"; then
+  fail "a mismatching staged archive fell back to the extension registry"
+fi
+
+# A release pin whose archive was never staged fails loudly. Falling back to
+# the registry would look like a working release for an extension nobody can
+# install.
+write_release_pin 'absent-1.2.3.zip' "$digest"
+reset_site '[]'
+if ck_enable_extensions >"$work/out" 2>"$work/err"; then
+  fail "a release pin without its staged archive was accepted"
+fi
+grep -q 'absent-1.2.3.zip is not there' "$work/err" \
+  || fail "a missing staged archive must name the file it looked for: $(cat "$work/err")"
+if grep -q '^ext:download' "$CV_LOG"; then
+  fail "a missing staged archive fell back to the extension registry"
+fi
+
+# Same when nothing was staged at all — an image booting without a staging
+# directory says so instead of guessing.
+write_release_pin 'dep-1.2.3.zip' "$digest"
+unset CK_DEP_ARCHIVE_DIR
+reset_site '[]'
+if ck_enable_extensions >"$work/out" 2>"$work/err"; then
+  fail "a release pin without CK_DEP_ARCHIVE_DIR was accepted"
+fi
+grep -q 'CK_DEP_ARCHIVE_DIR' "$work/err" \
+  || fail "an unstaged release pin must say what is missing: $(cat "$work/err")"
+if grep -q '^ext:download' "$CV_LOG"; then
+  fail "an unstaged release pin fell back to the extension registry"
+fi
+/bin/rm "$work/ext/fixture/civikitchen.yaml"
 
 # No <requires> at all: just the enable.
 write_info ''
