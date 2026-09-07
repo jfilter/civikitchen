@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace CiviKitchen\Ckconform;
 
 /**
- * Collects results and renders them in the format the bash predecessor used,
- * byte for byte — the golden output captured across all consuming repos is the
- * regression net for this port, and it is only a net if the format matches.
+ * Collects results and renders them byte for byte in the golden-output format
+ * the consuming repos' captured output is compared against.
  */
 final class Reporter
 {

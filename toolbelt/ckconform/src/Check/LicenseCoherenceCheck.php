@@ -17,10 +17,9 @@ use CiviKitchen\Ckconform\Reporter;
  * optional `civikitchen.yaml` (`license=`). Without one the declarations only have to
  * agree with each other.
  *
- * Both values are now read with real parsers — SimpleXML and json_decode. The
- * bash predecessor pulled them out with sed, which meant a `<license>` split
- * over two lines read as empty and a composer.json that mentioned "license"
- * anywhere earlier (a script name, a dependency) won the `head -1`.
+ * Both values are read with real parsers — SimpleXML and json_decode — so a
+ * `<license>` split over two lines or a "license" string elsewhere in
+ * composer.json cannot mislead the comparison.
  */
 final class LicenseCoherenceCheck implements Check
 {
@@ -62,10 +61,8 @@ final class LicenseCoherenceCheck implements Check
 
     /**
      * SPDX allows `"license": ["MIT", "GPL-2.0"]` for disjunctive licensing, and
-     * that form is permitted here — but permitted is not the same as unchecked.
-     * The bash regex could not see the shape at all, so an array read as unset
-     * and skipped the policy entirely; that would make an array the way to
-     * bypass every licence rule we have.
+     * that form is permitted here — but permitted is not the same as unchecked:
+     * an unchecked array would be the way to bypass every licence rule.
      *
      * So a disjunctive list satisfies the policy when the expected licence is
      * one of its members, and is reported in full when it is not.

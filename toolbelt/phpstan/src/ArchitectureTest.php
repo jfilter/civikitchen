@@ -23,10 +23,8 @@ use PHPat\Test\PHPat;
  * or the image's extension directory). One that is not found is reported
  * like any foreign extension and the message says so — no silent fallback.
  *
- * Legacy-UI rule: the phpat successor of the retired NoLegacyPageForm phpcs
- * sniff. Because phpat resolves the full ancestry, a class extending an own
- * intermediate base or a concrete core report is caught too — the token
- * sniff only ever saw the direct parent's name.
+ * Legacy-UI rule: because phpat resolves the full ancestry, a class extending
+ * an own intermediate base or a concrete core report is caught too.
  *
  * Both rules derive the extension from the working directory (info.xml,
  * classloader dirs). Outside an extension root they stay inert — there is no

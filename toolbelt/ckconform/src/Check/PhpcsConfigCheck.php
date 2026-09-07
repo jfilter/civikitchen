@@ -13,9 +13,8 @@ use CiviKitchen\Ckconform\Reporter;
  * whatever standard happens to be configured, so a repo can look linted while
  * running rules nobody chose.
  *
- * The file is XML, so it is read as XML — the bash version grepped for the
- * literal string ref="CiviKitchen", which also matched it inside a comment or
- * inside an <exclude>.
+ * The file is read as XML: a ref="CiviKitchen" inside a comment or an
+ * <exclude> must not count.
  */
 final class PhpcsConfigCheck implements Check
 {

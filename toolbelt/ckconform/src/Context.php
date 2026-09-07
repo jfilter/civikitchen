@@ -6,14 +6,9 @@ namespace CiviKitchen\Ckconform;
 
 /**
  * Everything a check may want to know about the extension under inspection,
- * parsed once and parsed properly.
- *
- * The bash predecessor read info.xml with sed, composer.json with a regex and
- * globbed for nested files with a fixed-depth pattern. Every one of those was
- * eventually wrong in a way that made a check pass silently — a missed
- * `<ext version="3.32">`, a `ang/afform/*.aff.html` two levels down, a
- * `@since` parse that BSD sed rejected. Structured formats are parsed with
- * structured parsers here, and that is most of the reason this is PHP now.
+ * parsed once and parsed properly: structured formats through structured
+ * parsers, files found recursively — a sed or a fixed-depth glob makes a
+ * check pass silently.
  */
 final class Context
 {
@@ -169,8 +164,8 @@ final class Context
 
     /**
      * The <ext> children of info.xml's <requires>, as trimmed extension keys.
-     * Read via SimpleXML because attributes are legal on the element — a regex
-     * once missed `<ext version="3.32">org.civicoop.civirules</ext>` — and
+     * Read via SimpleXML because attributes are legal on the element
+     * (`<ext version="3.32">org.civicoop.civirules</ext>`), and
      * empty/whitespace-only elements are dropped: '' is not a key, and letting
      * it through makes an in_array() dependency test silently unmatchable.
      *

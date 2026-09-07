@@ -29,8 +29,8 @@ mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root'; FLUSH PRIVILEGES;"
 # Toolbar, so the 'access toolbar' permission no longer exists and upstream
 # buildkit's civicrm_apply_d8_perm_defaults (src/civibuild.lib.sh) hard-fails
 # the whole `civibuild create` on it — drush: "Permission(s) not found: access
-# toolbar" (first seen 2026-07-01, hours after Drupal 11.4.0 shipped; Drupal
-# =<11.3 and 10.x still install Toolbar and are unaffected). Grant whichever
+# toolbar" (Drupal =<11.3 and 10.x still install Toolbar and are unaffected).
+# Grant whichever
 # admin-bar permission the installed core provides; neither is worth sinking a
 # build over. The patched clone is COPY'd into the demo and final images, so
 # the runtime `civibuild reinstall` takes the same path. Drop this once
@@ -99,8 +99,8 @@ echo "DROP TABLE IF EXISTS civicrm_install_canary;" | cvutil_php_nodbg amp sql -
 fi
 # civibuild create downloads the CMS + civicrm-core, including dozens of bundled
 # JS assets the composer-downloads-plugin fetches from github.com. A single
-# transient github.com 5xx on ANY one of them (seen in CI: dc-js/dc.js 2.1.10.zip
-# -> HTTP 502, after composer's own retries) makes composer — and thus the whole
+# transient github.com 5xx on ANY one of them (after composer's own retries)
+# makes composer — and thus the whole
 # multi-arch image build — fail, with civibuild's bash then dying noisily
 # ("pop_var_context: ... not a function context"). Retry the create so a
 # transient blip doesn't sink the build; the composer cache (cleared only at the

@@ -70,8 +70,7 @@ final class TranslationCatalogCheck implements Check
             // CRM_Core_I18n builds the lookup path as
             // l10n/<locale>/LC_MESSAGES/<domain>.mo — a catalog anywhere else
             // under l10n/ compiles fine and is never loaded, the same silent
-            // inertness as a missing .mo (found in the wild on the first
-            // fleet scan).
+            // inertness as a missing .mo.
             if (preg_match('#^l10n/[^/]+/LC_MESSAGES/[^/]+\.po$#', $catalog) !== 1) {
                 $reporter->fail(
                     "$catalog: not under l10n/<locale>/LC_MESSAGES/ — CiviCRM builds the runtime "
@@ -244,8 +243,7 @@ final class TranslationCatalogCheck implements Check
 
         // A .mgd.php can carry Smarty message-template bodies as PHP string
         // literals — their {ts} blocks are user-facing source strings like any
-        // template's, and skipping them here silently marked 34 real strings
-        // as absent on the first fleet catalog refresh.
+        // template's.
         if (str_ends_with($file, '.mgd.php')) {
             $literals = array_merge($literals, $this->smartyStrings($source));
         }

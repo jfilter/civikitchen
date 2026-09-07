@@ -21,9 +21,8 @@ use CiviKitchen\Ckconform\Suppressions;
  *     retries disabled it never records at all, and where retries are on, a
  *     flaky test that passes on the second attempt leaves a trace nobody reads.
  *     `retain-on-failure` keeps one for every attempt that actually failed.
- *   - No reporter configured means no `playwright-report/` directory exists —
- *     and two workflows were archiving that exact path, so every upload was
- *     empty and no one noticed.
+ *   - No reporter configured means no `playwright-report/` directory exists,
+ *     so an upload of that path archives nothing.
  *   - An `upload-artifact` step with no `if:` is SKIPPED when a previous step
  *     fails — which is exactly, and only, when the report matters. It needs
  *     `if: always()` (or `!cancelled()` / `failure()`).

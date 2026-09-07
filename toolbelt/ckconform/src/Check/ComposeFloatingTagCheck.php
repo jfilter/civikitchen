@@ -11,11 +11,9 @@ use CiviKitchen\Ckconform\Reporter;
 /**
  * Floating image tags in the compose stacks.
  *
- * FloatingTagCheck covers the workflow files; the stacks CI actually brings up
- * were unwatched, and that is where it bit. On 2026-07-06 `maildev/maildev:latest`
- * moved to 3.0.0-rc.1, whose built-in healthcheck queries a route the app answers
- * with 404. Every stack pinning `:latest` stopped coming up — with no diff in any
- * repo to point at, and the same commit green the day before.
+ * FloatingTagCheck covers the workflow files; this covers the stacks CI brings
+ * up. A `:latest` that moves (a maildev release whose built-in healthcheck
+ * queries a 404 route) stops every stack coming up with no diff to point at.
  *
  * A missing tag is the same defect spelled shorter: `image: mariadb` means
  * `mariadb:latest`.

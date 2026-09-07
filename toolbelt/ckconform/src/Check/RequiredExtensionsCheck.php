@@ -15,14 +15,11 @@ use CiviKitchen\Ckconform\Reporter;
  * fatals on a SearchKit entity that isn't there — so nothing catches it during
  * normal development, where the dependency happens to be installed anyway.
  *
- * The bash version compared the <requires> block as a substring, which is both
- * too loose (a key that is a prefix of another satisfies it) and, in the
- * ad-hoc variant that once shipped, too strict: an `<ext>[^<]+</ext>` regex
- * missed `<ext version="3.32">org.civicoop.civirules</ext>` because the element
- * carried an attribute. Here the <requires><ext> children are read via
- * SimpleXML and compared as exact, trimmed keys.
+ * The <requires><ext> children are read via SimpleXML and compared as exact,
+ * trimmed keys: a substring match is too loose (a key that is a prefix of
+ * another satisfies it), a regex misses an element carrying an attribute.
  *
- * Only failures are reported — a satisfied dependency is silent, as in bash.
+ * Only failures are reported — a satisfied dependency is silent.
  */
 final class RequiredExtensionsCheck implements Check
 {
@@ -70,8 +67,7 @@ final class RequiredExtensionsCheck implements Check
 
     /**
      * Managed entities are declared in .mgd.php files, where the entity name is
-     * a single-quoted string — that is the literal bash grepped for, kept.
-     * Recursive: repos nest managed/ by entity type.
+     * a single-quoted string. Recursive: repos nest managed/ by entity type.
      */
     private function shipsSearchKitEntities(Context $context): bool
     {
@@ -89,9 +85,7 @@ final class RequiredExtensionsCheck implements Check
     }
 
     /**
-     * Recursive on purpose: a flat ang/*.aff.html glob missed the common
-     * ang/afform/*.aff.html layout, and the check passed on a repo full of
-     * Afforms with no <ext> for them.
+     * Recursive on purpose: the common ang/afform/*.aff.html layout must count.
      */
     private function shipsAfforms(Context $context): bool
     {

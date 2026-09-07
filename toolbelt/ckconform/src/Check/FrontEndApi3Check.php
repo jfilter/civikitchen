@@ -75,9 +75,8 @@ final class FrontEndApi3Check implements Check
     }
 
     /**
-     * Mirrors the bash exclusion exactly: 'node_modules' anywhere in the path,
-     * '/dist/' with both slashes (so a top-level dist/ is *not* excluded), and
-     * a .min.js suffix.
+     * Excluded: 'node_modules' anywhere in the path, '/dist/' with both slashes
+     * (so a top-level dist/ is *not* excluded), and a .min.js suffix.
      */
     private function isExcluded(string $file): bool
     {

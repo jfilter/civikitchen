@@ -243,9 +243,8 @@ final class HookDispatchNameCheckTest extends CheckTestCase
     }
 
     /**
-     * The hook list used to be hand-maintained and ~56 hooks short, so ordinary
-     * core hooks were reported as typos. The catalog is generated now; this
-     * guards the regression with hooks that were missing from that old list.
+     * Ordinary core hooks that a hand-maintained list is prone to miss must not
+     * be reported as typos.
      */
     public function testHooksAbsentFromTheOldHandWrittenListAreSilent(): void
     {

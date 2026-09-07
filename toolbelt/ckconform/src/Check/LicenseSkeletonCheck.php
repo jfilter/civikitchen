@@ -14,9 +14,7 @@ use CiviKitchen\Ckconform\Reporter;
  * copy-paste bootstrap unnoticed, and then the licence file names someone else's
  * package.
  *
- * The extension key comes from the root element's `key` attribute via SimpleXML;
- * the bash predecessor sed'ed for it and picked up the first `key="…"` on any
- * line that happened to mention `<extension`.
+ * The extension key comes from the root element's `key` attribute via SimpleXML.
  */
 final class LicenseSkeletonCheck implements Check
 {

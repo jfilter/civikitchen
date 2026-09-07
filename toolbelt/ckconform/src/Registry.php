@@ -7,10 +7,8 @@ namespace CiviKitchen\Ckconform;
 /**
  * The ordered list of checks.
  *
- * Order is not cosmetic: the golden output captured from the bash predecessor is
- * compared line by line, so a reordering reads as a regression. Entries whose
- * class does not exist yet are skipped, which is what lets the port land check by
- * check instead of as one unreviewable commit.
+ * Order is not cosmetic: the golden output is compared line by line, so a
+ * reordering reads as a regression. Entries whose class does not exist are skipped.
  */
 final class Registry
 {

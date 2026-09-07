@@ -10,9 +10,8 @@
  *
  * Input: path to profile.json via the CK_PROFILE_JSON env var (`cv scr` has
  * no argv passthrough). Idempotent: load-or-create everywhere, so a re-run
- * after an aborted first boot converges instead of duplicating. Unlike the
- * old bash version this fails loudly — an uncaught exception makes cv exit
- * non-zero, apply.sh aborts, and the boot test goes red.
+ * after an aborted first boot converges instead of duplicating. Fails loudly:
+ * an uncaught exception makes cv exit non-zero and apply.sh abort.
  */
 
 $configFile = getenv('CK_PROFILE_JSON');

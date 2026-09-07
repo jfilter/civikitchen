@@ -22,13 +22,10 @@ declare(strict_types=1);
  * hand-verified lists in HookDispatchNameCheck:
  *
  *  - REMOVED hooks. A removed hook leaves no trace in core, so the only signal
- *    is documentation prose. Four attempts each condemned a live hook:
- *    post/install/enable (names built dynamically), alterExternUrl (dispatched
- *    straight from CRM/Utils/System.php).
- *  - Hooks deprecated only in the docs. Auditing every dev-docs page that says
- *    "deprecated" found 2 real hook deprecations against 2 pages describing a
- *    deprecated *parameter* (links, merge) — a 50% false-positive rate over a
- *    four-item candidate set is not worth automating.
+ *    is documentation prose, which condemns live hooks: post/install/enable
+ *    (names built dynamically), alterExternUrl (dispatched from CRM/Utils/System.php).
+ *  - Hooks deprecated only in the docs: two real ones against two pages that
+ *    describe a deprecated *parameter* (links, merge) — not worth automating.
  */
 
 if ($argc < 2) {

@@ -15,8 +15,7 @@ use CiviKitchen\Ckconform\Reporter;
  *
  * The block must start in column 0: a job-level `permissions:` (indented,
  * scoped to one job) narrows that job but says nothing about the others in
- * the same file, so it does not satisfy this check — intentionally, matching
- * the bash original's `grep -q '^permissions:'`.
+ * the same file, so it does not satisfy this check.
  */
 final class WorkflowPermissionsCheck implements Check
 {

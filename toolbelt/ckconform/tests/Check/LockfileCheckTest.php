@@ -123,7 +123,7 @@ final class LockfileCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new LockfileCheck(), $context));
     }
 
-    /** The old line parser compared literal names, so `*.lock` slipped through. */
+    /** A wildcard pattern must count like a literal name. */
     public function testAWildcardPatternCoveringLockfilesFails(): void
     {
         $context = $this->repo(['.gitignore' => "*.lock\n"], git: true);
@@ -134,8 +134,8 @@ final class LockfileCheckTest extends CheckTestCase
     }
 
     /**
-     * The old parser read `!build/composer.lock` as an ignore rule because the
-     * line ends in "/composer.lock" — a negation is the opposite of one.
+     * `!build/composer.lock` ends in "/composer.lock" but is the opposite of
+     * an ignore rule.
      */
     public function testANegationLineIsNotAnIgnoreRule(): void
     {

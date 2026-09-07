@@ -77,15 +77,11 @@ final class TestBootstrapGuardCheck implements Check
      * Whether the bootstrap actually executes the guard, rather than describing
      * it in a comment or merely naming the constant.
      *
-     * Two stages of tightening, both from real passes on unguarded files. First
-     * the raw source matched, so three explanatory comments naming TEST_DB_DSN
-     * read as "has the guard" — comments are stripped now. But a bare mention in
-     * code (`$x = getenv('TEST_DB_DSN');`) is still not a guard: a guard reads
-     * the value AND stops the run when it is missing. So the code must both name
-     * TEST_DB_DSN and reach a terminating statement — every real bootstrap in
-     * the estate does (throw / exit / die). The read itself is left loose on
-     * purpose: one estate guard does not getenv() it, it pulls TEST_DB_DSN out of
-     * a decoded ~/.cv.json, and that is a valid guard.
+     * Comments are stripped first (an explanatory comment naming TEST_DB_DSN is
+     * not a guard), and a bare read (`getenv('TEST_DB_DSN')`) is not one either:
+     * the code must both name TEST_DB_DSN and reach a terminating statement
+     * (throw / exit / die). The read is left loose on purpose: pulling the value
+     * out of a decoded ~/.cv.json is a valid guard too.
      */
     private function guardsInCode(string $source): bool
     {

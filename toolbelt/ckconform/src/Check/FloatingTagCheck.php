@@ -14,8 +14,7 @@ use CiviKitchen\Ckconform\Reporter;
  * building against a different image or binary tomorrow with no diff to
  * point at.
  *
- * The bash original only ever surfaces the first hit (`grep -n ... | head -3`
- * feeding `head -1 | cut -c1-70`), so this stops at the first match too.
+ * Only the first hit per file is reported.
  */
 final class FloatingTagCheck implements Check
 {

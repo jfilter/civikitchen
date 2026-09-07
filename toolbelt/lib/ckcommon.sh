@@ -75,11 +75,8 @@ ck_policy_all() { "$(_ck_conform_bin)" --policy "$1"; }
 ck_dist_paths() { "$(_ck_conform_bin)" --dist-paths; }
 
 # --- info.xml and composer.json ----------------------------------------------
-# XML is parsed as XML and JSON as JSON. The line-oriented shortcuts that
-# ckconform was rewritten in PHP to get rid of — a <license> spanning two lines
-# read as empty, a tag-shaped regex blind to attributes — misread info.xml here
-# just as happily. Three tools and one CI step had their own `tr | grep -o |
-# sed` version of this; only ckrelease, where these two come from, did it right.
+# XML is parsed as XML and JSON as JSON: a line-oriented `tr | grep -o | sed`
+# reads a <license> spanning two lines as empty and is blind to attributes.
 
 # $1 = file, $2 = 'key' (the root attribute) or a child element name.
 ck_xml_field() {
@@ -93,8 +90,7 @@ ck_json_field() {
 
 # --- file-selection patterns -------------------------------------------------
 # Patterns, not one do-everything list_files(): the callers differ in ls-files
-# flags and in which generated code counts. What drifted between the three
-# copies was the patterns.
+# flags and in which generated code counts.
 ck_re_vendored='(^|/)(node_modules|vendor|dist|build|bower_components|packages|\.civikitchen-siblings)/'
 
 # Third-party source a repo carries verbatim outside those conventional

@@ -7,9 +7,8 @@ namespace CiviKitchen\Ckconform\Tests;
 final class ContextTest extends CheckTestCase
 {
     /**
-     * Two callers used to parse <requires> separately; one dropped empty
-     * elements, the other let '' through, where it could never match any real
-     * key in an in_array() test. The shared parser trims and drops.
+     * An empty <ext> element can never match a real key in an in_array() test;
+     * the shared parser trims and drops it.
      */
     public function testRequiredExtensionsTrimsAndDropsEmptyElements(): void
     {

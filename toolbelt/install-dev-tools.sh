@@ -198,7 +198,7 @@ composer install --working-dir=/opt/civikitchen-rector --no-interaction --no-pro
 # ---------------------------------------------------------------------------
 # phpstan (isolated install, same shape as rector above).
 #
-# Why not the standalone phar any more: phpstan extensions are composer
+# Not the standalone phar: phpstan extensions are composer
 # packages, and the phar cannot load one. The deprecation rules are worth that
 # switch — they are the only thing that catches calls into the ~640 symbols
 # CiviCRM core marks @deprecated, and they need no list anyone has to maintain.

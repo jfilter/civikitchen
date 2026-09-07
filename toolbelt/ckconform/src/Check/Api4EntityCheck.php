@@ -15,11 +15,9 @@ use CiviKitchen\Ckconform\Reporter;
  * one this extension claims to support.
  *
  * A `\Civi\Api4\Foo` reference resolves at runtime, so a migration can move code
- * onto an entity core never shipped and phpstan, phpcs and every test that does
- * not load that page stay green. This is not hypothetical: an api3->v4 pass moved
- * two pages onto \Civi\Api4\MailingAB, which core exposes only @since 6.17 (from
- * ext/civi_mail, and even there as a bare DAOEntity). The extension declared 6.10
- * and the suite was green — the pages would have fatalled on every live site.
+ * onto an entity core never shipped — or shipped only @since a core newer than
+ * the declared floor — and phpstan, phpcs and every test that does not load
+ * that page stay green while the page fatals on every live site.
  *
  * Hence two questions, not one:
  *   1. does the entity exist at all?
@@ -237,11 +235,9 @@ final class Api4EntityCheck implements Check
     /**
      * The @since tag from the class docblock.
      *
-     * Read through the PHP tokenizer rather than by regex over the whole file:
-     * the first cut of this rule parsed the docblock with sed's \+, which BSD sed
-     * does not support and silently ignores — so the version came back empty and
-     * the check passed on every entity instead of failing. A rule that cannot
-     * fail is worse than no rule.
+     * Read through the PHP tokenizer rather than by regex over the whole file: a
+     * version that comes back empty makes the check pass on every entity, and a
+     * rule that cannot fail is worse than no rule.
      */
     private function parseSince(string $file): ?string
     {

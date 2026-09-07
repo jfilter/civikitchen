@@ -12,12 +12,9 @@ use CiviKitchen\Ckconform\Reporter;
  * An APIv4 entity called by name from JavaScript that exists nowhere.
  *
  * Api4EntityCheck reads PHP and asks core about `\Civi\Api4\Foo`. It is blind to
- * the case that actually happened here: a React component calling
- * `getEntities('LedgerAdapter', ...)` — an entity nobody ever wrote. Every
- * request 500s, and a `catch {}` two lines below swapped in a hardcoded list
- * under the comment "Fallback to default adapters if API is not available". The
- * API was never available, so the fallback was the only code path that ever ran,
- * and it read as deliberate for as long as nobody looked.
+ * a React component calling `getEntities('LedgerAdapter', ...)` for an entity
+ * nobody ever wrote: every request 500s, and a `catch {}` with a hardcoded
+ * fallback list makes that read as deliberate for as long as nobody looks.
  *
  * Following the name through the frontend's wrappers would take real dataflow
  * analysis: `getEntities(entity)` -> `apiCall(entity, action)` ->
@@ -33,10 +30,9 @@ use CiviKitchen\Ckconform\Reporter;
  *     shape of an entity class, and rare for a label or a key;
  *   - core does not have it and neither do we.
  *
- * An earlier cut matched every quoted string starting with the extension's own
- * prefix. It flagged SearchDisplay names, ScheduledJob names and entityType
- * plurals across four repos — the rule has to recognise an entity reference,
- * not merely a familiar-looking word.
+ * Matching every quoted string with the extension's prefix would flag
+ * SearchDisplay names, ScheduledJob names and entityType plurals — the rule has
+ * to recognise an entity reference, not merely a familiar-looking word.
  */
 final class Api4SelfEntityCheck implements Check
 {

@@ -33,8 +33,7 @@ use CiviKitchen\Ckconform\SmartySource;
  * A wrapper whose extensionKey is a Smarty variable is accepted: what it
  * resolves to is not statically knowable, and refusing to guess beats guessing
  * wrong. A wrapper that names a *different* extension's key, on the other hand,
- * is exactly the mistake this rule exists for — the fleet's original sighting
- * was an extension that hand-passed a neighbouring key and never noticed.
+ * is exactly the mistake this rule exists for.
  *
  * A `{ts domain="<key>"}` needs no wrapper at all: core's smarty_block_ts
  * fills the domain from {crmScope}'s extensionKey only when the tag carries

@@ -19,11 +19,6 @@ use CiviKitchen\Ckconform\Suppressions;
  * never registered, the menu route 404s — while every test that does not
  * exercise that exact path stays green.
  *
- * This is not hypothetical. One extension shipped an xml/Menu file routing four
- * CiviRules config forms, its actions sent admins straight to those URLs
- * (getExtraDataInputUrl), and no menu-xml mixin and no xmlMenu hook loaded them:
- * configuring one of its actions 404'd, and had since the extension was renamed.
- *
  * scan-classes is the one entry core itself nags about: an entity picked up by
  * Civi\Api4\Service\LegacyEntityScanner instead of the class scanner raises a
  * status-check message ("APIv4 Entities using Legacy Entity Scanner"), so the

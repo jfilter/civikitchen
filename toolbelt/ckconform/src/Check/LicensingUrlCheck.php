@@ -14,9 +14,8 @@ use CiviKitchen\Ckconform\Reporter;
  * survives — so the extension browser shows terms nobody granted. Readers trust
  * the link over the tag, so a stale one is worse than none.
  *
- * The url is located by attribute through SimpleXML rather than by matching
- * `desc="Licensing">` in the raw text, so attribute order and whitespace inside
- * the tag no longer decide whether the check runs at all.
+ * The url is located by attribute through SimpleXML, so attribute order and
+ * whitespace inside the tag cannot decide whether the check runs at all.
  */
 final class LicensingUrlCheck implements Check
 {
@@ -55,8 +54,7 @@ final class LicensingUrlCheck implements Check
 
     /**
      * Order is load-bearing: an AGPL url contains "gpl", so `agpl` and `lgpl`
-     * must be decided before the plain `gpl` arm ever sees it. This mirrors the
-     * bash `case`, where the first matching pattern wins.
+     * must be decided before the plain `gpl` arm ever sees it.
      */
     private function classify(string $url): string
     {

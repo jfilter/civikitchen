@@ -48,15 +48,11 @@ final class HookDispatchNameCheck implements Check
     /**
      * Hooks CiviCRM has removed: suffix => guidance.
      *
-     * Hand-verified, and deliberately not generated. A removed hook leaves no
-     * trace in a core checkout, so the only machine-readable signal is dev-docs
-     * prose — and deriving from it condemned live hooks in every attempt
-     * (`post`, `install` and `enable` because core builds those names
-     * dynamically; `alterExternUrl` because it is dispatched from
-     * CRM/Utils/System.php rather than CRM_Utils_Hook). Each entry below was
-     * confirmed absent from CRM/, Civi/, api/ and ext/ in a 6.14 checkout,
-     * ignoring CRM/Upgrade/Incremental/ — upgrade steps still name hooks that
-     * were removed years ago.
+     * Hand-verified, and deliberately not generated: a removed hook leaves no
+     * trace in a core checkout, and deriving from dev-docs prose condemns live
+     * hooks (`post`, `install`, `enable` are built dynamically; `alterExternUrl`
+     * is dispatched from CRM/Utils/System.php). Each entry is confirmed absent
+     * from CRM/, Civi/, api/ and ext/, ignoring CRM/Upgrade/Incremental/.
      *
      * @var array<string, string>
      */
@@ -74,10 +70,7 @@ final class HookDispatchNameCheck implements Check
      * Deprecations that exist only in the dev docs, never as a core marker.
      *
      * The generator reads core's `@deprecated` tags and its runtime deprecation
-     * warnings; these two carry neither. Auditing every dev-docs page mentioning
-     * "deprecated" yielded exactly these two real hook deprecations alongside
-     * two pages describing a deprecated *parameter* (`links`, `merge`), so the
-     * shorter and more honest route is to list them.
+     * warnings; these carry neither, so they are listed by hand.
      *
      * @var array<string, string>
      */

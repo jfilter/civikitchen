@@ -14,7 +14,7 @@ use CiviKitchen\Ckconform\Reporter;
  * previous holder is the failure mode.
  *
  * The match is a literal substring, case-sensitive — a holder's legal name is
- * not a thing to be lenient about. (`grep -F` in the predecessor.)
+ * not a thing to be lenient about.
  */
 final class CopyrightCheck implements Check
 {

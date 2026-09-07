@@ -12,10 +12,8 @@ use CiviKitchen\Ckconform\Reporter;
  * The .gitignore has to cover the artifacts this repo can actually produce.
  *
  * CommittedArtifactCheck punishes a tracked cache after the fact; this one stops
- * it being tracked in the first place. The difference is not academic: phpunit
- * writes .phpunit.result.cache next to its config on every run, so a `git add -A`
- * straight after a test run commits it — which is exactly how it got into
- * one of our repos, and how a tsconfig.tsbuildinfo rode along in a merge elsewhere.
+ * it being tracked in the first place: phpunit writes .phpunit.result.cache next
+ * to its config on every run, so a `git add -A` straight after a test run commits it.
  *
  * Only artifacts the repo can generate are demanded, so a PHP-only extension is
  * never nagged about node_modules. The counterpart rule lives in LockfileCheck:

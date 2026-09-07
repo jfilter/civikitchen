@@ -13,9 +13,7 @@ use CiviKitchen\Ckconform\Reporter;
  * pass and nothing about whether they still cover anything.
  *
  * Scope is Context::workflows(), like every other workflow check: recursive and
- * including `.yaml`. The bash predecessor globbed `.github/workflows/*.yml`
- * directly in that directory, because that is what the original globbed and the
- * golden output across the consuming repos was captured from.
+ * including `.yaml`.
  */
 final class CiCoverageCheck implements Check
 {
@@ -51,10 +49,8 @@ final class CiCoverageCheck implements Check
             }
         }
 
-        // A declared floor with nothing to enforce it is the worst of both: the
-        // number reads like a gate and stops nothing. Eight repos carried a
-        // min_coverage while CI ran `phpunit --coverage-text`, which prints a
-        // percentage and always exits 0.
+        // A declared floor with nothing to enforce it reads like a gate and stops
+        // nothing: `phpunit --coverage-text` prints a percentage and always exits 0.
         if ($context->policyValue('min_coverage') !== null && $ran !== 'ckcoverage') {
             $reporter->fail(
                 'civikitchen.yaml sets min_coverage but no workflow runs ckcoverage — '

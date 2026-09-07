@@ -12,9 +12,8 @@ use CiviKitchen\Ckconform\Reporter;
  * A repo with real PHP logic and no suite is a gap, not a style preference.
  * Config-only extensions can say so in civikitchen.yaml: tests=optional -- <reason>
  *
- * The source count is the delicate part: it once missed the extension's own
- * root .php file, which is exactly where a config-only extension keeps whatever
- * logic it has, so such a repo looked like it had nothing to cover. Counted are
+ * The source count must include the extension's own root .php file, which is
+ * exactly where a config-only extension keeps whatever logic it has. Counted are
  * all .php under Civi/ and CRM/ plus the .php directly in the repo root;
  * generated and machine-owned files (.civix.php, DAO/, BAO/,
  * phpstanBootstrap.php) do not count as surface anyone is asked to test.

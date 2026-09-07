@@ -11,12 +11,9 @@ use CiviKitchen\Ckconform\Reporter;
 /**
  * A tool config that nothing in CI ever runs.
  *
- * The generic form of a failure that turned up six separate ways in one audit:
- * a phpstan.neon.dist in a repo whose workflow never calls phpstan; 54 PHPUnit
- * files and a phpunit.xml.dist that no job invokes; a second phpunit config only
- * one repo remembers to run; a whole checks/ harness with Playwright specs and a
- * typecheck that CI never touches. Each looked like coverage from the outside —
- * the config is there, the tests are there, the badge is green.
+ * A phpstan.neon.dist in a repo whose workflow never calls phpstan, a
+ * phpunit.xml.dist no job invokes, a Playwright harness CI never touches: each
+ * looks like coverage from the outside — the config is there, the badge is green.
  *
  * The check is deliberately indirect-aware: a workflow that runs `npm run test`
  * counts as running whatever that script maps to, because that is how these
@@ -135,11 +132,8 @@ final class ConfigWithoutRunnerCheck implements Check
      * Workflow text with YAML comments removed.
      *
      * Matching the raw file means a step described in a comment counts as a step
-     * that runs — one repo's test.yml explains at length why its phpunit job was
-     * retired, and that explanation alone satisfied a naive search for
-     * "phpunit". This is the third variant of the same mistake found in one day,
-     * so it is worth stating plainly: never match a tool name against text that
-     * still contains prose.
+     * that runs — a workflow explaining why its phpunit job was retired satisfies
+     * a naive search for "phpunit". Never match a tool name against prose.
      *
      * Line-based and therefore approximate (a '#' inside a quoted string is
      * dropped too), which errs toward reporting a missing runner rather than

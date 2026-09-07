@@ -165,8 +165,7 @@ ck_smtp() {
     # DB-level setting above (it only checks the $civicrm_setting override)
     # and so defines CIVICRM_MAIL_LOG=/dev/null — send() returns TRUE while
     # every outbound mail silently vanishes. With an explicit SMTP host there
-    # is nothing left for that heuristic to decide: drop it. (The standalone
-    # flavor never had it — this aligns the flavors.)
+    # is nothing left for that heuristic to decide: drop it.
     # NOT `[[ ... ]] && rm`: as the function's last statement it returns 1
     # when CK_SETTINGS_D is empty (standalone), and the entrypoints run set -e.
     if [[ -n "${CK_SETTINGS_D}" ]]; then
@@ -194,8 +193,7 @@ ck_standalone_auth() {
 
 # Demo login user. Opt-in via CIVIKITCHEN_DEMO_USER. Needs the standaloneusers
 # \Civi\Api4\User entity, which ck_standalone_auth enables (it runs first in the
-# standalone config bundle, ck_post_install_config) — so this no longer enables
-# standaloneusers itself. Standalone-only: buildkit flavors get their CMS login
+# standalone config bundle, ck_post_install_config). Standalone-only: buildkit flavors get their CMS login
 # from civibuild and must NOT call this (their entrypoints don't).
 ck_demo_user() {
     [[ -n "${CIVIKITCHEN_DEMO_USER}" ]] || return 0

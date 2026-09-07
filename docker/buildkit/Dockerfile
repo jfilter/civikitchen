@@ -36,10 +36,8 @@ ARG DEFAULT_SITE_TYPE=drupal10-demo
 # default) ships mariadb-client 11.8 which enforces TLS by default and breaks
 # every dev MariaDB sidecar that doesn't have a cert configured (drush, amp,
 # civibuild all fail with "ERROR 2026 ... SSL is required, but the server
-# does not support it"). Bookworm's mariadb-client is 10.11 — same as the
-# civicrm/civicrm:latest base of the standalone image, so both images now
-# sit on the same Debian release. Revisit when MariaDB 11.4+ servers are
-# the norm.
+# does not support it"). Bookworm's mariadb-client is 10.11, the same as the
+# standalone image's base. Revisit when MariaDB 11.4+ servers are the norm.
 FROM php:${PHP_VERSION}-apache-bookworm AS base
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -50,9 +48,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 # - default-mysql-client: civibuild + entrypoint DB probe
 # - lib*-dev: headers needed by docker-php-ext-install for gd/intl/zip/soap
 # - nodejs: extensions with Angular/JS assets, and civicrm-buildkit's own
-#   civi-download-tools. 24.x is the current LTS line (Node 20 went
-#   end-of-life 2026-04-30); npm is upgraded past what the distro package
-#   ships in install-dev-tools.sh (NPM_VERSION).
+#   civi-download-tools. 24.x is the current LTS line; npm is upgraded past
+#   what the distro package ships in install-dev-tools.sh (NPM_VERSION).
 # apt-get upgrade: security updates come from Debian at build time; the base
 # image ships none. The daily rebuild runs without cache, so they land.
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
@@ -125,9 +122,8 @@ COPY toolbelt/bin/ckcivix /usr/local/bin/ckcivix
 COPY toolbelt/bin/ckdeps /usr/local/bin/ckdeps
 COPY toolbelt/lib/composer-deps.php /opt/civikitchen-composer-deps.php
 # repo-conformance check against the extension template (structure, not style).
-# A PHP application, not a script: it parses info.xml as XML and the manifests as
-# JSON, which is what the shell version kept getting wrong. `ckconform` in PATH
-# stays a thin shim so every caller and CI job is unaffected.
+# A PHP application: it parses info.xml as XML and the manifests as JSON.
+# `ckconform` in PATH is a thin shim.
 COPY toolbelt/ckconform /opt/civikitchen-ckconform
 COPY toolbelt/bin/ckconform /usr/local/bin/ckconform
 # coverage gate: runs the suite with clover and enforces civikitchen.yaml's min_coverage
@@ -258,10 +254,8 @@ WORKDIR /home/buildkit
 
 # Clone buildkit + download its tools (composer, drush, cv, node, ...). Both pull
 # from github.com / CDNs with no built-in resilience, so a single transient 5xx
-# would fail the whole image (same flaky-download class as bake.sh's civibuild
-# create — see the dc-js/dc.js 502 that motivated this). Retry the network-heavy
-# setup; --depth 1 trims the clone (its .git is dropped anyway) to shrink the
-# failure surface. (.git removed to save space.)
+# would fail the whole image. Retry the network-heavy setup; --depth 1 trims
+# the clone (its .git is dropped anyway) to shrink the failure surface.
 RUN for attempt in 1 2 3; do \
         rm -rf buildkit; \
         if git clone --depth 1 https://github.com/civicrm/civicrm-buildkit.git buildkit \

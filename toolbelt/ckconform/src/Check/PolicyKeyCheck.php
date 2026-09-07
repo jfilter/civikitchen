@@ -13,16 +13,14 @@ use CiviKitchen\Ckconform\Reporter;
  * Keeps the `policy:` mapping in civikitchen.yaml honest.
  * SuppressionHygieneCheck.
  *
- * The asymmetry it closes: a typo'd check name in an inline `ckconform-ignore`
- * has always been reported as "a dead ignore never matches", while
- * `min_covrage=70` disabled a coverage floor in silence. Same typo, same
- * consequence, and only one of them was caught.
+ * A typo'd check name in an inline `ckconform-ignore` is reported as a dead
+ * ignore; `min_covrage=70` would disable a coverage floor in silence. Same
+ * typo, same consequence, so both are caught.
  *
  * Three failure modes, all silent by nature:
  *
  *   unknown key   nothing will ever read it, so the policy it expresses does
- *                 not exist. Reported against Policy::KEYS, which is now the
- *                 single inventory.
+ *                 not exist. Reported against Policy::KEYS, the single inventory.
  *   bad number    a percentage that is not one. `min_coverage=seventy` reached
  *                 a numeric comparison as a string, and `min_coverage=70%`
  *                 likewise — both compare as 0, which passes every floor.

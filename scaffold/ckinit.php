@@ -45,9 +45,8 @@ const SEEDED_FILES = [
   '.docker/docker-compose.yml',
   'composer.json',
   // The file calls itself a "project layer" and it means it: repos scope out
-  // generated code and tune severities there. Managing it byte-identically
-  // turned five green repos red on the first fleet rollout. The CiviKitchen
-  // STANDARD stays central (it ships in the image); the layer is the repo's.
+  // generated code and tune severities there. The CiviKitchen STANDARD stays
+  // central (it ships in the image); the layer is the repo's.
   'phpcs.xml.dist',
   'phpstan.neon.dist',
   // Opt-in test analysis. Seeded, never managed: its mere existence turns a
@@ -186,12 +185,9 @@ if (preg_match('/^[a-z0-9]([a-z0-9_.-]*[a-z0-9])?$/', $vendor) !== 1) {
 // reseeding one). Names are validated against the full template inventory, so
 // a typo still fails loudly instead of disabling nothing.
 //
-// The parser is ckconform's, required straight out of the checkout this script
-// runs from: a private copy of the same loop is how civikitchen.yaml came to have
-// seven readers that disagreed on whitespace, comments and the reason suffix.
-// ckinit runs on a bare runner with no image, so it cannot shell out to
-// `ckconform --policy-env` the way the ck* tools do — but it is PHP, so it can
-// use the very class that command uses.
+// The parser is ckconform's, required straight out of the checkout: ckinit
+// runs on a bare runner with no image, so it cannot shell out to
+// `ckconform --policy-env` the way the ck* tools do, but it can use the class.
 require_once $yamlAutoload;
 require_once dirname(__DIR__) . '/toolbelt/ckconform/src/Policy.php';
 
@@ -204,8 +200,8 @@ if (is_file($legacyPolicy)) {
 $policyRaw = is_file($target . '/civikitchen.yaml') ? file_get_contents($target . '/civikitchen.yaml') : FALSE;
 if (is_string($policyRaw)) {
   $declared = \CiviKitchen\Ckconform\Policy::parse($policyRaw)['template_custom'] ?? [];
-  // First occurrence wins, as before; ckconform's policy-key check is what
-  // reports a second line that would silently do nothing.
+  // First occurrence wins; ckconform's policy-key check reports a second line
+  // that would silently do nothing.
   foreach (array_slice($declared, 0, 1) as $value) {
     if (preg_match('/\s--\s\S/', $value) !== 1) {
       fwrite(STDERR, "ckinit: policy.template_custom in civikitchen.yaml needs paths and a reason\n");

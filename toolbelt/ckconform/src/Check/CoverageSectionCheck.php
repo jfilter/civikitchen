@@ -13,10 +13,8 @@ use CiviKitchen\Ckconform\Reporter;
  * section `phpunit --coverage-text` reports on nothing, which reads like a
  * passing gate.
  *
- * The bash version grepped for the literal '<coverage', so a commented-out
- * `<!-- <coverage> -->` satisfied it while phpunit measured nothing — exactly
- * the failure mode the gate exists to catch. The config is XML, so it is parsed
- * as XML and a real element is required.
+ * The config is parsed as XML and a real element is required: a commented-out
+ * `<!-- <coverage> -->` must not satisfy the gate.
  */
 final class CoverageSectionCheck implements Check
 {

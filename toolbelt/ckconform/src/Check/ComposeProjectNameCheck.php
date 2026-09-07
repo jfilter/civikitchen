@@ -12,18 +12,11 @@ use CiviKitchen\Ckconform\Reporter;
  * A compose file without an explicit project name.
  *
  * Compose derives the project from the directory the file sits in. Every
- * extension here keeps its stacks in `.docker/`, so thirteen compose files
- * across eight repos all resolved to one project called "docker" — they shared
- * containers, networks and volumes with each other.
- *
- * The damage is not theoretical: `up` in one repo bind-mounted a different
- * repo's checkout into the container, and `down -v` removed a sibling's
- * volumes. It cost a working session and a torn-down stack before anyone
- * noticed, because the failure looks like "my extension directory is missing"
- * rather than "you are in the wrong project".
- *
- * CI never sees it — each runner has one repo — which is exactly why it
- * survived: it only bites the developer with several checkouts.
+ * extension keeps its stacks in `.docker/`, so all of them resolve to one
+ * project called "docker" and share containers, networks and volumes: `up` in
+ * one repo bind-mounts another's checkout, `down -v` removes a sibling's
+ * volumes. CI never sees it (one repo per runner); it bites the developer with
+ * several checkouts.
  */
 final class ComposeProjectNameCheck implements Check
 {

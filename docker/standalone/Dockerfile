@@ -3,12 +3,10 @@
 # debug, testing, static analysis, linting).
 #
 # Self-built base, not FROM civicrm/civicrm: the Docker Hub image lags the
-# release (stable.php said 6.17.0 while civicrm/civicrm:6.17 did not exist,
-# and every build died on the FROM line), while the tarball this installs is
-# published with the release itself. The base block below mirrors what the
-# official image provides (github.com/civicrm/civicrm-docker), so consumers
-# see the same PHP extensions, Apache vhost and ini values as before the
-# switch — test-dev-tools.sh asserts the parity points.
+# release, while the tarball this installs is published with the release
+# itself. The base block below mirrors what the official image provides
+# (github.com/civicrm/civicrm-docker) — PHP extensions, Apache vhost, ini
+# values; test-dev-tools.sh asserts the parity points.
 #
 # Build context: the repo root, so this can COPY from both toolbelt/ (what gets
 # baked in) and docker/ (this image's own runtime files) without either having
@@ -54,9 +52,9 @@ FROM php:${PHP_VERSION}-apache-bookworm
 # - mariadb-client: cv, ckschemadiff and poking the DB from inside the container
 # - unzip/git: composer needs them for dist/source installs
 # - nodejs/npm: required by extensions with Angular/JS assets. 24.x is the
-#   current LTS line (Node 20 went end-of-life 2026-04-30); npm is upgraded
-#   past what the distro package ships in install-dev-tools.sh (NPM_VERSION),
-#   which is what keeps npm's own bundled dependency tree out of the image scan.
+#   current LTS line; npm is upgraded past what the distro package ships in
+#   install-dev-tools.sh (NPM_VERSION), which keeps npm's own bundled
+#   dependency tree out of the image scan.
 # - jq: the profile driver (CIVIKITCHEN_PROFILE) parses profile.json with it
 # apt-get upgrade: security updates come from Debian at build time; the base
 # image ships none. The daily rebuild runs without cache, so they land.
@@ -156,10 +154,8 @@ COPY toolbelt/bin/ckcivix /usr/local/bin/ckcivix
 COPY toolbelt/bin/ckdeps /usr/local/bin/ckdeps
 COPY toolbelt/lib/composer-deps.php /opt/civikitchen-composer-deps.php
 # repo-conformance check against the extension template (structure, not style).
-# This image is what the extension repos run their CI in, so it needs the same
-# tools the buildkit image has — ckconform and ckcoverage were added there only,
-# which would have made every repo's lint job fail on 'ckconform: command not
-# found' the moment CI first ran.
+# The extension repos run their CI in this image, so it carries the same tools
+# as the buildkit image.
 COPY toolbelt/ckconform /opt/civikitchen-ckconform
 COPY toolbelt/bin/ckconform /usr/local/bin/ckconform
 # coverage gate: runs the suite with clover and enforces civikitchen.yaml's min_coverage

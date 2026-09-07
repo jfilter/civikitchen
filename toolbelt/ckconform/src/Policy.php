@@ -67,8 +67,7 @@ final class Policy
      *
      * `template_custom` is deliberately NOT one: its value is a comma-separated
      * list on one line and ckinit stops at the first occurrence, so a second
-     * line does nothing today. It stays scalar and PolicyKeyCheck reports the
-     * repeat, rather than behaviour changing under repos that may have one.
+     * line does nothing. It stays scalar and PolicyKeyCheck reports the repeat.
      *
      * @var list<string>
      */

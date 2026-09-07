@@ -13,10 +13,7 @@ use CiviKitchen\Ckconform\Reporter;
  *
  * `@coversNothing` tells PHPUnit that a test contributes to no code's coverage.
  * civix's generated headless test template carries it at the class level, so a
- * suite scaffolded from that template runs green while measuring nothing: one suite
- * here read 0.00% over sixteen passing headless tests, and it took a second opinion to
- * find the four `@coversNothing` lines that caused it. Removing them: 0% ->
- * 71.87%.
+ * suite scaffolded from that template runs green while measuring 0%.
  *
  * ckcoverage catches the symptom once a floor is set, but only says "below the
  * floor", not why — and a repo still bringing its coverage up has no floor yet,

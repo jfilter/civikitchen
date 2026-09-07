@@ -55,8 +55,7 @@ final class LockfileCheck implements Check
      * Lockfile paths git would ignore, asked per location a lockfile can be
      * required: next to each tracked manifest and at the root. Git answers via
      * check-ignore (Context::isIgnored), so `*.lock`, negations and nested
-     * .gitignore files are resolved the way git resolves them — the first cut
-     * matched lines by suffix and read `!build/composer.lock` as an ignore.
+     * .gitignore files are resolved the way git resolves them.
      *
      * @return list<string>
      */

@@ -13,11 +13,9 @@ use CiviKitchen\Ckconform\Reporter;
  * debt it was generated from, and a lower level makes the run look green while
  * whole classes of error are never asked about.
  *
- * phpstan.neon is NEON, not XML or JSON, so there is no structured parser to
- * reach for here — but the bash version grepped the raw file, which meant a
- * commented-out `level: 10` counted. Comments are stripped before matching, and
- * the level is matched as a whole token so `level: 100` is no longer mistaken
- * for level 10.
+ * phpstan.neon is NEON, so there is no structured parser to reach for here.
+ * Comments are stripped before matching, and the level is matched as a whole
+ * token so `level: 100` is not mistaken for level 10.
  */
 final class PhpstanConfigCheck implements Check
 {
@@ -72,13 +70,9 @@ final class PhpstanConfigCheck implements Check
     /**
      * scanFiles / scanDirectories entries that climb out of the repo with `..`.
      *
-     * One extension scanned `../sibling` for an interface a class implemented — a
-     * sibling checkout that is real on a developer machine and absent in CI and
-     * on every other machine, so phpstan had in fact never run there. The honest
-     * forms are a fixed container path (another scans
-     * /var/www/html/ext/org.civicoop.civirules) or no cross-repo type edge at
-     * all. This catches the `..` form before it reaches a red CI with a cryptic
-     * message.
+     * A `../sibling` scan path is real on a developer machine and absent in CI,
+     * so phpstan never runs there. The honest forms are a fixed container path
+     * (/var/www/html/ext/<key>) or no cross-repo type edge at all.
      *
      * @return list<string>
      */

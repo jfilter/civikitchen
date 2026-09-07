@@ -14,9 +14,7 @@ use CiviKitchen\Ckconform\Reporter;
  * commit checked in. A committed copy is stale by construction.
  *
  * Checked as both a tracked file of that exact name and a tracked directory
- * of that name anywhere in the tree, top-level or nested — matching the bash
- * predecessor's two `git ls-files` pathspecs: "$bad/" and a glob for $bad
- * nested under another directory.
+ * of that name anywhere in the tree, top-level or nested.
  */
 final class CommittedArtifactCheck implements Check
 {

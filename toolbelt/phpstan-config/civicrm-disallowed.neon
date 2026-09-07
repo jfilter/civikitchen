@@ -1,9 +1,6 @@
-# CiviCRM call sites that have modern, mandatory replacements — the bans that
-# used to live in the hand-written CiviKitchen.Legacy.NoLegacyCall sniff.
-#
-# Now spaze/phpstan-disallowed-calls config instead of sniff code: the rules are
-# the same, but phpstan resolves types, so a ban also holds through a variable
-# (`$class::value()`) and an alias, which a token matcher cannot see.
+# CiviCRM call sites that have modern, mandatory replacements, as
+# spaze/phpstan-disallowed-calls config rather than a sniff: phpstan resolves
+# types, so a ban also holds through a variable (`$class::value()`) and an alias.
 #
 # Shipped at /opt/civikitchen-phpstan/civicrm-disallowed.neon; a project opts in
 # with one `includes:` line (the template's phpstan.neon.dist has it).

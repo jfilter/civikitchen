@@ -160,8 +160,7 @@ final class DistPaths
     }
 
     /**
-     * One comma-separated policy value, reason stripped and whitespace removed
-     * — the same shape `ckrelease` read before this became the owner.
+     * One comma-separated policy value, reason stripped and whitespace removed.
      *
      * @return list<string>
      */

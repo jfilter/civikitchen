@@ -14,8 +14,7 @@ use CiviKitchen\Ckconform\Reporter;
  * or quick_form_type takes the whole admin page down: the generic form
  * (CRM_Admin_Form_Generic) passes the empty element type to QuickForm, which
  * throws "unregistered element" while BUILDING the page — a fatal on every
- * visit, invisible until someone opens the page. Found live in production
- * (an Array setting added for a feeder).
+ * visit, invisible until someone opens the page.
  *
  * The files are `return [...]` PHP with at most an ExtensionUtil `E::ts()`
  * dependency, so they can be evaluated outside CiviCRM with a stubbed
