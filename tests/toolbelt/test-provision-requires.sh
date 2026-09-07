@@ -250,6 +250,21 @@ if grep -q '^ext:download' "$CV_LOG"; then
 fi
 /bin/rm "$work/ext/fixture/civikitchen.yaml"
 
+# The release smoke test calls ck_resolve_requires as a plain statement under
+# set -e: an absent dependency is a status the resolver inspects, never an
+# error that may end the caller's shell before the install.
+write_release_pin 'dep-1.2.3.zip' "$digest"
+export CK_DEP_ARCHIVE_DIR="$work/staged"
+reset_site '[]'
+export -f ck_as_web sleep curl
+if ! bash -euo pipefail -c '. "$1"; ck_resolve_requires fixture' _ "$root/docker/runtime/provision.sh" >"$work/out" 2>"$work/err"; then
+  fail "ck_resolve_requires must survive a caller's set -e when the dependency is absent: $(cat "$work/err")"
+fi
+grep -q '^ext:enable org.example.dep' "$CV_LOG" \
+  || fail "the absent dependency was not installed under a caller's set -e"
+/bin/rm -rf "$work/ext/org.example.dep" "$work/ext/fixture/civikitchen.yaml"
+unset CK_DEP_ARCHIVE_DIR
+
 # No <requires> at all: just the enable.
 write_info ''
 reset_site '[]'

@@ -339,7 +339,7 @@ ck_install_staged_extension() {
 }
 
 ck_download_extension() {
-    local ext_spec="$1" version_constraint="${2:-}" ext_key="${1%%@*}" attempt source digest archive
+    local ext_spec="$1" version_constraint="${2:-}" ext_key="${1%%@*}" attempt source digest archive rc
     if [[ "${ext_spec}" == *@*#sha256=* ]]; then
         source="${ext_spec#*@}"
         digest="${source##*#sha256=}"
@@ -349,8 +349,10 @@ ck_download_extension() {
             # Timeouts, because three attempts only bound the job when each of
             # them returns: a stalled transfer would otherwise hang the boot.
             if curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-redirs 3 --max-filesize 134217728 --connect-timeout 20 --max-time 300 "${source}" -o "${archive}"; then
-                ck_install_pinned_archive "${archive}" "${ext_key}" "${digest}" "${version_constraint}"
-                case $? in
+                # `&& rc=0 || rc=$?` keeps a caller's `set -e` from exiting on the
+                # status this case inspects.
+                ck_install_pinned_archive "${archive}" "${ext_key}" "${digest}" "${version_constraint}" && rc=0 || rc=$?
+                case ${rc} in
                     0) rm -f "${archive}"; return 0 ;;
                     # Wrong bytes stay wrong: a retry would fetch them again.
                     2) rm -f "${archive}"; return 1 ;;
@@ -569,7 +571,7 @@ ck_assert_extension_version() {
 # are core or registry extensions cv resolves on enable.
 ck_resolve_requires() {
     local ext_key="$1" ext_dir="${2:-${CK_EXT_DIR}/$1}" required spec release version_constraint
-    local rel_repo rel_tag rel_asset rel_digest
+    local rel_repo rel_tag rel_asset rel_digest rc
     [[ -f "${ext_dir}/info.xml" ]] || return 0
     while IFS= read -r required; do
         [[ -z "${required}" ]] && continue
@@ -578,8 +580,10 @@ ck_resolve_requires() {
             || ! version_constraint="$(ck_extension_version "${ext_dir}" "${required}")"; then
             return 1
         fi
-        ck_extension_present "${required}"
-        case $? in
+        # `&& rc=0 || rc=$?`: 1 means absent, and a plain call under a
+        # caller's `set -e` would otherwise exit right here.
+        ck_extension_present "${required}" && rc=0 || rc=$?
+        case ${rc} in
             0)
                 if [[ -n "${version_constraint}" ]]; then
                     ck_assert_extension_version "${required}" "${version_constraint}" || return 1
