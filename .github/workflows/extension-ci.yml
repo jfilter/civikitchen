@@ -1602,13 +1602,12 @@ jobs:
       # already had.
       #
       # `--wait` is weaker on this boot than it looks: the image's health probe
-      # is `test -f .civikitchen-provisioned`, and the volume has just carried
-      # that marker across, so the container reports healthy as soon as it starts
-      # rather than when the entrypoint has finished. It costs nothing here —
-      # every step below talks to the stack through `docker compose exec`,
-      # nothing speaks HTTP, and the second boot's entrypoint only skips through
-      # its marker-gated bundles. Worth knowing before anything in this job is
-      # ever pointed at the web server.
+      # is the `.civikitchen-provisioned` marker plus an answering Apache, and
+      # the volume has just carried that marker across, so the container reports
+      # healthy as soon as Apache listens rather than when the entrypoint has
+      # finished. It costs nothing here — every step below talks to the stack
+      # through `docker compose exec`, and the second boot's entrypoint only
+      # skips through its marker-gated bundles.
       - name: Swap the core underneath the site
         run: |
           set -euo pipefail

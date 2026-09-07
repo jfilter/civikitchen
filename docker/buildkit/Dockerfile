@@ -356,9 +356,11 @@ EXPOSE 80
 # MariaDB + provisioning + Apache" — fast. With CIVIKITCHEN_PROFILE set, first
 # boot also clones + enables + seeds the profile (minutes, needs network) —
 # hence the generous start period. The entrypoint writes the provisioned
-# marker before handing off to Apache.
+# marker before handing off to Apache, so the check also asks Apache for any
+# HTTP answer.
 HEALTHCHECK --interval=10s --timeout=5s --start-period=600s --retries=18 \
-    CMD test -f /home/buildkit/.civikitchen-provisioned || exit 1
+    CMD test -f /home/buildkit/.civikitchen-provisioned \
+        && curl -s -o /dev/null http://localhost/ || exit 1
 
 ENTRYPOINT ["/home/buildkit/entrypoint.sh"]
 
@@ -415,11 +417,13 @@ RUN chmod +x /home/buildkit/entrypoint.sh
 EXPOSE 80
 
 # Readiness signal: the entrypoint writes this marker after the first-boot
-# install + provisioning complete, before handing off to Apache. The site
+# install + provisioning complete, before handing off to Apache — so the check
+# also asks Apache for any HTTP answer. The site
 # codebase is baked, so first boot is a fast `civibuild reinstall` (~60s) +
 # provisioning — but a CIVIKITCHEN_PROFILE apply on top (git clones + seeds)
 # can take minutes, hence the generous start period.
 HEALTHCHECK --interval=10s --timeout=5s --start-period=600s --retries=18 \
-    CMD test -f /home/buildkit/.civikitchen-provisioned || exit 1
+    CMD test -f /home/buildkit/.civikitchen-provisioned \
+        && curl -s -o /dev/null http://localhost/ || exit 1
 
 ENTRYPOINT ["/home/buildkit/entrypoint.sh"]
