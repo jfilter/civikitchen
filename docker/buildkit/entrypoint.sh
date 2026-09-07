@@ -72,13 +72,23 @@ if [[ ! -f "${MARKER_FILE}" ]]; then
     # the site databases. Refuse to wipe data that survived us: a sentinel
     # row written after every successful install marks the external DB as
     # carrying a civikitchen site.
-    if [[ "${CIVIKITCHEN_REINSTALL:-0}" != "1" ]] \
-        && ck internal database-sentinel-exists 2>/dev/null; then
-        echo "ERROR: this container is fresh, but the database at ${CIVICRM_DB_HOST} already holds a civikitchen site." >&2
-        echo "       Rebuilding the site would DROP those databases (your dev data)." >&2
-        echo "       Either set CIVIKITCHEN_REINSTALL=1 to rebuild anyway (drops the site DBs)," >&2
-        echo "       or remove the DB volume for a clean start (docker compose down -v)." >&2
-        exit 1
+    if [[ "${CIVIKITCHEN_REINSTALL:-0}" != "1" ]]; then
+        sentinel_rc=0
+        ck internal database-sentinel-exists || sentinel_rc=$?
+        case "${sentinel_rc}" in
+            0)
+                echo "ERROR: this container is fresh, but the database at ${CIVICRM_DB_HOST} already holds a civikitchen site." >&2
+                echo "       Rebuilding the site would DROP those databases (your dev data)." >&2
+                echo "       Either set CIVIKITCHEN_REINSTALL=1 to rebuild anyway (drops the site DBs)," >&2
+                echo "       or remove the DB volume for a clean start (docker compose down -v)." >&2
+                exit 1 ;;
+            1) ;;
+            *)
+                # "Could not tell" must not fall through to a reinstall that drops databases.
+                echo "ERROR: could not verify whether ${CIVICRM_DB_HOST} already holds a civikitchen site (exit ${sentinel_rc})." >&2
+                echo "       Fix the root credentials or grants first; CIVIKITCHEN_REINSTALL=1 skips this check." >&2
+                exit 1 ;;
+        esac
     fi
 
     echo "First run: installing ${CIVICRM_SITE_TYPE} site against ${CIVICRM_DB_HOST}..."

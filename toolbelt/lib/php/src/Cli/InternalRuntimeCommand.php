@@ -135,9 +135,20 @@ final class InternalRuntimeCommand implements Command
                 return $database->connect_errno ? 1 : 0;
             }
             if ($operation === 'database-sentinel-exists' && $arguments === []) {
-                $database = $this->rootDatabase();
+                // 0 = a site is recorded, 1 = none, 3 = could not tell. The caller
+                // drops databases on 1, so an unanswerable probe must not look like 1.
+                try {
+                    $database = $this->rootDatabase();
+                } catch (\RuntimeException $e) {
+                    fwrite(STDERR, $e->getMessage() . "\n");
+                    return self::SENTINEL_UNKNOWN;
+                }
                 $result = @$database->query('SELECT 1 FROM civikitchen_state.site_installed LIMIT 1');
-                return $result instanceof \mysqli_result && $result->num_rows > 0 ? 0 : 1;
+                $status = self::sentinelStatus($result, $database->errno);
+                if ($status === self::SENTINEL_UNKNOWN) {
+                    fwrite(STDERR, "could not read the install sentinel: {$database->error}\n");
+                }
+                return $status;
             }
             if ($operation === 'database-sentinel-write' && $arguments === []) {
                 $database = $this->rootDatabase();
@@ -171,6 +182,22 @@ final class InternalRuntimeCommand implements Command
             fwrite(STDERR, $e->getMessage() . "\n");
             return 1;
         }
+    }
+
+    public const SENTINEL_PRESENT = 0;
+    public const SENTINEL_ABSENT = 1;
+    public const SENTINEL_UNKNOWN = 3;
+
+    /**
+     * Only "no such database" (1049) and "no such table" (1146) mean the sentinel
+     * was never written; any other failed query is an unanswered question.
+     */
+    public static function sentinelStatus(\mysqli_result|bool $result, int $errno): int
+    {
+        if ($result instanceof \mysqli_result) {
+            return $result->num_rows > 0 ? self::SENTINEL_PRESENT : self::SENTINEL_ABSENT;
+        }
+        return in_array($errno, [1049, 1146], true) ? self::SENTINEL_ABSENT : self::SENTINEL_UNKNOWN;
     }
 
     private function rootDatabase(): \mysqli

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use CiviKitchen\Toolbelt\Cli\Application;
 use CiviKitchen\Toolbelt\Cli\CompatibilityCommand;
 use CiviKitchen\Toolbelt\Cli\FormatCommand;
+use CiviKitchen\Toolbelt\Cli\InternalRuntimeCommand;
 use CiviKitchen\Toolbelt\Cli\ReleaseCommand;
 use CiviKitchen\Toolbelt\Process\Runner;
 use CiviKitchen\Toolbelt\Repository\Files;
@@ -59,6 +60,18 @@ final class SharedPhpTest extends TestCase
         }
         self::assertSame(2, $application->run(['internal', 'unknown-operation'], 'ck'));
         self::assertSame(2, $application->run(['definitely-unknown'], 'ck'));
+    }
+
+    public function testSentinelProbeTellsAbsentFromUnanswerable(): void
+    {
+        // Only "no such database" and "no such table" mean the sentinel was never written.
+        self::assertSame(InternalRuntimeCommand::SENTINEL_ABSENT, InternalRuntimeCommand::sentinelStatus(false, 1049));
+        self::assertSame(InternalRuntimeCommand::SENTINEL_ABSENT, InternalRuntimeCommand::sentinelStatus(false, 1146));
+        // Access denied, lost connection, or no errno at all: the question is open.
+        self::assertSame(InternalRuntimeCommand::SENTINEL_UNKNOWN, InternalRuntimeCommand::sentinelStatus(false, 1142));
+        self::assertSame(InternalRuntimeCommand::SENTINEL_UNKNOWN, InternalRuntimeCommand::sentinelStatus(false, 2013));
+        self::assertSame(InternalRuntimeCommand::SENTINEL_UNKNOWN, InternalRuntimeCommand::sentinelStatus(false, 0));
+        self::assertNotSame(InternalRuntimeCommand::SENTINEL_ABSENT, InternalRuntimeCommand::SENTINEL_UNKNOWN);
     }
 
     public function testRunnerCapturesRedirectsAndPassesThroughProcesses(): void
