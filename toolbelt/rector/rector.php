@@ -64,9 +64,13 @@ else {
 
 // Core on the autoloader, the same way phpstanBootstrap.php does it: without it
 // rector's type inference is blind wherever a core symbol is involved — which
-// silently costs the off-the-shelf sets, not just our own rules.
+// costs the off-the-shelf sets, not just our own rules. So a missing core is an
+// error, not a quieter run; ckmodernize derives CIVICRM_CORE_DIR from cv.
 $coreDir = getenv('CIVICRM_CORE_DIR') ?: '/var/www/html/core';
-$bootstrapFiles = is_file($coreDir . '/CRM/Core/ClassLoader.php') ? [__DIR__ . '/bootstrap.php'] : [];
+if (!is_file($coreDir . '/CRM/Core/ClassLoader.php')) {
+  throw new RuntimeException("no CiviCRM core at $coreDir (set CIVICRM_CORE_DIR)");
+}
+$bootstrapFiles = [__DIR__ . '/bootstrap.php'];
 
 return RectorConfig::configure()
   ->withBootstrapFiles($bootstrapFiles)

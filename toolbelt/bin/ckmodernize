@@ -106,6 +106,17 @@ if [ "${do_rector}" -eq 1 ]; then
     [ "${#paths[@]}" -eq 0 ] && paths=(".")
   fi
 
+  # rector's type inference needs core on the autoloader. The default path
+  # only fits the standalone layout; every other flavour answers through cv.
+  if [ -z "${CIVICRM_CORE_DIR:-}" ]; then
+    CIVICRM_CORE_DIR="$(cv path -d '[civicrm.root]' 2>/dev/null || true)"
+    export CIVICRM_CORE_DIR
+  fi
+  if [ ! -f "${CIVICRM_CORE_DIR}/CRM/Core/ClassLoader.php" ]; then
+    echo "ckmodernize: no CiviCRM core found (cv path -d '[civicrm.root]' gave '${CIVICRM_CORE_DIR}'); set CIVICRM_CORE_DIR" >&2
+    exit 1
+  fi
+
   # A project's own rector.php wins; otherwise the bundled CiviKitchen config.
   config=("--config" "${DEFAULT_CONFIG}")
   [ -f rector.php ] && config=()
