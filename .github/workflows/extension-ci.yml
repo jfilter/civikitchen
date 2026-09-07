@@ -397,7 +397,7 @@ jobs:
               exit 1
               ;;
           esac
-          curl -fsSL -o "$RUNNER_TEMP/osv-scanner" \
+          curl -fsSL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/osv-scanner" \
             "https://github.com/google/osv-scanner/releases/download/$CK_OSV_VERSION/$asset"
           echo "$sha  $RUNNER_TEMP/osv-scanner" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/osv-scanner"
@@ -857,6 +857,10 @@ jobs:
           fi
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data -e "CK_DEFAULT_CONFIG=$defaults" app bash -c \
             "cd /var/www/html/ext/$CK_EXT_KEY && cklint --all && ckconform && ckcivix --check"
+      # Most phpcs and formatter findings are one local command away.
+      - name: How to fix lint findings locally
+        if: failure()
+        run: echo "::notice::cklint --fix and ckfmt (inside the civikitchen image) auto-fix most phpcs and formatting findings; ckcivix --update brings the civix scaffold forward."
 
       # Formatting gate (mago for PHP, oxfmt for JS/TS). Hard by design: the
       # bundled mago baseline is tuned so its output is clean under the phpcs
