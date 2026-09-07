@@ -23,7 +23,7 @@ case "$(uname -s)/$(uname -m)" in
 esac
 
 tarball="$RUNNER_TEMP/trivy_${version}_${asset}.tar.gz"
-curl -fsSL -o "$tarball" \
+curl -fsSL --retry 3 --retry-all-errors -o "$tarball" \
   "https://github.com/aquasecurity/trivy/releases/download/v${version}/trivy_${version}_${asset}.tar.gz"
 echo "$sha  $tarball" | sha256sum -c -
 tar -xzf "$tarball" -C "$RUNNER_TEMP" trivy
