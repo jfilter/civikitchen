@@ -13,7 +13,7 @@
  * retrievals rather than under-reporting the 'String' ones, which are the
  * dangerous majority. See docs/extension-standards.md for how to dismiss one.
  *
- * Signatures verified against CiviCRM 6.17.2 (CRM/Utils/Request.php).
+ * Signatures verified against CiviCRM 6.18.0 (CRM/Utils/Request.php).
  */
 class CRM_Utils_Request {
 

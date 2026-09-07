@@ -10,7 +10,7 @@ namespace CiviKitchen\PHPStan;
  * Regenerate with:
  *   php tools/gen-core-namespace-catalog.php <core-dir>
  *
- * Generated from CiviCRM 6.17.2. The boundary rule in ArchitectureTest
+ * Generated from CiviCRM 6.18.0. The boundary rule in ArchitectureTest
  * allows these prefixes (plus the extension's own); every other CRM_/Civi\
  * symbol is another extension's internals. Core-shipped extensions (ext/)
  * are included — SearchKit, Afform etc. count as core.
@@ -23,7 +23,7 @@ final class CoreNamespaceCatalog
      * CI reads this to fetch the matching source tree, so the drift gate
      * compares against the exact release rather than a moving branch.
      */
-    public const CORE_VERSION = '6.17.2';
+    public const CORE_VERSION = '6.18.0';
 
     /**
      * X in CRM_X_* / CRM_X owned by core.
@@ -50,16 +50,17 @@ final class CoreNamespaceCatalog
      * @var list<string>
      */
     public const CIVI_NAMESPACES = [
-        'API', 'ActionSchedule', 'Afform', 'AfformAdmin', 'AfformLoginToken',
-        'AfformReCaptcha2', 'Angular', 'Api4', 'Authx', 'BAO',
-        'CCase', 'ChartKit', 'Checkout', 'CiUtil', 'Codeception',
-        'ComposerTasks', 'Connect', 'Contribute', 'Core', 'Crypto',
-        'Custom', 'Esm', 'FlexMailer', 'I18n', 'Iframe',
-        'Import', 'Install', 'LegacyFinder', 'Managed', 'Membership',
-        'OAuth', 'Oembed', 'Order', 'Payment', 'Pipe',
-        'Postbox', 'Queue', 'Report', 'Riverlea', 'Schema',
-        'Search', 'Standalone', 'Test', 'Token', 'UserDashboard',
-        'UserJob', 'Util', 'Visual', 'WorkflowMessage',
+        'API', 'ActionSchedule', 'AdminUI', 'Afform', 'AfformAdmin',
+        'AfformLoginToken', 'AfformReCaptcha2', 'Angular', 'Api4', 'Authx',
+        'BAO', 'CCase', 'ChartKit', 'Checkout', 'CiUtil',
+        'Codeception', 'ComposerTasks', 'Connect', 'Contribute', 'Core',
+        'Crypto', 'Custom', 'Esm', 'FlexMailer', 'I18n',
+        'Iframe', 'Import', 'Install', 'Kcfinder', 'LegacyFinder',
+        'Managed', 'Membership', 'OAuth', 'Oembed', 'Order',
+        'Payment', 'Pipe', 'Postbox', 'Queue', 'Report',
+        'Riverlea', 'Schema', 'Search', 'Smarty', 'Standalone',
+        'Test', 'Token', 'UserDashboard', 'UserJob', 'Util',
+        'Visual', 'WorkflowMessage',
     ];
 
     /**
@@ -81,11 +82,11 @@ final class CoreNamespaceCatalog
         'financialacls', 'greenwich', 'iframe',
         'legacybatchentry', 'legacycustomsearches', 'legacydedupefinder',
         'legacyprofiles', 'message_admin', 'oauth-client',
-        'oembed', 'org.civicrm.afform', 'org.civicrm.afform-html',
-        'org.civicrm.afform-mock', 'org.civicrm.afform_admin', 'org.civicrm.flexmailer',
-        'org.civicrm.search_kit', 'payflowpro', 'postbox',
-        'recaptcha', 'riverlea', 'scheduled_communications',
-        'search_kit_reports', 'sequentialcreditnotes', 'standaloneusers',
-        'tellafriend', 'user_dashboard',
+        'oembed', 'org.civicrm.afform', 'org.civicrm.afform-mock',
+        'org.civicrm.afform_admin', 'org.civicrm.flexmailer', 'org.civicrm.search_kit',
+        'payflowpro', 'postbox', 'recaptcha',
+        'riverlea', 'scheduled_communications', 'search_kit_reports',
+        'sequentialcreditnotes', 'standaloneusers', 'tellafriend',
+        'user_dashboard',
     ];
 }

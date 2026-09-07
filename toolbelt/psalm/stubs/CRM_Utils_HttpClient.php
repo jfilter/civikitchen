@@ -15,7 +15,7 @@
  *
  * Guzzle itself is stubbed next door in Guzzle.php.
  *
- * Signatures verified against CiviCRM 6.17.2 (CRM/Utils/HttpClient.php).
+ * Signatures verified against CiviCRM 6.18.0 (CRM/Utils/HttpClient.php).
  */
 
 class CRM_Utils_HttpClient {

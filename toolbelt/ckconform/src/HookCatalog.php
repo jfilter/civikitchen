@@ -10,7 +10,7 @@ namespace CiviKitchen\Ckconform;
  * Regenerate with:
  *   php tools/gen-hook-catalog.php <core-dir>
  *
- * Generated from CiviCRM 6.17.2. Deprecated entries carry the core line they
+ * Generated from CiviCRM 6.18.0. Deprecated entries carry the core line they
  * were derived from, so a surprising one can be audited without rerunning the
  * generator. Hooks that no longer exist, and hooks deprecated only in the dev
  * docs, are NOT here — see HookDispatchNameCheck for those and for why.
@@ -24,7 +24,7 @@ final class HookCatalog
      * always compares against the exact release rather than a moving branch.
      * Bumping core is therefore deliberate: regenerate, and this moves with it.
      */
-    public const CORE_VERSION = '6.17.2';
+    public const CORE_VERSION = '6.18.0';
 
     /**
      * Hook suffixes CiviCRM core currently dispatches.
@@ -69,15 +69,15 @@ final class HookCatalog
      * @var array<string, string>
      */
     public const DEPRECATED = [
-        // CRM/Utils/Hook.php:1602
+        // CRM/Utils/Hook.php:1594
         'dupeQuery' => 'deprecated since 5.72',
-        // CRM/Utils/Hook.php:1710
+        // CRM/Utils/Hook.php:1702
         'import' => 'deprecated',
-        // CRM/Utils/Hook.php:1500
+        // CRM/Utils/Hook.php:1492
         'optionValues' => 'deprecated in favor of hook_civicrm_fieldOptions',
-        // CRM/Utils/Hook.php:992
+        // CRM/Utils/Hook.php:984
         'tokenValues' => 'deprecated since 5.71 will be removed sometime after all core uses are fully removed.',
-        // CRM/Utils/Hook.php:940
+        // CRM/Utils/Hook.php:932
         'tokens' => 'deprecated — core logs a deprecation warning when it fires',
     ];
 }
