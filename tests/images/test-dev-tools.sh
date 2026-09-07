@@ -52,16 +52,23 @@ done
 # The unified commands depend on files copied outside /usr/local/bin. Exercise
 # them in-image so a missing schema/implementation layer cannot pass the host
 # dispatcher tests and then ship broken.
-if ck help 2>&1 | grep -q 'ck scenario'; then ok "ck dispatcher"; else fail "ck dispatcher"; fi
-if ck profile validate /usr/local/share/civikitchen/profiles/verein >/dev/null 2>&1; then
+# Each check keeps what the command printed and shows it on failure — a
+# one-off miss on a CI runner is undiagnosable from "✗" alone.
+ck_out=$(ck help 2>&1) || true
+if grep -q 'ck scenario' <<<"${ck_out}"; then ok "ck dispatcher"; else fail "ck dispatcher"; echo "      ${ck_out}"; fi
+ck_out=$(ck profile validate /usr/local/share/civikitchen/profiles/verein 2>&1) && ck_rc=0 || ck_rc=$?
+if [ "${ck_rc}" -eq 0 ]; then
     ok "ck profile validates a bundled profile"
 else
     fail "ck profile validates a bundled profile"
+    echo "      exit ${ck_rc}: ${ck_out}"
 fi
-if ck scenario --help 2>&1 | grep -q 'validate|plan|compose'; then
+ck_out=$(ck scenario --help 2>&1) && ck_rc=0 || ck_rc=$?
+if grep -q 'validate|plan|compose' <<<"${ck_out}"; then
     ok "ck scenario implementation boots"
 else
     fail "ck scenario implementation boots"
+    echo "      exit ${ck_rc}: ${ck_out}"
 fi
 
 # ---------------------------------------------------------------------------
