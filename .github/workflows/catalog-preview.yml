@@ -42,3 +42,32 @@ jobs:
           LATEST: ${{ steps.latest.outputs.latest }}
           PINNED: ${{ steps.latest.outputs.pinned }}
         run: .github/scripts/catalog-diff.sh
+
+  notify-scheduled-failure:
+    # The cron run fails on purpose when a bump is due — and by accident when
+    # the resolve or regenerate step breaks. Either way nobody opens a job
+    # summary, so the failure gets an issue; push-triggered runs are visible
+    # on the commit already.
+    needs: [preview]
+    if: github.event_name == 'schedule' && failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+
+    steps:
+      - name: Checkout (for the notify script)
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Open or bump the catalog-preview issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          LABEL: catalog-drift
+          LABEL_DESCRIPTION: Catalog preview failed — bump due or job broken
+          TITLE: Catalog preview is failing
+          BODY: "The weekly catalog preview failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n\nEither the latest CiviCRM release would change a catalog (time to regenerate and bump the pins, see the job summary) or the preview job itself broke. Both stay invisible without this issue."
+          AGAIN: "The catalog preview failed again: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: .github/scripts/notify-scheduled-failure.sh
