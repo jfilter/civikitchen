@@ -106,7 +106,7 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-profiles test-scenario test-parity \
+.PHONY: help doctor test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-parity \
 	test-compose-isolation test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
 	test-ck-headless test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
 	test-database-matrix test-demo-basic-auth test-release-retag \
@@ -128,7 +128,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-database-matrix test-demo-basic-auth test-release-retag test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-database-matrix test-demo-basic-auth test-release-retag test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -171,6 +171,9 @@ test-ckcivix: ## ckcivix current/behind/missing/update checks (fake civix)
 
 test-ck: ## Unified ck dispatcher and compatibility aliases
 	bash tests/toolbelt/test-ck.sh
+
+test-composer-deps: ## ckdeps ignore patterns: core-provided classes only
+	php tests/toolbelt/test-composer-deps.php
 
 test-profiles: ## Profile schema, external resolution, credentials modes and file permissions
 	php tests/profiles/test-credentials.php

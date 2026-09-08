@@ -17,8 +17,17 @@ use ShipMonk\ComposerDependencyAnalyser\Config\ErrorType;
  *
  * A repo with more to say ships its own composer-dependency-analyser.php.
  */
+// The Symfony components below are the ones core's own composer.json ships.
+// An extension that decorates the container or subscribes to an event types
+// against them and must not declare them: a second copy of the container core
+// already booted is not a dependency. Enumerated rather than a blanket
+// `Symfony\`, so a component core does not ship stays reportable.
 $configuration = (new Configuration())
-  ->ignoreUnknownClassesRegex('~^(CRM_|Civi(?:\\\\|$)|CiviCRM|CiviMix\\\\|GuzzleHttp\\\\|Psr\\\\)~')
+  ->ignoreUnknownClassesRegex(
+    '~^(CRM_|Civi(?:\\\\|$)|CiviCRM|CiviMix\\\\|GuzzleHttp\\\\|Psr\\\\'
+    . '|Symfony\\\\Component\\\\(?:Config|DependencyInjection|EventDispatcher|Filesystem|Finder|Process|VarDumper)\\\\'
+    . '|Symfony\\\\Contracts\\\\)~',
+  )
   ->ignoreUnknownFunctionsRegex('~^(civicrm_|civi|CiviMix\\\\)~')
   // Paths are validated against the CWD, so a shared config cannot name
   // directories (node_modules) that only some repos have.

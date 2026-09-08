@@ -296,7 +296,11 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
 - `ckdeps` checks `composer.json` against what the code really uses (shadow /
   unused / dev-in-prod dependencies). Extensions depending on core alone pass
   silently — CiviCRM is not a composer dependency, and the bundled config
-  teaches the analyser exactly that.
+  teaches the analyser exactly that, down to the Guzzle, PSR and Symfony
+  packages core ships: an extension that decorates the container types against
+  them and must not require a second copy. A repo shipping its own
+  `composer-dependency-analyser.php` replaces the bundled config rather than
+  extending it, so it has to restate those patterns.
 - `cksmarty` compiles every `.tpl` in the repo — and the bodies of the managed
   MessageTemplates the extension installed — with the real `CRM_Core_Smarty`,
   in the booted CI stack. It is a step in the normal `ci` job, not an opt-in:
