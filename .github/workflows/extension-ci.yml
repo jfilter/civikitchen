@@ -176,10 +176,12 @@ on:
         default: ''
       sibling_repo:
         description: >-
-          Second extension repo (`owner/repo`) checked out to
-          .civikitchen-siblings/ and mounted read-only beside this one, under
-          the key from ITS info.xml — for extensions implementing a sibling's
-          interfaces. Mounted as-is (no composer install there); private
+          Comma- or newline-separated extension repos (`owner/repo`), each
+          checked out to .civikitchen-siblings/ and mounted read-only beside
+          this one under the key from ITS info.xml — for extensions
+          implementing a sibling's interfaces. Enabled LEFT TO RIGHT in list
+          order before this extension, so a sibling another sibling requires
+          comes first. Mounted as-is (no composer install there); a private
           sibling needs the composer_app_* secrets. Empty mounts nothing.
         type: string
         default: ''
@@ -544,10 +546,12 @@ jobs:
         run: |
           [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
             || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
-          # Empty is the default and means "no sibling"; anything else has to
-          # be owner/repo, because it becomes a checkout target and a path.
-          [[ -z "$CK_SIBLING_REPO" || "$CK_SIBLING_REPO" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
-            || { echo "invalid sibling_repo (expected owner/repo): $CK_SIBLING_REPO" >&2; exit 1; }
+          # Empty is the default and means "no sibling"; every entry of the
+          # list has to be owner/repo — it becomes a clone target and a path.
+          for repo in ${CK_SIBLING_REPO//,/ }; do
+            [[ "$repo" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
+              || { echo "invalid sibling_repo entry (expected owner/repo): $repo" >&2; exit 1; }
+          done
           [[ -z "$CK_POLICY_DEFAULTS" || "$CK_POLICY_DEFAULTS" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
             || { echo "invalid policy_defaults (expected owner/repo): $CK_POLICY_DEFAULTS" >&2; exit 1; }
           [[ -z "$CK_EXTRA_PHPUNIT_CONFIG" || \
@@ -687,40 +691,44 @@ jobs:
           # private packages over HTTPS. Nothing here writes with it.
           permission-contents: read
 
-      # Two steps rather than an expression: GitHub's expression language has
-      # no split(), and what the checkout needs is the repo name — the part
-      # after the slash — as a path.
-      - name: Resolve the sibling checkout path
-        id: sibling
-        if: ${{ inputs.sibling_repo != '' }}
-        env:
-          CK_SIBLING_REPO: ${{ inputs.sibling_repo }}
-        run: |
-          set -euo pipefail
-          echo "path=.civikitchen-siblings/${CK_SIBLING_REPO##*/}" >> "$GITHUB_OUTPUT"
-
-      # Inside the workspace, because actions/checkout refuses to write
-      # anywhere else — and the LEADING DOT is load-bearing, twice over:
+      # Inside the workspace, like actions/checkout would — and the LEADING
+      # DOT of the directory is load-bearing, twice over:
       #   * CiviCRM's extension scanner (CRM_Utils_File::findFiles, via
       #     CRM_Extension_Container_Basic) skips any directory whose name
-      #     starts with a dot. Without that, the sibling would be discovered a
+      #     starts with a dot. Without that, a sibling would be discovered a
       #     second time *through the extension's own mount* and the same key
       #     would resolve to two paths.
       #   * cklint ignores `.civikitchen-siblings/` explicitly — phpcs has no
       #     such rule of its own, and a project phpcs.xml.dist scoped to
       #     `<file>.</file>` would otherwise lint the sibling's code.
       #
-      # token is passed unconditionally: without an app the output is empty
-      # and actions/checkout falls back to the calling workflow's token, which
-      # is the right behaviour for a public sibling.
-      - name: Check out the sibling extension
+      # `git clone` in a loop rather than actions/checkout: an action cannot
+      # run once per list entry, and keeping the action for the first repo
+      # while cloning the rest would be two implementations of one step.
+      #
+      # The token is used unconditionally: without an app it is the calling
+      # workflow's token, which is the right credential for a public sibling.
+      - name: Check out the sibling extensions
+        id: siblings
         if: ${{ inputs.sibling_repo != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-        with:
-          persist-credentials: false
-          repository: ${{ inputs.sibling_repo }}
-          token: ${{ steps.app.outputs.token || github.token }}
-          path: ${{ steps.sibling.outputs.path }}
+        env:
+          CK_SIBLING_REPO: ${{ inputs.sibling_repo }}
+          CK_SIBLING_TOKEN: ${{ steps.app.outputs.token || github.token }}
+        run: |
+          set -euo pipefail
+          # `git -c` keeps the credential in this process: unlike a token in
+          # the clone URL it never reaches the sibling's .git/config. Never
+          # echoed either — base64 defeats the runner's secret masking.
+          header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$CK_SIBLING_TOKEN" | base64 | tr -d '\n')"
+          paths=""
+          for repo in ${CK_SIBLING_REPO//,/ }; do
+            dir=".civikitchen-siblings/${repo##*/}"
+            git -c "http.https://github.com/.extraheader=$header" \
+              clone --quiet --depth 1 "https://github.com/$repo" "$dir"
+            paths="${paths:+$paths }$dir"
+          done
+          echo "checked out siblings: $paths"
+          echo "paths=$paths" >> "$GITHUB_OUTPUT"
 
       # The organisation's default civikitchen.yaml, next to the sibling for the
       # same two reasons (dot-prefixed: invisible to the extension scanner and
@@ -735,7 +743,7 @@ jobs:
           path: .civikitchen-siblings/policy
 
       # The CI compose file is template-managed (ckinit checks it), so the
-      # sibling cannot be written into it — the same bind this job's Playwright
+      # siblings cannot be written into it — the same bind this job's Playwright
       # counterpart is in, and the same way out: a compose override written
       # here, in $RUNNER_TEMP, layered on top for `up` only.
       #
@@ -747,56 +755,65 @@ jobs:
       #     value REPLACES the base file's for that key, it does not append to
       #     it. So CIVIKITCHEN_ENABLE_EXTENSIONS has to be written out in full,
       #     including the extension the template file already lists.
-      # The sibling comes FIRST in that list: provision.sh enables the keys
-      # left to right, and the extension that declares the requirement should
-      # meet it already satisfied.
+      # The siblings come FIRST in that list, in input order: provision.sh
+      # enables the keys left to right, and the extension that declares the
+      # requirement should meet it already satisfied. A sibling required by
+      # another sibling therefore has to be listed before it.
       #
       # Absolute host paths, because compose resolves relative ones against the
       # project directory — the directory of the FIRST -f file, i.e. .docker/,
       # not the workspace this override was written from.
       #
-      # Read-only and as is: no composer install runs in the sibling. If it
-      # ships no vendor/, CIVIKITCHEN_AUTO_COMPOSER logs a warning — not a
+      # Read-only and as is: no composer install runs in the siblings. One that
+      # ships no vendor/ makes CIVIKITCHEN_AUTO_COMPOSER log a warning — not a
       # failed boot.
-      - name: Compose override — mount and enable the sibling
+      - name: Compose override — mount and enable the siblings
         if: ${{ inputs.sibling_repo != '' }}
         env:
-          CK_SIBLING_DIR: ${{ steps.sibling.outputs.path }}
+          CK_SIBLING_DIRS: ${{ steps.siblings.outputs.paths }}
         run: |
           set -euo pipefail
-          info="$GITHUB_WORKSPACE/$CK_SIBLING_DIR/info.xml"
-          [ -f "$info" ] \
-            || { echo "sibling_repo: no info.xml in $CK_SIBLING_DIR — that repo is not a CiviCRM extension" >&2; exit 1; }
-          # The extension KEY, read from the sibling's own info.xml rather than
-          # taken from the repo name or asked for as a second input: it is the
-          # name CiviCRM registers the extension under, the name `cv ext:enable`
-          # expects, and the directory a consuming phpstan.neon points its
-          # scanDirectories at. A repo name is none of those and is free to
-          # differ. Reading it costs one step and cannot go stale.
-          # Parsed as XML, not with a tag-shaped regex: an attribute order or a
-          # root element split over two lines is legal and would silently yield
-          # an empty key. Same reader as the toolbelt's ck_xml_field — inline,
-          # because this runs on the bare runner where the toolbelt is not on
-          # PATH. php is preinstalled on the GitHub-hosted images.
-          # shellcheck disable=SC2016  # the $vars belong to PHP, not the shell.
-          sibling_key=$(php -r '
-            libxml_use_internal_errors(TRUE);
-            $xml = simplexml_load_file($argv[1]);
-            if ($xml === FALSE) { fwrite(STDERR, "cannot parse {$argv[1]}\n"); exit(2); }
-            echo trim((string) $xml["key"]);
-          ' "$info")
-          [[ "$sibling_key" =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]] \
-            || { echo "sibling_repo: could not read a usable extension key from $CK_SIBLING_DIR/info.xml (got: '$sibling_key')" >&2; exit 1; }
-          echo "sibling extension: $sibling_key (from $CK_SIBLING_DIR)"
+          mounts=""
+          keys=""
+          for dir in $CK_SIBLING_DIRS; do
+            info="$GITHUB_WORKSPACE/$dir/info.xml"
+            [ -f "$info" ] \
+              || { echo "sibling_repo: no info.xml in $dir — that repo is not a CiviCRM extension" >&2; exit 1; }
+            # The extension KEY, read from the sibling's own info.xml rather
+            # than taken from the repo name or asked for as a second input: it
+            # is the name CiviCRM registers the extension under, the name
+            # `cv ext:enable` expects, and the directory a consuming
+            # phpstan.neon points its scanDirectories at. A repo name is none
+            # of those and is free to differ. It cannot go stale.
+            # Parsed as XML, not with a tag-shaped regex: an attribute order or
+            # a root element split over two lines is legal and would silently
+            # yield an empty key. Same reader as the toolbelt's ck_xml_field —
+            # inline, because this runs on the bare runner where the toolbelt
+            # is not on PATH. php is preinstalled on the GitHub-hosted images.
+            # shellcheck disable=SC2016  # the $vars belong to PHP, not the shell.
+            sibling_key=$(php -r '
+              libxml_use_internal_errors(TRUE);
+              $xml = simplexml_load_file($argv[1]);
+              if ($xml === FALSE) { fwrite(STDERR, "cannot parse {$argv[1]}\n"); exit(2); }
+              echo trim((string) $xml["key"]);
+            ' "$info")
+            [[ "$sibling_key" =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]] \
+              || { echo "sibling_repo: could not read a usable extension key from $dir/info.xml (got: '$sibling_key')" >&2; exit 1; }
+            echo "sibling extension: $sibling_key (from $dir)"
+            mounts="$mounts      - $GITHUB_WORKSPACE/$dir:/var/www/html/ext/$sibling_key:ro"$'\n'
+            keys="${keys:+$keys,}$sibling_key"
+          done
           override="$RUNNER_TEMP/civikitchen-sibling-override.yml"
-          cat > "$override" <<YAML
-          services:
-            app:
-              volumes:
-                - $GITHUB_WORKSPACE/$CK_SIBLING_DIR:/var/www/html/ext/$sibling_key:ro
-              environment:
-                CIVIKITCHEN_ENABLE_EXTENSIONS: "$sibling_key,$CK_EXT_KEY"
-          YAML
+          # Assembled line by line, not from one heredoc: the mount list has as
+          # many entries as the input had repos.
+          {
+            echo "services:"
+            echo "  app:"
+            echo "    volumes:"
+            printf '%s' "$mounts"
+            echo "    environment:"
+            echo "      CIVIKITCHEN_ENABLE_EXTENSIONS: \"$keys,$CK_EXT_KEY\""
+          } > "$override"
           echo "CK_SIBLING_OVERRIDE=$override" >> "$GITHUB_ENV"
 
       - name: Composer install (private packages over HTTPS)
