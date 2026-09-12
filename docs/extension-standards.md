@@ -991,7 +991,7 @@ to off; a caller that sets neither gets exactly the run it has today.
 | Input / secret | What it adds |
 |---|---|
 | `composer_install` | `composer install --no-interaction --no-progress` on the runner, before the stack boots. |
-| `sibling_repo` | `owner/repo` of a second extension: checked out to `.civikitchen-siblings/<repo>` and bind-mounted read-only into the stack, which also enables it. |
+| `sibling_repo` | Comma- or newline-separated `owner/repo` list of further extensions: each checked out to `.civikitchen-siblings/<repo>` and bind-mounted read-only into the stack, which also enables them — left to right, before this extension. |
 | `composer_app_repositories` | Comma- or newline-separated repository names within the caller's owner. Required with the App secrets and scopes the minted token to exactly these private dependencies. |
 | `composer_app_id`, `composer_app_private_key` (secrets) | A GitHub App with `contents: read`, installed on the private dependency repos. The workflow mints a short-lived installation token restricted by `composer_app_repositories` and uses it for both the composer install and the sibling checkout. |
 
@@ -1012,7 +1012,10 @@ strictly `--no-dev`, so test-only packages never enter the shipped archive.
 **`sibling_repo`** is for the extension that implements another extension's
 interfaces: the classes must exist at boot (`cv ext:enable` wants the declared
 requirement present), and `phpstan` and the test bootstrap resolve them from
-the sibling's ext directory. The mount target is the sibling's **extension
+the sibling's ext directory. It takes a **list** — comma- or newline-separated,
+like `composer_app_repositories` — and enables the siblings **left to right**
+before this extension, so a sibling that another sibling requires has to be
+listed before it. The mount target is each sibling's **extension
 key**, read from its `info.xml` — not its repo name, which is free to differ
 and is not what CiviCRM registers it under. That is the directory the managed
 `phpstanBootstrap.php` autoloads it from, provided the sibling is also in
@@ -1023,12 +1026,12 @@ the sibling under `.civikitchen-siblings/<key>` on the runner, so using the
 sibling's classes directly is allowed rather than reported as reaching into
 another extension's internals.
 
-The sibling is mounted **as is**, read-only: no `composer install` runs in it.
+Each sibling is mounted **as is**, read-only: no `composer install` runs in it.
 A sibling that keeps its own `vendor/` out of git is not supported yet — say
 so on the issue rather than working around it.
 
-The checkout lands *inside* your checkout (`actions/checkout` cannot write
-outside the workspace) but is not treated as your code: `cklint` ignores
+The checkouts land *inside* your checkout (the workspace is the only place a
+runner checkout may write) but are not treated as your code: `cklint` ignores
 `.civikitchen-siblings/`, and `ckconform` reads tracked files only. Nothing to
 add to your `.gitignore` — the directory only ever exists on a runner.
 
@@ -1044,6 +1047,16 @@ jobs:
     secrets:
       composer_app_id: ${{ secrets.COMPOSER_APP_ID }}
       composer_app_private_key: ${{ secrets.COMPOSER_APP_PRIVATE_KEY }}
+```
+
+Two siblings, the required one first — a YAML block scalar keeps one repo per
+line, and a single-line `myorg/base, myorg/othersibling` is the same input:
+
+```yaml
+    with:
+      sibling_repo: |
+        myorg/base
+        myorg/othersibling
 ```
 
 Name the two secrets you pass; do **not** write `secrets: inherit`. Inherit

@@ -17,7 +17,7 @@ jobs:
 ```
 
 That suite runs after the standard headless coverage suite and reuses the same
-materialized Composer dependencies, optional sibling checkout, and container.
+materialized Composer dependencies, optional sibling checkouts, and container.
 
 All jobs resolve their runner in the same order:
 
