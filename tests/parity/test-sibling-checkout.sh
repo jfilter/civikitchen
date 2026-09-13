@@ -169,6 +169,13 @@ for pin in "v1.0.0=tagged" "topic=branched" "$pinned_sha=tagged" "=moved-on"; do
     || fail "pinned sibling paths output wrong: $(cat "$ws/github_output")"
 done
 
+# A commit the remote cannot serve: git's own "couldn't find remote ref" says
+# nothing about which input was wrong.
+run_real unreachable-sha "org/pinned@$(printf 'd%.0s' {1..40})"
+[ "$rc" = 1 ] || fail "unfetchable pinned commit accepted (rc=$rc): $(cat "$out")"
+grep -q "is not reachable from any branch or tag" "$out" \
+  || fail "unfetchable pinned commit: unclear message: $(cat "$out")"
+
 # Called from a job whose steps run somewhere else (playwright-e2e sets a
 # working directory): the checkout still belongs to the workspace root.
 ws="$work/ws-workdir"

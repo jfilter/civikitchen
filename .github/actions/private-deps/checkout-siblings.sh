@@ -64,8 +64,11 @@ for entry in ${CK_SIBLING_REPO//,/ }; do
     # name: fetch it into an empty repository and check out what came back.
     git -c init.defaultBranch=main init --quiet "$staging"
     git -C "$staging" remote add origin "$url"
-    git -C "$staging" -c "http.https://github.com/.extraheader=$header" \
-      fetch --quiet --depth 1 origin "$ref"
+    if ! git -C "$staging" -c "http.https://github.com/.extraheader=$header" \
+      fetch --quiet --depth 1 origin "$ref"; then
+      echo "sibling_repo: commit $ref of $repo is not reachable from any branch or tag (only reachable commits can be fetched)" >&2
+      exit 1
+    fi
     git -C "$staging" checkout --quiet FETCH_HEAD
   else
     git -c "http.https://github.com/.extraheader=$header" \
