@@ -202,6 +202,53 @@ final class PermissionClosureCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
     }
 
+    public function testCheckCallsMatchClassAndMethodCaseInsensitively(): void
+    {
+        $context = $this->repo([
+            'myext.php' => self::HOOK,
+            'CRM/Myext/Page/Lower.php' => "<?php\ncrm_core_permission::Check('acces MyExt reports');\n",
+            'CRM/Myext/Page/Upper.php' => "<?php\n\\CRM_Core_Permission::CHECK('administer MyExtt');\n",
+        ], git: true);
+        $reporter = $this->run_(new PermissionClosureCheck(), $context);
+        $this->assertFails($reporter, "CRM/Myext/Page/Lower.php: permission 'acces MyExt reports'");
+        $this->assertFails($reporter, "CRM/Myext/Page/Upper.php: permission 'administer MyExtt'");
+    }
+
+    public function testAClosingBraceInAStringDoesNotEndTheHookBody(): void
+    {
+        $context = $this->repo([
+            'myext.php' => <<<'PHP'
+                <?php
+                function myext_civicrm_permission(&$permissions) {
+                  $note = 'closing } brace';
+                  $permissions += ['administer My Ext' => ['label' => 'My Ext']];
+                }
+                PHP,
+            'CRM/Myext/Page/Thing.php' => "<?php\nCRM_Core_Permission::check('administer My Ext');\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    public function testAnOpeningBraceInAStringDoesNotExtendTheHookBody(): void
+    {
+        $context = $this->repo([
+            'myext.php' => <<<'PHP'
+                <?php
+                function myext_civicrm_permission(&$permissions) {
+                  $note = 'opening { brace';
+                  $permissions['administer MyExt'] = ['label' => 'administer MyExt'];
+                }
+                function myext_civicrm_config(&$config) {
+                  $map = ['some unrelated label' => 1];
+                }
+                PHP,
+            'xml/Menu/myext.xml' => $this->menu('some unrelated labell'),
+        ], git: true);
+        $reporter = $this->run_(new PermissionClosureCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, "permission 'some unrelated labell'");
+    }
+
     /**
      * The failure that started this check: a typo turns the guard into an
      * always-no and nothing at runtime says so.

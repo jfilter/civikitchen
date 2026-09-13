@@ -207,15 +207,8 @@ final class PermissionClosureCheck implements Check
             // it would otherwise donate every unrelated string with a space to
             // the definition set, and an over-wide definition set is what turns
             // a warning into a false FAIL.
-            foreach ([
-                '/function\s+\w*_civicrm_permission\s*\(/i',
-                '/function\s+getPermissions\s*\(/i',
-            ] as $signature) {
-                $body = $this->functionBody($contents, $signature);
-                if ($body === null) {
-                    continue;
-                }
-                foreach ($this->arrayKeyLiterals($body) as $permission) {
+            foreach (['/^\w*_civicrm_permission$/i', '/^getPermissions$/i'] as $name) {
+                foreach ($this->arrayKeyLiterals($this->functionBody($tokens, $name) ?? []) as $permission) {
                     $defined[] = $permission;
                 }
             }
@@ -228,34 +221,41 @@ final class PermissionClosureCheck implements Check
     }
 
     /**
-     * The `{ … }` body of the first function matching $signature, by brace
-     * counting. Crude but adequate: strings containing braces only ever make
-     * the slice longer, never shorter, and a missing closing brace yields the
-     * rest of the file rather than nothing.
+     * The `{ … }` tokens of the first function with a body whose name matches
+     * $name. Braces inside strings and comments are not tokens and do not
+     * count; a missing closing brace yields the rest of the file.
+     *
+     * @param  list<\PhpToken> $tokens
+     * @return list<\PhpToken>|null
      */
-    private function functionBody(string $contents, string $signature): ?string
+    private function functionBody(array $tokens, string $name): ?array
     {
-        if (preg_match($signature, $contents, $match, PREG_OFFSET_CAPTURE) !== 1) {
-            return null;
-        }
-        $start = strpos($contents, '{', (int) $match[0][1]);
-        if ($start === false) {
-            return null;
-        }
-        $depth = 0;
-        $length = strlen($contents);
-        for ($i = $start; $i < $length; $i++) {
-            if ($contents[$i] === '{') {
-                $depth++;
-            } elseif ($contents[$i] === '}') {
-                $depth--;
-                if ($depth === 0) {
-                    return substr($contents, $start, $i - $start + 1);
+        foreach (array_keys($tokens) as $i) {
+            if (!self::tokenIs($tokens, $i, T_FUNCTION) || !self::tokenIs($tokens, $i + 1, T_STRING)
+                || preg_match($name, $tokens[$i + 1]->text) !== 1
+            ) {
+                continue;
+            }
+            $start = $i + 2;
+            while (isset($tokens[$start]) && !$tokens[$start]->is(['{', ';'])) {
+                $start++;
+            }
+            if (!self::tokenIs($tokens, $start, '{')) {
+                continue;
+            }
+            $depth = 0;
+            for ($j = $start, $count = count($tokens); $j < $count; $j++) {
+                if ($tokens[$j]->is(['{', T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES])) {
+                    $depth++;
+                } elseif ($tokens[$j]->is('}') && --$depth === 0) {
+                    return array_slice($tokens, $start, $j - $start + 1);
                 }
             }
+
+            return array_slice($tokens, $start);
         }
 
-        return substr($contents, $start);
+        return null;
     }
 
     /**
@@ -263,11 +263,11 @@ final class PermissionClosureCheck implements Check
      * space, so ordinary config arrays in the same body do not inflate the
      * definition set.
      *
+     * @param  list<\PhpToken> $tokens
      * @return list<string>
      */
-    private function arrayKeyLiterals(string $body): array
+    private function arrayKeyLiterals(array $tokens): array
     {
-        $tokens = $this->tokens('<?php ' . $body);
         $found = [];
         foreach ($tokens as $i => $token) {
             if (!$token->is(T_CONSTANT_ENCAPSED_STRING) || !self::tokenIs($tokens, $i + 1, T_DOUBLE_ARROW)) {
@@ -362,8 +362,11 @@ final class PermissionClosureCheck implements Check
         $tokens = $this->tokens($contents);
         $found = [];
         foreach (array_keys($tokens) as $i) {
-            if (self::tokenIs($tokens, $i, ['CRM_Core_Permission', '\CRM_Core_Permission'])
-                && self::tokenIs($tokens, $i + 1, T_DOUBLE_COLON) && self::tokenIs($tokens, $i + 2, 'check')
+            // PHP resolves class and method names case-insensitively.
+            if (self::tokenIs($tokens, $i, [T_STRING, T_NAME_FULLY_QUALIFIED])
+                && strcasecmp(ltrim($tokens[$i]->text, '\\'), 'CRM_Core_Permission') === 0
+                && self::tokenIs($tokens, $i + 1, T_DOUBLE_COLON) && self::tokenIs($tokens, $i + 2, T_STRING)
+                && strcasecmp($tokens[$i + 2]->text, 'check') === 0
                 && self::tokenIs($tokens, $i + 3, '(') && self::tokenIs($tokens, $i + 4, T_CONSTANT_ENCAPSED_STRING)
             ) {
                 $found[] = $this->literal($tokens[$i + 4]->text);
