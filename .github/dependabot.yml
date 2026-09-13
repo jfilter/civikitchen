@@ -32,3 +32,8 @@ updates:
       mariadb:
         patterns:
           - mariadb
+      # The other sidecars carry no compatibility decision; one PR per image.
+      sidecars:
+        patterns:
+          - phpmyadmin/phpmyadmin
+          - maildev/maildev
