@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 workflow="$root/.github/workflows/build-dev-images.yml"
-for image in mariadb:10.11 mariadb:11.4 mysql:8.0; do
+for image in mariadb:10.11 mariadb:11.4 mariadb:12.2 mysql:8.0; do
   grep -q -- "- ${image}" "$workflow" || { echo "database matrix misses ${image}" >&2; exit 1; }
 done
 grep -Eq 'needs: \[.*database-compat-standalone.*\]' "$workflow" \

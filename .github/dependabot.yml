@@ -25,3 +25,10 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # The database tag is one decision for every example at once, and it is
+    # taken against the database-compat matrix in build-dev-images.yml — one PR
+    # to weigh that evidence against, not one per example.
+    groups:
+      mariadb:
+        patterns:
+          - mariadb

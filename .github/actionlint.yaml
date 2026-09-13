@@ -6,6 +6,9 @@ paths:
   .github/workflows/extension-ci.yml:
     ignore:
       - 'property "workflow_sha" is not defined in object type'
+  .github/workflows/playwright-e2e.yml:
+    ignore:
+      - 'property "workflow_sha" is not defined in object type'
   .github/workflows/extension-release.yml:
     ignore:
       - 'property "workflow_sha" is not defined in object type'

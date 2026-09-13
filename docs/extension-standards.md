@@ -1015,7 +1015,7 @@ to off; a caller that sets neither gets exactly the run it has today.
 | Input / secret | What it adds |
 |---|---|
 | `composer_install` | `composer install --no-interaction --no-progress` on the runner, before the stack boots. |
-| `sibling_repo` | Comma- or newline-separated `owner/repo` list of further extensions: each checked out to `.civikitchen-siblings/<key>` and bind-mounted read-only into the stack, which also enables them — left to right, before this extension. |
+| `sibling_repo` | Comma- or newline-separated `owner/repo` list of further extensions, each entry optionally pinned as `owner/repo@ref`: each checked out to `.civikitchen-siblings/<key>` and bind-mounted read-only into the stack, which also enables them — left to right, before this extension. |
 | `composer_app_repositories` | Comma- or newline-separated repository names within the caller's owner. Required with the App secrets and scopes the minted token to exactly these private dependencies. |
 | `composer_app_id`, `composer_app_private_key` (secrets) | A GitHub App with `contents: read`, installed on the private dependency repos. The workflow mints a short-lived installation token restricted by `composer_app_repositories` and uses it for both the composer install and the sibling checkout. |
 
@@ -1050,6 +1050,11 @@ the sibling under `.civikitchen-siblings/<key>` on the runner, so using the
 sibling's classes directly is allowed rather than reported as reaching into
 another extension's internals.
 
+An entry may pin the checkout: `owner/repo@ref`, where `ref` is a tag, a
+branch or a full 40-character commit. Without it the sibling's default branch
+is used, so a break there reds every consumer and an old run no longer
+reproduces — pin a tag and bump it deliberately.
+
 Because the directory is the key, two entries whose `info.xml` declares the
 same key fail the run instead of overwriting each other, and so do the keys
 `ci` and `policy` — the workflow checks its own helper repositories out under
@@ -1072,7 +1077,7 @@ jobs:
     uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
     with:
       composer_install: true
-      sibling_repo: myorg/othersibling
+      sibling_repo: myorg/othersibling@v1.4.0
     secrets:
       composer_app_id: ${{ secrets.COMPOSER_APP_ID }}
       composer_app_private_key: ${{ secrets.COMPOSER_APP_PRIVATE_KEY }}
