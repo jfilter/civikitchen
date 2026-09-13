@@ -208,6 +208,16 @@ vulnerabilities:
       as jquery above; recheck against core's bower_components on expiry.
     expired_at: 2027-02-01
 
+  - id: CVE-2026-84375
+    statement: >-
+      Third in the js-yaml 3.13.1 merge-key series (GHSA-2883-xcg3-v3hh):
+      maxTotalMergeKeys does not bound CPU for empty merge sources, so a
+      crafted merge-key chain still costs quadratic time. Same copy in
+      core/bower_components, same single consumer — the APIv4 Explorer parsing
+      the YAML the logged-in developer typed into it. Same core-asset argument
+      as jquery above; recheck against core's bower_components on expiry.
+    expired_at: 2027-02-01
+
   # -------------------------------------------------------------------------
   # civicrm-buildkit's own node_modules (buildkit-based flavors only)
   #
