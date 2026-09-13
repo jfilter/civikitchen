@@ -161,6 +161,31 @@ jobs:
             echo "any=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # policy.dist.build: output the repo builds instead of committing. Built before
+      # any credential reaches the runner, because the build runs dependency code.
+      - name: Read the declared release build
+        id: dist-build
+        run: |
+          set -euo pipefail
+          # Refuses an unsafe output path, an unpinned Bun or a missing bun.lock up front.
+          php .civikitchen-ci/toolbelt/bin/ckconform --dist-paths > /dev/null
+          tool=$(php .civikitchen-ci/toolbelt/bin/ckconform --policy dist_build_tool)
+          echo "tool=$tool" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Bun for the declared release build
+        if: ${{ steps.dist-build.outputs.tool == 'bun' }}
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      # `ckrelease dist` stages exactly the declared outputs and fails on a missing one.
+      - name: Build the declared release output
+        if: ${{ steps.dist-build.outputs.tool == 'bun' }}
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun run build
+
       # Branching on the secret in bash — the `secrets` context is not
       # available in `if:`. No app means every required package is public.
       - name: Decide whether a private-dependency token is needed

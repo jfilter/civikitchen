@@ -282,6 +282,97 @@ final class SharedPhpTest extends TestCase
         }
     }
 
+    public function testReleaseStagesTheDeclaredBuildOutputAndNothingElse(): void
+    {
+        $repository = $this->stagedRepository(['ang/app.bundle.js', 'dist/lib']);
+        $this->write($repository, 'ang/app.bundle.js', 'built();');
+        $this->write($repository, 'ang/unlisted.bundle.js', 'undeclared();');
+        $this->write($repository, 'dist/lib/lib.min.js', 'lib();');
+        $this->write($repository, 'dist/lib/licenses/LICENSE-dependency', 'license');
+        $this->write($repository, 'notes.txt', 'untracked and not ignored');
+
+        [$status, $entries] = $this->releaseDist($repository);
+
+        self::assertSame(0, $status);
+        foreach (['staged.php', 'ang/app.bundle.js', 'dist/lib/lib.min.js', 'dist/lib/licenses/LICENSE-dependency'] as $path) {
+            self::assertContains("org.example.staged/{$path}", $entries);
+        }
+        foreach ($entries as $entry) {
+            self::assertDoesNotMatchRegularExpression('#unlisted|notes\.txt|/tests/|civikitchen\.yaml|bun\.lock#', $entry);
+        }
+        // The checkout's own index still matches HEAD.
+        self::assertSame('', $this->git($repository, 'diff', '--cached', '--name-only'));
+    }
+
+    public function testReleaseRefusesDeclaredBuildOutputTheBuildDidNotWrite(): void
+    {
+        $repository = $this->stagedRepository(['ang/app.bundle.js', 'dist/lib']);
+        $this->write($repository, 'ang/app.bundle.js', 'built();');
+        self::assertTrue(mkdir($repository . '/dist/lib', 0777, true));
+
+        [$status, $entries] = $this->releaseDist($repository);
+
+        self::assertSame(1, $status);
+        self::assertSame([], $entries);
+        $cli = (new Runner())->captureSeparate(
+            ['php', dirname(__DIR__, 2) . '/toolbelt/bin/ckrelease', 'dist', '--output', $this->temporary . '/cli'],
+            null,
+            $repository,
+        );
+        self::assertSame(1, $cli['status']);
+        self::assertStringContainsString("policy.dist.build output missing:\n  dist/lib\n", $cli['stderr']);
+        self::assertStringContainsString('Run bun install --frozen-lockfile && bun run build first', $cli['stderr']);
+        self::assertFileDoesNotExist($this->temporary . '/cli/org.example.staged-1.0.0.zip');
+    }
+
+    public function testReleaseRefusesDeclaredBuildOutputThatGitTracks(): void
+    {
+        $repository = $this->stagedRepository(['staged.php']);
+
+        [$status, $entries] = $this->releaseDist($repository);
+
+        self::assertSame(1, $status);
+        self::assertSame([], $entries);
+        $cli = (new Runner())->captureSeparate(
+            ['php', dirname(__DIR__, 2) . '/toolbelt/bin/ckrelease', 'dist', '--output', $this->temporary . '/cli'],
+            null,
+            $repository,
+        );
+        self::assertSame(1, $cli['status']);
+        self::assertStringContainsString("policy.dist.build output is tracked at HEAD:\n  staged.php\n", $cli['stderr']);
+    }
+
+    public function testReleaseStagesOntoATreeThatAlreadyBundlesVendor(): void
+    {
+        $repository = $this->stagedRepository(['ang/app.bundle.js']);
+        $this->write($repository, 'ang/app.bundle.js', 'built();');
+        $this->write($repository, 'vendor/autoload.php', '<?php');
+        $this->git($repository, 'add', '--force', 'vendor');
+
+        [$status, $entries] = $this->releaseDist($repository, $this->git($repository, 'write-tree'));
+
+        self::assertSame(0, $status);
+        self::assertContains('org.example.staged/vendor/autoload.php', $entries);
+        self::assertContains('org.example.staged/ang/app.bundle.js', $entries);
+    }
+
+    public function testVerifyRequiresEveryDeclaredBuildOutputInTheArchive(): void
+    {
+        $repository = $this->stagedRepository(['ang/app.bundle.js']);
+        $archive = $this->temporary . '/archive.zip';
+        $zip = new ZipArchive();
+        self::assertTrue($zip->open($archive, ZipArchive::CREATE));
+        $zip->addFromString('org.example.staged/info.xml', '<extension key="org.example.staged"><version>1.0.0</version></extension>');
+        $zip->close();
+        $verify = static fn (): int => (new ReleaseCommand(dirname(__DIR__, 2)))->run(['verify', $archive]);
+
+        self::assertSame(1, $this->inRepository($repository, $verify));
+        self::assertTrue($zip->open($archive));
+        $zip->addFromString('org.example.staged/ang/app.bundle.js', 'built();');
+        $zip->close();
+        self::assertSame(0, $this->inRepository($repository, $verify));
+    }
+
     public function testExtensionEditorUpdatesOpenAndProprietaryMetadata(): void
     {
         $directory = $this->temporary . '/extension';
@@ -341,6 +432,80 @@ final class SharedPhpTest extends TestCase
         $file = $this->temporary . '/' . $name;
         file_put_contents($file, json_encode($contents, JSON_THROW_ON_ERROR));
         return $file;
+    }
+
+    /**
+     * A committed extension repository whose civikitchen.yaml declares these build outputs.
+     *
+     * @param list<string> $outputs
+     */
+    private function stagedRepository(array $outputs): string
+    {
+        $repository = $this->temporary . '/extension';
+        $this->write($repository, 'info.xml', '<extension key="org.example.staged"><file>staged</file><version>1.0.0</version></extension>');
+        $this->write($repository, 'staged.php', '<?php');
+        $this->write($repository, 'tests/StagedTest.php', '<?php');
+        $this->write($repository, 'package.json', '{"packageManager": "bun@1.4.0"}');
+        $this->write($repository, 'bun.lock', '{}');
+        $this->write($repository, '.gitignore', "/ang/\n/dist/\n/vendor/\n");
+        $this->write($repository, 'civikitchen.yaml', "version: 1\npolicy:\n  dist:\n    build:\n      tool: bun\n      outputs:\n"
+            . implode('', array_map(static fn (string $output): string => "        - {$output}\n", $outputs)));
+        $this->git($repository, 'init', '-q');
+        $this->git($repository, 'add', '-A');
+        $this->git($repository, '-c', 'user.name=ck', '-c', 'user.email=ck@example.org', 'commit', '-q', '-m', 'fixture');
+        return $repository;
+    }
+
+    private function write(string $repository, string $path, string $contents): void
+    {
+        $file = $repository . '/' . $path;
+        if (!is_dir(dirname($file))) {
+            self::assertTrue(mkdir(dirname($file), 0777, true));
+        }
+        self::assertNotFalse(file_put_contents($file, $contents));
+    }
+
+    /** Git in the fixture, insulated from the developer's own configuration. */
+    private function git(string $repository, string ...$arguments): string
+    {
+        $result = (new Runner())->captureSeparate(
+            ['git', ...$arguments],
+            [...getenv(), 'GIT_CONFIG_GLOBAL' => '/dev/null', 'GIT_CONFIG_SYSTEM' => '/dev/null'],
+            $repository,
+        );
+        self::assertSame(0, $result['status'], $result['stderr']);
+        return trim($result['stdout']);
+    }
+
+    /** @return array{0: int, 1: list<string>} the exit status and the entry names of the zip it left */
+    private function releaseDist(string $repository, string $ref = 'HEAD'): array
+    {
+        $output = $this->temporary . '/dist';
+        $status = $this->inRepository($repository, static fn (): int => (new ReleaseCommand(dirname(__DIR__, 2)))
+            ->run(['dist', '--ref', $ref, '--output', $output]));
+        $entries = [];
+        $zip = new ZipArchive();
+        if (is_file($output . '/org.example.staged-1.0.0.zip') && $zip->open($output . '/org.example.staged-1.0.0.zip') === true) {
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $entries[] = (string) $zip->getNameIndex($index);
+            }
+            $zip->close();
+        }
+        return [$status, $entries];
+    }
+
+    /** @param callable(): int $command */
+    private function inRepository(string $repository, callable $command): int
+    {
+        $before = getcwd();
+        chdir($repository);
+        ob_start();
+        try {
+            return $command();
+        } finally {
+            ob_end_clean();
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
     }
 }
 

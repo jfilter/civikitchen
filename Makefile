@@ -130,7 +130,7 @@ doctor: ## Report every missing host prerequisite in one pass
 
 test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-publish-flags test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
 
-test-shared-php-coverage: $(PHPUNIT) ## Shared PHP unit tests and measured line-coverage floor
+test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
 	  phpdbg -qrr $(PHPUNIT) -c tests/shared-php/phpunit.xml.dist --coverage-clover $(SHARED_PHP_COVERAGE); \
 	elif grep -qiE '^(pcov|xdebug)$$' <<<"$$(php -m)"; then \

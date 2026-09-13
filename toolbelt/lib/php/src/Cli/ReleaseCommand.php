@@ -5,17 +5,26 @@ declare(strict_types=1);
 namespace CiviKitchen\Toolbelt\Cli;
 
 use CiviKitchen\Toolbelt\Process\Runner;
+use FilesystemIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use SimpleXMLElement;
+use SplFileInfo;
 use ZipArchive;
 
 final class ReleaseCommand implements Command
 {
+    /** What a `policy.dist.build` tool runs; the release workflow runs the same. */
+    private const BUILD_COMMANDS = ['bun' => 'bun install --frozen-lockfile && bun run build'];
+
     /** @var array{key:string,file:string,version:string} */
     private array $metadata;
     /** @var list<string> */
     private array $excludedDirectories = [];
     /** @var list<string> */
     private array $excludedFiles = [];
+    /** @var list<string> */
+    private array $stagedPaths = [];
 
     public function __construct(
         private readonly string $checkoutRoot,
@@ -105,11 +114,9 @@ final class ReleaseCommand implements Command
             $this->error("info.xml key is not a usable directory name: {$this->metadata['key']}");
             return false;
         }
-        $binary = is_executable($this->checkoutRoot . '/toolbelt/bin/ckconform')
-            ? $this->checkoutRoot . '/toolbelt/bin/ckconform' : 'ckconform';
-        $paths = $this->runner->capture([$binary, '--dist-paths']);
+        $paths = $this->runner->capture([$this->ckconform(), '--dist-paths']);
         if ($paths['status'] !== 0) {
-            $this->error('could not read the release exclusion list');
+            $this->error("could not read the release exclusion list:\n" . rtrim($paths['output']));
             return false;
         }
         foreach (preg_split('/\R/', trim($paths['output'])) ?: [] as $line) {
@@ -117,6 +124,8 @@ final class ReleaseCommand implements Command
                 $this->excludedDirectories[] = substr($line, 4);
             } elseif (str_starts_with($line, 'file ')) {
                 $this->excludedFiles[] = substr($line, 5);
+            } elseif (str_starts_with($line, 'stage ')) {
+                $this->stagedPaths[] = substr($line, 6);
             }
         }
         if ($this->excludedDirectories === []) {
@@ -124,6 +133,12 @@ final class ReleaseCommand implements Command
             return false;
         }
         return true;
+    }
+
+    private function ckconform(): string
+    {
+        return is_executable($this->checkoutRoot . '/toolbelt/bin/ckconform')
+            ? $this->checkoutRoot . '/toolbelt/bin/ckconform' : 'ckconform';
     }
 
     /** @param list<string> $positionals */
@@ -200,11 +215,15 @@ final class ReleaseCommand implements Command
         $zip = rtrim($outputDirectory, '/') . "/{$this->metadata['key']}-{$this->metadata['version']}.zip";
         @unlink($zip);
         @unlink("{$zip}.sha256");
+        $tree = $this->stagedPaths === [] ? $ref : $this->stage($ref);
+        if ($tree === null) {
+            return 1;
+        }
         $pathspec = [];
         foreach ([...$this->excludedDirectories, ...$this->excludedFiles] as $item) {
             $pathspec[] = ($item === '.env.*' ? ':(glob,exclude)' : ':(exclude)') . $item;
         }
-        $status = $this->runner->passthrough(['git', 'archive', '--format=zip', '-9', "--prefix={$this->metadata['key']}/", '-o', $zip, $ref, '--', '.', ...$pathspec]);
+        $status = $this->runner->passthrough(['git', 'archive', '--format=zip', '-9', "--prefix={$this->metadata['key']}/", '-o', $zip, $tree, '--', '.', ...$pathspec]);
         if ($status !== 0) {
             return $status;
         }
@@ -218,6 +237,74 @@ final class ReleaseCommand implements Command
         }
         echo "ckrelease: built {$zip}\nckrelease: {$digest}  ", basename($zip), "\n";
         return 0;
+    }
+
+    /**
+     * The tree of $ref plus the declared build output, written through a throwaway
+     * index so the checkout's own index and refs stay untouched. Null after a FAIL.
+     */
+    private function stage(string $ref): ?string
+    {
+        $missing = array_values(array_filter($this->stagedPaths, static fn(string $path): bool => !self::built($path)));
+        if ($missing !== []) {
+            $tool = trim($this->runner->capture([$this->ckconform(), '--policy', 'dist_build_tool'])['output']);
+            $build = self::BUILD_COMMANDS[$tool] ?? 'the build civikitchen.yaml declares';
+            fwrite(STDERR, "ckrelease: FAIL - policy.dist.build output missing:\n  " . implode("\n  ", $missing)
+                . "\n  Run {$build} first: the archive stages the build output the working tree holds.\n");
+            return null;
+        }
+        $tracked = $this->runner->capture(['git', '--literal-pathspecs', 'ls-tree', '-r', '--name-only', $ref, '--', ...$this->stagedPaths]);
+        if ($tracked['status'] !== 0) {
+            $this->error("cannot list {$ref}:\n" . rtrim($tracked['output']));
+            return null;
+        }
+        if (trim($tracked['output']) !== '') {
+            fwrite(STDERR, "ckrelease: FAIL - policy.dist.build output is tracked at {$ref}:\n  " . str_replace("\n", "\n  ", trim($tracked['output']))
+                . "\n  A tracked file ships from git already; declare only output the build writes.\n");
+            return null;
+        }
+        $directory = sys_get_temp_dir() . '/ckrelease-' . bin2hex(random_bytes(6));
+        if (!mkdir($directory, 0700)) {
+            $this->error("cannot create {$directory}");
+            return null;
+        }
+        $environment = [...getenv(), 'GIT_INDEX_FILE' => "{$directory}/index"];
+        try {
+            foreach ([['git', 'read-tree', $ref], ['git', '--literal-pathspecs', 'add', '--force', '--', ...$this->stagedPaths]] as $command) {
+                $result = $this->runner->capture($command, $environment);
+                if ($result['status'] !== 0) {
+                    $this->error('could not stage the build output: ' . rtrim($result['output']));
+                    return null;
+                }
+            }
+            $tree = $this->runner->capture(['git', 'write-tree'], $environment);
+            if ($tree['status'] !== 0) {
+                $this->error('could not stage the build output: ' . rtrim($tree['output']));
+                return null;
+            }
+            return trim($tree['output']);
+        } finally {
+            foreach (["{$directory}/index", "{$directory}/index.lock"] as $file) {
+                if (is_file($file)) {
+                    unlink($file);
+                }
+            }
+            rmdir($directory);
+        }
+    }
+
+    /** A file, or a directory holding at least one file. */
+    private static function built(string $path): bool
+    {
+        if (!is_dir($path)) {
+            return is_file($path);
+        }
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS)) as $entry) {
+            if ($entry instanceof SplFileInfo && $entry->isFile()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** @param list<string> $positionals */
@@ -284,12 +371,32 @@ final class ReleaseCommand implements Command
             fwrite(STDERR, "ckrelease: FAIL - dev/CI paths in the archive:\n  " . implode("\n  ", array_unique($offenders)) . "\n  Configure policy.dist.exclude/include in civikitchen.yaml.\n");
             $failed = true;
         }
+        $absent = array_values(array_filter(
+            $this->stagedPaths,
+            fn(string $path): bool => !self::carries($entries, "{$this->metadata['key']}/{$path}"),
+        ));
+        if ($absent !== []) {
+            fwrite(STDERR, "ckrelease: FAIL - policy.dist.build output missing from the archive:\n  " . implode("\n  ", $absent) . "\n");
+            $failed = true;
+        }
         if ($failed) {
             return 1;
         }
         $files = count(array_filter($entries, static fn(string $entry): bool => !str_ends_with($entry, '/')));
-        echo "ckrelease: {$files} files, no dev/CI paths, info.xml {$this->metadata['version']}.\n";
+        $staged = $this->stagedPaths === [] ? '' : count($this->stagedPaths) . ' declared build outputs, ';
+        echo "ckrelease: {$files} files, {$staged}no dev/CI paths, info.xml {$this->metadata['version']}.\n";
         return 0;
+    }
+
+    /** @param list<string> $entries */
+    private static function carries(array $entries, string $name): bool
+    {
+        foreach ($entries as $entry) {
+            if ($entry === $name || str_starts_with($entry, "{$name}/")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function error(string $message): int
