@@ -62,15 +62,20 @@ except that a break the consumers are adjusted for ships as a minor, marked
   highest plain `vX.Y.Z` in the repo; a late release of an older version no
   longer takes Latest from the newest one.
 - `permission-closure` no longer reads an entity field named `permission` as a
-  permission spec, nor array subscripts or call arguments inside a spec, and
-  reads every permission of a nested OR list instead of stopping after the
-  first group. Escaped quotes in a permission string are resolved in specs,
-  `CRM_Core_Permission::check()` calls and `hook_civicrm_permission`.
+  permission spec, nor array subscripts, string subscripts, call arguments or a
+  string that is only part of a concatenation inside a spec, and reads every
+  permission of a nested OR list instead of stopping after the first group or
+  at an arrow function. Escaped quotes and `\u{…}` escapes in a permission
+  string are resolved in specs, `CRM_Core_Permission::check()` calls and
+  `hook_civicrm_permission`, and a numeric permission string no longer aborts
+  the check.
 - `permission-closure` accepts core's `*always deny*` sentinel and afform's
   `@afformPageToken` and `manage own afform`.
 - `permission-closure` finds `CRM_Core_Permission::check()` calls in any letter
-  case, and a brace inside a string or comment no longer moves the end of
-  `hook_civicrm_permission`.
+  case and reads their list and named `permissions:` arguments, and a brace
+  inside a string or comment no longer moves the end of
+  `hook_civicrm_permission`. A by-reference `hook_civicrm_permission` and every
+  `getPermissions()` in a file contribute definitions.
 
 ## [1.22.0] - 2026-09-12
 
