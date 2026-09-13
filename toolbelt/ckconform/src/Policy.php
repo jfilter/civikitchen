@@ -45,6 +45,7 @@ final class Policy
         'smarty_skip_templates' => 'cksmarty: managed MessageTemplates this repo renders without Smarty, reason mandatory',
         'npm_license' => 'ckconform: accepted npm licence identifiers',
         'release' => "ckconform: 'none -- <reason>' for a repo that deliberately cuts no releases",
+        'untagged_versions' => 'ckconform: versions the repo moved past that deliberately stay untagged, reason mandatory',
         'max_unreleased_days' => 'ckconform: days of unreleased shipped changes before it is reported',
         // read by the ck* tools
         'mutation_min_msi' => 'ckmutate: mutation score floor (--min-msi)',
@@ -71,7 +72,7 @@ final class Policy
      *
      * @var list<string>
      */
-    public const REPEATABLE = ['dist_exclude', 'dist_include', 'lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates', 'extension_source', 'extension_release', 'extension_version'];
+    public const REPEATABLE = ['dist_exclude', 'dist_include', 'lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates', 'untagged_versions', 'extension_source', 'extension_release', 'extension_version'];
 
     /** @var list<string> */
     public const PERCENT = ['min_coverage', 'mutation_min_msi', 'mutation_min_covered_msi'];
@@ -188,6 +189,7 @@ final class Policy
         foreach ($policy['vendored_paths'] ?? [] as $item) $out['vendored_paths'][] = $item['path'] . ' -- ' . $item['reason'];
         foreach ($policy['smarty_skip_templates'] ?? [] as $item) $out['smarty_skip_templates'][] = $item['template'] . ' -- ' . $item['reason'];
         if (isset($policy['release'])) $out['release'] = [$policy['release']['mode'] . ' -- ' . $policy['release']['reason']];
+        foreach ($policy['untagged_versions'] ?? [] as $item) $out['untagged_versions'][] = $item['version'] . ' -- ' . $item['reason'];
         if (isset($policy['mutation']['minimum_msi'])) $out['mutation_min_msi'] = [(string) $policy['mutation']['minimum_msi']];
         if (isset($policy['mutation']['minimum_covered_msi'])) $out['mutation_min_covered_msi'] = [(string) $policy['mutation']['minimum_covered_msi']];
         if (isset($policy['mutation']['paths'])) $out['mutation_paths'] = [implode(',', $policy['mutation']['paths'])];

@@ -372,7 +372,11 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   unevaluated rather than clean — the shared CI checks out with
   `fetch-depth: 0` and `fetch-tags: true` for exactly this. A repo that
   deliberately cuts no releases declares `policy.release: none` with its
-  reason. See [Releasing an extension](extension-releases.md).
+  reason; a single number that was bumped through and then re-scoped is listed
+  under `policy.untagged_versions` with the reason it stays untagged, and a
+  listed version that is tagged after all, or that `info.xml` never carried,
+  is reported as a stale entry. See
+  [Releasing an extension](extension-releases.md).
 - `composer.json` with the extension metadata; no `node_modules`/`vendor`/build
   artifacts committed (frontend builds commit only `dist/`).
 - `.gitignore` covers every artifact the repo can regenerate — the phpunit

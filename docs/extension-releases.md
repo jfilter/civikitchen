@@ -29,6 +29,24 @@ them together after the fact: it compares the `<version>` values `info.xml` has
 carried with the repo's tags, and fails on a version the repo bumped past
 without ever tagging — that release exists in the history and on no site.
 
+### A version that will never be released
+
+A bump that was re-scoped or taken back leaves a number the repo passed through
+and never wants to publish. Tagging it now is not the fix: the tag push runs the
+release workflow and publishes the code of that moment under a version nobody
+reviewed for release. Name it instead, with the reason:
+
+```yaml
+policy:
+  untagged_versions:
+    - version: 1.2.0
+      reason: bump re-scoped into 1.3.0 before anything shipped
+```
+
+`release-tags` then skips exactly that version and keeps failing on every other
+one. An entry for a version that is tagged after all, or that `info.xml` never
+carried, warns as a stale exception — the list is meant to shrink.
+
 ## Adopting it in a repo
 
 ```yaml

@@ -52,6 +52,51 @@ final class ReleaseTagsCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new ReleaseTagsCheck(), $context));
     }
 
+    /**
+     * A number that was bumped through and then re-scoped: tagging it now would
+     * publish the code of that moment, so the repo declares it instead.
+     */
+    public function testSkipsAVersionDeclaredAsDeliberatelyUntagged(): void
+    {
+        $context = $this->history(['1.0.0' => 'v1.0.0', '1.1.0' => null, '1.2.0' => 'v1.2.0']);
+        $this->write('civikitchen.yaml', $this->policyFixture("untagged_versions=1.1.0 -- bump re-scoped before release\n"));
+        $this->gitCommit('policy');
+        $this->assertSilent($this->run_(new ReleaseTagsCheck(), $context));
+    }
+
+    public function testFailsForTheVersionThatIsNotDeclared(): void
+    {
+        $context = $this->history(['1.0.0' => 'v1.0.0', '1.1.0' => null, '1.2.0' => null, '1.3.0' => 'v1.3.0']);
+        $this->write('civikitchen.yaml', $this->policyFixture("untagged_versions=1.1.0 -- bump re-scoped before release\n"));
+        $this->gitCommit('policy');
+
+        $reporter = $this->run_(new ReleaseTagsCheck(), $context);
+        $this->assertFails($reporter, 'moved past 1.2.0 and no v1.2.0 exists');
+        self::assertStringNotContainsString('1.1.0', $reporter->render());
+    }
+
+    public function testWarnsWhenADeclaredVersionIsTaggedAfterAll(): void
+    {
+        $context = $this->history(['1.0.0' => 'v1.0.0', '1.1.0' => 'v1.1.0', '1.2.0' => null]);
+        $this->write('civikitchen.yaml', $this->policyFixture("untagged_versions=1.1.0 -- bump re-scoped before release\n"));
+        $this->gitCommit('policy');
+        $this->assertWarns(
+            $this->run_(new ReleaseTagsCheck(), $context),
+            'untagged_versions lists 1.1.0, but v1.1.0 exists — remove the stale exception',
+        );
+    }
+
+    public function testWarnsWhenADeclaredVersionNeverAppearedInTheHistory(): void
+    {
+        $context = $this->history(['1.0.0' => 'v1.0.0', '1.1.0' => null]);
+        $this->write('civikitchen.yaml', $this->policyFixture("untagged_versions=9.9.9 -- typo\n"));
+        $this->gitCommit('policy');
+        $this->assertWarns(
+            $this->run_(new ReleaseTagsCheck(), $context),
+            'untagged_versions lists 9.9.9, a version info.xml has not moved past — remove the stale exception',
+        );
+    }
+
     public function testWarnsUnevaluatedOnAShallowClone(): void
     {
         $context = $this->history(['0.1.0' => null, '0.2.0' => null]);

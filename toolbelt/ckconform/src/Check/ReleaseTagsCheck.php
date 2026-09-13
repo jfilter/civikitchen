@@ -6,6 +6,7 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\Policy;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -20,7 +21,11 @@ use CiviKitchen\Ckconform\Reporter;
  * window.
  *
  * The opt-out is `policy.release: none` with its reason — a repo that cuts no
- * releases has no tags to miss.
+ * releases has no tags to miss. For a single number the repo passed through and
+ * will never publish — a bump that was re-scoped or taken back — the narrow
+ * escape is `policy.untagged_versions`, one entry per version with its reason.
+ * Tagging such a version after the fact is not the fix: the tag push runs the
+ * release workflow and publishes the code of that moment.
  */
 final class ReleaseTagsCheck implements Check
 {
@@ -60,14 +65,31 @@ final class ReleaseTagsCheck implements Check
             $context->infoVersionHistory(),
             static fn (string $version): bool => $version !== $current,
         ));
-        if ($earlier === []) {
-            return;
-        }
-
         $tags = $context->tags();
         $untagged = array_values(array_filter(
             $earlier,
             static fn (string $version): bool => !in_array('v' . $version, $tags, true),
+        ));
+
+        $declaredUntagged = [];
+        foreach ($context->policyValues('untagged_versions') as $value) {
+            $version = Policy::stripReason($value);
+            $declaredUntagged[] = $version;
+            if (in_array($version, $untagged, true)) {
+                continue;
+            }
+            $reporter->warn(sprintf(
+                'civikitchen.yaml: untagged_versions lists %s, %s — remove the stale exception',
+                $version,
+                in_array('v' . $version, $tags, true)
+                    ? 'but v' . $version . ' exists'
+                    : 'a version info.xml has not moved past',
+            ));
+        }
+
+        $untagged = array_values(array_filter(
+            $untagged,
+            static fn (string $version): bool => !in_array($version, $declaredUntagged, true),
         ));
         if ($untagged === []) {
             return;

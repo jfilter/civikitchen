@@ -39,6 +39,7 @@
         "smarty_skip_templates": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["template", "reason"], "properties": {"template": {"$ref": "#/$defs/nonEmptyString"}, "reason": {"$ref": "#/$defs/reason"}}}},
         "npm_license": {"$ref": "#/$defs/nonEmptyString"},
         "release": {"type": "object", "additionalProperties": false, "required": ["mode", "reason"], "properties": {"mode": {"enum": ["none"]}, "reason": {"$ref": "#/$defs/reason"}}},
+        "untagged_versions": {"description": "info.xml <version> values the repo moved past without a v<version> tag, each with the reason it stays untagged (release-tags skips them; a listed version that is tagged or that info.xml never carried is reported as stale).", "type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["version", "reason"], "properties": {"version": {"$ref": "#/$defs/nonEmptyString"}, "reason": {"$ref": "#/$defs/reason"}}}},
         "max_unreleased_days": {"type": "integer", "minimum": 0},
         "mutation": {"type": "object", "additionalProperties": false, "properties": {"minimum_msi": {"type": "integer", "minimum": 0, "maximum": 100}, "minimum_covered_msi": {"type": "integer", "minimum": 0, "maximum": 100}, "paths": {"$ref": "#/$defs/stringList"}}},
         "dist": {"type": "object", "additionalProperties": false, "properties": {"exclude": {"$ref": "#/$defs/literalStringList"}, "include": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/pathReason"}}}},

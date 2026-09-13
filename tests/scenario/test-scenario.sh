@@ -104,6 +104,13 @@ printf '%s\n' 'version: 1' 'policy:' '  lifecycle:' '    log_ignore:' '      - p
 if "$root/toolbelt/bin/ck" config validate "$work/delimiter-value.yaml" >/dev/null 2>&1; then
   echo "configuration accepted the reserved line-protocol delimiter in a value" >&2; exit 1
 fi
+printf '%s\n' 'version: 1' 'policy:' '  untagged_versions:' '    - version: 1.1.0' > "$work/reasonless-untagged-version.yaml"
+if "$root/toolbelt/bin/ck" config validate "$work/reasonless-untagged-version.yaml" >/dev/null 2>&1; then
+  echo "configuration accepted an untagged_versions entry without a reason" >&2; exit 1
+fi
+printf '%s\n' 'version: 1' 'policy:' '  untagged_versions:' '    - version: 1.1.0' '      reason: bump re-scoped before release' > "$work/untagged-version.yaml"
+"$root/toolbelt/bin/ck" config validate "$work/untagged-version.yaml" >/dev/null \
+  || { echo "configuration rejected a valid untagged_versions entry" >&2; exit 1; }
 printf '%s\n' 'version: 1' 'policy:' '  release:' '    mode: none' "    reason: ' '" > "$work/blank-reason.yaml"
 if "$root/toolbelt/bin/ck" config validate "$work/blank-reason.yaml" >/dev/null 2>&1; then
   echo "configuration accepted a whitespace-only reason" >&2; exit 1

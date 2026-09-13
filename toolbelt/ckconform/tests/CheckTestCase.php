@@ -123,6 +123,7 @@ abstract class CheckTestCase extends TestCase
                 case 'vendored_paths': $policy['vendored_paths'][] = ['path' => $plain, 'reason' => $reason]; break;
                 case 'smarty_skip_templates': $policy['smarty_skip_templates'][] = ['template' => $plain, 'reason' => $reason]; break;
                 case 'release': $policy['release'] = ['mode' => $plain, 'reason' => $reason]; break;
+                case 'untagged_versions': $policy['untagged_versions'][] = ['version' => $plain, 'reason' => $reason]; break;
                 case 'max_unreleased_days': $policy[$key] = ctype_digit($plain) ? (int) $plain : $plain; break;
                 case 'mutation_min_msi': $policy['mutation']['minimum_msi'] = ctype_digit($plain) ? (int) $plain : $plain; break;
                 case 'mutation_min_covered_msi': $policy['mutation']['minimum_covered_msi'] = ctype_digit($plain) ? (int) $plain : $plain; break;
