@@ -166,6 +166,42 @@ final class PermissionClosureCheckTest extends CheckTestCase
         $this->assertWarns($reporter, "permission 'administer SomeOtherExtension'");
     }
 
+    public function testEscapesInACheckLiteralFollowPhpStringRules(): void
+    {
+        $context = $this->repo([
+            'CRM/Myext/Page/Thing.php' => "<?php\nif (CRM_Core_Permission::check('generate any user\\'s JWT')) {}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    public function testEscapesInAHookAssignmentFollowPhpStringRules(): void
+    {
+        $context = $this->repo([
+            'myext.php' => <<<'PHP'
+                <?php
+                function myext_civicrm_permission(&$permissions) {
+                  $permissions['edit my client\'s tokens'] = ['label' => 'Tokens'];
+                }
+                PHP,
+            'xml/Menu/myext.xml' => $this->menu("edit my client's tokens"),
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    public function testEscapesInAReturnedPermissionMapFollowPhpStringRules(): void
+    {
+        $context = $this->repo([
+            'myext.php' => <<<'PHP'
+                <?php
+                function myext_civicrm_permission(&$permissions) {
+                  $permissions += ['edit my client\'s notes' => ['label' => 'Notes']];
+                }
+                PHP,
+            'CRM/Myext/Page/Thing.php' => "<?php\nCRM_Core_Permission::check(\"edit my client's notes\");\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
     /**
      * The failure that started this check: a typo turns the guard into an
      * always-no and nothing at runtime says so.

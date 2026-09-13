@@ -193,13 +193,12 @@ final class PermissionClosureCheck implements Check
             }
 
             // $permissions['administer CiviFoo'] = ... — the canonical hook body.
-            if (preg_match_all(
-                '/\$permissions\s*\[\s*([\'"])(.+?)\1\s*\]/s',
-                $contents,
-                $matches,
-            ) > 0) {
-                foreach ($matches[2] as $permission) {
-                    $defined[] = $permission;
+            $tokens = $this->tokens($contents);
+            foreach (array_keys($tokens) as $i) {
+                if (self::tokenIs($tokens, $i, '$permissions') && self::tokenIs($tokens, $i + 1, '[')
+                    && self::tokenIs($tokens, $i + 2, T_CONSTANT_ENCAPSED_STRING) && self::tokenIs($tokens, $i + 3, ']')
+                ) {
+                    $defined[] = $this->literal($tokens[$i + 2]->text);
                 }
             }
 
@@ -260,20 +259,23 @@ final class PermissionClosureCheck implements Check
     }
 
     /**
-     * `'administer CiviFoo' => [...]` keys — only strings that look like a
-     * permission (a space or a CiviCRM-ish word), so ordinary config arrays in
-     * the same file do not inflate the definition set.
+     * `'administer CiviFoo' => [...]` keys — only single-line strings with a
+     * space, so ordinary config arrays in the same body do not inflate the
+     * definition set.
      *
      * @return list<string>
      */
-    private function arrayKeyLiterals(string $contents): array
+    private function arrayKeyLiterals(string $body): array
     {
+        $tokens = $this->tokens('<?php ' . $body);
         $found = [];
-        if (preg_match_all('/([\'"])([^\'"\n]{4,})\1\s*=>/', $contents, $matches) > 0) {
-            foreach ($matches[2] as $literal) {
-                if (str_contains($literal, ' ')) {
-                    $found[] = $literal;
-                }
+        foreach ($tokens as $i => $token) {
+            if (!$token->is(T_CONSTANT_ENCAPSED_STRING) || !self::tokenIs($tokens, $i + 1, T_DOUBLE_ARROW)) {
+                continue;
+            }
+            $literal = $this->literal($token->text);
+            if (strlen($literal) >= 4 && str_contains($literal, ' ') && !str_contains($literal, "\n")) {
+                $found[] = $literal;
             }
         }
 
@@ -357,19 +359,18 @@ final class PermissionClosureCheck implements Check
      */
     private function fromPhp(string $contents): array
     {
+        $tokens = $this->tokens($contents);
         $found = [];
-
-        if (preg_match_all(
-            '/CRM_Core_Permission::check\s*\(\s*([\'"])(.+?)\1/s',
-            $contents,
-            $matches,
-        ) > 0) {
-            foreach ($matches[2] as $permission) {
-                $found[] = $permission;
+        foreach (array_keys($tokens) as $i) {
+            if (self::tokenIs($tokens, $i, ['CRM_Core_Permission', '\CRM_Core_Permission'])
+                && self::tokenIs($tokens, $i + 1, T_DOUBLE_COLON) && self::tokenIs($tokens, $i + 2, 'check')
+                && self::tokenIs($tokens, $i + 3, '(') && self::tokenIs($tokens, $i + 4, T_CONSTANT_ENCAPSED_STRING)
+            ) {
+                $found[] = $this->literal($tokens[$i + 4]->text);
             }
         }
 
-        array_push($found, ...$this->permissionSpecs($contents));
+        array_push($found, ...$this->permissionSpecs($tokens));
 
         return array_values(array_filter(
             array_map('trim', $found),
@@ -378,18 +379,35 @@ final class PermissionClosureCheck implements Check
     }
 
     /**
+     * @return list<\PhpToken> the code tokens, without whitespace and comments
+     */
+    private function tokens(string $contents): array
+    {
+        return array_values(array_filter(
+            \PhpToken::tokenize($contents),
+            static fn (\PhpToken $t): bool => !$t->isIgnorable(),
+        ));
+    }
+
+    /**
+     * @param list<\PhpToken>                $tokens
+     * @param int|string|list<int|string>    $kind
+     */
+    private static function tokenIs(array $tokens, int $i, int|string|array $kind): bool
+    {
+        return isset($tokens[$i]) && $tokens[$i]->is($kind);
+    }
+
+    /**
      * `'permission' => 'x'` and `'permission' => ['x', ['y', 'z']]`: a string or
      * a list of strings nested to any depth. An array with a key anywhere
      * inside is a field or config definition named `permission`, not a spec.
      *
+     * @param  list<\PhpToken> $tokens
      * @return list<string>
      */
-    private function permissionSpecs(string $contents): array
+    private function permissionSpecs(array $tokens): array
     {
-        $tokens = array_values(array_filter(
-            \PhpToken::tokenize($contents),
-            static fn (\PhpToken $t): bool => !$t->isIgnorable(),
-        ));
         $count = count($tokens);
         $found = [];
         for ($i = 0; $i + 2 < $count; $i++) {
