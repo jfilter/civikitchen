@@ -90,8 +90,8 @@ SHELLCHECK := $(CACHE)/shellcheck-$(CK_SHELLCHECK_VERSION)
 WORKTREE_FILES = git ls-files --cached --others --exclude-standard
 SHELL_FILES = $(WORKTREE_FILES) | while read -r f; do \
 	  case "$$f" in (*.sh) printf '%s\n' "$$f"; continue ;; esac ; \
-	  if head -1 "$$f" 2>/dev/null \
-	      | grep -qaE '^\#!.*(\bsh\b|\bbash\b)|^\# shellcheck shell=' ; then \
+	  if grep -qaE '^\#!.*(\bsh\b|\bbash\b)|^\# shellcheck shell=' \
+	      < <(head -1 "$$f" 2>/dev/null) ; then \
 	    printf '%s\n' "$$f" ; \
 	  fi ; \
 	done
@@ -133,7 +133,7 @@ test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcr
 test-shared-php-coverage: $(PHPUNIT) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
 	  phpdbg -qrr $(PHPUNIT) -c tests/shared-php/phpunit.xml.dist --coverage-clover $(SHARED_PHP_COVERAGE); \
-	elif php -m | grep -qiE '^(pcov|xdebug)$$'; then \
+	elif grep -qiE '^(pcov|xdebug)$$' <<<"$$(php -m)"; then \
 	  XDEBUG_MODE=coverage php $(PHPUNIT) -c tests/shared-php/phpunit.xml.dist --coverage-clover $(SHARED_PHP_COVERAGE); \
 	else \
 	  echo 'shared PHP coverage requires phpdbg, pcov, or xdebug' >&2; exit 2; \

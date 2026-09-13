@@ -127,6 +127,17 @@ run_doctor "$(host no-coverage "${without_coverage[@]}")"
 [ "$status" -eq 1 ] || fail "no coverage driver: expected exit 1, got $status"
 expect 'no coverage driver' 'MISSING  coverage' "$out"
 
+# --- a module list beyond a pipe buffer still yields its coverage driver ----
+# grep -q exits on the first match; a producer still writing then dies of
+# SIGPIPE, which pipefail reports as "no match".
+{ echo pcov; "$real_awk" 'BEGIN { for (i = 0; i < 200000; i++) print "module_" i }'; } > "$work/modules"
+long_modules="$(host long-modules "${without_coverage[@]}")"
+printf '#!/bin/sh\ncase "$1" in -m) exec %s "%s" ;; *) echo "PHP 8.3.10 (cli)" ;; esac\n' \
+  "$(command -v cat)" "$work/modules" > "$long_modules/php"
+run_doctor "$long_modules"
+[ "$status" -eq 0 ] || fail "long module list: expected exit 0, got $status"
+expect 'long module list' 'ok       coverage' "$out"
+
 # --- Docker is the slow loop only: absent must not fail the fast one ---------
 without_docker=()
 for entry in "${COMPLETE[@]}"; do

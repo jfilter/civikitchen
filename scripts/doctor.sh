@@ -127,7 +127,7 @@ check_version php 8.0 \
 
 if command -v phpdbg >/dev/null 2>&1; then
   say_ok phpdbg 'present (shared PHP coverage driver)'
-elif php -m 2>/dev/null | grep -qiE '^(pcov|xdebug)$'; then
+elif grep -qiE '^(pcov|xdebug)$' <<<"$(php -m 2>/dev/null)"; then
   say_ok coverage 'PCOV or Xdebug is enabled'
 else
   say_missing 'coverage' 'make test-shared-php-coverage needs phpdbg, PCOV, or Xdebug' \
