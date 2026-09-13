@@ -8,18 +8,22 @@ consumer: what changes for a repo calling the workflows, running the toolbelt,
 or pulling an image.
 
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
-this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
+except that a break the consumers are adjusted for ships as a minor, marked
+**Breaking** ([versioning rules](docs/releases.md#versioning-rules)).
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-09-13
+
 ### Added
 
-- `release-tags` conformance check: a version bumped past without its git tag
-  fails, and the failure names every untagged version. Versions that
-  deliberately never got a tag are declared under `policy.untagged_versions`
-  in `civikitchen.yaml` (bare `info.xml` version, quoted — an unquoted `1.0`
-  is a YAML float).
-- `managed-job` conformance check: a scheduled job whose parameters
+- **Breaking** `release-tags` conformance check: a version bumped past without
+  its git tag fails, and the failure names every untagged version. Versions that
+  deliberately never got a tag are declared under `policy.untagged_versions` in
+  `civikitchen.yaml` (bare `info.xml` version, quoted — an unquoted `1.0` is a
+  YAML float).
+- **Breaking** `managed-job` conformance check: a scheduled job whose parameters
   `CRM_Core_BAO_Job::parseParameters` rejects fails, as does an APIv4-only
   entity declared without `version=4`. The check recognises the civix
   `api/v3/<Entity>/<Action>.php` layout.
@@ -29,7 +33,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-- **Breaking for `@v1` callers with hard-coded sibling paths:** private
+- **Breaking** for callers with hard-coded sibling paths: private
   dependencies are checked out under the extension key, one directory per key.
   A `prepare_command` that spells `.civikitchen-siblings/<repo name>` has to
   read `CK_SIBLING_DIR` or use the key instead.
@@ -600,7 +604,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.22.0...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.23.0...HEAD
+[1.23.0]: https://github.com/jfilter/civikitchen/compare/v1.22.0...v1.23.0
 [1.22.0]: https://github.com/jfilter/civikitchen/compare/v1.21.6...v1.22.0
 [1.21.6]: https://github.com/jfilter/civikitchen/compare/v1.21.5...v1.21.6
 [1.21.5]: https://github.com/jfilter/civikitchen/compare/v1.21.4...v1.21.5
