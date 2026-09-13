@@ -73,11 +73,18 @@ final class ReleaseTagsCheck implements Check
             return;
         }
 
+        $missing = implode(', ', array_map(static fn (string $version): string => 'v' . $version, $untagged));
+        if ($tags === []) {
+            $absent = 'this repo has no v* tag at all';
+        } else {
+            $absent = count($untagged) === 1 ? "no $missing exists" : "none of $missing exists";
+        }
+
         $reporter->fail(sprintf(
             'info.xml <version> moved past %s and %s — the bump was committed, the tag never cut, '
             . 'so nothing installable carries %s; see docs/extension-releases.md',
             implode(', ', $untagged),
-            $tags === [] ? 'this repo has no v* tag at all' : 'no v' . $untagged[0] . ' exists',
+            $absent,
             count($untagged) === 1 ? 'that version' : 'those versions',
         ));
     }
