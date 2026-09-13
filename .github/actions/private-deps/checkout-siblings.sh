@@ -20,6 +20,10 @@ set -euo pipefail
 # pattern, and an unquoted expansion is what splits the list.
 set -f
 
+# Every path below is workspace-relative, and the calling job may run its own
+# steps from somewhere else entirely.
+cd "${GITHUB_WORKSPACE:-.}"
+
 root=.civikitchen-siblings
 
 # The calling workflow checks its own helpers out under the same parent. A

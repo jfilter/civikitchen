@@ -29,10 +29,18 @@ inputs:
     description: GitHub App private key (secrets.composer_app_private_key).
     default: ''
   ext_key:
-    description: This extension's key — the last entry of the enable list.
-    required: true
+    description: >-
+      This extension's key — the last entry of the enable list. Empty writes
+      no enable list at all: the override then only mounts the siblings, for a
+      caller that owns CIVIKITCHEN_ENABLE_EXTENSIONS itself.
+    default: ''
 
 outputs:
+  sibling_paths:
+    description: >-
+      Space-separated workspace-relative directories of the checked-out
+      siblings, each named after the extension key from its info.xml.
+    value: ${{ steps.siblings.outputs.paths }}
   sibling_override:
     description: >-
       Path of the compose override that mounts and enables the siblings, or
@@ -181,8 +189,12 @@ runs:
           echo "  app:"
           echo "    volumes:"
           printf '%s' "$mounts"
-          echo "    environment:"
-          echo "      CIVIKITCHEN_ENABLE_EXTENSIONS: \"$keys,$CK_EXT_KEY\""
+          # Without an ext_key the caller owns the enable list, and writing a
+          # partial one here would REPLACE theirs — environment merges per key.
+          if [ -n "$CK_EXT_KEY" ]; then
+            echo "    environment:"
+            echo "      CIVIKITCHEN_ENABLE_EXTENSIONS: \"$keys,$CK_EXT_KEY\""
+          fi
         } > "$override"
         echo "file=$override" >> "$GITHUB_OUTPUT"
 

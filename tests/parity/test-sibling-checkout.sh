@@ -44,6 +44,7 @@ run() {
     CK_SIBLING_REPO="$1" \
     CK_SIBLING_TOKEN=token \
     FAKE_KEYS="$2" \
+    GITHUB_WORKSPACE="$ws" \
     GITHUB_OUTPUT="$ws/github_output" \
       "$script"
   ) > "$out" 2>&1 || rc=$?
@@ -150,6 +151,7 @@ run_real() {
     PATH="$work/bin-real:$PATH" \
     CK_SIBLING_REPO="$2" \
     CK_SIBLING_TOKEN=token \
+    GITHUB_WORKSPACE="$ws" \
     GITHUB_OUTPUT="$ws/github_output" \
       "$script"
   ) > "$out" 2>&1 || rc=$?
@@ -166,5 +168,23 @@ for pin in "v1.0.0=tagged" "topic=branched" "$pinned_sha=tagged" "=moved-on"; do
   grep -qx "paths=$dir" "$ws/github_output" \
     || fail "pinned sibling paths output wrong: $(cat "$ws/github_output")"
 done
+
+# Called from a job whose steps run somewhere else (playwright-e2e sets a
+# working directory): the checkout still belongs to the workspace root.
+ws="$work/ws-workdir"
+mkdir -p "$ws/tests/e2e"
+out="$ws/out"
+rc=0
+(
+  cd "$ws/tests/e2e"
+  PATH="$work/bin-real:$PATH" \
+  CK_SIBLING_REPO=org/pinned \
+  CK_SIBLING_TOKEN=token \
+  GITHUB_WORKSPACE="$ws" \
+  GITHUB_OUTPUT="$ws/github_output" \
+    "$script"
+) > "$out" 2>&1 || rc=$?
+[ "$rc" = 0 ] || fail "checkout from a nested working directory failed: $(cat "$out")"
+[ -f "$ws/$dir/info.xml" ] || fail "sibling not checked out at the workspace root: $(cat "$out")"
 
 echo "sibling checkout suite OK"

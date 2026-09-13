@@ -9,6 +9,11 @@ declare(strict_types=1);
  * extension registry does not know cannot boot at all without them, so a job
  * that skips the wiring is not "unsupported" — it is unusable for that repo.
  *
+ * A job that consumes `sibling_repo` at all has to get its checkout from the
+ * same private-deps action: that is what names the directory after the
+ * extension key, which is where phpstan's ArchitectureTest and the test
+ * bootstrap look for it. A bespoke checkout lands somewhere else.
+ *
  * Usage: php sibling-wiring.php <workflow.yml> [<workflow.yml> ...]
  */
 
@@ -26,6 +31,10 @@ foreach ($files as $file) {
 
     foreach (ck_jobs($yaml) as $job => $range) {
         $body = ck_job_body($yaml, $range['start'], $range['end']);
+
+        if (str_contains($body, 'inputs.sibling_repo') && !str_contains($body, 'private-deps')) {
+            $problems[] = "$file: job '$job' uses sibling_repo without the private-dependency steps";
+        }
 
         // Only a job that brings a stack UP installs the extension; one that
         // only `exec`s reaches into a stack another job booted.

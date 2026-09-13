@@ -1,0 +1,16 @@
+# Fixture for the sibling-wiring gate: `bespoke` checks the sibling out with
+# its own actions/checkout instead of the private-dependency steps, so the
+# directory is named after the repo rather than the extension key.
+name: Fixture
+on: workflow_call
+
+jobs:
+  bespoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the sibling extension
+        if: ${{ inputs.sibling_repo != '' }}
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: ${{ inputs.sibling_repo }}
+          path: .civikitchen-siblings/sibling
