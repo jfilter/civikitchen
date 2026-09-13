@@ -179,10 +179,11 @@ only lacks the tooling layer, run `ckinit.php` directly:
 
 ```bash
 composer install --no-dev --working-dir=/path/to/civikitchen/packages/civikitchen-scenario-schema
-/path/to/civikitchen/scaffold/ckinit.php org.example.myext
+/path/to/civikitchen/scaffold/ckinit.php /path/to/org.example.myext
 ```
 
-`ckinit.php` reads the extension `<file>` value from `info.xml`, renders
+The argument is the extension directory, not the extension key. `ckinit.php`
+reads the extension `<file>` value from that directory's `info.xml`, renders
 `scaffold/template/extension/`, and refuses to overwrite existing files. Use `--force`
 only after reviewing conflicts. This makes the template an executable
 interface rather than a checklist to copy by hand.
@@ -196,8 +197,8 @@ files the repo takes ownership of after the first copy (`composer.json`,
 Two more modes work with that split:
 
 ```bash
-/path/to/civikitchen/scaffold/ckinit.php --check  org.example.myext   # report drift, exit 1 on any
-/path/to/civikitchen/scaffold/ckinit.php --update org.example.myext   # rewrite managed files, create missing ones
+/path/to/civikitchen/scaffold/ckinit.php --check  /path/to/org.example.myext   # report drift, exit 1 on any
+/path/to/civikitchen/scaffold/ckinit.php --update /path/to/org.example.myext   # rewrite managed files, create missing ones
 ```
 
 `--update` never touches an existing seeded file; review its output with
