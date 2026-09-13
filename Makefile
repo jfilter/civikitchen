@@ -110,7 +110,7 @@ endef
 	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
 	test-ck-headless test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
 	test-database-matrix test-demo-basic-auth test-release-retag \
-        lint-actions lint-php lint-schema build test-images e2e tools clean
+        lint-actions lint-php lint-schema lint-changelog test-changelog build test-images e2e tools clean
 
 help: ## Show this help
 	@echo "civikitchen — make targets"
@@ -128,7 +128,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -256,9 +256,12 @@ test-shell-portability: ## Shell portability lint accepts portable edits and rej
 test-install-trivy: ## Trivy installer architecture selection and release checksum pins
 	bash tests/parity/test-install-trivy.sh
 
+test-changelog: ## Changelog gate: grammar, release mode and section extraction
+	bash tests/parity/test-changelog-check.sh
+
 # --- static checks -----------------------------------------------------------
 
-lint: lint-shell lint-shell-portability lint-actions lint-php lint-schema ## Every static check CI runs
+lint: lint-shell lint-shell-portability lint-actions lint-php lint-schema lint-changelog ## Every static check CI runs
 
 lint-shell: $(SHELLCHECK) ## shellcheck (pinned) over every tracked or untracked, non-ignored shell file
 	@files=$$($(SHELL_FILES)) ; \
@@ -278,6 +281,12 @@ lint-actions: $(CACHE)/actionlint ## actionlint + zizmor over the workflows
 	$(CACHE)/actionlint -color
 	$(call pyrun_pinned,zizmor,$(CK_ZIZMOR_VERSION)) --no-online-audits --config zizmor.yml \
 	  .github/workflows .github/actions scaffold/template/extension/.github/workflows
+
+# The release job runs the same script with --release, so a tag whose version
+# has no section fails before anything is pushed. Structure is checked here so
+# a malformed file is a red PR, not a red release.
+lint-changelog: ## CHANGELOG.md follows the Keep a Changelog grammar
+	.github/scripts/changelog-check.sh --lint
 
 # Informational, not part of `lint`: reports token-level clones so duplication
 # gets noticed, without hard-failing on the existing backlog.
