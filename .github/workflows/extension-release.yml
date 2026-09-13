@@ -5,7 +5,7 @@
 #   name: Release
 #   on:
 #     push:
-#       tags: ['v[0-9]+.[0-9]+.[0-9]+']
+#       tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
 #   permissions:
 #     contents: read
 #   jobs:
@@ -15,7 +15,8 @@
 #       uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
 #
 # Pin the major (@v1), not @main — same versioned contract as extension-ci.yml
-# (docs/releases.md).
+# (docs/releases.md). A vX.Y.Z-<pre> tag publishes a pre-release, which never
+# takes Latest; a plain tag takes Latest only as the highest plain version.
 #
 # NOT a version bumper: the bump is a commit an author writes and reviews, the
 # tag is the statement that it is ready. Why not release-please, and what the
@@ -88,6 +89,9 @@ permissions:
 jobs:
   dist:
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    outputs:
+      prerelease: ${{ steps.flags.outputs.prerelease }}
+      latest: ${{ steps.flags.outputs.latest }}
     env:
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-release
       # Inputs reach the shell through the environment, never through expression
@@ -121,6 +125,21 @@ jobs:
           repository: jfilter/civikitchen
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
+
+      # Before any build work, so a tag that is no release version fails here.
+      # The checkout is shallow without tags; the API lists them with the
+      # job's read token. Left to gh, a late release of an older version or a
+      # pre-release takes Latest by date.
+      - name: Decide how the release is published
+        id: flags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
+            --jq '.[].ref' > "$RUNNER_TEMP/release-tags.txt"
+          .civikitchen-ci/.github/scripts/release-publish-flags.sh "$GITHUB_REF_NAME" \
+            < "$RUNNER_TEMP/release-tags.txt" | tee -a "$GITHUB_OUTPUT"
 
       - name: Install the locked CiviKitchen configuration parser
         run: |
@@ -413,12 +432,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CK_DRAFT: ${{ inputs.draft }}
+          CK_PRERELEASE: ${{ needs.dist.outputs.prerelease }}
+          CK_LATEST: ${{ needs.dist.outputs.latest }}
         run: |
           set -euo pipefail
-          args=()
+          args=(--latest="$CK_LATEST")
           if [ "$CK_DRAFT" = 'true' ]; then
             args+=(--draft)
           fi
+          if [ "$CK_PRERELEASE" = 'true' ]; then
+            args+=(--prerelease)
+          fi
+          # A re-run only replaces assets: upload leaves Latest and pre-release
+          # as the first run set them, even if a higher tag was released since.
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             echo "release $GITHUB_REF_NAME exists — replacing its assets"
             gh release upload "$GITHUB_REF_NAME" ckrelease-dist/* --clobber
