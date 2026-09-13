@@ -1106,13 +1106,16 @@ keys:
   `source.url` matches; a `git@github.com:` URL cannot use the token and
   fails as "repository not found".
 
-Two limits worth knowing before you switch something else on as well:
+Both inputs apply to **every job that boots a stack**, not just `ci`: the
+opt-in extra jobs (`matrix_images`, `mutation`, `upgrade_from_last_release`,
+`schema_parity`, `core_upgrade_from`, `playwright`) check the siblings out and
+install the lockfile the same way. The two jobs that move the working tree
+between commits (`upgrade_from_last_release`, `schema_parity`) re-run the
+install after each move, so each boot sees the `vendor/` tree of the commit it
+is testing.
 
-- The opt-in extra jobs (`matrix_images`, `upgrade_from_last_release`,
-  `schema_parity`, `core_upgrade_from`, `playwright`) boot the stack from a
-  plain checkout and
-  are **not** wired up for private dependencies. Combining them with these inputs fails fast with
-  that message rather than booting an extension that cannot load.
+One limit worth knowing before you switch something else on as well:
+
 - `composer.lock` still has to be committed — see the lockfile rule above. An
   install that is not reproducible is not a dependency, it is a moving target.
   The install runs on the **runner's** PHP, not the image's, and installs the

@@ -1,0 +1,20 @@
+# Fixture for the sibling-wiring gate: `boots` brings a stack up with neither
+# the private-dependency steps nor the override, `execs` only talks to one
+# somebody else booted and must not be reported.
+name: Fixture
+on: workflow_call
+
+jobs:
+  boots:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start CiviCRM stack
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" up -d --wait
+
+  execs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PHPUnit
+        run: |
+          docker compose -f "$CK_COMPOSE_FILE" exec -T app ckphpunit tests/phpunit

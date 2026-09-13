@@ -16,40 +16,7 @@ declare(strict_types=1);
  * Usage: php compose-project-isolation.php <workflow.yml> [<workflow.yml> ...]
  */
 
-/**
- * Job blocks keyed by name, each as its raw line range.
- *
- * @return array<string, array{start: int, end: int}>
- */
-function ck_jobs(string $yaml): array
-{
-    $lines = explode("\n", $yaml);
-    $jobsAt = null;
-    foreach ($lines as $i => $line) {
-        if (preg_match('/^jobs:\s*$/', $line) === 1) {
-            $jobsAt = $i;
-            break;
-        }
-    }
-    if ($jobsAt === null) {
-        return [];
-    }
-
-    $jobs = [];
-    $current = null;
-    for ($i = $jobsAt + 1, $n = count($lines); $i < $n; $i++) {
-        // A job header is exactly one indent level below `jobs:`.
-        if (preg_match('/^  ([A-Za-z0-9_-]+):\s*$/', $lines[$i], $m) === 1) {
-            if ($current !== null) {
-                $jobs[$current]['end'] = $i - 1;
-            }
-            $current = $m[1];
-            $jobs[$current] = ['start' => $i, 'end' => $n - 1];
-        }
-    }
-
-    return $jobs;
-}
+require_once __DIR__ . '/workflow-jobs.php';
 
 $files = array_slice($argv, 1);
 if ($files === []) {
@@ -60,14 +27,9 @@ if ($files === []) {
 $problems = [];
 foreach ($files as $file) {
     $yaml = (string) file_get_contents($file);
-    $lines = explode("\n", $yaml);
 
     foreach (ck_jobs($yaml) as $job => $range) {
-        $body = implode("\n", array_slice($lines, $range['start'], $range['end'] - $range['start'] + 1));
-        // A compose invocation routinely wraps over a backslash continuation,
-        // so `up` lands on a later line than `docker compose`. Join them first
-        // or the boot goes unseen and the job is silently waved through.
-        $joined = preg_replace('/\\\\\n\s*/', ' ', $body) ?? $body;
+        $joined = ck_job_body($yaml, $range['start'], $range['end']);
 
         // Only jobs that actually bring a stack up can collide. `exec` alone
         // reaches into whatever the booting job created and is not a boot.
