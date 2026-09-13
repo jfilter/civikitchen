@@ -14,6 +14,22 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- `extension-release.yml` ships build output a repo does not commit. The repo
+  declares it in `civikitchen.yaml` under `policy.dist.build` (`tool: bun` and
+  its `outputs`); the release runs `bun install --frozen-lockfile` and
+  `bun run build` on the Bun `package.json` pins, and `ckrelease dist` stages
+  exactly those untracked paths into the archived tree, on top of
+  `composer_install` too. A missing or tracked output, an output the archive
+  leaves out, or a missing `packageManager` pin or `bun.lock` fails the release,
+  and `ckrelease verify` requires every declared output in the zip.
+
+### Fixed
+
+- `ckrelease` prints why `ckconform --dist-paths` refused the release layout
+  instead of only reporting that it could not read it.
+
 ## [1.23.0] - 2026-09-14
 
 ### Added
