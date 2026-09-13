@@ -30,6 +30,7 @@ final class Registry
         Check\CiWorkflowCheck::class,
         Check\ReleaseWorkflowCheck::class,
         Check\ReleaseTagCoherenceCheck::class,
+        Check\ReleaseTagsCheck::class,
         Check\UnreleasedShippedChangesCheck::class,
         Check\ConfigWithoutRunnerCheck::class,
         Check\RequiredExtensionsCheck::class,
