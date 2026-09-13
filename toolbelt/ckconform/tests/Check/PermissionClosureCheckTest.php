@@ -320,6 +320,16 @@ final class PermissionClosureCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
     }
 
+    public function testNumericPermissionStringsAreCheckedLikeAnyOther(): void
+    {
+        $context = $this->repo([
+            'managed/Thing.mgd.php' => "<?php\nreturn [['permission' => '1'], ['permission' => ['2']]];\n",
+        ], git: true);
+        $reporter = $this->run_(new PermissionClosureCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, "managed/Thing.mgd.php: permission '2' is neither a known core permission");
+    }
+
     public function testNonLiteralPermissionsAreIgnored(): void
     {
         $context = $this->repo([
@@ -350,6 +360,99 @@ final class PermissionClosureCheckTest extends CheckTestCase
         $reporter = $this->run_(new PermissionClosureCheck(), $context);
         $this->assertPasses($reporter);
         $this->assertWarns($reporter);
+    }
+
+    public function testAnArrowFunctionInsideASpecDoesNotEndIt(): void
+    {
+        $context = $this->repo([
+            'myext.php' => self::HOOK,
+            'managed/Thing.mgd.php' => "<?php\nreturn ['permission' => [fn() => ['x' => 'noise string'], 'administer MyExtt']];\n",
+        ], git: true);
+        $this->assertFails($this->run_(new PermissionClosureCheck(), $context), "permission 'administer MyExtt'");
+    }
+
+    public function testListAndNamedArgumentsOfACheckCallAreRead(): void
+    {
+        $context = $this->repo([
+            'myext.php' => self::HOOK,
+            'CRM/Myext/Page/List.php' => "<?php\nCRM_Core_Permission::check(['administer MyExtt']);\n",
+            'CRM/Myext/Page/Nested.php' => "<?php\nCRM_Core_Permission::check([['access CiviCRM', 'acces MyExt reports']]);\n",
+            'CRM/Myext/Page/Named.php' => "<?php\nCRM_Core_Permission::check(permissions: 'administer MyEXt');\n",
+            'CRM/Myext/Page/NamedList.php' => "<?php\nCRM_Core_Permission::check(permissions: array('access MyExt reportss'));\n",
+        ], git: true);
+        $reporter = $this->run_(new PermissionClosureCheck(), $context);
+        $this->assertFails($reporter, "CRM/Myext/Page/List.php: permission 'administer MyExtt'");
+        $this->assertFails($reporter, "CRM/Myext/Page/Nested.php: permission 'acces MyExt reports'");
+        $this->assertFails($reporter, "CRM/Myext/Page/Named.php: permission 'administer MyEXt'");
+        $this->assertFails($reporter, "CRM/Myext/Page/NamedList.php: permission 'access MyExt reportss'");
+    }
+
+    public function testAStringThatIsOnlyPartOfAnExpressionIsNotAPermission(): void
+    {
+        $context = $this->repo([
+            'CRM/Myext/Page/Thing.php' => "<?php\nCRM_Core_Permission::check('add contributions of type ' . \$type);\n",
+            'ang/afformThing.aff.php' => <<<'PHP'
+                <?php
+                return [
+                  ['permission' => "@afform:" . $name],
+                  ['permission' => ['edit all ' . $what, $prefix . ' records']],
+                  ['permission' => [$ok ? 'access one thing' : 'access other thing']],
+                ];
+                PHP,
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    public function testAByReferenceHookIsRead(): void
+    {
+        $context = $this->repo([
+            'myext.php' => <<<'PHP'
+                <?php
+                function &myext_civicrm_permission(&$permissions) {
+                  $permissions += ['administer My Ext' => ['label' => 'My Ext']];
+                  return $permissions;
+                }
+                PHP,
+            'CRM/Myext/Page/Thing.php' => "<?php\nCRM_Core_Permission::check('administer My Ext');\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    public function testEveryPermissionProviderInAFileContributesDefinitions(): void
+    {
+        $context = $this->repo([
+            'Civi/Myext/Providers.php' => <<<'PHP'
+                <?php
+                class First { public static function getPermissions() { return ['administer First Thing' => []]; } }
+                class Second { public static function getPermissions() { return ['administer Second Thing' => []]; } }
+                PHP,
+            'CRM/Myext/Page/Thing.php' => "<?php\nCRM_Core_Permission::check('administer Second Thing');\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    public function testASubscriptOnAStringInsideASpecIsNotAList(): void
+    {
+        $context = $this->repo([
+            'managed/Thing.mgd.php' => "<?php\nreturn ['permission' => ['abc'['2'], \"a\$b\"['3'], <<<X\nabc\nX['4']]];\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    /**
+     * Each boundary of the UTF-8 byte length, plus the C1 range and NUL that
+     * entity decoding does not produce.
+     */
+    public function testUnicodeEscapesResolveToUtf8(): void
+    {
+        $context = $this->repo([
+            'myext.php' => "<?php\nfunction myext_civicrm_permission(&\$permissions) {\n"
+                . "  \$permissions['administer My Ext \u{0} \u{7f} \u{80} \u{9f} \u{7ff} \u{800} \u{ffff} \u{10000} \u{10ffff} end'] = [];\n}\n",
+            'CRM/Myext/Page/Thing.php' => "<?php\nCRM_Core_Permission::check("
+                . '"administer My Ext \u{0} \u{7F} \u{80} \u{9f} \u{7ff} \u{0800} \u{ffff} \u{10000} \u{10FFFF} end"'
+                . ");\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
     }
 
     public function testUntrackedFilesDoNotDecideTheVerdict(): void

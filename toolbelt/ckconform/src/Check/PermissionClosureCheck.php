@@ -87,10 +87,16 @@ final class PermissionClosureCheck implements Check
     private const PSEUDO_PERMISSIONS = ['*always allow*', '*always deny*', '*allow*', '\*always allow\*', '1', '0'];
 
     /** Tokens after which `[` is a subscript rather than a list. */
-    private const SUBSCRIPTABLE = [T_VARIABLE, ']', ')', '}', T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE];
+    private const SUBSCRIPTABLE = [
+        T_VARIABLE, ']', ')', '}', T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE,
+        T_CONSTANT_ENCAPSED_STRING, T_END_HEREDOC, '"',
+    ];
 
     /** Tokens that open a bracketed group. */
     private const OPENERS = ['[', '(', '{', T_ATTRIBUTE, T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES];
+
+    /** Tokens that end a list element or a call argument. */
+    private const ELEMENT_END = [',', ')', ']'];
 
     public function name(): string
     {
@@ -104,11 +110,11 @@ final class PermissionClosureCheck implements Check
             return;
         }
 
-        $defined = $this->definedPermissions($context, $files);
-        /** @var array<string, list<string>> $used permission => files */
-        $used = $this->usedPermissions($context, $files);
+        [$defined, $used] = $this->scan($context, $files);
 
         foreach ($used as $permission => $where) {
+            // A numeric string became an integer array key.
+            $permission = (string) $permission;
             if ($this->isKnown($permission, $defined)) {
                 continue;
             }
@@ -173,89 +179,124 @@ final class PermissionClosureCheck implements Check
     }
 
     /**
-     * Permissions this extension declares: hook_civicrm_permission assignments
-     * and the array literal a hook may return, plus APIv4 permission providers
-     * where the string is greppable.
+     * The permissions the repo defines, and the files each used permission
+     * appears in.
      *
      * @param  list<string> $files
-     * @return list<string>
+     * @return array{list<string>, array<string, list<string>>}
      */
-    private function definedPermissions(Context $context, array $files): array
+    private function scan(Context $context, array $files): array
     {
         $defined = [];
+        $used = [];
         foreach ($files as $file) {
-            if (!str_ends_with($file, '.php')) {
-                continue;
-            }
             $contents = $context->read($file);
             if ($contents === null) {
                 continue;
             }
 
-            // $permissions['administer CiviFoo'] = ... — the canonical hook body.
-            $tokens = $this->tokens($contents);
-            foreach (array_keys($tokens) as $i) {
-                if (self::tokenIs($tokens, $i, '$permissions') && self::tokenIs($tokens, $i + 1, '[')
-                    && self::tokenIs($tokens, $i + 2, T_CONSTANT_ENCAPSED_STRING) && self::tokenIs($tokens, $i + 3, ']')
-                ) {
-                    $defined[] = $this->literal($tokens[$i + 2]->text);
-                }
+            $permissions = [];
+            if (preg_match('#(^|/)xml/Menu/[^/]+\.xml$#', $file) === 1) {
+                $permissions = $this->fromMenuXml($contents);
+            } elseif (str_ends_with($file, '.php')) {
+                $tokens = $this->tokens($contents);
+                array_push($defined, ...$this->definedIn($tokens));
+                $permissions = $this->fromPhp($tokens);
+            } elseif (str_ends_with($file, '.aff.json')) {
+                $permissions = $this->fromAffJson($contents);
             }
 
-            // A hook or provider that returns the whole map at once. Scanned
-            // only inside the function body: a .php file with a dozen hooks in
-            // it would otherwise donate every unrelated string with a space to
-            // the definition set, and an over-wide definition set is what turns
-            // a warning into a false FAIL.
-            foreach (['/^\w*_civicrm_permission$/i', '/^getPermissions$/i'] as $name) {
-                foreach ($this->arrayKeyLiterals($this->functionBody($tokens, $name) ?? []) as $permission) {
-                    $defined[] = $permission;
+            foreach ($permissions as $permission) {
+                // CiviCRM accepts comma/semicolon permission expressions in
+                // more than menu XML (notably API action metadata). Closure is
+                // about every leaf permission, independent of AND/OR shape.
+                foreach (preg_split('/[;,]/', $permission) ?: [] as $part) {
+                    $part = trim($part);
+                    if ($part === '') {
+                        continue;
+                    }
+                    $used[$part] ??= [];
+                    if (!in_array($file, $used[$part], true)) {
+                        $used[$part][] = $file;
+                    }
                 }
             }
         }
 
-        return array_values(array_unique(array_filter(
+        ksort($used);
+        $defined = array_values(array_unique(array_filter(
             $defined,
             static fn (string $p): bool => $p !== '' && !str_contains($p, '$'),
         )));
+
+        return [$defined, $used];
     }
 
     /**
-     * The `{ … }` tokens of the first function with a body whose name matches
-     * $name. Braces inside strings and comments are not tokens and do not
-     * count; a missing closing brace yields the rest of the file.
+     * Permissions a PHP file declares: hook_civicrm_permission assignments and
+     * the array literal a hook may return, plus APIv4 permission providers
+     * where the string is greppable.
      *
      * @param  list<\PhpToken> $tokens
-     * @return list<\PhpToken>|null
+     * @return list<string>
      */
-    private function functionBody(array $tokens, string $name): ?array
+    private function definedIn(array $tokens): array
     {
+        $defined = [];
+
+        // $permissions['administer CiviFoo'] = ... — the canonical hook body.
         foreach (array_keys($tokens) as $i) {
-            if (!self::tokenIs($tokens, $i, T_FUNCTION) || !self::tokenIs($tokens, $i + 1, T_STRING)
-                || preg_match($name, $tokens[$i + 1]->text) !== 1
+            if (self::tokenIs($tokens, $i, '$permissions') && self::tokenIs($tokens, $i + 1, '[')
+                && self::tokenIs($tokens, $i + 2, T_CONSTANT_ENCAPSED_STRING) && self::tokenIs($tokens, $i + 3, ']')
+            ) {
+                $defined[] = $this->literal($tokens[$i + 2]->text);
+            }
+        }
+
+        // A hook or provider that returns the whole map at once. Scanned
+        // only inside the function body: a .php file with a dozen hooks in
+        // it would otherwise donate every unrelated string with a space to
+        // the definition set, and an over-wide definition set is what turns
+        // a warning into a false FAIL.
+        foreach (['/^\w*_civicrm_permission$/i', '/^getPermissions$/i'] as $name) {
+            array_push($defined, ...$this->arrayKeyLiterals($this->functionBodies($tokens, $name)));
+        }
+
+        return $defined;
+    }
+
+    /**
+     * The `{ … }` tokens of every function with a body whose name matches
+     * $name, one after the other. Braces inside strings and comments are not
+     * tokens and do not count; a missing closing brace yields the rest of the
+     * file.
+     *
+     * @param  list<\PhpToken> $tokens
+     * @return list<\PhpToken>
+     */
+    private function functionBodies(array $tokens, string $name): array
+    {
+        $bodies = [];
+        for ($i = 0, $count = count($tokens); $i < $count; $i++) {
+            // `function &name()` returns by reference.
+            $at = self::tokenIs($tokens, $i + 1, T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG) ? $i + 2 : $i + 1;
+            if (!$tokens[$i]->is(T_FUNCTION) || !self::tokenIs($tokens, $at, T_STRING)
+                || preg_match($name, $tokens[$at]->text) !== 1
             ) {
                 continue;
             }
-            $start = $i + 2;
+            $start = $at + 1;
             while (isset($tokens[$start]) && !$tokens[$start]->is(['{', ';'])) {
                 $start++;
             }
             if (!self::tokenIs($tokens, $start, '{')) {
                 continue;
             }
-            $depth = 0;
-            for ($j = $start, $count = count($tokens); $j < $count; $j++) {
-                if ($tokens[$j]->is(['{', T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES])) {
-                    $depth++;
-                } elseif ($tokens[$j]->is('}') && --$depth === 0) {
-                    return array_slice($tokens, $start, $j - $start + 1);
-                }
-            }
-
-            return array_slice($tokens, $start);
+            $i = $this->closingIndex($tokens, $start) ?? $count - 1;
+            array_push($bodies, ...array_slice($tokens, $start, $i - $start + 1));
         }
 
-        return null;
+        return $bodies;
     }
 
     /**
@@ -280,50 +321,6 @@ final class PermissionClosureCheck implements Check
         }
 
         return $found;
-    }
-
-    /**
-     * @param  list<string> $files
-     * @return array<string, list<string>>
-     */
-    private function usedPermissions(Context $context, array $files): array
-    {
-        $used = [];
-        foreach ($files as $file) {
-            $contents = $context->read($file);
-            if ($contents === null) {
-                continue;
-            }
-
-            $permissions = [];
-            if (preg_match('#(^|/)xml/Menu/[^/]+\.xml$#', $file) === 1) {
-                $permissions = $this->fromMenuXml($contents);
-            } elseif (str_ends_with($file, '.php')) {
-                $permissions = $this->fromPhp($contents);
-            } elseif (str_ends_with($file, '.aff.json')) {
-                $permissions = $this->fromAffJson($contents);
-            }
-
-            foreach ($permissions as $permission) {
-                // CiviCRM accepts comma/semicolon permission expressions in
-                // more than menu XML (notably API action metadata). Closure is
-                // about every leaf permission, independent of AND/OR shape.
-                foreach (preg_split('/[;,]/', $permission) ?: [] as $part) {
-                    $part = trim($part);
-                    if ($part === '') {
-                        continue;
-                    }
-                    $used[$part] ??= [];
-                    if (!in_array($file, $used[$part], true)) {
-                        $used[$part][] = $file;
-                    }
-                }
-            }
-        }
-
-        ksort($used);
-
-        return $used;
     }
 
     /**
@@ -355,21 +352,22 @@ final class PermissionClosureCheck implements Check
      * actions, Afform metadata in PHP). Only literals: a variable or a constant
      * cannot be resolved statically, and guessing would produce noise.
      *
+     * @param  list<\PhpToken> $tokens
      * @return list<string>
      */
-    private function fromPhp(string $contents): array
+    private function fromPhp(array $tokens): array
     {
-        $tokens = $this->tokens($contents);
         $found = [];
         foreach (array_keys($tokens) as $i) {
             // PHP resolves class and method names case-insensitively.
             if (self::tokenIs($tokens, $i, [T_STRING, T_NAME_FULLY_QUALIFIED])
                 && strcasecmp(ltrim($tokens[$i]->text, '\\'), 'CRM_Core_Permission') === 0
                 && self::tokenIs($tokens, $i + 1, T_DOUBLE_COLON) && self::tokenIs($tokens, $i + 2, T_STRING)
-                && strcasecmp($tokens[$i + 2]->text, 'check') === 0
-                && self::tokenIs($tokens, $i + 3, '(') && self::tokenIs($tokens, $i + 4, T_CONSTANT_ENCAPSED_STRING)
+                && strcasecmp($tokens[$i + 2]->text, 'check') === 0 && self::tokenIs($tokens, $i + 3, '(')
             ) {
-                $found[] = $this->literal($tokens[$i + 4]->text);
+                // check(permissions: …) names its argument.
+                $named = self::tokenIs($tokens, $i + 4, T_STRING) && self::tokenIs($tokens, $i + 5, ':');
+                array_push($found, ...$this->valueLiterals($tokens, $named ? $i + 6 : $i + 4));
             }
         }
 
@@ -414,14 +412,8 @@ final class PermissionClosureCheck implements Check
         $count = count($tokens);
         $found = [];
         for ($i = 0; $i + 2 < $count; $i++) {
-            if (!$tokens[$i]->is(["'permission'", '"permission"']) || !$tokens[$i + 1]->is(T_DOUBLE_ARROW)) {
-                continue;
-            }
-            $j = $i + 2;
-            if ($tokens[$j]->is(T_CONSTANT_ENCAPSED_STRING)) {
-                $found[] = $this->literal($tokens[$j]->text);
-            } elseif ($tokens[$j]->is(['[', T_ARRAY])) {
-                array_push($found, ...$this->listLiterals($tokens, $j));
+            if ($tokens[$i]->is(["'permission'", '"permission"']) && $tokens[$i + 1]->is(T_DOUBLE_ARROW)) {
+                array_push($found, ...$this->valueLiterals($tokens, $i + 2));
             }
         }
 
@@ -429,8 +421,25 @@ final class PermissionClosureCheck implements Check
     }
 
     /**
+     * The strings of the expression at $i when it is a string literal or a list
+     * of them; a string that is only an operand of a larger expression is none.
+     *
+     * @param  list<\PhpToken> $tokens
+     * @return list<string>
+     */
+    private function valueLiterals(array $tokens, int $i): array
+    {
+        if (self::tokenIs($tokens, $i, T_CONSTANT_ENCAPSED_STRING)) {
+            return self::tokenIs($tokens, $i + 1, self::ELEMENT_END) ? [$this->literal($tokens[$i]->text)] : [];
+        }
+
+        return self::tokenIs($tokens, $i, ['[', T_ARRAY]) ? $this->listLiterals($tokens, $i) : [];
+    }
+
+    /**
      * The string leaves of the list literal opening at $start. Subscripts,
-     * calls, closures and attributes inside it are skipped whole; a key
+     * calls, closures, arrow functions and attributes inside it are skipped
+     * whole, and so is a string that is only part of an element; a key
      * anywhere, or a list that never closes, yields nothing.
      *
      * @param  list<\PhpToken> $tokens
@@ -461,7 +470,18 @@ final class PermissionClosureCheck implements Check
                 }
                 $j = $close;
                 $token = $tokens[$j];
-            } elseif ($token->is(T_CONSTANT_ENCAPSED_STRING)) {
+            } elseif ($token->is(T_FN)) {
+                // An arrow function's body runs to the end of its element.
+                while ($j + 1 < $count && !$tokens[$j + 1]->is(self::ELEMENT_END)) {
+                    $j = $tokens[$j + 1]->is(self::OPENERS) ? ($this->closingIndex($tokens, $j + 1) ?? $count) : $j + 1;
+                }
+                if ($j >= $count) {
+                    return [];
+                }
+                $token = $tokens[$j];
+            } elseif ($token->is(T_CONSTANT_ENCAPSED_STRING) && ($previous?->is(['[', '(', ',']) ?? false)
+                && self::tokenIs($tokens, $j + 1, self::ELEMENT_END)
+            ) {
                 $strings[] = $this->literal($token->text);
             }
             $previous = $token;
@@ -502,13 +522,28 @@ final class PermissionClosureCheck implements Check
         return preg_replace_callback(
             '/\\\\(?:([nrtvef\\\\$"])|([0-7]{1,3})|x([0-9A-Fa-f]{1,2})|u\{([0-9A-Fa-f]+)\})/',
             static fn (array $m): string => match (true) {
-                ($m[4] ?? '') !== '' => html_entity_decode('&#x' . $m[4] . ';', ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                ($m[4] ?? '') !== '' => self::utf8((int) hexdec($m[4])),
                 ($m[3] ?? '') !== '' => chr((int) hexdec($m[3])),
                 ($m[2] ?? '') !== '' => chr((int) octdec($m[2]) & 255),
                 default => ['n' => "\n", 'r' => "\r", 't' => "\t", 'v' => "\v", 'e' => "\e", 'f' => "\f"][$m[1]] ?? $m[1],
             },
             $body,
         ) ?? $body;
+    }
+
+    /**
+     * The UTF-8 bytes of a code point, as PHP encodes a `\u{…}` escape.
+     */
+    private static function utf8(int $codePoint): string
+    {
+        return match (true) {
+            $codePoint < 0x80 => chr($codePoint),
+            $codePoint < 0x800 => chr(0xC0 | ($codePoint >> 6)) . chr(0x80 | ($codePoint & 0x3F)),
+            $codePoint < 0x10000 => chr(0xE0 | ($codePoint >> 12)) . chr(0x80 | (($codePoint >> 6) & 0x3F))
+                . chr(0x80 | ($codePoint & 0x3F)),
+            default => chr(0xF0 | ($codePoint >> 18)) . chr(0x80 | (($codePoint >> 12) & 0x3F))
+                . chr(0x80 | (($codePoint >> 6) & 0x3F)) . chr(0x80 | ($codePoint & 0x3F)),
+        };
     }
 
     /**
