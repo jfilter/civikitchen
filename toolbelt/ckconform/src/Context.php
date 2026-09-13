@@ -23,6 +23,9 @@ final class Context
     /** @var array<string, string>|null */
     private ?array $policy = null;
 
+    /** @var list<string>|null */
+    private ?array $versionHistory = null;
+
     public function __construct(
         public readonly string $root,
         public readonly ?string $coreDir = null,
@@ -433,6 +436,77 @@ final class Context
         $tag = trim((string) $this->git(['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*']));
 
         return $tag === '' ? null : $tag;
+    }
+
+    /**
+     * Every `v*` tag in the checkout, unordered. The release-tags rule asks
+     * whether a given version was ever tagged, which is a set question, not
+     * the "last release on this line of history" newestTag() answers.
+     *
+     * @return list<string>
+     */
+    public function tags(): array
+    {
+        $output = $this->git(['tag', '--list', 'v[0-9]*']);
+        if ($output === null) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map('trim', explode("\n", $output)),
+            static fn (string $tag): bool => $tag !== '',
+        ));
+    }
+
+    /**
+     * The distinct `<version>` values info.xml has carried, oldest first.
+     *
+     * Ordered by history, not by version_compare: what a release rule needs to
+     * know is which numbers this repo actually published its way through. Each
+     * historical blob is parsed as XML, because a diff-scraping variant reads a
+     * `<version>` out of a comment or a neighbouring element.
+     *
+     * @return list<string>
+     */
+    public function infoVersionHistory(): array
+    {
+        if ($this->versionHistory === null) {
+            $this->versionHistory = [];
+            $log = $this->git(['log', '--format=%H', '--', 'info.xml']);
+            $hashes = $log === null ? [] : array_filter(array_map('trim', explode("\n", $log)));
+            // git log is newest first and this list is oldest first.
+            foreach (array_reverse($hashes) as $hash) {
+                $version = $this->versionAt($hash);
+                if ($version === null || $version === end($this->versionHistory)) {
+                    continue;
+                }
+                $this->versionHistory[] = $version;
+            }
+            $this->versionHistory = array_values(array_unique($this->versionHistory));
+        }
+
+        return $this->versionHistory;
+    }
+
+    /** info.xml's `<version>` at one commit, null when it is absent or unparsable. */
+    private function versionAt(string $hash): ?string
+    {
+        // ./info.xml, not info.xml: a blob path is repo-root-relative unless it
+        // is explicitly relative to the working directory, which a monorepo
+        // extension root is not.
+        $raw = $this->git(['show', $hash . ':./info.xml']);
+        if ($raw === null) {
+            return null;
+        }
+        $previous = libxml_use_internal_errors(true);
+        $parsed = simplexml_load_string($raw);
+        libxml_use_internal_errors($previous);
+        if ($parsed === false || !isset($parsed->version)) {
+            return null;
+        }
+        $version = trim((string) $parsed->version);
+
+        return $version === '' ? null : $version;
     }
 
     /**
