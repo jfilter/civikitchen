@@ -64,7 +64,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - `permission-closure` no longer reads an entity field named `permission` as a
   permission spec, nor array subscripts or call arguments inside a spec, and
   reads every permission of a nested OR list instead of stopping after the
-  first group. Escaped quotes in a permission string are resolved.
+  first group. Escaped quotes in a permission string are resolved in specs,
+  `CRM_Core_Permission::check()` calls and `hook_civicrm_permission`.
 - `permission-closure` accepts core's `*always deny*` sentinel and afform's
   `@afformPageToken` and `manage own afform`.
 
