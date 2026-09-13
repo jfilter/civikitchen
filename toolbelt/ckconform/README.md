@@ -33,7 +33,8 @@ JSON, walk directories recursively, and — the actual point — **have tests**.
 
 `Context` is the only thing that touches the filesystem: `infoXml()` (SimpleXML),
 `json()`, `policy()`/`policyValue()` (the repo's `civikitchen.yaml`), `findFiles()`
-(recursive), `tracked()`/`isTracked()`/`trackedFiles()` (git), `workflows()`.
+(recursive), `tracked()`/`isTracked()`/`trackedFiles()` (git), `workflows()`,
+`tags()`/`newestTag()`/`isShallowClone()`/`infoVersionHistory()` (release history).
 If you find yourself reaching for a regex over a structured file, add a method
 there instead.
 

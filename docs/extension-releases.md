@@ -24,6 +24,11 @@ Three things, in this order:
 Step 1 is deliberately not automated. A version number is a compatibility claim
 about the change, and nothing derives that from a diff.
 
+Steps 1 and 2 belong together, and `ckconform`'s `release-tags` is what holds
+them together after the fact: it compares the `<version>` values `info.xml` has
+carried with the repo's tags, and fails on a version the repo bumped past
+without ever tagging — that release exists in the history and on no site.
+
 ## Adopting it in a repo
 
 ```yaml

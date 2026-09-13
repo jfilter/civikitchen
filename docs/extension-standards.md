@@ -353,6 +353,16 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   `composer.json` and they are bumped together; `ckrelease check` is what says
   so out loud. See [Releasing an extension](extension-releases.md). Not a
   template-managed file yet, so adoption is per repo and one line.
+- Every version the repo has moved past carries its `v<version>` tag.
+  `ckconform`'s `release-tags` reads the `<version>` history of `info.xml` and
+  the repo's tags: a number that was bumped through and never tagged is a
+  release nothing can install, and it fails. The current version is left to
+  `release-tag-coherence`, so the window between the bump commit and the tag
+  push is not a finding twice. On a shallow clone the rule reports itself
+  unevaluated rather than clean — the shared CI checks out with
+  `fetch-depth: 0` and `fetch-tags: true` for exactly this. A repo that
+  deliberately cuts no releases declares `policy.release: none` with its
+  reason. See [Releasing an extension](extension-releases.md).
 - `composer.json` with the extension metadata; no `node_modules`/`vendor`/build
   artifacts committed (frontend builds commit only `dist/`).
 - `.gitignore` covers every artifact the repo can regenerate — the phpunit
