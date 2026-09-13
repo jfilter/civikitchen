@@ -114,8 +114,10 @@ smoke test → `gh release create --generate-notes` with the zip and its
 A tag with a SemVer pre-release suffix (`v1.3.0-rc.1`) is published as a
 pre-release and never marked Latest; a plain tag is marked Latest only when it
 is the highest plain `vX.Y.Z` in the repo, so a late release of an older version
-leaves Latest where it is. Any other tag shape (`v1.3`, `v2.2.7.1`) fails the
-run before the build.
+leaves Latest where it is — and a higher tag whose release never succeeded keeps
+Latest from lower releases until it does. A draft is never marked Latest. A tag
+the trigger lets through that is no SemVer version (`v1.2.3-rc..1`) fails the
+run before the build; shapes such as `v1.3` or `v2.2.7.1` start no run at all.
 
 Locally, `ckrelease dist` produces exactly the same archive from the same
 commit — `git archive` is deterministic — so "what will ship" is inspectable

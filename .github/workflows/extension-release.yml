@@ -436,9 +436,12 @@ jobs:
           CK_LATEST: ${{ needs.dist.outputs.latest }}
         run: |
           set -euo pipefail
-          args=(--latest="$CK_LATEST")
+          # A draft cannot be Latest; publishing it later decides that in the UI.
+          args=()
           if [ "$CK_DRAFT" = 'true' ]; then
             args+=(--draft)
+          else
+            args+=(--latest="$CK_LATEST")
           fi
           if [ "$CK_PRERELEASE" = 'true' ]; then
             args+=(--prerelease)

@@ -32,8 +32,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - MariaDB 12.2 in the database compatibility matrix.
 - `extension-release.yml` publishes a `vX.Y.Z-<pre-release>` tag as a GitHub
   pre-release that never takes Latest. Callers extend their tag trigger with
-  `'v[0-9]+.[0-9]+.[0-9]+-*'` to release them; any other tag shape fails the
-  run before the build.
+  `'v[0-9]+.[0-9]+.[0-9]+-*'` to release them; a tag the trigger lets through
+  that is no SemVer version fails the run before the build.
 
 ### Changed
 
