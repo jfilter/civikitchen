@@ -5,7 +5,8 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-"${root}/toolbelt/bin/ck" help | grep -q 'ck conform'
+help=$("${root}/toolbelt/bin/ck" help)
+grep -q 'ck conform' <<<"${help}"
 printf '%s\n' 'version: 1' 'policy:' '  coverage:' '    minimum: 73' > "${work}/civikitchen.yaml"
 value=$(cd "${work}" && "${root}/toolbelt/bin/ck" conform --policy min_coverage)
 [ "${value}" = 73 ] || { echo "ck conform did not dispatch (got: ${value})" >&2; exit 1; }
@@ -41,7 +42,8 @@ php -r '
 "${root}/toolbelt/bin/ckprofile" validate "${root}/docker/profiles/mailing" >/dev/null
 profiles=$("${root}/toolbelt/bin/ck" profile list)
 grep -q $'^mailing\t' <<<"${profiles}"
-"${root}/toolbelt/bin/ckdeps" --help | grep -q 'ck dependencies'
+deps_help=$("${root}/toolbelt/bin/ckdeps" --help)
+grep -q 'ck dependencies' <<<"${deps_help}"
 for alias in ckcivix ckcompat ckconform ckcoverage ckdeps ckeslint ckfmt cklifecycle cklint ckmutate ckphpunit ckprofile ckrelease ckscenario ckschemadiff cksmarty; do
   [ -L "${root}/toolbelt/bin/${alias}" ] || { echo "${alias} is not a symlink" >&2; exit 1; }
   [ "$(readlink "${root}/toolbelt/bin/${alias}")" = ck ] || { echo "${alias} does not target ck" >&2; exit 1; }

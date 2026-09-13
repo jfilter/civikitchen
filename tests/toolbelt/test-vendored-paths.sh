@@ -41,13 +41,15 @@ printf '%s\n' \
   '  vendored_paths:' \
   '    - path: .docker/upstream/proxy' \
   '      reason: unmodified upstream, must stay byte-identical' > civikitchen.yaml
-list | grep -q '^own/Thing.php$' || fail "the repo's own file was dropped"
-list | grep -q 'upstream/proxy' && fail "the declared vendored path was still listed"
+files="$(list)"
+grep -q '^own/Thing.php$' <<<"$files" || fail "the repo's own file was dropped"
+grep -q 'upstream/proxy' <<<"$files" && fail "the declared vendored path was still listed"
 
 # A declared prefix names ONE place, not every directory sharing its name.
 mkdir -p other/.docker/upstream/proxy
 printf '<?php\n' > other/.docker/upstream/proxy/proxy.php
-list | grep -q '^other/.docker/upstream/proxy/proxy.php$' \
+files="$(list)"
+grep -q '^other/.docker/upstream/proxy/proxy.php$' <<<"$files" \
   || fail "the prefix matched a same-named directory somewhere else"
 
 # A top-level prefix (civix drops `mixin/` into every extension) must survive
@@ -57,7 +59,8 @@ printf '<?php\n' > mixin/polyfill.php
 printf '%s\n' \
   '    - path: mixin' \
   '      reason: upstream polyfill, copied verbatim' >> civikitchen.yaml
-list | grep -q '^mixin/polyfill.php$' && fail "a top-level vendored prefix was still listed"
+files="$(list)"
+grep -q '^mixin/polyfill.php$' <<<"$files" && fail "a top-level vendored prefix was still listed"
 
 # phpcs keeps only the FIRST --ignore it is given and discards every later one.
 # So the exclusions must arrive as ONE comma-separated value: the moment they

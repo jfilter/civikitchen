@@ -133,7 +133,8 @@ php -r '
   assert($d["policy"]["license"] === "Proprietary");
   assert($d["policy"]["copyright"] === "Acme Collective");
 ' "$root/packages/civikitchen-scenario-schema/scenario.php" "$proprietary/civikitchen.yaml"
-"$root/scaffold/ckinit.php" --check "$proprietary" | grep -q 'up to date'
+drift=$("$root/scaffold/ckinit.php" --check "$proprietary")
+grep -q 'up to date' <<<"$drift"
 grep -q -- '--license MIT --compatibility 6.12' "$FAKE_DOCKER_LOG"
 grep -q -- '--enable=no' "$FAKE_DOCKER_LOG"
 grep -q 'down -v --remove-orphans' "$FAKE_DOCKER_LOG"
