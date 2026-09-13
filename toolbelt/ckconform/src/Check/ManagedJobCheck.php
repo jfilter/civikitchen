@@ -29,6 +29,12 @@ use CiviKitchen\Ckconform\Scalar;
  * A Job pointing at an API of this extension that the repo does not ship is a
  * warning: it may come from a dependency, but far more often it is a rename
  * that the mgd file did not follow.
+ *
+ * The runner calls civicrm_api($entity, $action, $params) with the parameters
+ * CRM_Core_BAO_Job::parseParameters() produced, and that defaults key=value
+ * text to version => 3. A job whose entity exists only under Civi/Api4/ then
+ * dies on "API does not exist" on every cron pass unless its parameters say
+ * version=4.
  */
 final class ManagedJobCheck implements Check
 {
@@ -95,6 +101,19 @@ final class ManagedJobCheck implements Check
                 ) {
                     $reporter->warn("$label: api_entity '$entity' looks like this extension's own API but neither Civi/Api4/$entity.php nor api/v3/$entity*.php is in the repo");
                 }
+
+                if (is_string($entity) && $entity !== '' && self::shipsApi4Only($repoFiles, $entity)) {
+                    $parameters = $values['parameters'] ?? null;
+                    if ($parameters === null || is_string($parameters)) {
+                        $parsed = self::parseParameters($parameters);
+                        $version = $parsed['version'] ?? 3;
+                        if (!is_scalar($version) || (int) $version !== 4) {
+                            $reporter->fail("$label: api_entity '$entity' is APIv4-only but parameters do not set version=4 — the runner calls APIv3 and the job fails on every cron pass");
+                        } elseif (!in_array($parsed['checkPermissions'] ?? null, [0, '0', false, 'false', 'FALSE'], true)) {
+                            $reporter->warn("$label: api_entity '$entity' is APIv4-only and parameters do not set checkPermissions=0 — APIv4 checks permissions by default and the cron user usually has none");
+                        }
+                    }
+                }
             }
         }
     }
@@ -116,4 +135,51 @@ final class ManagedJobCheck implements Check
         return false;
     }
 
+    /**
+     * Ships Civi/Api4/<Entity>.php and no APIv3 file for the same entity.
+     *
+     * @param list<string> $repoFiles
+     */
+    private static function shipsApi4Only(array $repoFiles, string $entity): bool
+    {
+        $api4 = false;
+        foreach ($repoFiles as $file) {
+            if (preg_match('#(^|/)api/v3/' . preg_quote($entity, '#') . '[^/]*\.php$#', $file) === 1) {
+                return false;
+            }
+            if (str_ends_with($file, "Civi/Api4/$entity.php")) {
+                $api4 = true;
+            }
+        }
+
+        return $api4;
+    }
+
+    /**
+     * CRM_Core_BAO_Job::parseParameters(): a value starting with '{' is JSON,
+     * anything else is key=value lines defaulting to version 3. Core throws on
+     * a malformed line; here it is simply not a parameter.
+     *
+     * @return array<string, mixed>
+     */
+    private static function parseParameters(?string $parameters): array
+    {
+        $parameters = trim($parameters ?? '');
+        if ($parameters !== '' && $parameters[0] === '{') {
+            $decoded = json_decode($parameters, true);
+
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        $result = ['version' => 3];
+        foreach ($parameters === '' ? [] : explode("\n", $parameters) as $line) {
+            $pair = explode('=', $line);
+            if (count($pair) !== 2 || trim($pair[0]) === '' || trim($pair[1]) === '') {
+                continue;
+            }
+            $result[trim($pair[0])] = trim($pair[1]);
+        }
+
+        return $result;
+    }
 }
