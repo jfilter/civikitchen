@@ -176,12 +176,14 @@ on:
         default: ''
       sibling_repo:
         description: >-
-          Comma- or newline-separated extension repos (`owner/repo`), each
-          checked out to .civikitchen-siblings/ and mounted read-only beside
-          this one under the key from ITS info.xml — for extensions
-          implementing a sibling's interfaces. Enabled LEFT TO RIGHT in list
-          order before this extension, so a sibling another sibling requires
-          comes first. Mounted as-is (no composer install there); a private
+          Comma- or newline-separated extension repos (`owner/repo`, or
+          `owner/repo@ref` to pin a tag, branch or full commit — a tag keeps
+          old runs reproducible and a sibling's main from reddening every
+          consumer), each checked out to .civikitchen-siblings/ and mounted
+          read-only beside this one under the key from ITS info.xml — for
+          extensions implementing a sibling's interfaces. Enabled LEFT TO
+          RIGHT in list order before this extension, so a sibling another
+          sibling requires comes first. Mounted as-is (no composer install there); a private
           sibling needs the composer_app_* secrets. Empty mounts nothing.
         type: string
         default: ''
@@ -547,10 +549,12 @@ jobs:
           [[ "$CK_EXT_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
             || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
           # Empty is the default and means "no sibling"; every entry of the
-          # list has to be owner/repo — it becomes a clone target and a path.
+          # list has to be owner/repo, optionally @ref — it becomes a clone
+          # target and a path. Same expression as the private-deps action's
+          # checkout-siblings.sh, which is where the value becomes a command.
           for repo in ${CK_SIBLING_REPO//,/ }; do
-            [[ "$repo" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
-              || { echo "invalid sibling_repo entry (expected owner/repo): $repo" >&2; exit 1; }
+            [[ "$repo" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*(@[A-Za-z0-9][A-Za-z0-9._/-]*)?$ ]] \
+              || { echo "invalid sibling_repo entry (expected owner/repo or owner/repo@ref): $repo" >&2; exit 1; }
           done
           [[ -z "$CK_POLICY_DEFAULTS" || "$CK_POLICY_DEFAULTS" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
             || { echo "invalid policy_defaults (expected owner/repo): $CK_POLICY_DEFAULTS" >&2; exit 1; }

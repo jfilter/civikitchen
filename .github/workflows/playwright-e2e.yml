@@ -63,7 +63,9 @@ on:
         default: ''
       sibling_repo:
         description: >-
-          Second extension repo (`owner/repo`) checked out to
+          Second extension repo (`owner/repo`, or `owner/repo@ref` to pin a
+          tag, branch or full commit — a tag keeps old runs reproducible and a
+          sibling's main from reddening every consumer) checked out to
           .civikitchen-siblings/ and mounted read-only beside this one, under
           the key from ITS info.xml — for extensions implementing a sibling's
           interfaces. Mounted as-is (no composer install there); private
@@ -127,8 +129,8 @@ jobs:
         env:
           CK_SIBLING_REPO: ${{ inputs.sibling_repo }}
         run: |
-          [[ "$CK_SIBLING_REPO" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
-            || { echo "invalid sibling_repo (expected owner/repo): $CK_SIBLING_REPO" >&2; exit 1; }
+          [[ "$CK_SIBLING_REPO" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*(@[A-Za-z0-9][A-Za-z0-9._/-]*)?$ ]] \
+            || { echo "invalid sibling_repo (expected owner/repo or owner/repo@ref): $CK_SIBLING_REPO" >&2; exit 1; }
 
       # Branching on the secret in bash, not the step's `if:` — the `secrets`
       # context is not available there.

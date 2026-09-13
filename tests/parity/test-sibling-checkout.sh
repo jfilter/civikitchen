@@ -6,6 +6,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 script="$root/.github/actions/private-deps/checkout-siblings.sh"
+real_git="$(command -v git)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
@@ -87,5 +88,83 @@ grep -q "invalid sibling_repo entry" "$out" || fail "glob entry: unclear message
 run no-info 'org/plain' ''
 [ "$rc" = 1 ] || fail "repo without info.xml accepted (rc=$rc)"
 grep -q "not a CiviCRM extension" "$out" || fail "missing info.xml: unclear message: $(cat "$out")"
+
+# A ref that is neither a branch, a tag nor a full commit.
+i=0
+for entry in 'org/repo@' 'org/repo@-x' 'org/repo@a@b' 'org/repo@ref;id'; do
+  i=$((i + 1))
+  run "badref-$i" "$entry" ''
+  [ "$rc" = 1 ] || fail "invalid entry '$entry' accepted (rc=$rc): $(cat "$out")"
+  grep -q "invalid sibling_repo entry" "$out" || fail "entry '$entry': unclear message: $(cat "$out")"
+done
+
+# --- owner/repo@ref against real git ---------------------------------------
+#
+# The stub above is enough for the script's bookkeeping; the pinned forms have
+# to prove the git commands themselves. This leg runs REAL git against a local
+# file:// repository through a shim that maps https://github.com/<owner>/<repo>
+# onto it — the only thing about github.com a local fixture cannot be.
+remotes="$work/remotes"
+mkdir -p "$remotes/org" "$work/bin-real"
+cat > "$work/bin-real/git" <<SHIM
+#!/usr/bin/env bash
+set -euo pipefail
+args=()
+for arg in "\$@"; do
+  case "\$arg" in
+    https://github.com/*) args+=("file://$remotes/\${arg#https://github.com/}") ;;
+    *) args+=("\$arg") ;;
+  esac
+done
+exec "$real_git" "\${args[@]}"
+SHIM
+chmod +x "$work/bin-real/git"
+
+fixture="$remotes/org/pinned"
+git init --quiet -b main "$fixture"
+git -C "$fixture" config user.email test@example.org
+git -C "$fixture" config user.name 'CiviKitchen test'
+# Fetching a bare commit needs the server to serve it; github.com does.
+git -C "$fixture" config uploadpack.allowAnySHA1InWant true
+printf '<extension key="de.example.pinned" type="module"/>\n' > "$fixture/info.xml"
+echo tagged > "$fixture/MARKER"
+git -C "$fixture" add info.xml MARKER
+git -C "$fixture" commit --quiet -m 'first'
+git -C "$fixture" tag v1.0.0
+pinned_sha=$(git -C "$fixture" rev-parse HEAD)
+git -C "$fixture" checkout --quiet -b topic
+echo branched > "$fixture/MARKER"
+git -C "$fixture" commit --quiet -am 'branch'
+git -C "$fixture" checkout --quiet main
+echo moved-on > "$fixture/MARKER"
+git -C "$fixture" commit --quiet -am 'default branch moves on'
+
+# Same runner as above, with real git behind the shim instead of the stub.
+run_real() {
+  ws="$work/ws-$1"
+  mkdir -p "$ws"
+  out="$ws/out"
+  rc=0
+  (
+    cd "$ws"
+    PATH="$work/bin-real:$PATH" \
+    CK_SIBLING_REPO="$2" \
+    CK_SIBLING_TOKEN=token \
+    GITHUB_OUTPUT="$ws/github_output" \
+      "$script"
+  ) > "$out" 2>&1 || rc=$?
+}
+
+dir=.civikitchen-siblings/de.example.pinned
+for pin in "v1.0.0=tagged" "topic=branched" "$pinned_sha=tagged" "=moved-on"; do
+  ref="${pin%%=*}"
+  want="${pin#*=}"
+  run_real "pin-${want}-${#ref}" "org/pinned${ref:+@$ref}"
+  [ "$rc" = 0 ] || fail "sibling pinned at '$ref' failed (rc=$rc): $(cat "$out")"
+  got=$(cat "$ws/$dir/MARKER")
+  [ "$got" = "$want" ] || fail "sibling pinned at '$ref' checked out '$got', expected '$want'"
+  grep -qx "paths=$dir" "$ws/github_output" \
+    || fail "pinned sibling paths output wrong: $(cat "$ws/github_output")"
+done
 
 echo "sibling checkout suite OK"
