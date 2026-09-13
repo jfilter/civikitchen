@@ -20,6 +20,10 @@ use CiviKitchen\Ckconform\Reporter;
  * the tag it is legitimately untagged, and release-tag-coherence owns that
  * window.
  *
+ * An entry of `policy.untagged_versions` that the history does not need is
+ * reported as stale, in three shapes: the version carries a tag after all, the
+ * version is the one info.xml carries right now, or info.xml never carried it.
+ *
  * The opt-out is `policy.release: none` with its reason — a repo that cuts no
  * releases has no tags to miss. For a single number the repo passed through and
  * will never publish — a bump that was re-scoped or taken back — the narrow
@@ -38,6 +42,15 @@ final class ReleaseTagsCheck implements Check
     {
         $declared = $context->policyValue('release');
         if ($declared !== null) {
+            // A repo that cuts no releases has no tag to miss, so every entry
+            // in the list is inert — and nothing else here would say so.
+            if ($context->policyValues('untagged_versions') !== []) {
+                $reporter->warn(
+                    'civikitchen.yaml: untagged_versions is set while release is none — a repo that cuts no '
+                    . 'releases has no missing tag to excuse; drop the list'
+                );
+            }
+
             // release-workflow reports a value that is not the documented
             // opt-out; repeating that here would double the finding.
             return;
@@ -76,6 +89,16 @@ final class ReleaseTagsCheck implements Check
             $version = Policy::stripReason($value);
             $declaredUntagged[] = $version;
             if (in_array($version, $untagged, true)) {
+                continue;
+            }
+            if ($version === $current) {
+                $reporter->warn(sprintf(
+                    'civikitchen.yaml: untagged_versions lists %s, the version info.xml carries right now — '
+                    . 'release-tag-coherence owns the window between the bump commit and the tag, so the entry '
+                    . 'excuses nothing yet',
+                    $version,
+                ));
+
                 continue;
             }
             $reporter->warn(sprintf(

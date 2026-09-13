@@ -97,6 +97,34 @@ final class ReleaseTagsCheckTest extends CheckTestCase
         );
     }
 
+    /**
+     * The entry excuses nothing: the current version is legitimately untagged
+     * until the tag push, and that window belongs to release-tag-coherence.
+     */
+    public function testWarnsWhenADeclaredVersionIsTheOneInfoXmlCarriesNow(): void
+    {
+        $context = $this->history(['1.0.0' => 'v1.0.0', '1.1.0' => null]);
+        $this->write('civikitchen.yaml', $this->policyFixture("untagged_versions=1.1.0 -- bump re-scoped before release\n"));
+        $this->gitCommit('policy');
+        $this->assertWarns(
+            $this->run_(new ReleaseTagsCheck(), $context),
+            'untagged_versions lists 1.1.0, the version info.xml carries right now',
+        );
+    }
+
+    public function testWarnsWhenUntaggedVersionsIsDeclaredAlongsideReleaseNone(): void
+    {
+        $context = $this->history(['0.1.0' => null, '0.2.0' => null]);
+        $this->write('civikitchen.yaml', $this->policyFixture(
+            "release=none -- configuration-only extension\nuntagged_versions=0.1.0 -- bump re-scoped before release\n"
+        ));
+        $this->gitCommit('policy');
+        $this->assertWarns(
+            $this->run_(new ReleaseTagsCheck(), $context),
+            'untagged_versions is set while release is none',
+        );
+    }
+
     public function testWarnsUnevaluatedOnAShallowClone(): void
     {
         $context = $this->history(['0.1.0' => null, '0.2.0' => null]);

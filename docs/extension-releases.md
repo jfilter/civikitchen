@@ -48,8 +48,11 @@ and the schema rejects it as "expected string". Write it exactly as `info.xml`
 carries it, without the `v` — `release-tags` prefixes the `v` itself.
 
 `release-tags` then skips exactly that version and keeps failing on every other
-one. An entry for a version that is tagged after all, or that `info.xml` never
-carried, warns as a stale exception — the list is meant to shrink.
+one. An entry warns as stale when it excuses nothing: the version is tagged
+after all, it is the version `info.xml` carries right now (that window belongs
+to `release-tag-coherence`), or `info.xml` never carried it. The list is meant
+to shrink. With `policy.release: none` there is no tag to miss at all, so a
+list next to it warns as well.
 
 ## Adopting it in a repo
 

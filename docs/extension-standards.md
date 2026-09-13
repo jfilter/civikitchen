@@ -373,9 +373,10 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   `fetch-depth: 0` and `fetch-tags: true` for exactly this. A repo that
   deliberately cuts no releases declares `policy.release: none` with its
   reason; a single number that was bumped through and then re-scoped is listed
-  under `policy.untagged_versions` with the reason it stays untagged, and a
-  listed version that is tagged after all, or that `info.xml` never carried,
-  is reported as a stale entry. The version is the bare `info.xml` value —
+  under `policy.untagged_versions` with the reason it stays untagged. A listed
+  version that is tagged after all, that `info.xml` carries right now, or that
+  `info.xml` never carried is reported as a stale entry, and so is a list
+  declared next to `policy.release: none`. The version is the bare `info.xml` value —
   `release-tags` prefixes the `v` itself — and it is quoted, because a
   two-component number like `1.0` is a YAML float unquoted:
 
