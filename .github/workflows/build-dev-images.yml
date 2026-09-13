@@ -299,6 +299,7 @@ jobs:
         database:
           - mariadb:10.11
           - mariadb:11.4
+          - mariadb:12.2
           - mysql:8.0
     steps:
       - name: Checkout
