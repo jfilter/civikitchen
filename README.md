@@ -103,6 +103,7 @@ Details in [Custom or older CiviCRM versions](docs/images.md#custom-or-older-civ
 - [Configuration](docs/configuration.md) — every env var the images understand
 - [Building locally](docs/building.md) — build args, `KEEP_GIT=1`, running the test suite locally
 - [Releases](docs/releases.md) — the versioned contract extension repos pin (`@v1` / `:v1`), how a release is cut
+- [Changelog](CHANGELOG.md) — what changed in every released version
 - [Releasing an extension](docs/extension-releases.md) — the other direction: how a consuming extension repo cuts *its* release (`ckrelease`, the shared `extension-release.yml`)
 - [Reusable CI building blocks](docs/reusable-workflows.md) — frontend, standalone Playwright, and lightweight repository checks beside `extension-ci.yml`
 - [Unified configuration](docs/scenarios.md) — one validated `civikitchen.yaml` for repository policy, image, DB, locale, profile selection, mounts, and checks; profile definitions remain in `profile.json`
