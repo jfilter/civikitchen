@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use CiviKitchen\Toolbelt\Cli\Application;
 use CiviKitchen\Toolbelt\Cli\CompatibilityCommand;
+use CiviKitchen\Toolbelt\Cli\CoverageCommand;
 use CiviKitchen\Toolbelt\Cli\FormatCommand;
 use CiviKitchen\Toolbelt\Cli\InternalRuntimeCommand;
 use CiviKitchen\Toolbelt\Cli\ReleaseCommand;
@@ -205,6 +206,29 @@ final class SharedPhpTest extends TestCase
         }
     }
 
+    public function testCoverageTreatsOptionalTestsPolicyWithItsMandatoryReasonAsOptional(): void
+    {
+        file_put_contents($this->temporary . '/info.xml', '<extension key="org.example.safe"><file>safe</file></extension>');
+        $before = getcwd();
+        chdir($this->temporary);
+        try {
+            // ckconform --policy prints the whole value, and policy.tests
+            // requires a reason, so the value is never the bare word.
+            ob_start();
+            $status = (new CoverageCommand(dirname(__DIR__, 2), new PolicyRunner('optional -- no PHP in this repo')))->run([]);
+            $output = (string) ob_get_clean();
+            self::assertSame(0, $status);
+            self::assertStringContainsString('declares it optional', $output);
+
+            ob_start();
+            $required = (new CoverageCommand(dirname(__DIR__, 2), new PolicyRunner('')))->run([]);
+            ob_end_clean();
+            self::assertSame(2, $required);
+        } finally {
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
     public function testLiteralOptionTerminatorPreservesDashPrefixedPaths(): void
     {
         file_put_contents($this->temporary . '/info.xml', '<extension key="org.example.safe"><file>safe</file></extension>');
@@ -360,5 +384,18 @@ final class RecordingRunner extends Runner
             }
         }
         return false;
+    }
+}
+
+/** Answers `ckconform --policy <key>` with one canned value. */
+final class PolicyRunner extends Runner
+{
+    public function __construct(private readonly string $value)
+    {
+    }
+
+    public function capture(array $command, ?array $environment = null, ?string $workingDirectory = null): array
+    {
+        return ['status' => 0, 'output' => $this->value . "\n"];
     }
 }

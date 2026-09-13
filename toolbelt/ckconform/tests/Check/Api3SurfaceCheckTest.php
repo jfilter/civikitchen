@@ -21,6 +21,7 @@ final class Api3SurfaceCheckTest extends CheckTestCase
         $reporter = $this->run_(new Api3SurfaceCheck(), $context);
         $this->assertPasses($reporter);
         $this->assertWarns($reporter, 'civicrm_api3_widget_get() ships an APIv3 endpoint');
+        $this->assertWarns($reporter, 'set the job\'s parameters to {"version":4}');
     }
 
     public function testAnMgdFileUnderApiV3IsSilent(): void

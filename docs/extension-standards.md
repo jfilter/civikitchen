@@ -52,6 +52,13 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   repo's own `phpstan.neon.dist`, with the reason next to it. phpstan reads PHP
   only, so `ckconform` additionally rejects `CRM.api3` in JS/Smarty; annotate a
   genuine exception there with `ck-allow-api3 -- <reason>`.
+- An extension's own `civicrm_api3_<entity>_<action>()` export is `ckconform`'s
+  `api3-surface` warning. A scheduled job does not need one:
+  `CRM_Core_BAO_Job::parseParameters()` forces version 3 only for `key=value`
+  parameters and passes JSON parameters through, so a managed job with
+  `'parameters' => '{"version":4,"checkPermissions":false}'` calls the APIv4
+  action directly. Keep an APIv3 export only for a documented external
+  compatibility contract (`ckconform-ignore api3-surface -- <reason>`).
 - **An APIv4 entity has to exist in the core you claim to support.** Entities
   resolve at runtime, so `\Civi\Api4\Foo` compiles, passes phpstan and passes
   every test that never loads that page — then fatals in production. Check the
