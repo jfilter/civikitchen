@@ -83,7 +83,7 @@ final class PermissionClosureCheck implements Check
      *
      * @var list<string>
      */
-    private const PSEUDO_PERMISSIONS = ['*always allow*', '*allow*', '\*always allow\*', '1', '0'];
+    private const PSEUDO_PERMISSIONS = ['*always allow*', '*always deny*', '*allow*', '\*always allow\*', '1', '0'];
 
     public function name(): string
     {
@@ -362,25 +362,61 @@ final class PermissionClosureCheck implements Check
             }
         }
 
-        // 'permission' => 'x'  and  'permission' => ['x', 'y']
-        if (preg_match_all(
-            '/([\'"])permission\1\s*=>\s*(\[[^\]]*\]|array\s*\([^)]*\)|([\'"]).*?\3)/s',
-            $contents,
-            $matches,
-        ) > 0) {
-            foreach ($matches[2] as $value) {
-                if (preg_match_all('/([\'"])(.*?)\1/s', $value, $inner) > 0) {
-                    foreach ($inner[2] as $permission) {
-                        $found[] = $permission;
-                    }
-                }
-            }
-        }
+        array_push($found, ...$this->permissionSpecs($contents));
 
         return array_values(array_filter(
             array_map('trim', $found),
             static fn (string $p): bool => $p !== '' && !str_contains($p, '$'),
         ));
+    }
+
+    /**
+     * `'permission' => 'x'` and `'permission' => ['x', ['y', 'z']]`: a string or
+     * a list of strings nested to any depth. An array with a key anywhere
+     * inside is a field or config definition named `permission`, not a spec.
+     *
+     * @return list<string>
+     */
+    private function permissionSpecs(string $contents): array
+    {
+        $tokens = array_values(array_filter(
+            \PhpToken::tokenize($contents),
+            static fn (\PhpToken $t): bool => !$t->isIgnorable(),
+        ));
+        $count = count($tokens);
+        $found = [];
+        for ($i = 0; $i + 2 < $count; $i++) {
+            if (!$tokens[$i]->is(["'permission'", '"permission"']) || !$tokens[$i + 1]->is(T_DOUBLE_ARROW)) {
+                continue;
+            }
+            $j = $i + 2;
+            if ($tokens[$j]->is(T_CONSTANT_ENCAPSED_STRING)) {
+                $found[] = substr($tokens[$j]->text, 1, -1);
+                continue;
+            }
+            if (!$tokens[$j]->is(['[', T_ARRAY])) {
+                continue;
+            }
+
+            $strings = [];
+            $depth = 0;
+            for (; $j < $count; $j++) {
+                $token = $tokens[$j];
+                if ($token->is(T_DOUBLE_ARROW)) {
+                    continue 2;
+                }
+                if ($token->is(['[', '('])) {
+                    $depth++;
+                } elseif ($token->is([']', ')']) && --$depth === 0) {
+                    break;
+                } elseif ($token->is(T_CONSTANT_ENCAPSED_STRING)) {
+                    $strings[] = substr($token->text, 1, -1);
+                }
+            }
+            array_push($found, ...$strings);
+        }
+
+        return $found;
     }
 
     /**

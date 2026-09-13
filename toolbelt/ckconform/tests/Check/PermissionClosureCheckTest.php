@@ -35,6 +35,68 @@ final class PermissionClosureCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
     }
 
+    public function testAlwaysDenyIsAccepted(): void
+    {
+        $context = $this->repo([
+            'schema/Thing.entityType.php' => "<?php\nreturn ['getFields' => fn() => ['secret' => ['permission' => ['*always deny*']]]];\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    /**
+     * An entity with a column called `permission` defines that column with an
+     * associative array; its title, SQL type and input type are not permissions.
+     */
+    public function testAFieldNamedPermissionIsNotAPermissionSpec(): void
+    {
+        $context = $this->repo([
+            'schema/Denial.entityType.php' => <<<'PHP'
+                <?php
+                return [
+                  'getFields' => fn() => [
+                    'permission' => [
+                      'title' => 'Permission',
+                      'sql_type' => 'varchar(255)',
+                      'input_type' => 'Text',
+                      'required' => TRUE,
+                    ],
+                    'legacy' => array('permission' => array('title' => 'Legacy permission')),
+                    'secret' => [
+                      'title' => 'Secret',
+                      'permission' => ['administer SomeOtherExtension'],
+                    ],
+                  ],
+                ];
+                PHP,
+        ], git: true);
+        $reporter = $this->run_(new PermissionClosureCheck(), $context);
+        $this->assertPasses($reporter);
+        self::assertSame(
+            ["schema/Denial.entityType.php: permission 'administer SomeOtherExtension' is neither a known core permission "
+                . 'nor defined by this extension — fine if a dependency defines it, a silent always-no otherwise'],
+            $reporter->messages('warn'),
+        );
+    }
+
+    /**
+     * Core writes OR groups as nested lists; every leaf counts, including
+     * those after the first inner list closes.
+     */
+    public function testEveryLeafOfANestedPermissionListIsRead(): void
+    {
+        $context = $this->repo([
+            'schema/Contact.entityType.php' => <<<'PHP'
+                <?php
+                return ['getFields' => fn() => ['api_key' => [
+                  'permission' => [['administer CiviCRM', 'edit api keys'], ['administer SomeOtherExtension']],
+                ]]];
+                PHP,
+        ], git: true);
+        $reporter = $this->run_(new PermissionClosureCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, "permission 'administer SomeOtherExtension'");
+    }
+
     /**
      * The failure that started this check: a typo turns the guard into an
      * always-no and nothing at runtime says so.
