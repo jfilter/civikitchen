@@ -39,9 +39,13 @@ reviewed for release. Name it instead, with the reason:
 ```yaml
 policy:
   untagged_versions:
-    - version: 1.2.0
+    - version: "1.2.0"
       reason: bump re-scoped into 1.3.0 before anything shipped
 ```
+
+Quote the version: a two-component number like `1.0` is a YAML float unquoted
+and the schema rejects it as "expected string". Write it exactly as `info.xml`
+carries it, without the `v` — `release-tags` prefixes the `v` itself.
 
 `release-tags` then skips exactly that version and keeps failing on every other
 one. An entry for a version that is tagged after all, or that `info.xml` never

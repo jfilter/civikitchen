@@ -375,8 +375,18 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   reason; a single number that was bumped through and then re-scoped is listed
   under `policy.untagged_versions` with the reason it stays untagged, and a
   listed version that is tagged after all, or that `info.xml` never carried,
-  is reported as a stale entry. See
-  [Releasing an extension](extension-releases.md).
+  is reported as a stale entry. The version is the bare `info.xml` value —
+  `release-tags` prefixes the `v` itself — and it is quoted, because a
+  two-component number like `1.0` is a YAML float unquoted:
+
+  ```yaml
+  policy:
+    untagged_versions:
+      - version: "1.2.0"
+        reason: bump re-scoped into 1.3.0 before anything shipped
+  ```
+
+  See [Releasing an extension](extension-releases.md).
 - `composer.json` with the extension metadata; no `node_modules`/`vendor`/build
   artifacts committed (frontend builds commit only `dist/`).
 - `.gitignore` covers every artifact the repo can regenerate — the phpunit
