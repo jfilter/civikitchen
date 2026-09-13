@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# The managed phpstanBootstrap.php autoloads the classes of every extension
-# the repo's info.xml <requires> that exists under CK_EXT_DIR, so a class
-# extended from a required extension resolves without a repo-specific
+# The managed phpstanBootstrap.php autoloads the classes of core's own ext
+# packages and of every extension the repo's info.xml <requires> that exists
+# under CK_EXT_DIR, so Civi\Api4 façades of a core component and a class
+# extended from a required extension resolve without a repo-specific
 # bootstrap. Core is stubbed to the three files the bootstrap requires.
 set -euo pipefail
 
@@ -17,6 +18,12 @@ mkdir -p "$core/CRM/Core/DAO"
 echo '<?php class CRM_Core_DAO_Base {}' > "$core/CRM/Core/DAO/Base.php"
 echo '<?php require __DIR__ . "/../CRM/Core/DAO/Base.php";' > "$core/vendor/autoload.php"
 echo '<?php' > "$core/api/api.php"
+# Core component extension: ships with core, off its classloader path.
+mkdir -p "$core/ext/civi_member/Civi/Api4"
+echo '<?php namespace Civi\Api4; class Membership {}' > "$core/ext/civi_member/Civi/Api4/Membership.php"
+# A package whose classes sit off the civix layout stays uncovered.
+mkdir -p "$core/ext/flexmailer/src/Civi/Flexmailer"
+echo '<?php namespace Civi\Flexmailer; class Sender {}' > "$core/ext/flexmailer/src/Civi/Flexmailer/Sender.php"
 cat > "$core/CRM/Core/ClassLoader.php" <<'PHP'
 <?php
 class CRM_Core_ClassLoader {
@@ -50,6 +57,9 @@ probe='require $argv[1];
     interface_exists("Civi\\Dep\\Contract") ? "civi" : "-", " ",
     defined("CK_DEP_VENDOR_LOADED") ? "vendor" : "-", " ",
     is_subclass_of("CRM_Dep_DAO_Thing", "CRM_Core_DAO_Base") ? "dao" : "-", "\n";'
+coreprobe='require $argv[1];
+  echo class_exists("Civi\\Api4\\Membership") ? "member" : "-", " ",
+    class_exists("Civi\\Flexmailer\\Sender") ? "flexmailer" : "-", "\n";'
 out="$(CIVICRM_CORE_DIR="$core" CK_EXT_DIR="$ext" php -r "$probe" "$ext/repo/phpstanBootstrap.php" 2>"$work/stderr")"
 [[ "$out" == "crm civi vendor dao" ]] || fail "required extension classes did not resolve: '$out'"
 grep -q 'org.example.absent is not under' "$work/stderr" \
@@ -63,5 +73,10 @@ printf '%s\n' '<extension key="org.example.repo" type="module"><file>repo</file>
 out="$(CIVICRM_CORE_DIR="$core" CK_EXT_DIR="$ext" php -r "$probe" "$ext/repo/phpstanBootstrap.php" 2>"$work/stderr")"
 [[ "$out" == "- - - -" ]] || fail "without <requires> nothing may be autoloaded: '$out'"
 [[ ! -s "$work/stderr" ]] || fail "without <requires> stderr must stay empty: $(cat "$work/stderr")"
+
+# Core component extensions need no <requires> entry; a package off the civix
+# layout is not covered and stays a scanDirectories entry.
+out="$(CIVICRM_CORE_DIR="$core" CK_EXT_DIR="$ext" php -r "$coreprobe" "$ext/repo/phpstanBootstrap.php" 2>"$work/stderr")"
+[[ "$out" == "member -" ]] || fail "core ext autoloading is wrong: '$out'"
 
 echo "phpstan bootstrap: ok"
