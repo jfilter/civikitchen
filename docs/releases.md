@@ -168,18 +168,19 @@ next run.
 
 - **patch** — image content refresh, bug fix in a tool or the workflow, doc
   changes.
-- **minor** — new workflow input, new template file, a new `ckconform` check
-  that only *warns*, a new tool.
-- **major** — anything a conforming repo has to react to: a removed or renamed
-  workflow input, a managed template file that changes shape, a check that
-  turns from warning to failure, a dropped image flavor or tag, or a changed
-  value behind a variable the caller's own commands read — `playwright-e2e.yml`
-  now sets `CK_SIBLING_DIR` to `.civikitchen-siblings/<extension key>` where it
-  used to use the sibling's repo name, so a hard-coded path in a
-  `prepare_command` breaks.
+- **minor** — new workflow input, new template file, a new `ckconform` check,
+  a new tool — and a change a conforming repo has to react to, as long as
+  every affected consumer is adjusted before the tag. The changelog marks such
+  an entry **Breaking**.
+- **major** — a change the consumers cannot absorb before the tag: a dropped
+  image flavor or tag, or a contract that has to run side by side with the
+  old one while repos move over.
 
-The test for "is this breaking" is not the size of the diff; it is whether a
-repo that was green yesterday goes red without touching its own code.
+Every `@v1` caller is a repo this project maintains, so a break is cheaper to
+fix in the consumers than to carry as a second `@v2` line. The test for "is
+this breaking" is still whether a repo that was green yesterday goes red
+without touching its own code; the answer decides the changelog marker and
+the consumer pass, not the version number.
 
 ## The canary
 
