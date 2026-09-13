@@ -46,7 +46,7 @@ expect "the highest plain tag takes Latest" v0.10.0 'prerelease=false\nlatest=tr
 expect "a late release of an older version does not" v0.0.0 'prerelease=false\nlatest=false'
 expect "lexically larger, numerically smaller" v0.9.0 'prerelease=false\nlatest=false'
 expect "a new highest version not yet in the list" v0.12.0 'prerelease=false\nlatest=true'
-expect "the ref prefix is optional" v0.3.1 'prerelease=false\nlatest=false'
+expect "an older version not in the list" v0.3.1 'prerelease=false\nlatest=false'
 expect "a pre-release is never Latest" v0.10.0-rc.1 'prerelease=true\nlatest=false'
 expect "nor above the newest plain tag" v0.11.0-alpha3 'prerelease=true\nlatest=false'
 expect "a pre-release of a new major" v3.0.0-beta.2 'prerelease=true\nlatest=false'
@@ -61,6 +61,11 @@ reject "empty pre-release identifier" v1.2.3-rc..1
 reject "build metadata" v1.2.3+build.5
 reject "empty pre-release" v1.2.3-
 reject "not a version" latest-build
+
+# Tag names without the refs/tags/ prefix count the same.
+printf 'v9.0.0\nv1.0.0\n' | "$flags" v1.0.0 > "$work/out"
+[ "$(cat "$work/out")" = "$(printf 'prerelease=false\nlatest=false')" ] \
+  || { echo "an unprefixed higher tag must keep Latest" >&2; cat "$work/out" >&2; exit 1; }
 
 # No tag list at all (a first release) is still decidable.
 "$flags" v0.1.0 < /dev/null > "$work/out"
