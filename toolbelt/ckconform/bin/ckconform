@@ -47,14 +47,14 @@ if (!in_array($format, ['human', 'json', 'github', 'sarif'], true)) {
  *
  *   eval "$(ckconform --policy-env)"   # CK_POLICY_MIN_COVERAGE='70', …
  *   ckconform --policy <key>           # every value of one key, one per line
- *   ckconform --dist-paths             # `dir <name>` / `file <name>`, one per line
+ *   ckconform --dist-paths             # `dir <name>` / `file <name>`, then `stage <path>`, one per line
  *
  * Both read the repo file over the CK_DEFAULT_CONFIG layer (Policy::effective).
  * --policy-env gives the scalar view with the ` -- <reason>` stripped, which is
  * what a shell caller comparing a number wants. --policy keeps the value
  * verbatim, for the repeatable keys and for the callers whose job is to check
  * that the reason is there (cklifecycle). --dist-paths is the same arrangement
- * one level up: DistPaths owns what a release archive leaves out, ckrelease
+ * one level up: DistPaths owns what a release archive leaves out and stages, ckrelease
  * reads it from here rather than keeping a second copy in bash.
  *
  * Before the info.xml gate and before a single check is constructed, on
@@ -103,6 +103,9 @@ switch ($argv[1] ?? '') {
         }
         foreach ($distPaths['files'] as $file) {
             echo 'file ', $file, "\n";
+        }
+        foreach (DistPaths::staged($distContext) as $path) {
+            echo 'stage ', $path, "\n";
         }
         exit(0);
 }

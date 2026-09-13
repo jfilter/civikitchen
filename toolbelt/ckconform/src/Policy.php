@@ -53,6 +53,8 @@ final class Policy
         'mutation_paths' => 'ckmutate: what to mutate, comma-separated',
         'dist_exclude' => 'ckrelease + ckconform: additionally kept out of the release zip',
         'dist_include' => 'ckrelease + ckconform: kept IN the zip despite the central exclude list',
+        'dist_build_tool' => 'ckrelease + extension-release.yml: the toolchain that builds the release-only output',
+        'dist_build_output' => 'ckrelease + ckconform: untracked build output staged into the release zip, one path per value',
         'lifecycle_log_ignore' => 'cklifecycle: log patterns to ignore, reason mandatory',
         // read by ckinit
         'template_custom' => 'ckinit: template-managed files this repo owns instead',
@@ -72,7 +74,7 @@ final class Policy
      *
      * @var list<string>
      */
-    public const REPEATABLE = ['dist_exclude', 'dist_include', 'lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates', 'untagged_versions', 'extension_source', 'extension_release', 'extension_version'];
+    public const REPEATABLE = ['dist_exclude', 'dist_include', 'dist_build_output', 'lifecycle_log_ignore', 'vendored_paths', 'smarty_skip_templates', 'untagged_versions', 'extension_source', 'extension_release', 'extension_version'];
 
     /** @var list<string> */
     public const PERCENT = ['min_coverage', 'mutation_min_msi', 'mutation_min_covered_msi'];
@@ -196,6 +198,10 @@ final class Policy
         foreach ($policy['dist']['exclude'] ?? [] as $path) $out['dist_exclude'][] = $path;
         if (isset($policy['dist']['include'])) {
             foreach ($policy['dist']['include'] as $item) $out['dist_include'][] = $item['path'] . ' -- ' . $item['reason'];
+        }
+        if (isset($policy['dist']['build'])) {
+            $out['dist_build_tool'] = [$policy['dist']['build']['tool']];
+            foreach ($policy['dist']['build']['outputs'] as $path) $out['dist_build_output'][] = $path;
         }
         foreach ($policy['lifecycle']['log_ignore'] ?? [] as $item) $out['lifecycle_log_ignore'][] = $item['pattern'] . ' -- ' . $item['reason'];
         if (isset($policy['template_custom'])) $out['template_custom'] = [implode(',', $policy['template_custom']['paths']) . ' -- ' . $policy['template_custom']['reason']];

@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace CiviKitchen\Ckconform;
 
 /**
- * What a release archive leaves out: the development layer.
+ * What a release archive leaves out (the development layer), and the untracked
+ * build output it stages on top of git (`policy.dist.build`).
  *
  * The one copy of that list. `ckrelease` builds and verifies the zip from it,
  * reading it through `ckconform --dist-paths` the way every ck* tool reads
@@ -134,8 +135,37 @@ final class DistPaths
                 $problems[] = "dist.include may not ship protected development or secret-bearing path: {$item}";
             }
         }
+        $excluded = self::excluded($context);
+        foreach (self::listValue($context, 'dist_build_output') as $item) {
+            $problem = self::problem($item, 'dist.build.outputs');
+            if ($problem !== null) {
+                $problems[] = $problem;
+            } elseif (!self::ships(rtrim($item, '/'), $excluded)) {
+                $problems[] = "dist.build.outputs lists a path the archive leaves out: {$item}";
+            }
+        }
+        if ($context->policyValue('dist_build_tool') === 'bun') {
+            $pin = $context->json('package.json')['packageManager'] ?? null;
+            if (!is_string($pin) || preg_match('/^bun@\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/', $pin) !== 1) {
+                $problems[] = 'dist.build.tool bun needs "packageManager": "bun@x.y.z" in package.json, the Bun the build runs on';
+            }
+            // Without a lockfile, `bun install --frozen-lockfile` installs unlocked and succeeds.
+            if (!$context->exists('bun.lock')) {
+                $problems[] = 'dist.build.tool bun needs a committed bun.lock';
+            }
+        }
 
         return $problems;
+    }
+
+    /**
+     * Untracked build output the archive carries, from `policy.dist.build.outputs`.
+     *
+     * @return list<string>
+     */
+    public static function staged(Context $context): array
+    {
+        return array_map(static fn (string $path): string => rtrim($path, '/'), self::listValue($context, 'dist_build_output'));
     }
 
     /**
