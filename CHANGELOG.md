@@ -30,6 +30,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - `sibling_repo` entries may pin a tag, branch or commit (`repo@ref`) instead
   of tracking the default branch.
 - MariaDB 12.2 in the database compatibility matrix.
+- `extension-release.yml` publishes a `vX.Y.Z-<pre-release>` tag as a GitHub
+  pre-release that never takes Latest. Callers extend their tag trigger with
+  `'v[0-9]+.[0-9]+.[0-9]+-*'` to release them; any other tag shape fails the
+  run before the build.
 
 ### Changed
 
@@ -54,6 +58,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - `ckconform` reads `policy.tests=optional` with its mandatory reason in
   `ckcoverage`.
 - Image scan: excuse CVE-2026-84375 in core's bundled js-yaml.
+- `extension-release.yml` marks a release Latest only when its tag is the
+  highest plain `vX.Y.Z` in the repo; a late release of an older version no
+  longer takes Latest from the newest one.
 
 ## [1.22.0] - 2026-09-12
 
