@@ -19,6 +19,10 @@ use CiviKitchen\Ckconform\Suppressions;
  * `api/v3/` directory: that directory legitimately holds `*.mgd.php` (even
  * core's mgd-php@2 example does) and other near-misses.
  *
+ * The common reason for one is a scheduled job: CRM_Core_BAO_Job::parseParameters()
+ * forces version 3 for key=value parameters but passes JSON parameters through, so
+ * a job with `'parameters' => '{"version":4}'` reaches an APIv4 action directly.
+ *
  * WARN per function; the escape for a documented external compatibility
  * contract is an inline `ckconform-ignore api3-surface -- <reason>` (or the
  * file/repo levels).
@@ -46,7 +50,7 @@ final class Api3SurfaceCheck implements Check
                     continue;
                 }
                 $reporter->warn(sprintf(
-                    '%s: %s() ships an APIv3 endpoint — new public extension APIs should be APIv4; keep this only for a documented external compatibility contract (ckconform-ignore api3-surface -- <reason>)',
+                    '%s: %s() ships an APIv3 endpoint — new public extension APIs should be APIv4; for a scheduled job, set the job\'s parameters to {"version":4} and point it at the APIv4 action instead of wrapping it; keep this only for a documented external compatibility contract (ckconform-ignore api3-surface -- <reason>)',
                     $file,
                     $function,
                 ));
