@@ -19,7 +19,9 @@ use CiviKitchen\Ckconform\Scalar;
  * unknown run_frequency is not in the option list, so the job never matches a
  * cron window at all. A non-string `parameters` breaks Civi's line-based
  * parser (it splits the value on newlines and `=`), so the job runs with
- * missing arguments — a nightly sync that silently syncs nothing.
+ * missing arguments — a nightly sync that silently syncs nothing. A malformed
+ * line in a string `parameters` is worse: the parser throws before the API is
+ * called, so the job never runs at all.
  *
  * The reactivation trap is the expensive one: a managed Job with
  * `is_active => TRUE` and update `always` (the default) is re-enabled by every
@@ -85,6 +87,10 @@ final class ManagedJobCheck implements Check
 
                 if (isset($values['parameters']) && !is_string($values['parameters'])) {
                     $reporter->fail("$label: 'parameters' is " . get_debug_type($values['parameters']) . ", not a string — Civi parses it line by line, so the job would run without its arguments");
+                } elseif (is_string($values['parameters'] ?? null)) {
+                    foreach (self::parameterErrors($values['parameters']) as $problem) {
+                        $reporter->fail("$label: $problem");
+                    }
                 }
 
                 $update = $record['update'] ?? null;
@@ -109,8 +115,8 @@ final class ManagedJobCheck implements Check
                         $version = $parsed['version'] ?? 3;
                         if (!is_scalar($version) || (int) $version !== 4) {
                             $reporter->fail("$label: api_entity '$entity' is APIv4-only but parameters do not set version=4 — the runner calls APIv3 and the job fails on every cron pass");
-                        } elseif (!in_array($parsed['checkPermissions'] ?? null, [0, '0', false, 'false', 'FALSE'], true)) {
-                            $reporter->warn("$label: api_entity '$entity' is APIv4-only and parameters do not set checkPermissions=0 — APIv4 checks permissions by default and the cron user usually has none");
+                        } elseif (!self::disablesPermissions($parsed['checkPermissions'] ?? null)) {
+                            $reporter->warn("$label: api_entity '$entity' is APIv4-only and parameters do not set checkPermissions=0" . self::truthyPermissionHint($parsed['checkPermissions'] ?? null) . " — APIv4 checks permissions by default and the cron user usually has none");
                         }
                     }
                 }
@@ -168,9 +174,71 @@ final class ManagedJobCheck implements Check
     }
 
     /**
+     * Everything CRM_Core_BAO_Job::parseParameters() rejects, in its own
+     * terms. Core throws 'Malformed API parameters in scheduled job' (and a
+     * 'Job parameters error' for unparseable JSON) before the API is ever
+     * called, so the job never runs — a silent failure the mgd file does not
+     * show. Its acceptance rules are mirrored exactly, including that a blank
+     * line is malformed too.
+     *
+     * @return list<string>
+     */
+    private static function parameterErrors(string $parameters): array
+    {
+        $parameters = trim($parameters);
+        if ($parameters === '') {
+            return [];
+        }
+        if ($parameters[0] === '{') {
+            json_decode($parameters, true);
+
+            return json_last_error() === JSON_ERROR_NONE
+                ? []
+                : ["parameters start with '{' but are not valid JSON (" . json_last_error_msg() . ") — Civi throws 'Job parameters error' and the job never runs"];
+        }
+
+        $problems = [];
+        foreach (explode("\n", $parameters) as $line) {
+            $pair = explode('=', $line);
+            if (count($pair) !== 2 || !trim($pair[0]) || trim($pair[1]) === '') {
+                $problems[] = "parameters line '" . trim($line) . "' is not a single key=value pair — Civi throws 'Malformed API parameters in scheduled job' and the job never runs";
+            }
+        }
+
+        return $problems;
+    }
+
+    /**
+     * APIv4's setCheckPermissions() takes a bool and core calls it from
+     * non-strict files, so PHP coerces: 0, '0' and false turn the check off,
+     * while the non-empty strings 'false'/'FALSE' coerce to TRUE and leave it
+     * on.
+     */
+    private static function disablesPermissions(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return !$value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (float) $value === 0.0;
+        }
+
+        return $value === '0';
+    }
+
+    private static function truthyPermissionHint(mixed $value): string
+    {
+        if (!is_string($value) || !in_array(strtolower(trim($value)), ['false', 'no', 'off'], true)) {
+            return '';
+        }
+
+        return " ('$value' is a non-empty string, which APIv4 coerces to TRUE — only 0 turns the check off)";
+    }
+
+    /**
      * CRM_Core_BAO_Job::parseParameters(): a value starting with '{' is JSON,
-     * anything else is key=value lines defaulting to version 3. Core throws on
-     * a malformed line; here it is simply not a parameter.
+     * anything else is key=value lines defaulting to version 3. Malformed
+     * input is reported by parameterErrors() and skipped here.
      *
      * @return array<string, mixed>
      */

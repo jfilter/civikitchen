@@ -9,6 +9,11 @@ use CiviKitchen\Ckconform\Tests\CheckTestCase;
 
 final class ManagedJobCheckTest extends CheckTestCase
 {
+    private function escape(string $parameters): string
+    {
+        return str_replace(["\\", "\n", '"', '$'], ['\\\\', '\\n', '\\"', '\\$'], $parameters);
+    }
+
     public function testSilentWithoutManagedFiles(): void
     {
         $context = $this->repo(['CRM/Foo.php' => '<?php']);
@@ -377,6 +382,100 @@ final class ManagedJobCheckTest extends CheckTestCase
                 PHP,
         ]);
         $this->assertSilent($this->run_(new ManagedJobCheck(), $context));
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function malformedParameterLines(): array
+    {
+        return [
+            'no separator' => ['limit', 'limit'],
+            'two separators' => ["version=4\nfoo=a=b", 'foo=a=b'],
+            'empty key' => ["version=4\n=50", '=50'],
+            'empty value' => ["version=4\nlimit=", 'limit='],
+            'blank line' => ["version=4\n\nlimit=50", ''],
+        ];
+    }
+
+    /**
+     * @dataProvider malformedParameterLines
+     */
+    public function testFailsOnMalformedParameterLine(string $parameters, string $line): void
+    {
+        $context = $this->repo([
+            'api/v3/Fixture.php' => '<?php',
+            'managed/Job.mgd.php' => <<<PHP
+                <?php
+                return [
+                  [
+                    'name' => 'Cron:Fixture.sync',
+                    'entity' => 'Job',
+                    'update' => 'never',
+                    'params' => ['version' => 4, 'values' => [
+                      'api_entity' => 'Fixture',
+                      'api_action' => 'sync',
+                      'parameters' => "{$this->escape($parameters)}",
+                    ]],
+                  ],
+                ];
+                PHP,
+        ]);
+        $this->assertFails(
+            $this->run_(new ManagedJobCheck(), $context),
+            "Cron:Fixture.sync': parameters line '$line' is not a single key=value pair",
+        );
+    }
+
+    public function testFailsOnParametersThatLookLikeJsonButAreNot(): void
+    {
+        $context = $this->repo([
+            'api/v3/Fixture.php' => '<?php',
+            'managed/Job.mgd.php' => <<<'PHP'
+                <?php
+                return [
+                  [
+                    'name' => 'Cron:Fixture.sync',
+                    'entity' => 'Job',
+                    'update' => 'never',
+                    'params' => ['version' => 4, 'values' => [
+                      'api_entity' => 'Fixture',
+                      'api_action' => 'sync',
+                      'parameters' => '{"version":4,}',
+                    ]],
+                  ],
+                ];
+                PHP,
+        ]);
+        $this->assertFails(
+            $this->run_(new ManagedJobCheck(), $context),
+            'are not valid JSON',
+        );
+    }
+
+    public function testWarnsOnCheckPermissionsFalseAsText(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Fixture.php' => '<?php',
+            'managed/Job.mgd.php' => <<<'PHP'
+                <?php
+                return [
+                  [
+                    'name' => 'Cron:Fixture.sync',
+                    'entity' => 'Job',
+                    'update' => 'never',
+                    'params' => ['version' => 4, 'values' => [
+                      'api_entity' => 'Fixture',
+                      'api_action' => 'sync',
+                      'parameters' => "version=4\ncheckPermissions=FALSE",
+                    ]],
+                  ],
+                ];
+                PHP,
+        ]);
+        $reporter = $this->run_(new ManagedJobCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'which APIv4 coerces to TRUE');
     }
 
     public function testWarnsWhenFileCannotBeEvaluated(): void
