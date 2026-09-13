@@ -23,4 +23,11 @@ out=$(php "$CHECK" tests/parity/fixtures/workflow.sibling-bespoke.yml 2>&1) \
 echo "$out" | grep -q "'bespoke'" \
   || fail "checker failed but did not name job 'bespoke' (got: $out)"
 
+# The same bespoke checkout with a comment that names the action it does not
+# use: the gate reads the steps' `uses:`, so the comment changes nothing.
+out=$(php "$CHECK" tests/parity/fixtures/workflow.sibling-comment-bait.yml 2>&1) \
+  && fail "checker passed a bespoke checkout carrying a private-deps comment"
+echo "$out" | grep -q "'bait'" \
+  || fail "checker failed but did not name job 'bait' (got: $out)"
+
 echo "sibling wiring suite OK"

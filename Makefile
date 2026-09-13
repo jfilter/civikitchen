@@ -235,7 +235,7 @@ test-compose-isolation: ## Per-job compose project names in the workflows
 
 # Without the sibling override a stack-booting job cannot install an extension
 # whose <requires> names a sibling the registry does not know.
-test-sibling-wiring: ## Stack-booting jobs reach the private-dependency steps
+test-sibling-wiring: $(SCENARIO_YAML_STAMP) ## Stack-booting jobs reach the private-dependency steps
 	bash tests/parity/test-sibling-wiring.sh
 
 test-sibling-checkout: ## Sibling clones land in one directory per extension key

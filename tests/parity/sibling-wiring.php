@@ -27,24 +27,31 @@ if ($files === []) {
 
 $problems = [];
 foreach ($files as $file) {
-    $yaml = (string) file_get_contents($file);
+    foreach (ck_jobs_parsed($file) as $job => $definition) {
+        $text = ck_job_text($definition);
+        // The private-deps steps are recognized by the action they run, not by
+        // the job text: a comment naming the action is not a step that uses it.
+        $usesPrivateDeps = false;
+        foreach (ck_job_uses($definition) as $uses) {
+            if (str_contains($uses, '/private-deps')) {
+                $usesPrivateDeps = true;
+                break;
+            }
+        }
 
-    foreach (ck_jobs($yaml) as $job => $range) {
-        $body = ck_job_body($yaml, $range['start'], $range['end']);
-
-        if (str_contains($body, 'inputs.sibling_repo') && !str_contains($body, 'private-deps')) {
+        if (str_contains($text, 'inputs.sibling_repo') && !$usesPrivateDeps) {
             $problems[] = "$file: job '$job' uses sibling_repo without the private-dependency steps";
         }
 
         // Only a job that brings a stack UP installs the extension; one that
         // only `exec`s reaches into a stack another job booted.
-        if (preg_match('/docker compose\b[^\n]*\bup\b/', $body) !== 1) {
+        if (preg_match('/docker compose\b[^\n]*\bup\b/', $text) !== 1) {
             continue;
         }
-        if (!str_contains($body, 'private-deps')) {
+        if (!$usesPrivateDeps) {
             $problems[] = "$file: job '$job' boots a stack without the private-dependency steps";
         }
-        if (!str_contains($body, 'CK_SIBLING_OVERRIDE')) {
+        if (!str_contains($text, 'CK_SIBLING_OVERRIDE')) {
             $problems[] = "$file: job '$job' boots a stack without layering CK_SIBLING_OVERRIDE";
         }
     }
