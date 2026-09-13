@@ -61,6 +61,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - `extension-release.yml` marks a release Latest only when its tag is the
   highest plain `vX.Y.Z` in the repo; a late release of an older version no
   longer takes Latest from the newest one.
+- `permission-closure` no longer reads an entity field named `permission` as a
+  permission spec, and reads every permission of a nested OR list instead of
+  stopping after the first group.
+- `permission-closure` accepts core's `*always deny*` sentinel.
 
 ## [1.22.0] - 2026-09-12
 
