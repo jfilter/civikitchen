@@ -99,7 +99,7 @@ final class ManagedJobCheck implements Check
                     && str_starts_with(strtolower($entity), strtolower($prefix))
                     && !self::shipsApi($repoFiles, $entity)
                 ) {
-                    $reporter->warn("$label: api_entity '$entity' looks like this extension's own API but neither Civi/Api4/$entity.php nor api/v3/$entity*.php is in the repo");
+                    $reporter->warn("$label: api_entity '$entity' looks like this extension's own API but neither Civi/Api4/$entity.php nor an api/v3/$entity*.php or api/v3/$entity/*.php is in the repo");
                 }
 
                 if (is_string($entity) && $entity !== '' && self::shipsApi4Only($repoFiles, $entity)) {
@@ -127,12 +127,24 @@ final class ManagedJobCheck implements Check
             if (str_ends_with($file, "Civi/Api4/$entity.php")) {
                 return true;
             }
-            if (preg_match('#(^|/)api/v3/' . preg_quote($entity, '#') . '[^/]*\.php$#', $file) === 1) {
+            if (self::isApi3File($file, $entity)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * The three APIv3 layouts for one entity: api/v3/<Entity>.php, the
+     * suffixed api/v3/<Entity>Something.php, and civix's per-action directory
+     * api/v3/<Entity>/<Action>.php.
+     */
+    private static function isApi3File(string $file, string $entity): bool
+    {
+        $quoted = preg_quote($entity, '#');
+
+        return preg_match('#(^|/)api/v3/' . $quoted . '([^/]*|/[^/]+)\.php$#', $file) === 1;
     }
 
     /**
@@ -144,7 +156,7 @@ final class ManagedJobCheck implements Check
     {
         $api4 = false;
         foreach ($repoFiles as $file) {
-            if (preg_match('#(^|/)api/v3/' . preg_quote($entity, '#') . '[^/]*\.php$#', $file) === 1) {
+            if (self::isApi3File($file, $entity)) {
                 return false;
             }
             if (str_ends_with($file, "Civi/Api4/$entity.php")) {

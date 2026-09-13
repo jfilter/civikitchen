@@ -355,6 +355,30 @@ final class ManagedJobCheckTest extends CheckTestCase
         $this->assertWarns($reporter, 'do not set checkPermissions=0');
     }
 
+    public function testCivixApiV3DirectoryKeepsVersionOutOfScope(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Fixture.php' => '<?php',
+            'api/v3/Fixture/Sync.php' => '<?php',
+            'managed/Job.mgd.php' => <<<'PHP'
+                <?php
+                return [
+                  [
+                    'name' => 'Cron:Fixture.sync',
+                    'entity' => 'Job',
+                    'update' => 'never',
+                    'params' => ['version' => 4, 'values' => [
+                      'api_entity' => 'Fixture',
+                      'api_action' => 'sync',
+                      'parameters' => 'limit=50',
+                    ]],
+                  ],
+                ];
+                PHP,
+        ]);
+        $this->assertSilent($this->run_(new ManagedJobCheck(), $context));
+    }
+
     public function testWarnsWhenFileCannotBeEvaluated(): void
     {
         $context = $this->repo(['managed/Bad.mgd.php' => "<?php\nreturn [['name' => \\Civi\\Nope::name()]];\n"]);
