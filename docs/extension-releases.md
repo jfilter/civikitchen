@@ -123,12 +123,16 @@ Locally, `ckrelease dist` produces exactly the same archive from the same
 commit — `git archive` is deterministic — so "what will ship" is inspectable
 before anything is pushed. A caller with `composer_install: true` additionally
 materializes the locked production dependencies on the runner and archives a
-temporary Git tree containing them; the release tag itself is not changed.
+temporary Git tree containing them; the release tag itself is not changed. A repo
+that declares [build output](#build-output-git-does-not-track) is archived from
+such a tree as well, on a laptop too. An archive of a tree carries the time it
+was built instead of the commit time, so it matches another build of the same
+tree in content, not byte for byte.
 
 ## What the archive contains
 
-Tracked files at the tag, under a single top-level directory named the
-extension key, minus the development layer:
+Tracked files at the tag plus any declared build output, under a single
+top-level directory named the extension key, minus the development layer:
 
 ```
 .github/ .docker/ .claude/ tests/ node_modules/
@@ -142,7 +146,7 @@ commits it because the site needs it at runtime, or sets `composer_install: true
 so the release workflow bundles the locked production tree. A packager that
 silently drops runtime code is worse than one that ships a test file. And
 `dist/` — for a frontend-building extension the committed build *is* the
-shipped artifact.
+shipped artifact. A build that is not committed is declared instead, see below.
 
 When `composer_install` is enabled, package-level copies of the same excluded
 development paths (for example `vendor/acme/package/.github/`) are removed
@@ -150,8 +154,9 @@ before the temporary tree is archived. The resulting ZIP still goes through
 the ordinary `ckrelease verify` and fresh-install smoke test.
 
 Because the archive is built from tracked files, everything a `.gitignore`
-already covers is absent for free; the list above is only about files that are
-committed on purpose and still have no business on a production site.
+already covers is absent for free, unless it is declared build output; the list
+above is only about files that are committed on purpose and still have no
+business on a production site.
 
 Per repo, in `civikitchen.yaml` (where every other repo-level policy lives):
 
@@ -167,9 +172,49 @@ policy:
 ```
 
 `ckrelease verify` re-checks the built archive: one top-level directory named
-after the key, an `info.xml` at the released version, and no excluded name as a
-path segment *at any depth* — which is how a second `tests/` under a sub-package
-gets caught, since the build only excludes at the root.
+after the key, an `info.xml` at the released version, every declared build
+output, and no excluded name as a path segment *at any depth* — which is how a
+second `tests/` under a sub-package gets caught, since the build only excludes
+at the root.
+
+### Build output git does not track
+
+A frontend bundle or a third-party dist that a repo builds instead of committing
+is declared in `civikitchen.yaml`, together with the build that writes it:
+
+```yaml
+policy:
+  dist:
+    build:
+      tool: bun
+      outputs:
+        - ang/example/app.bundle.js
+        - dist/vendor-js/
+```
+
+On a tag the release workflow sets up the Bun that `package.json` pins as
+`"packageManager": "bun@x.y.z"`, runs `bun install --frozen-lockfile` and
+`bun run build`, and `ckrelease dist` adds exactly the listed paths — files, or
+directories with everything in them — to the tree it archives, on top of the
+bundled `vendor/` when `composer_install` is on. Nothing else the build leaves
+in the checkout reaches the zip. The release fails when
+
+- a listed output is missing after the build (each one is named),
+- a listed output is tracked by git, which ships it from git already,
+- a listed output lies in the development layer or under `dist.exclude`,
+- `package.json` has no exact Bun pin, or `bun.lock` is not committed: without a
+  lockfile `bun install --frozen-lockfile` installs unlocked and succeeds.
+
+The build runs before any credential is minted on the runner, because it
+executes the repo's and its dependencies' code. A build script that calls a Node
+binary gets the runner's own Node.
+
+Locally, run the same two Bun commands first. `ckrelease dist` never runs the
+build: it stages the outputs the working tree holds and refuses, naming each
+missing one, until they exist. Build at the commit you archive, since the
+outputs come from the working tree and not from `--ref`.
+
+No caller input is involved, so a repo adopts this in `civikitchen.yaml` alone.
 
 ### Why not `.gitattributes export-ignore`
 
@@ -270,4 +315,4 @@ ckrelease info   key|file|version|dist-name
 
 It ships in the civikitchen images (so `docker compose exec app ckrelease …`
 works) and runs standalone from a checkout with nothing but bash, git, php and
-unzip.
+unzip. A repo with declared build output needs its build run first.

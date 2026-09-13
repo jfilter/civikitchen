@@ -389,7 +389,8 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
 
   See [Releasing an extension](extension-releases.md).
 - `composer.json` with the extension metadata; no `node_modules`/`vendor`/build
-  artifacts committed (frontend builds commit only `dist/`).
+  artifacts committed (frontend builds commit only `dist/`, or declare the
+  uncommitted build under `policy.dist.build` so the release zip carries it).
 - `.gitignore` covers every artifact the repo can regenerate — the phpunit
   result cache, `vendor/`, `node_modules/`, `*.tsbuildinfo`. `ckconform` demands
   only what the repo can actually produce, and only those: nagging a PHP-only
