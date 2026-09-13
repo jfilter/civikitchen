@@ -134,10 +134,19 @@ version.
 
 From a clean `main` whose images have been built and promoted:
 
+First move the `[Unreleased]` bullets in [`CHANGELOG.md`](../CHANGELOG.md)
+under a new `## [X.Y.Z] - YYYY-MM-DD` heading with today's date and add the
+compare link at the bottom. The file follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and `release.yml`
+refuses a tag whose version has no section — or whose `[Unreleased]` still
+carries bullets, which means the entry was never moved. The same section
+becomes the GitHub release body.
+
 ```bash
 git switch main && git pull
 # sanity: the template still stamps and checks cleanly
 bash tests/ckinit/test-ckinit.sh
+bash .github/scripts/changelog-check.sh --release 1.0.1
 
 git tag -a v1.0.1 -m 'v1.0.1'
 git push origin v1.0.1
@@ -150,7 +159,7 @@ The tag push runs `release.yml`, which
 3. moves the git `v1` tag to the release commit — but only if `v1.0.1` really
    is the newest `v1.x.y`, so a late patch on an older line cannot drag `v1`
    backwards,
-4. creates the GitHub release with generated notes.
+4. creates the GitHub release from that version's changelog section.
 
 Nothing else is needed: callers on `@v1` and `:v1` pick the release up on their
 next run.
