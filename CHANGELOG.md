@@ -68,6 +68,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `CRM_Core_Permission::check()` calls and `hook_civicrm_permission`.
 - `permission-closure` accepts core's `*always deny*` sentinel and afform's
   `@afformPageToken` and `manage own afform`.
+- `permission-closure` finds `CRM_Core_Permission::check()` calls in any letter
+  case, and a brace inside a string or comment no longer moves the end of
+  `hook_civicrm_permission`.
 
 ## [1.22.0] - 2026-09-12
 
