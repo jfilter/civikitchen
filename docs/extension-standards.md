@@ -1080,6 +1080,19 @@ runner checkout may write) but are not treated as your code: `cklint` ignores
 `.civikitchen-siblings/`, and `ckconform` reads tracked files only. Nothing to
 add to your `.gitignore` — the directory only ever exists on a runner.
 
+`playwright-e2e.yml` takes the same `sibling_repo` input for a single repo and
+hands the checkout to the caller's own `prepare_command`, `test_command` and
+`cleanup_command` through three environment variables, because that workflow
+never boots the stack itself:
+
+| Variable | Value |
+|----------|-------|
+| `CK_SIBLING_DIR` | Absolute path of the checkout — `$GITHUB_WORKSPACE/.civikitchen-siblings/<key>`, named after the extension key from the sibling's `info.xml`, not its repo name. |
+| `CK_SIBLING_KEY` | That extension key on its own, for an enable list or a mount target. |
+| `CK_SIBLING_OVERRIDE` | Path of the compose override that bind-mounts the sibling read-only; layer it with a second `-f` on your `up`. It only mounts — `playwright-e2e.yml` does not know the stack's enable list, so `CIVIKITCHEN_ENABLE_EXTENSIONS` stays yours. |
+
+All three are unset when `sibling_repo` is empty.
+
 Caller, with both:
 
 ```yaml

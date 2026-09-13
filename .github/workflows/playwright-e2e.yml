@@ -68,7 +68,10 @@ on:
           sibling's main from reddening every consumer) checked out to
           .civikitchen-siblings/ and mounted read-only beside this one, under
           the key from ITS info.xml — for extensions implementing a sibling's
-          interfaces. Mounted as-is (no composer install there); private
+          interfaces. The prepare/test/cleanup commands address it through
+          CK_SIBLING_DIR (absolute path), CK_SIBLING_KEY (that extension key)
+          and CK_SIBLING_OVERRIDE (a compose override file that bind-mounts it
+          read-only). Mounted as-is (no composer install there); private
           sibling needs the composer_app_* secrets. Empty mounts nothing.
         type: string
         default: ''

@@ -163,7 +163,11 @@ next run.
   that only *warns*, a new tool.
 - **major** — anything a conforming repo has to react to: a removed or renamed
   workflow input, a managed template file that changes shape, a check that
-  turns from warning to failure, a dropped image flavor or tag.
+  turns from warning to failure, a dropped image flavor or tag, or a changed
+  value behind a variable the caller's own commands read — `playwright-e2e.yml`
+  now sets `CK_SIBLING_DIR` to `.civikitchen-siblings/<extension key>` where it
+  used to use the sibling's repo name, so a hard-coded path in a
+  `prepare_command` breaks.
 
 The test for "is this breaking" is not the size of the diff; it is whether a
 repo that was green yesterday goes red without touching its own code.
