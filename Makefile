@@ -107,7 +107,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: help doctor test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-parity \
-	test-compose-isolation test-sibling-wiring test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
+	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
 	test-ck-headless test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
 	test-database-matrix test-demo-basic-auth test-release-retag \
         lint-actions lint-php lint-schema build test-images e2e tools clean
@@ -128,7 +128,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-sibling-wiring test-database-matrix test-demo-basic-auth test-release-retag test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -237,6 +237,9 @@ test-compose-isolation: ## Per-job compose project names in the workflows
 # whose <requires> names a sibling the registry does not know.
 test-sibling-wiring: ## Stack-booting jobs reach the private-dependency steps
 	bash tests/parity/test-sibling-wiring.sh
+
+test-sibling-checkout: ## Sibling clones land in one directory per extension key
+	bash tests/parity/test-sibling-checkout.sh
 
 test-database-matrix: ## Supported database images gate standalone promotion
 	bash tests/parity/test-database-matrix.sh

@@ -1011,7 +1011,7 @@ to off; a caller that sets neither gets exactly the run it has today.
 | Input / secret | What it adds |
 |---|---|
 | `composer_install` | `composer install --no-interaction --no-progress` on the runner, before the stack boots. |
-| `sibling_repo` | Comma- or newline-separated `owner/repo` list of further extensions: each checked out to `.civikitchen-siblings/<repo>` and bind-mounted read-only into the stack, which also enables them — left to right, before this extension. |
+| `sibling_repo` | Comma- or newline-separated `owner/repo` list of further extensions: each checked out to `.civikitchen-siblings/<key>` and bind-mounted read-only into the stack, which also enables them — left to right, before this extension. |
 | `composer_app_repositories` | Comma- or newline-separated repository names within the caller's owner. Required with the App secrets and scopes the minted token to exactly these private dependencies. |
 | `composer_app_id`, `composer_app_private_key` (secrets) | A GitHub App with `contents: read`, installed on the private dependency repos. The workflow mints a short-lived installation token restricted by `composer_app_repositories` and uses it for both the composer install and the sibling checkout. |
 
@@ -1045,6 +1045,11 @@ entry is needed for it. The phpat boundary rule reads the same list and finds
 the sibling under `.civikitchen-siblings/<key>` on the runner, so using the
 sibling's classes directly is allowed rather than reported as reaching into
 another extension's internals.
+
+Because the directory is the key, two entries whose `info.xml` declares the
+same key fail the run instead of overwriting each other, and so do the keys
+`ci` and `policy` — the workflow checks its own helper repositories out under
+those two names.
 
 Each sibling is mounted **as is**, read-only: no `composer install` runs in it.
 A sibling that keeps its own `vendor/` out of git is not supported yet — say

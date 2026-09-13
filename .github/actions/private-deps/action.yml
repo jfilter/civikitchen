@@ -114,29 +114,7 @@ runs:
       env:
         CK_SIBLING_REPO: ${{ inputs.sibling_repo }}
         CK_SIBLING_TOKEN: ${{ steps.app.outputs.token || github.token }}
-      run: |
-        set -euo pipefail
-        # Every entry has to be owner/repo — it becomes a clone target and a
-        # path. Validated here as well as in the calling job: this action is
-        # the only place that turns the value into a command.
-        for repo in ${CK_SIBLING_REPO//,/ }; do
-          [[ "$repo" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
-            || { echo "invalid sibling_repo entry (expected owner/repo): $repo" >&2; exit 1; }
-        done
-        # `git -c` keeps the credential in this process: unlike a token in
-        # the clone URL it never reaches the sibling's .git/config. Never
-        # echoed either — base64 defeats the runner's secret masking.
-        header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$CK_SIBLING_TOKEN" | base64 | tr -d '\n')"
-        paths=""
-        for repo in ${CK_SIBLING_REPO//,/ }; do
-          dir=".civikitchen-siblings/${repo##*/}"
-          rm -rf "$dir"
-          git -c "http.https://github.com/.extraheader=$header" \
-            clone --quiet --depth 1 "https://github.com/$repo" "$dir"
-          paths="${paths:+$paths }$dir"
-        done
-        echo "checked out siblings: $paths"
-        echo "paths=$paths" >> "$GITHUB_OUTPUT"
+      run: ${{ github.action_path }}/checkout-siblings.sh
 
     # The organisation's default civikitchen.yaml, next to the sibling for the
     # same two reasons (dot-prefixed: invisible to the extension scanner and
@@ -186,31 +164,12 @@ runs:
         set -euo pipefail
         mounts=""
         keys=""
+        set -f
         for dir in $CK_SIBLING_DIRS; do
-          info="$GITHUB_WORKSPACE/$dir/info.xml"
-          [ -f "$info" ] \
-            || { echo "sibling_repo: no info.xml in $dir — that repo is not a CiviCRM extension" >&2; exit 1; }
-          # The extension KEY, read from the sibling's own info.xml rather
-          # than taken from the repo name or asked for as a second input: it
-          # is the name CiviCRM registers the extension under, the name
-          # `cv ext:enable` expects, and the directory a consuming
-          # phpstan.neon points its scanDirectories at. A repo name is none
-          # of those and is free to differ. It cannot go stale.
-          # Parsed as XML, not with a tag-shaped regex: an attribute order or
-          # a root element split over two lines is legal and would silently
-          # yield an empty key. Same reader as the toolbelt's ck_xml_field —
-          # inline, because this runs on the bare runner where the toolbelt
-          # is not on PATH. php is preinstalled on the GitHub-hosted images.
-          # shellcheck disable=SC2016  # the $vars belong to PHP, not the shell.
-          sibling_key=$(php -r '
-            libxml_use_internal_errors(TRUE);
-            $xml = simplexml_load_file($argv[1]);
-            if ($xml === FALSE) { fwrite(STDERR, "cannot parse {$argv[1]}\n"); exit(2); }
-            echo trim((string) $xml["key"]);
-          ' "$info")
-          [[ "$sibling_key" =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]] \
-            || { echo "sibling_repo: could not read a usable extension key from $dir/info.xml (got: '$sibling_key')" >&2; exit 1; }
-          echo "sibling extension: $sibling_key (from $dir)"
+          # The checkout step named each directory after the extension key it
+          # read from that sibling's info.xml — the name CiviCRM registers the
+          # extension under and `cv ext:enable` expects.
+          sibling_key="${dir##*/}"
           mounts="$mounts      - $GITHUB_WORKSPACE/$dir:/var/www/html/ext/$sibling_key:ro"$'\n'
           keys="${keys:+$keys,}$sibling_key"
         done
