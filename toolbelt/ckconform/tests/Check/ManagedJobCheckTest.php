@@ -46,7 +46,7 @@ final class ManagedJobCheckTest extends CheckTestCase
                         'api_action' => 'sync',
                         'run_frequency' => 'Hourly',
                         'is_active' => TRUE,
-                        'parameters' => "limit=50\ndry_run=0",
+                        'parameters' => "version=4\ncheckPermissions=0\nlimit=50",
                       ],
                     ],
                   ],
@@ -157,6 +157,7 @@ final class ManagedJobCheckTest extends CheckTestCase
                       'api_entity' => 'Fixture',
                       'api_action' => 'sync',
                       'is_active' => TRUE,
+                      'parameters' => "version=4\ncheckPermissions=0",
                     ]],
                   ],
                 ];
@@ -232,6 +233,126 @@ final class ManagedJobCheckTest extends CheckTestCase
                 PHP,
         ]);
         $this->assertSilent($this->run_(new ManagedJobCheck(), $context));
+    }
+
+    public function testPassesOnApiV4OnlyEntityWithJsonVersion(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Fixture.php' => '<?php',
+            'managed/Job.mgd.php' => <<<'PHP'
+                <?php
+                return [
+                  [
+                    'name' => 'Cron:Fixture.sync',
+                    'entity' => 'Job',
+                    'update' => 'never',
+                    'params' => ['version' => 4, 'values' => [
+                      'api_entity' => 'Fixture',
+                      'api_action' => 'sync',
+                      'parameters' => '{"version":4,"checkPermissions":false}',
+                    ]],
+                  ],
+                ];
+                PHP,
+        ]);
+        $this->assertSilent($this->run_(new ManagedJobCheck(), $context));
+    }
+
+    public function testFailsOnApiV4OnlyEntityWithoutVersion(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Fixture.php' => '<?php',
+            'managed/Job.mgd.php' => <<<'PHP'
+                <?php
+                return [
+                  [
+                    'name' => 'Cron:Fixture.sync',
+                    'entity' => 'Job',
+                    'update' => 'never',
+                    'params' => ['version' => 4, 'values' => [
+                      'api_entity' => 'Fixture',
+                      'api_action' => 'sync',
+                      'parameters' => "version = 3\nlimit=50",
+                    ]],
+                  ],
+                ];
+                PHP,
+        ]);
+        $this->assertFails(
+            $this->run_(new ManagedJobCheck(), $context),
+            "api_entity 'Fixture' is APIv4-only but parameters do not set version=4",
+        );
+    }
+
+    public function testFailsOnApiV4OnlyEntityWithoutParameters(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Fixture.php' => '<?php',
+            'managed/Job.mgd.php' => <<<'PHP'
+                <?php
+                return [
+                  [
+                    'name' => 'Cron:Fixture.sync',
+                    'entity' => 'Job',
+                    'update' => 'never',
+                    'params' => ['version' => 4, 'values' => [
+                      'api_entity' => 'Fixture',
+                      'api_action' => 'sync',
+                    ]],
+                  ],
+                ];
+                PHP,
+        ]);
+        $this->assertFails($this->run_(new ManagedJobCheck(), $context), 'do not set version=4');
+    }
+
+    public function testApiV3FileKeepsVersionOutOfScope(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Fixture.php' => '<?php',
+            'api/v3/Fixture.php' => '<?php',
+            'managed/Job.mgd.php' => <<<'PHP'
+                <?php
+                return [
+                  [
+                    'name' => 'Cron:Fixture.sync',
+                    'entity' => 'Job',
+                    'update' => 'never',
+                    'params' => ['version' => 4, 'values' => [
+                      'api_entity' => 'Fixture',
+                      'api_action' => 'sync',
+                      'parameters' => 'limit=50',
+                    ]],
+                  ],
+                ];
+                PHP,
+        ]);
+        $this->assertSilent($this->run_(new ManagedJobCheck(), $context));
+    }
+
+    public function testWarnsOnApiV4OnlyEntityWithoutCheckPermissions(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Fixture.php' => '<?php',
+            'managed/Job.mgd.php' => <<<'PHP'
+                <?php
+                return [
+                  [
+                    'name' => 'Cron:Fixture.sync',
+                    'entity' => 'Job',
+                    'update' => 'never',
+                    'params' => ['version' => 4, 'values' => [
+                      'api_entity' => 'Fixture',
+                      'api_action' => 'sync',
+                      'parameters' => 'version=4',
+                    ]],
+                  ],
+                ];
+                PHP,
+        ]);
+        $reporter = $this->run_(new ManagedJobCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'do not set checkPermissions=0');
     }
 
     public function testWarnsWhenFileCannotBeEvaluated(): void

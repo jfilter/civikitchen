@@ -216,6 +216,9 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   bespoke hooks (`CiviKitchen.Extension.UseMixinsForStandardHooks`).
 - Config as managed entities (`managed/*.mgd.php` or `.mgd.php`), not
   install-time imperative code.
+- A managed `Job` on an entity this repo ships only under `Civi/Api4/` sets
+  `version=4` in its `parameters` — the runner parses them the APIv3 way and
+  the job otherwise fails on every cron pass (`ckconform` `managed-job`).
 - phpstan level 10 clean (template `phpstan.neon.dist`), files ≤ 1000 lines
   (`CiviKitchen.Files.MaxFileLength`).
 - `declare(strict_types = 1)` in every file

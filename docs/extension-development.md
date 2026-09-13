@@ -258,11 +258,13 @@ PHPStan needs to know about CiviCRM's autoloader to resolve `CRM_*` and
 `Civi\*` symbols. The managed
 [`phpstanBootstrap.php`](../scaffold/template/extension/phpstanBootstrap.php)
 registers core's class loader, then the civix layout (`CRM_*`, `Civi\*`,
-`api_*`, `vendor/`) of every extension the repo's `info.xml` `<requires>`
-that exists under the ext dir (`CK_EXT_DIR`, default `/var/www/html/ext` — the
-mount and download target of the images). A class extended from a required
-extension therefore resolves without a repo-specific bootstrap or
-`scanDirectories` entry; a required extension that is not present is noted on
+`api_*`, `vendor/`) of core's own ext packages (`civi_member`,
+`civi_contribute`, … — they ship with core but live off its classloader path)
+and of every extension the repo's `info.xml` `<requires>` that exists under
+the ext dir (`CK_EXT_DIR`, default `/var/www/html/ext` — the mount and
+download target of the images). `Civi\Api4\Membership` and a class extended
+from a required extension therefore resolve without a repo-specific bootstrap
+or `scanDirectories` entry; a required extension that is not present is noted on
 stderr and its classes stay unresolved, which phpstan then reports where the
 code touches them. The same `<requires>` list tells the fleet-wide phpat
 boundary rule which extensions the repo may use directly — a required
