@@ -62,7 +62,7 @@ name: Release
 
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
 
 permissions:
   contents: read
@@ -110,6 +110,12 @@ git tag -a v1.3.0 -m 'v1.3.0' && git push origin main v1.3.0
 The tag push runs the workflow: `ckrelease check` → `ckrelease dist` → install
 smoke test → `gh release create --generate-notes` with the zip and its
 `.sha256` attached.
+
+A tag with a SemVer pre-release suffix (`v1.3.0-rc.1`) is published as a
+pre-release and never marked Latest; a plain tag is marked Latest only when it
+is the highest plain `vX.Y.Z` in the repo, so a late release of an older version
+leaves Latest where it is. Any other tag shape (`v1.3`, `v2.2.7.1`) fails the
+run before the build.
 
 Locally, `ckrelease dist` produces exactly the same archive from the same
 commit — `git archive` is deterministic — so "what will ship" is inspectable
