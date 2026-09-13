@@ -1,0 +1,20 @@
+# Fixture for the compose-project isolation gate: `bait` boots a stack on a
+# configurable runner and only mentions COMPOSE_PROJECT_NAME in a comment, and
+# `hosted-in-a-comment` names a GitHub-hosted label in one. A checker reading
+# the raw job text passes both.
+name: fixture
+
+on: workflow_dispatch
+
+jobs:
+  bait:
+    runs-on: ${{ inputs.runs_on || 'ubuntu-latest' }}
+    steps:
+      # COMPOSE_PROJECT_NAME is set by the compose file itself
+      - run: docker compose -f .docker/docker-compose.ci.yml up -d --wait
+
+  hosted-in-a-comment:
+    runs-on: ${{ inputs.runs_on || 'ubuntu-latest' }}
+    steps:
+      # pinned to ubuntu-latest, one VM per job
+      - run: docker compose -f .docker/docker-compose.ci.yml up -d --wait

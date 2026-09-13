@@ -26,24 +26,22 @@ if ($files === []) {
 
 $problems = [];
 foreach ($files as $file) {
-    $yaml = (string) file_get_contents($file);
-
-    foreach (ck_jobs($yaml) as $job => $range) {
-        $joined = ck_job_body($yaml, $range['start'], $range['end']);
+    foreach (ck_jobs_parsed($file) as $job => $definition) {
+        $text = ck_job_text($definition);
 
         // Only jobs that actually bring a stack up can collide. `exec` alone
         // reaches into whatever the booting job created and is not a boot.
-        if (preg_match('/docker compose\b[^\n]*\bup\b/', $joined) !== 1) {
+        if (preg_match('/docker compose\\b[^\\n]*\\bup\\b/', $text) !== 1) {
             continue;
         }
         // A hardcoded GitHub-hosted label means one VM per job — no shared
-        // Docker daemon, nothing to collide over.
-        if (preg_match('/^\s*runs-on:\s*(.+)$/m', $joined, $m) === 1
-            && !str_contains($m[1], '${{')
-        ) {
+        // Docker daemon, nothing to collide over. Read from the `runs-on` key,
+        // not from the job text: a label named in a comment is not a runner.
+        $runsOn = ck_scalar_text($definition['runs-on'] ?? null);
+        if ($runsOn !== '' && !str_contains($runsOn, '${{')) {
             continue;
         }
-        if (str_contains($joined, 'COMPOSE_PROJECT_NAME')) {
+        if (str_contains($text, 'COMPOSE_PROJECT_NAME')) {
             continue;
         }
         $problems[] = "$file: job '$job' boots a compose stack without COMPOSE_PROJECT_NAME";

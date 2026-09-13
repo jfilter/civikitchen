@@ -230,7 +230,7 @@ test-tool-locks: ## Tool lockfiles: in sync, and resolved against the PHP floor
 # Two jobs of one run sharing a compose project means the second one's
 # `down -v` kills the first one's containers. Only reproducible where jobs
 # share a Docker daemon, i.e. never on the runner this suite runs on.
-test-compose-isolation: ## Per-job compose project names in the workflows
+test-compose-isolation: $(SCENARIO_YAML_STAMP) ## Per-job compose project names in the workflows
 	bash tests/parity/test-compose-project-isolation.sh
 
 # Without the sibling override a stack-booting job cannot install an extension

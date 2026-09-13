@@ -26,4 +26,13 @@ done
 echo "$out" | grep -q "'hosted'" \
   && fail "checker flagged a job pinned to a GitHub-hosted runner"
 
+# Comments that name what the job does not do: the gate reads the `runs-on`
+# key and the jobs' scalars, so neither bait changes the verdict.
+out=$(php "$CHECK" tests/parity/fixtures/workflow.compose-project-comment-bait.yml 2>&1) \
+  && fail "checker passed a shared compose project excused only by comments"
+for job in bait hosted-in-a-comment; do
+  echo "$out" | grep -q "'$job'" \
+    || fail "checker failed but did not name job '$job' (got: $out)"
+done
+
 echo "compose project isolation suite OK"
