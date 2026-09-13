@@ -73,6 +73,7 @@ final class PermissionClosureCheck implements Check
         'export own manual batches', 'reopen own manual batches',
         'reopen all manual batches', 'close own manual batches',
         'refund contributions', 'edit contact summary layouts', 'administer afform',
+        'manage own afform', '@afformPageToken',
         'administer search_kit', 'administer API keys', 'authenticate with password',
         'authenticate with api key', "generate any user's JWT",
         "validate any user's credentials",
@@ -84,6 +85,12 @@ final class PermissionClosureCheck implements Check
      * @var list<string>
      */
     private const PSEUDO_PERMISSIONS = ['*always allow*', '*always deny*', '*allow*', '\*always allow\*', '1', '0'];
+
+    /** Tokens after which `[` is a subscript rather than a list. */
+    private const SUBSCRIPTABLE = [T_VARIABLE, ']', ')', '}', T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE];
+
+    /** Tokens that open a bracketed group. */
+    private const OPENERS = ['[', '(', '{', T_ATTRIBUTE, T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES];
 
     public function name(): string
     {
@@ -391,32 +398,96 @@ final class PermissionClosureCheck implements Check
             }
             $j = $i + 2;
             if ($tokens[$j]->is(T_CONSTANT_ENCAPSED_STRING)) {
-                $found[] = substr($tokens[$j]->text, 1, -1);
-                continue;
+                $found[] = $this->literal($tokens[$j]->text);
+            } elseif ($tokens[$j]->is(['[', T_ARRAY])) {
+                array_push($found, ...$this->listLiterals($tokens, $j));
             }
-            if (!$tokens[$j]->is(['[', T_ARRAY])) {
-                continue;
-            }
-
-            $strings = [];
-            $depth = 0;
-            for (; $j < $count; $j++) {
-                $token = $tokens[$j];
-                if ($token->is(T_DOUBLE_ARROW)) {
-                    continue 2;
-                }
-                if ($token->is(['[', '('])) {
-                    $depth++;
-                } elseif ($token->is([']', ')']) && --$depth === 0) {
-                    break;
-                } elseif ($token->is(T_CONSTANT_ENCAPSED_STRING)) {
-                    $strings[] = substr($token->text, 1, -1);
-                }
-            }
-            array_push($found, ...$strings);
         }
 
         return $found;
+    }
+
+    /**
+     * The string leaves of the list literal opening at $start. Subscripts,
+     * calls, closures and attributes inside it are skipped whole; a key
+     * anywhere, or a list that never closes, yields nothing.
+     *
+     * @param  list<\PhpToken> $tokens
+     * @return list<string>
+     */
+    private function listLiterals(array $tokens, int $start): array
+    {
+        $strings = [];
+        $depth = 0;
+        $previous = null;
+        for ($j = $start, $count = count($tokens); $j < $count; $j++) {
+            $token = $tokens[$j];
+            $opensList = ($token->is('[') && !($previous?->is(self::SUBSCRIPTABLE) ?? false))
+                || ($token->is('(') && ($previous?->is(T_ARRAY) ?? false));
+            if ($token->is(T_DOUBLE_ARROW) || $token->is('}')) {
+                return [];
+            }
+            if ($opensList) {
+                $depth++;
+            } elseif ($token->is([']', ')'])) {
+                if (--$depth === 0) {
+                    return $strings;
+                }
+            } elseif ($token->is(self::OPENERS)) {
+                $close = $this->closingIndex($tokens, $j);
+                if ($close === null) {
+                    return [];
+                }
+                $j = $close;
+                $token = $tokens[$j];
+            } elseif ($token->is(T_CONSTANT_ENCAPSED_STRING)) {
+                $strings[] = $this->literal($token->text);
+            }
+            $previous = $token;
+        }
+
+        return [];
+    }
+
+    /**
+     * @param list<\PhpToken> $tokens
+     */
+    private function closingIndex(array $tokens, int $open): ?int
+    {
+        $depth = 0;
+        for ($j = $open, $count = count($tokens); $j < $count; $j++) {
+            if ($tokens[$j]->is(self::OPENERS)) {
+                $depth++;
+            } elseif ($tokens[$j]->is([']', ')', '}']) && --$depth === 0) {
+                return $j;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The value of a T_CONSTANT_ENCAPSED_STRING token, escapes resolved by
+     * PHP's single- or double-quote rules.
+     */
+    private function literal(string $text): string
+    {
+        $text = ltrim($text, 'bB');
+        $body = substr($text, 1, -1);
+        if ($text[0] === "'") {
+            return preg_replace('/\\\\([\\\\\'])/', '$1', $body) ?? $body;
+        }
+
+        return preg_replace_callback(
+            '/\\\\(?:([nrtvef\\\\$"])|([0-7]{1,3})|x([0-9A-Fa-f]{1,2})|u\{([0-9A-Fa-f]+)\})/',
+            static fn (array $m): string => match (true) {
+                ($m[4] ?? '') !== '' => html_entity_decode('&#x' . $m[4] . ';', ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                ($m[3] ?? '') !== '' => chr((int) hexdec($m[3])),
+                ($m[2] ?? '') !== '' => chr((int) octdec($m[2]) & 255),
+                default => ['n' => "\n", 'r' => "\r", 't' => "\t", 'v' => "\v", 'e' => "\e", 'f' => "\f"][$m[1]] ?? $m[1],
+            },
+            $body,
+        ) ?? $body;
     }
 
     /**

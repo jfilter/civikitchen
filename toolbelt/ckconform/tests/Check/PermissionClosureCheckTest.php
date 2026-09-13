@@ -71,11 +71,80 @@ final class PermissionClosureCheckTest extends CheckTestCase
         ], git: true);
         $reporter = $this->run_(new PermissionClosureCheck(), $context);
         $this->assertPasses($reporter);
+        self::assertSame([$this->unknown('schema/Denial.entityType.php')], $reporter->messages('warn'));
+    }
+
+    public function testAnUnclosedPermissionListYieldsNothing(): void
+    {
+        $context = $this->repo([
+            'managed/Thing.mgd.php' => "<?php\n\$x = ['permission' => ['administer SomeOtherExtension'\n\$z = 'tail string';\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    public function testAnAttributeOrClosureInsideASpecDoesNotEndIt(): void
+    {
+        $context = $this->repo([
+            'managed/Thing.mgd.php' => <<<'PHP'
+                <?php
+                return ['permission' => [#[A] function () { return 'noise string'; }, 'administer SomeOtherExtension']];
+                PHP,
+        ], git: true);
         self::assertSame(
-            ["schema/Denial.entityType.php: permission 'administer SomeOtherExtension' is neither a known core permission "
-                . 'nor defined by this extension — fine if a dependency defines it, a silent always-no otherwise'],
-            $reporter->messages('warn'),
+            [$this->unknown('managed/Thing.mgd.php')],
+            $this->run_(new PermissionClosureCheck(), $context)->messages('warn'),
         );
+    }
+
+    public function testEscapesInPermissionLiteralsFollowPhpStringRules(): void
+    {
+        $context = $this->repo([
+            'managed/Thing.mgd.php' => <<<'PHP'
+                <?php
+                return [
+                  ['permission' => 'generate any user\'s JWT'],
+                  ['permission' => ["validate any user\x27s credentials"]],
+                ];
+                PHP,
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    public function testArraySubscriptsInsideASpecAreNotPermissions(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Getter.php' => <<<'PHP'
+                <?php
+                $record = ['permission' => [$reportInstance['permission']]];
+                PHP,
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    public function testCallArgumentsInsideASpecAreNotPermissions(): void
+    {
+        $context = $this->repo([
+            'managed/Thing.mgd.php' => <<<'PHP'
+                <?php
+                return ['permission' => array(array('administer SomeOtherExtension'), E::ts('not a permission'))];
+                PHP,
+        ], git: true);
+        self::assertSame(
+            [$this->unknown('managed/Thing.mgd.php')],
+            $this->run_(new PermissionClosureCheck(), $context)->messages('warn'),
+        );
+    }
+
+    /**
+     * Declared by core's afform extension through hook_civicrm_permission and
+     * hook_civicrm_permissionList.
+     */
+    public function testAfformPermissionsAreKnown(): void
+    {
+        $context = $this->repo([
+            'ang/afformThing.aff.php' => "<?php\nreturn ['permission' => ['@afformPageToken', 'manage own afform']];\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
     }
 
     /**
@@ -205,6 +274,12 @@ final class PermissionClosureCheckTest extends CheckTestCase
         $context = $this->repo(['myext.php' => self::HOOK], git: true);
         file_put_contents($context->path('scratch.php'), "<?php\nCRM_Core_Permission::check('administer MyExtt');\n");
         $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    private function unknown(string $file): string
+    {
+        return "$file: permission 'administer SomeOtherExtension' is neither a known core permission "
+            . 'nor defined by this extension — fine if a dependency defines it, a silent always-no otherwise';
     }
 
     private function menu(string $arguments): string
