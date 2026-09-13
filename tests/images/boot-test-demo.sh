@@ -248,7 +248,8 @@ if [ -z "${PROFILE}" ] && [ "${CK_SKIP_SITE_URL_TEST:-0}" != "1" ]; then
             # Retry: healthy can precede the log flush by a moment on fast runners.
             rewrote=1
             for _ in 1 2 3 4 5 6; do
-                if docker logs "${APP}-url" 2>&1 | grep -q 'Rewriting site base URL'; then
+                if url_logs="$(docker logs "${APP}-url" 2>&1)" \
+                    && grep -q 'Rewriting site base URL' <<<"${url_logs}"; then
                     rewrote=0; break
                 fi
                 sleep 5

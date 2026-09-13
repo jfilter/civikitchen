@@ -78,10 +78,11 @@ fi
 #     the boot stub patch-test-db-boot.php anchors on.
 if [ "${CIVICRM_UF:-}" = "Standalone" ]; then
     echo "== standalone base parity =="
+    PHP_MODULES="$(php -m)"
     for ext in imagick soap opcache gd intl mysqli pdo_mysql zip bcmath pcov; do
         name="${ext}"
         [ "${ext}" = opcache ] && name="Zend OPcache"
-        if php -m | grep -qix -- "${name}"; then
+        if grep -qix -- "${name}" <<<"${PHP_MODULES}"; then
             ok "php extension ${ext} loaded"
         else
             fail "php extension ${ext} loaded"
@@ -194,7 +195,7 @@ else
     fail "CiviKitchen UseMixinsForStandardHooks didn't flag legacy hook (output: ${CK_OUT:0:200})"
 fi
 
-if cklint --help 2>&1 | grep -q "uncommitted git changes"; then
+if CKLINT_HELP="$(cklint --help 2>&1)" && grep -q "uncommitted git changes" <<<"${CKLINT_HELP}"; then
     ok "cklint --help"
 else
     fail "cklint --help"
@@ -436,7 +437,7 @@ function f(array $a) {
 }
 PHP
 
-if ckmodernize --help 2>&1 | grep -q "modernize a CiviCRM extension"; then
+if CKMOD_HELP="$(ckmodernize --help 2>&1)" && grep -q "modernize a CiviCRM extension" <<<"${CKMOD_HELP}"; then
     ok "ckmodernize --help"
 else
     fail "ckmodernize --help"
@@ -1278,7 +1279,7 @@ fi
 # 5c. cklifecycle: the cycle itself needs a booted site, so only the guards are
 #     checkable here.
 echo "== cklifecycle =="
-if cklifecycle --help 2>&1 | grep -q 'disable'; then
+if CKLIFECYCLE_HELP="$(cklifecycle --help 2>&1)" && grep -q 'disable' <<<"${CKLIFECYCLE_HELP}"; then
     ok "cklifecycle --help describes the cycle"
 else
     fail "cklifecycle --help"
@@ -1309,7 +1310,7 @@ fi
 # ---------------------------------------------------------------------------
 # 7. civix renders help (proves the phar boots and core registers commands)
 echo "== civix =="
-if civix list 2>&1 | grep -q "generate:module"; then
+if CIVIX_LIST="$(civix list 2>&1)" && grep -q "generate:module" <<<"${CIVIX_LIST}"; then
     ok "civix list includes generate:module"
 else
     fail "civix list didn't include generate:module"
@@ -1320,8 +1321,9 @@ fi
 # pcov should always be loaded; xdebug should only load when XDEBUG_MODE is set
 # via the entrypoint.
 echo "== xdebug toggle =="
-if php -m | grep -qiE "^pcov$"; then ok "pcov enabled by default"; else fail "pcov not enabled"; fi
-if php -m | grep -qiE "^xdebug$"; then
+DEFAULT_MODULES="$(php -m)"
+if grep -qiE "^pcov$" <<<"${DEFAULT_MODULES}"; then ok "pcov enabled by default"; else fail "pcov not enabled"; fi
+if grep -qiE "^xdebug$" <<<"${DEFAULT_MODULES}"; then
     fail "xdebug enabled by default (should be off until XDEBUG_MODE is set)"
 else
     ok "xdebug off by default"
@@ -1336,7 +1338,7 @@ cat > "${XDEBUG_INI}" <<EOF
 zend_extension=xdebug.so
 xdebug.mode=develop
 EOF
-if php -m 2>&1 | grep -qi "^xdebug$"; then
+if XDEBUG_MODULES="$(php -m 2>&1)" && grep -qi "^xdebug$" <<<"${XDEBUG_MODULES}"; then
     ok "XDEBUG_MODE enables xdebug"
 else
     fail "XDEBUG_MODE didn't enable xdebug"
