@@ -75,7 +75,7 @@ fi
 # expanded by THIS shell (so ${DEFAULT_SITE_TYPE}/${CIVICRM_CREATE_VERSION}
 # resolve); \$PATH is escaped so it expands inside the buildkit shell.
 su -s /bin/bash buildkit <<BK
-set -e
+set -eo pipefail
 export PATH=/home/buildkit/buildkit/bin:\$PATH
 printf '[client]\nhost=127.0.0.1\nport=3306\nuser=root\npassword=root\n' > /home/buildkit/.my.cnf
 amp config:set --mysql_type=mycnf --httpd_type=none --perm_type=none
@@ -112,11 +112,9 @@ fi
 # cache purge below makes a retry actually re-fetch.
 CREATE_LOG=/home/buildkit/civibuild-create.log
 for attempt in 1 2 3; do
-  if civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_CREATE_VERSION}' --url http://localhost --admin-pass admin </dev/null >"\$CREATE_LOG" 2>&1; then
-    cat "\$CREATE_LOG"
+  if civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_CREATE_VERSION}' --url http://localhost --admin-pass admin </dev/null 2>&1 | tee "\$CREATE_LOG"; then
     break
   fi
-  cat "\$CREATE_LOG"
   FAILED_HOST=\$(grep -o '\[\[Downloading https\?://[^/]*' "\$CREATE_LOG" | tail -1 | sed 's|.*//||')
   if [ "\$attempt" = 3 ]; then
     echo "bake.sh: civibuild create failed after 3 attempts (last download host: \${FAILED_HOST:-unknown})" >&2
