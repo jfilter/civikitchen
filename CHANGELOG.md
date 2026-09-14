@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-09-14
+
 ### Added
 
 - `extension-release.yml` ships build output a repo does not commit. The repo
@@ -24,16 +26,6 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `composer_install` too. A missing or tracked output, an output the archive
   leaves out, or a missing `packageManager` pin or `bun.lock` fails the release,
   and `ckrelease verify` requires every declared output in the zip.
-
-### Fixed
-
-- `ckrelease` prints why `ckconform --dist-paths` refused the release layout
-  instead of only reporting that it could not read it.
-
-## [1.23.0] - 2026-09-14
-
-### Added
-
 - **Breaking** `release-tags` conformance check: a version bumped past without
   its git tag fails, and the failure names every untagged version. Versions that
   deliberately never got a tag are declared under `policy.untagged_versions` in
@@ -68,6 +60,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- `ckrelease` prints why `ckconform --dist-paths` refused the release layout
+  instead of only reporting that it could not read it.
 - `api3-surface` recognises APIv4 scheduled jobs configured through JSON
   parameters.
 - `ckdeps` treats the Symfony components core ships as core-provided.
