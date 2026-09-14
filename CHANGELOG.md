@@ -14,6 +14,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- The seeded `phpstanBootstrap.php` passes `cklint` and `ckfmt` again, so a repo
+  on `ckinit --update` no longer fails its own lint gate; the dev-image test now
+  lints and formats the stamped template and keeps it that way.
+
 ## [1.24.0] - 2026-09-14
 
 ### Added

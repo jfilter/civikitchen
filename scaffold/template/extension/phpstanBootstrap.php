@@ -55,9 +55,10 @@ $ckRegister = static function (string $ckDir): void {
 // package whose classes sit somewhere else (flexmailer's src/) is not covered
 // and stays a scanDirectories entry.
 foreach (glob($coreDir . '/ext/*', GLOB_ONLYDIR) ?: [] as $ckCoreExt) {
-  if (is_dir($ckCoreExt . '/Civi') || is_dir($ckCoreExt . '/CRM')) {
-    $ckRegister($ckCoreExt);
+  if (!is_dir($ckCoreExt . '/Civi') && !is_dir($ckCoreExt . '/CRM')) {
+    continue;
   }
+  $ckRegister($ckCoreExt);
 }
 
 // Required extensions live off core's classloader path. Each one mounted or
