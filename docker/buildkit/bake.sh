@@ -115,7 +115,8 @@ for attempt in 1 2 3; do
   if civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_CREATE_VERSION}' --url http://localhost --admin-pass admin </dev/null 2>&1 | tee "\$CREATE_LOG"; then
     break
   fi
-  FAILED_HOST=\$(grep -o '\[\[Downloading https\?://[^/]*' "\$CREATE_LOG" | tail -1 | sed 's|.*//||')
+  # composer failures carry no [[Downloading ...]] line; an empty match must not end the script under pipefail.
+  FAILED_HOST=\$(grep -o '\[\[Downloading https\?://[^/]*' "\$CREATE_LOG" | tail -1 | sed 's|.*//||' || true)
   if [ "\$attempt" = 3 ]; then
     echo "bake.sh: civibuild create failed after 3 attempts (last download host: \${FAILED_HOST:-unknown})" >&2
     exit 1
@@ -130,7 +131,7 @@ for attempt in 1 2 3; do
     esac
     echo "bake.sh: dropping unusable download cache \$cached" >&2
     rm -f "\$cached"
-  done
+  done || true
   civibuild destroy site </dev/null >/dev/null 2>&1 || true
   sleep \$((attempt * 15))
 done
