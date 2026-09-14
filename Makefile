@@ -128,7 +128,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-publish-flags test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -249,6 +249,9 @@ test-demo-basic-auth: ## Demo smoke test delegates long Basic Auth credentials t
 
 test-release-retag: ## Release aliases preserve the verified image digest
 	bash tests/parity/test-release-retag.sh
+
+test-release-move-major-tag: ## Major tag push: App token required, never on disk, idempotent, never backwards
+	bash tests/parity/test-release-move-major-tag.sh
 
 test-release-publish-flags: ## Extension releases: pre-release flag, Latest only for the highest plain version
 	bash tests/parity/test-release-publish-flags.sh

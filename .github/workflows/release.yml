@@ -102,11 +102,34 @@ jobs:
       contents: write
 
     steps:
-      # The one checkout in this repo that keeps its credentials: the next step
-      # force-pushes the moving major tag through the persisted git remote.
+      # The run's own token cannot move a tag onto a commit whose workflow
+      # files differ from the old target; a GitHub App token with workflows
+      # write can.
+      - name: Require the release App credentials
+        env:
+          CLIENT_ID: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+        run: |
+          if [ -z "${CLIENT_ID}" ] || [ -z "${PRIVATE_KEY}" ]; then
+            echo "::error::the variable RELEASE_APP_CLIENT_ID and the secret RELEASE_APP_PRIVATE_KEY must both be set (docs/releases.md)"
+            exit 1
+          fi
+
+      - name: Mint a token that can move the major tag
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-workflows: write
+
       - name: Checkout the tag
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
+          persist-credentials: false
           ref: ${{ needs.images.outputs.tag }}
           fetch-depth: 0
 
@@ -115,6 +138,7 @@ jobs:
           TAG: ${{ needs.images.outputs.tag }}
           MAJOR: ${{ needs.images.outputs.major }}
           RELEASE_SHA: ${{ needs.images.outputs.sha }}
+          RELEASE_PUSH_TOKEN: ${{ steps.app.outputs.token }}
         run: .github/scripts/release-move-major-tag.sh
 
       - name: Create the GitHub release

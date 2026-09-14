@@ -46,15 +46,3 @@ rules:
       # GitHub Packages, where the scoped, run-lived GITHUB_TOKEN is the
       # intended credential — there is no long-lived secret to replace.
       - publish-schema.yml
-
-  artipacked:
-    ignore:
-      # The git-tag job force-pushes the moving major tag through exactly these
-      # persisted credentials. Dropping them would break the release.
-      #
-      # Anchored to line AND column, which is what keeps it from exempting a
-      # second credential-persisting checkout added later — and what makes it
-      # go stale: any edit ABOVE that step in release.yml shifts the line and
-      # the finding comes back. Re-pin it rather than widening this to the
-      # whole file.
-      - release.yml:107:9
