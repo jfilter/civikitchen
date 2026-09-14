@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-09-14
+
 ### Added
 
 - `extension-release.yml` ships build output a repo does not commit. The repo
@@ -642,7 +644,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.23.0...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.24.0...HEAD
+[1.24.0]: https://github.com/jfilter/civikitchen/compare/v1.23.0...v1.24.0
 [1.23.0]: https://github.com/jfilter/civikitchen/compare/v1.22.0...v1.23.0
 [1.22.0]: https://github.com/jfilter/civikitchen/compare/v1.21.6...v1.22.0
 [1.21.6]: https://github.com/jfilter/civikitchen/compare/v1.21.5...v1.21.6
