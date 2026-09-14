@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.24.2] - 2026-09-14
+
 ### Fixed
 
 - A retried demo image build re-downloads the CMS archive instead of reusing the
@@ -660,7 +662,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.24.1...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.24.2...HEAD
+[1.24.2]: https://github.com/jfilter/civikitchen/compare/v1.24.1...v1.24.2
 [1.24.1]: https://github.com/jfilter/civikitchen/compare/v1.24.0...v1.24.1
 [1.24.0]: https://github.com/jfilter/civikitchen/compare/v1.23.0...v1.24.0
 [1.23.0]: https://github.com/jfilter/civikitchen/compare/v1.22.0...v1.23.0
