@@ -102,23 +102,37 @@ echo "DROP TABLE IF EXISTS civicrm_install_canary;" | cvutil_php_nodbg amp sql -
 fi
 # civibuild create downloads the CMS + civicrm-core, including dozens of bundled
 # JS assets the composer-downloads-plugin fetches from github.com. A single
-# transient github.com 5xx on ANY one of them (after composer's own retries)
-# makes composer — and thus the whole
-# multi-arch image build — fail, with civibuild's bash then dying noisily
-# ("pop_var_context: ... not a function context"). Retry the create so a
-# transient blip doesn't sink the build; the composer cache (cleared only at the
+# transient 5xx on ANY one of them (after composer's own retries) makes composer
+# — and thus the whole multi-arch image build — fail, with civibuild's bash
+# then dying noisily ("pop_var_context: ... not a function context"). Retry the
+# create so a transient blip doesn't sink the build; the composer cache (cleared only at the
 # end of this heredoc) means a retry re-fetches just the asset that failed, not
 # the whole tree. </dev/null on both keeps a stray prompt from hanging the
-# non-interactive build; destroy resets partial state between attempts.
+# non-interactive build; destroy resets partial state between attempts, and the
+# cache purge below makes a retry actually re-fetch.
+CREATE_LOG=/home/buildkit/civibuild-create.log
 for attempt in 1 2 3; do
-  if civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_CREATE_VERSION}' --url http://localhost --admin-pass admin </dev/null; then
+  if civibuild create site --type '${DEFAULT_SITE_TYPE}' --civi-ver '${CIVICRM_CREATE_VERSION}' --url http://localhost --admin-pass admin </dev/null >"\$CREATE_LOG" 2>&1; then
+    cat "\$CREATE_LOG"
     break
   fi
+  cat "\$CREATE_LOG"
+  FAILED_HOST=\$(grep -o '\[\[Downloading https\?://[^/]*' "\$CREATE_LOG" | tail -1 | sed 's|.*//||')
   if [ "\$attempt" = 3 ]; then
-    echo "bake.sh: civibuild create failed after 3 attempts (last was likely a transient github.com download)" >&2
+    echo "bake.sh: civibuild create failed after 3 attempts (last download host: \${FAILED_HOST:-unknown})" >&2
     exit 1
   fi
-  echo "bake.sh: civibuild create attempt \$attempt failed (transient download?); resetting + retrying..." >&2
+  echo "bake.sh: civibuild create attempt \$attempt failed (last download host: \${FAILED_HOST:-unknown}); clearing bad downloads + retrying..." >&2
+  # extract-url caches by md5(url) and never checks the HTTP status, so a failed
+  # attempt leaves an error page where the archive belongs; a retry would reuse it.
+  find /home/buildkit/buildkit/app/tmp -maxdepth 1 -type f \\( -name '*.zip' -o -name '*.tar.gz' -o -name '*.tgz' \\) 2>/dev/null | while read -r cached; do
+    case "\$cached" in
+      *.zip) unzip -tqq "\$cached" >/dev/null 2>&1 && continue ;;
+      *) gzip -t "\$cached" >/dev/null 2>&1 && continue ;;
+    esac
+    echo "bake.sh: dropping unusable download cache \$cached" >&2
+    rm -f "\$cached"
+  done
   civibuild destroy site </dev/null >/dev/null 2>&1 || true
   sleep \$((attempt * 15))
 done

@@ -14,6 +14,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- A retried demo image build re-downloads the CMS archive instead of reusing the
+  error page the failed attempt cached. buildkit's `extract-url` stores whatever
+  the server returned under the URL's hash, so a transient 5xx used to make all
+  three `civibuild create` attempts fail identically; unusable archives are now
+  dropped between attempts and the failure names the host that was downloading.
+
 ## [1.24.1] - 2026-09-14
 
 ### Fixed
