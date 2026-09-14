@@ -134,10 +134,11 @@ Budget roughly an hour for the full default run; profile legs add up to
 
 ## Verifying a built image
 
-`tests/images/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through phpcs, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, and verifies the xdebug toggle. The same script runs in CI against both `:standalone` and the buildkit images. CI also boots each dev flavor's compose example and runs Playwright browser smoke tests before promoting stable tags.
+`tests/images/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through phpcs, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, verifies the xdebug toggle, and holds the scaffold template to cklint and ckfmt. The same script runs in CI against both `:standalone` and the buildkit images. CI also boots each dev flavor's compose example and runs Playwright browser smoke tests before promoting stable tags.
 
 ```bash
 docker run --rm -v "$(pwd)/tests/images:/civikitchen-test:ro" \
+    -v "$(pwd):/civikitchen-src:ro" \
     --entrypoint='' \
     ghcr.io/jfilter/civikitchen:standalone \
     bash /civikitchen-test/test-dev-tools.sh

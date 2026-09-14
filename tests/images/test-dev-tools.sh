@@ -29,6 +29,7 @@
 #   7. civix can render help (signals the phar boots)
 #   8. Xdebug toggle: php -m has no xdebug by default; setting XDEBUG_MODE
 #      via the entrypoint enables it
+#   9. The scaffold template, as ckinit stamps it, passes cklint and ckfmt
 set -euo pipefail
 
 PASS=0
@@ -1673,6 +1674,53 @@ for case in "${TAINT_CASES[@]}"; do
         ok "cktaint stays silent on the escaped ${good}"
     fi
 done
+
+# ---------------------------------------------------------------------------
+# 9. The scaffold template passes civikitchen's own gates
+# Consumers get these files verbatim from `ckinit --update` and then run cklint
+# and ckfmt over them in their CI, so a template that trips either one breaks
+# every conforming repo. Stamp a throwaway extension and hold it to the same bar.
+echo "== scaffold template vs. cklint/ckfmt =="
+CK_SRC="${CK_SRC:-/civikitchen-src}"
+if [[ ! -x "${CK_SRC}/scaffold/ckinit.php" ]]; then
+    fail "the repo source is not mounted at ${CK_SRC} — the template gate cannot run"
+else
+    TPL_SRC="${WORKDIR}/template_gate"
+    mkdir -p "${TPL_SRC}"
+    # Writable copy: ckinit reads its policy helper out of toolbelt/ and its YAML
+    # parser out of packages/, both by path relative to scaffold/.
+    cp -R "${CK_SRC}/scaffold" "${CK_SRC}/packages" "${CK_SRC}/toolbelt" "${TPL_SRC}/"
+    TPL_EXT="${TPL_SRC}/example_ext"
+    mkdir -p "${TPL_EXT}"
+    printf '%s\n' '<extension key="org.acme.example_ext" type="module"><file>example_ext</file></extension>' \
+        > "${TPL_EXT}/info.xml"
+    # ckinit's YAML parser lives in a gitignored vendor/, so the checkout CI
+    # mounts here usually has none.
+    TPL_SCHEMA="${TPL_SRC}/packages/civikitchen-scenario-schema"
+    if [[ ! -f "${TPL_SCHEMA}/vendor/autoload.php" ]]; then
+        composer install --no-interaction --no-progress --quiet \
+            --working-dir "${TPL_SCHEMA}" >/dev/null 2>&1 || true
+    fi
+    if TPL_OUT="$("${TPL_SRC}/scaffold/ckinit.php" "${TPL_EXT}" 2>&1)" \
+        && git -C "${TPL_EXT}" init -q \
+        && git -C "${TPL_EXT}" add -A; then
+        ok "ckinit stamps the template into a fresh extension"
+        if TPL_LINT="$(cd "${TPL_EXT}" && cklint --all 2>&1)"; then
+            ok "stamped template passes cklint --all"
+        else
+            fail "stamped template fails cklint --all"
+            echo "${TPL_LINT}"
+        fi
+        if TPL_FMT="$(cd "${TPL_EXT}" && ckfmt --check 2>&1)"; then
+            ok "stamped template passes ckfmt --check"
+        else
+            fail "stamped template fails ckfmt --check"
+            echo "${TPL_FMT}"
+        fi
+    else
+        fail "ckinit could not stamp the template: ${TPL_OUT}"
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 echo

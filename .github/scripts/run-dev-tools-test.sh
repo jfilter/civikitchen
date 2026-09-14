@@ -6,6 +6,7 @@ set -euo pipefail
 docker pull --platform "$PLATFORM" "$IMG"
 docker run --rm --platform "$PLATFORM" \
   -v "${GITHUB_WORKSPACE}/tests/images:/civikitchen-test:ro" \
+  -v "${GITHUB_WORKSPACE}:/civikitchen-src:ro" \
   --entrypoint='' \
   "$IMG" \
   bash /civikitchen-test/test-dev-tools.sh
