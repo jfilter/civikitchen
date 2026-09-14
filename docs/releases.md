@@ -229,3 +229,11 @@ release does. So the first time through, the order is not negotiable:
 
 Pointing a repo at `@v1` before step 2 does not produce a red run — it produces
 a run that cannot start at all, because the ref does not resolve.
+
+Before that first tag, the release workflow needs a GitHub App to move the
+major tag: the run's own `GITHUB_TOKEN` cannot move a tag onto a commit whose
+workflow files differ from the old target. The App is owned by the repo owner
+and installed on this repository only, with the repository permissions
+Contents: read & write and Workflows: read & write. Its client id goes in the
+variable `RELEASE_APP_CLIENT_ID`, its private key in the secret
+`RELEASE_APP_PRIVATE_KEY`; the `git-tag` job fails when either is missing.
