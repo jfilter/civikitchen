@@ -1,6 +1,6 @@
 # Plan: one release path for every extension repo
 
-Status: draft, targeted at v1.24.0. Not started.
+Status: draft, targeted at v1.25.0. Not started.
 
 ## Where things stand
 
@@ -81,7 +81,7 @@ The consequences observed while cutting v1.23.0:
    the repos that pin it, and each dependent gets its `extension_sources` pin
    and the App secrets in the caller. Run `ckconform` from the main branch of
    this repo against every consumer and record the counters before and after.
-5. **Release.** Changelog section, image build and promote, tag `v1.24.0`.
+5. **Release.** Changelog section, image build and promote, tag `v1.25.0`.
 
 ## Also in this round
 
