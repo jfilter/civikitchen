@@ -71,7 +71,7 @@ for flavor in "${FLAVORS[@]}"; do
             ;;
         *)
             run "test-dev-tools ${image}" \
-                docker run --rm -v "$(pwd):/civikitchen-test:ro" --entrypoint='' \
+                docker run --rm -v "$(pwd):/civikitchen-test:ro" -v "$(cd ../.. && pwd):/civikitchen-src:ro" --entrypoint='' \
                     "${image}" bash /civikitchen-test/test-dev-tools.sh
             site_type="$(site_type_for "${flavor}")"
             if [ -n "${site_type}" ]; then
