@@ -135,6 +135,7 @@ COPY toolbelt/bin/ckphpunit /usr/local/bin/ckphpunit
 COPY toolbelt/lib/tx-canary.php /usr/local/share/civikitchen/tx-canary.php
 COPY toolbelt/bin/cklifecycle /usr/local/bin/cklifecycle
 COPY toolbelt/lib/lifecycle-check.php /usr/local/share/civikitchen/lifecycle-check.php
+COPY toolbelt/lib/settings-metadata-check.php /usr/local/share/civikitchen/settings-metadata-check.php
 # release helper: version consistency + the installable dist zip (docs/extension-releases.md)
 COPY toolbelt/bin/ckrelease /usr/local/bin/ckrelease
 # rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.

@@ -23,6 +23,27 @@ use CiviKitchen\Ckconform\Reporter;
  */
 final class SettingsMetadataCheck implements Check
 {
+    /**
+     * Keys of a 'table' pseudoconstant that Civi\Core\SettingsMetadata::fillOptions()
+     * and CRM_Core_PseudoConstant::renderOptionsFromTablePseudoconstant() actually
+     * read (core 6.18, both camelCase). A snake_case sibling like 'key_column' is
+     * silently ignored, leaving keyColumn/labelColumn NULL — which fatals every
+     * settings page that loads options ("... is not of the type MysqlColumnNameOrAlias").
+     */
+    private const TABLE_PSEUDOCONSTANT_KEYS = [
+        'table', 'keyColumn', 'labelColumn', 'condition', 'nameColumn', 'abbrColumn',
+    ];
+
+    /** snake_case (or other common misspelling) => the accepted camelCase key */
+    private const TABLE_PSEUDOCONSTANT_ALIASES = [
+        'key_column' => 'keyColumn',
+        'label_column' => 'labelColumn',
+        'name_column' => 'nameColumn',
+        'abbr_column' => 'abbrColumn',
+        'keycolumn' => 'keyColumn',
+        'labelcolumn' => 'labelColumn',
+    ];
+
     public function name(): string
     {
         return 'settings-metadata';
@@ -68,7 +89,36 @@ final class SettingsMetadataCheck implements Check
                 ) {
                     $reporter->fail("$relative: setting '$key' is on a settings page (settings_pages) but has no html_type/quick_form_type — the generic settings form fatals with QuickForm \"unregistered element\"");
                 }
+
+                $this->checkTablePseudoconstant($relative, (string) $key, $meta['pseudoconstant'] ?? null, $reporter);
             }
+        }
+    }
+
+    /**
+     * @param mixed $pseudoconstant
+     */
+    private function checkTablePseudoconstant(string $relative, string $key, $pseudoconstant, Reporter $reporter): void
+    {
+        if (!is_array($pseudoconstant) || empty($pseudoconstant['table'])) {
+            return;
+        }
+
+        foreach (array_keys($pseudoconstant) as $pcKey) {
+            if (in_array($pcKey, self::TABLE_PSEUDOCONSTANT_KEYS, true)) {
+                continue;
+            }
+            $canonical = self::TABLE_PSEUDOCONSTANT_ALIASES[strtolower((string) $pcKey)] ?? null;
+            $reporter->fail($canonical !== null
+                ? "$relative: setting '$key' pseudoconstant key '$pcKey' is not read by core's settings code — use '$canonical'"
+                : "$relative: setting '$key' pseudoconstant key '$pcKey' is not read by core's settings code (table pseudoconstant)");
+        }
+
+        // Measured on a real install (core 6.18): a 'table' pseudoconstant with
+        // no keyColumn/labelColumn leaves both NULL, which throws the same
+        // "not of the type MysqlColumnNameOrAlias" fatal as the snake_case case.
+        if (!isset($pseudoconstant['keyColumn']) || !isset($pseudoconstant['labelColumn'])) {
+            $reporter->fail("$relative: setting '$key' has a 'table' pseudoconstant without both keyColumn and labelColumn — CRM_Core_PseudoConstant::renderOptionsFromTablePseudoconstant() fatals with \"not of the type MysqlColumnNameOrAlias\"");
         }
     }
 

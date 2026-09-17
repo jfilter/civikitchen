@@ -91,6 +91,14 @@ final class LifecycleCommand implements Command
         }
         $this->step('re-enable', ['cv', 'ext:enable', $key], $transcript);
 
+        echo "cklifecycle: checking settings metadata (option loading)\n";
+        $settingsCheck = $this->runner->capture(['cv', 'scr', '/usr/local/share/civikitchen/settings-metadata-check.php'], $environment);
+        echo $settingsCheck['output'];
+        $transcript .= $settingsCheck['output'];
+        if ($settingsCheck['status'] !== 0) {
+            $this->failed = true;
+        }
+
         $status = preg_replace('/\s+/', '', $this->runner->capture([
             'cv', 'ev', "echo CRM_Extension_System::singleton()->getManager()->getStatus((string) getenv('CK_LC_KEY'));",
         ], $environment)['output']);
