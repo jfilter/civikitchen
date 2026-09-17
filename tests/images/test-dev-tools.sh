@@ -1290,6 +1290,11 @@ if (cd "${WORKDIR}" && cklifecycle >/dev/null 2>&1); then
 else
     ok "cklifecycle refuses to run without info.xml"
 fi
+if [ -f /usr/local/share/civikitchen/settings-metadata-check.php ]; then
+    ok "cklifecycle's settings-metadata-check.php payload is baked in"
+else
+    fail "settings-metadata-check.php missing from the image"
+fi
 
 # ---------------------------------------------------------------------------
 # 6. composer can install a real package

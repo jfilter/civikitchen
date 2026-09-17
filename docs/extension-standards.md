@@ -1212,6 +1212,14 @@ Fatal/Parse/Warning/Recoverable lines. An `install()` whose `try`/`catch`
 swallows a missing-table error otherwise leaves the run green and the site
 broken.
 
+**Settings options must load.** After re-enable, the gate calls
+`\Civi\Core\SettingsMetadata::getMetadata()` with `loadOptions` on for every
+setting the extension declares. A `pseudoconstant` with a key core's settings
+code does not read (see `ckconform`'s `settings-metadata` check for the static
+version of this) leaves `keyColumn`/`labelColumn` `NULL` and fatals — invisible
+until someone opens `/civicrm/admin/theme` or the extension's own settings page,
+because neither install nor the test suite loads options.
+
 `PHP Notice` and `PHP Deprecated` are **not** matched: core emits them on every
 supported version, and deprecations are already covered by the phpunit config's
 `convertDeprecationsToExceptions` and by phpstan. The gate is scoped to this
