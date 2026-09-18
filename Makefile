@@ -106,10 +106,10 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-parity \
+.PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-parity \
 	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
 	test-ck-headless test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
-	test-database-matrix test-demo-basic-auth test-release-retag \
+	test-database-matrix test-demo-basic-auth test-release-retag test-release-script \
         lint-actions lint-php lint-schema lint-changelog test-changelog build test-images e2e tools clean
 
 help: ## Show this help
@@ -128,7 +128,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-script test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -255,6 +255,13 @@ test-release-move-major-tag: ## Major tag push: App token required, never on dis
 
 test-release-publish-flags: ## Extension releases: pre-release flag, Latest only for the highest plain version
 	bash tests/parity/test-release-publish-flags.sh
+
+release: ## Cut a release: VERSION=X.Y.Z [APPLY=1] — every pre-flight check, then the tag
+	@[ -n "$(VERSION)" ] || { echo "VERSION=X.Y.Z is required" >&2; exit 1; }
+	bash scripts/release.sh $(VERSION) $(if $(APPLY),--apply)
+
+test-release-script: ## Release pre-flight: argument, branch, sync, tag, image gate, dry run vs --apply
+	bash tests/parity/test-release-script.sh
 
 test-shell-portability: ## Shell portability lint accepts portable edits and rejects BSD-only sed -i
 	bash tests/parity/test-shell-portability.sh

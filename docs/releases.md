@@ -142,14 +142,16 @@ refuses a tag whose version has no section — or whose `[Unreleased]` still
 carries bullets, which means the entry was never moved. The same section
 becomes the GitHub release body.
 
+`scripts/release.sh` runs every gate the tag push would hit, locally and
+before the tag exists — on `main`, clean, in sync with `origin/main`, the tag
+free here and on origin, the changelog and ckinit suites green, and a completed,
+successful *Build Dev Images* run for the newest commit that touched the image
+trigger paths. Without `--apply` it only reports.
+
 ```bash
 git switch main && git pull
-# sanity: the template still stamps and checks cleanly
-bash tests/ckinit/test-ckinit.sh
-bash .github/scripts/changelog-check.sh --release 1.0.1
-
-git tag -a v1.0.1 -m 'v1.0.1'
-git push origin v1.0.1
+make release VERSION=1.0.1            # report only
+make release VERSION=1.0.1 APPLY=1    # tag and push
 ```
 
 The tag push runs `release.yml`, which

@@ -14,6 +14,15 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/release.sh X.Y.Z [--apply]` (`make release VERSION=… [APPLY=1]`):
+  the release pre-flight, run locally before the tag exists. It checks branch,
+  clean tree, sync with `origin/main`, that the tag is free locally and on
+  origin, the changelog and ckinit gates, and that *Build Dev Images* completed
+  successfully for the newest commit touching its trigger paths — reruns
+  included, the newest run decides. Without `--apply` nothing is created.
+
 ## [1.25.0] - 2026-09-18
 
 ### Added
