@@ -20,7 +20,21 @@ set -euo pipefail
 
 IMAGE="${1:?usage: boot-test-standalone.sh <image>}"
 DATABASE_IMAGE="${CK_DATABASE_IMAGE:-mariadb:10.11}"
-FIXTURE="$(cd "$(dirname "$0")/fixtures/ckbootfixture" && pwd)"
+SRC="$(cd "$(dirname "$0")/../.." && pwd)"
+# The fixture is staged, not mounted from the checkout: the headless suite
+# needs the TEMPLATE bootstrap next to it, and nothing may be written into
+# tests/images/fixtures.
+# Inside the checkout, never $TMPDIR: on macOS the Docker VM sees only $HOME.
+FIXTURE="${SRC}/.cache/boot-fixture-$$"
+mkdir -p "${FIXTURE}"
+cp -R "$(dirname "$0")/fixtures/ckbootfixture/." "${FIXTURE}/"
+mkdir -p "${FIXTURE}/tests/phpunit"
+cp "${SRC}/scaffold/template/extension/tests/phpunit/bootstrap.php" \
+   "${SRC}/scaffold/template/extension/tests/phpunit/ckHeadless.php" "${FIXTURE}/tests/phpunit/"
+mv "${FIXTURE}/headless/CkHeadlessContractTest.php" "${FIXTURE}/tests/phpunit/"
+rmdir "${FIXTURE}/headless"
+sed "s/__EXTKEY__/ckbootfixture/g" "${SRC}/scaffold/template/extension/phpunit.xml.dist" \
+   > "${FIXTURE}/phpunit.xml.dist"
 PROFILE_FIXTURE="$(cd "$(dirname "$0")/fixtures/external-profile" && pwd)"
 DB_INIT="$(cd "$(dirname "$0")/../../examples/standalone/db-init" && pwd)/01-grants.sql"
 
@@ -34,6 +48,7 @@ HEALTH_TIMEOUT=600   # install + the ~100 MB l10n stream
 cleanup() {
     docker rm -fv "${APP}" "${DB}" >/dev/null 2>&1 || true
     docker network rm "${NET}" >/dev/null 2>&1 || true
+    if [ -n "${FIXTURE:-}" ]; then rm -rf "${FIXTURE}"; fi
 }
 trap cleanup EXIT
 
@@ -129,5 +144,20 @@ check "credential file mode is 0600 (got ${cred_mode:-absent})" "[ '${cred_mode}
 cred_line=$(docker exec "${APP}" sed -n '1p' /var/www/api-credentials.txt 2>/dev/null || true)
 check "external profile generated random password + API key" "echo '${cred_line}' | grep -Eq '^smokeapi:[0-9a-f]{48}:[0-9a-f]{32}$'"
 check "password is not derived from username" "! echo '${cred_line}' | grep -q '^smokeapi:smokeapi:'"
+
+# 7) The managed headless bootstrap, twice against the SAME scratch database.
+# Signing the environment drops the core foreign keys, and a warm apply()
+# returns before re-adding them — only the second run shows it.
+docker exec -u www-data "${APP}" bash -c 'cktestreset' >/dev/null 2>&1 || true
+for round in 1 2; do
+    if docker exec -u www-data -w /var/www/html/ext/ckbootfixture "${APP}" \
+        ckphpunit tests/phpunit/CkHeadlessContractTest.php > "${FIXTURE}/phpunit-${round}.log" 2>&1; then
+        echo "  ✓ ck_headless contract holds on the ${round}. run"
+    else
+        echo "  ✗ ck_headless contract fails on the ${round}. run"
+        tail -30 "${FIXTURE}/phpunit-${round}.log"
+        fail=1
+    fi
+done
 
 if [ "${fail}" = 0 ]; then echo "==> PASS: ${IMAGE} on ${DATABASE_IMAGE}"; else echo "==> FAIL: ${IMAGE} on ${DATABASE_IMAGE}"; exit 1; fi
