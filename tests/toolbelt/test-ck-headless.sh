@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The managed test bootstrap's ck_headless() queues the extension's info.xml
 # <requires> before the extension itself, without touching the extension
-# system, and restores the core foreign keys its own signing drops. Civi is
-# stubbed: what is under test is the info.xml reader and the calls the builder
-# receives.
+# system, restores the core foreign keys its own signing drops, and drains the
+# status messages the build queues. Civi is stubbed: what is under test is the
+# info.xml reader and the calls the builder receives.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -75,13 +75,17 @@ probe='
   require $argv[1];
   require $argv[2];
   $b = ck_headless();
+  $last = end($b->steps);
   echo implode(",", $b->installed), "|",
     (CkProbe::$signed && CkProbe::$preInstall ? "restored" : "no-restore"), "|",
     (CkProbe::$builtAfterRestore ? "before-build" : "after-build"), "|",
-    str_replace("\n", " ", implode(";", CkProbe::$executed)), "\n";
+    str_replace("\n", " ", implode(";", CkProbe::$executed)), "|",
+    ($last[1] ?? "none"), "|";
+  if (is_callable($last[0] ?? NULL)) { ($last[0])($b); }
+  echo (CRM_Core_Session::$status === [] ? "drained" : "kept"), "\n";
 '
 out="$(php -r "$probe" "$work/stubs.php" "$work/ext/tests/phpunit/ckHeadless.php")"
-IFS='|' read -r installed restored order executed <<<"$out"
+IFS='|' read -r installed restored order executed sig drained <<<"$out"
 [[ "$installed" == "org.example.base,org.example.dep,org.example.fixture" ]] \
   || fail "expected the info.xml requires, trimmed, own key last; got '$installed'"
 
@@ -92,6 +96,11 @@ IFS='|' read -r installed restored order executed <<<"$out"
 [[ "$executed" == *"USE \`civicrm_test\`"* ]] \
   || fail "the restore must select the scratch database; got '$executed'"
 [[ "$executed" == *"CORE SCHEMA SQL"* ]] || fail "the restore must replay the CoreSchemaStep SQL; got '$executed'"
+
+# The build queues managed-entity errors; the last step drains them, so no test
+# starts with status messages it did not cause.
+[[ "$sig" == "ck-discard-bootstrap-status" ]] || fail "the last step must be the status drain; got '$sig'"
+[[ "$drained" == "drained" ]] || fail "the last step did not drain the session status"
 
 # No key in info.xml: a loud error, never a guessed key.
 printf '%s\n' '<extension type="module"><file>fixture</file></extension>' > "$work/ext/info.xml"

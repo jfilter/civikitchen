@@ -24,7 +24,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `apply()` returns before re-adding them. `ck_headless()` now replays the
   cached core schema SQL once per process. Tests expecting `ON DELETE CASCADE`
   stop failing on every run but the first.
-- The change lands in `tests/phpunit/ckHeadless.php`, so consuming repos need
+- `ck_headless()` discards the session status messages the environment build
+  itself queues — ten "Unknown entity SearchDisplay" errors from the managed
+  entity reconciliation during `Data::populate()`. A test asserting status
+  messages was red on a cold database and green on a warm one.
+- Both land in `tests/phpunit/ckHeadless.php`, so consuming repos need
   `ckinit --update`.
 
 ## [1.24.2] - 2026-09-14

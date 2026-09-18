@@ -28,7 +28,9 @@ function ck_headless(): \Civi\Test\CiviEnvBuilder {
   foreach ($info->requires->ext ?? [] as $required) {
     $builder = $builder->install([trim((string) $required)]);
   }
-  return $builder->install([trim((string) $info['key'])]);
+  $builder = $builder->install([trim((string) $info['key'])]);
+  // Last step, so it drains what every earlier step queued.
+  return $builder->callback('ck_discard_bootstrap_status', 'ck-discard-bootstrap-status');
 }
 
 /**
@@ -48,6 +50,14 @@ function ck_restore_core_foreign_keys(): void {
       throw new RuntimeException('ck_headless: could not restore the core foreign keys');
     }
   });
+}
+
+/**
+ * Data::populate() reconciles managed entities before SearchKit's entity types
+ * load, queueing "Unknown entity SearchDisplay" errors in the session.
+ */
+function ck_discard_bootstrap_status(): void {
+  \CRM_Core_Session::singleton()->getStatus(TRUE);
 }
 
 /**
