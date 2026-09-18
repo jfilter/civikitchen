@@ -23,6 +23,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
   successfully for the newest commit touching its trigger paths — reruns
   included, the newest run decides. Without `--apply` nothing is created.
 
+### Fixed
+
+- The template's `tests/phpunit/ckHeadless.php` passes PHPStan at the level of
+  `phpstan-tests.neon.dist`: 1.25.0 shipped it with four type errors, which
+  turned the opt-in *PHPStan (tests)* step red in every repo that enables it.
+  Run `ckinit --update`.
+
 ## [1.25.0] - 2026-09-18
 
 ### Added
