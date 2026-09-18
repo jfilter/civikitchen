@@ -52,8 +52,8 @@ git push -q origin main
 image_sha=$(git rev-parse HEAD)
 
 runs() { printf '%s\n' "$@" > "${work}/runs"; }
-green="2024-01-01T10:00:00Z 111 completed success"
-red="2024-01-02T10:00:00Z 222 completed failure"
+green="2024-01-01T10:00:00Z 111 completed success ${image_sha}"
+red="2024-01-02T10:00:00Z 222 completed failure ${image_sha}"
 runs "${green}"
 
 release() { bash scripts/release.sh "$@" > "${work}/out" 2>&1; }
@@ -97,15 +97,26 @@ git tag -d v1.2.3 >/dev/null
 
 runs "${red}"
 expect_fail 1 'run 222 for .* concluded failure' 1.2.3
-runs "2024-01-01T10:00:00Z 333 in_progress "
+runs "2024-01-01T10:00:00Z 333 in_progress  ${image_sha}"
 expect_fail 1 'run 333 for .* is in_progress' 1.2.3
 : > "${work}/runs"
 expect_fail 1 "no Build Dev Images run for image commit ${image_sha}" 1.2.3
 
+# A run on a commit outside image commit..HEAD does not count.
+runs "2024-01-01T10:00:00Z 555 completed success 0000000000000000000000000000000000000000"
+expect_fail 1 "no Build Dev Images run for image commit ${image_sha}" 1.2.3
+
+# A push builds its head: a run on a later commit covers the image commit.
+git commit -q --allow-empty -m later
+git push -q origin main
+runs "2024-01-01T10:00:00Z 666 completed success $(git rev-parse HEAD)"
+release 1.2.3 || { cat "${work}/out" >&2; fail "run on a descendant of the image commit"; }
+grep -q 'run 666 is green' "${work}/out" || fail "descendant run not selected"
+
 # A rerun that failed must beat the older green run, and the reverse must pass.
 runs "${green}" "${red}"
 expect_fail 1 'run 222 for .* concluded failure' 1.2.3
-runs "${red}" "2024-01-03T10:00:00Z 444 completed success"
+runs "${red}" "2024-01-03T10:00:00Z 444 completed success ${image_sha}"
 release 1.2.3 || { cat "${work}/out" >&2; fail "newest green run after a red one" ; }
 grep -q 'run 444 is green' "${work}/out" || fail "wrong run selected"
 

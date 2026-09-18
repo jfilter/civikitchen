@@ -46,12 +46,18 @@ image_sha=$(git log -1 --format=%H HEAD -- "${paths[@]}")
 [ -n "$image_sha" ] || die "no commit touching the image trigger paths"
 # Repo from origin: no script in this repo hardwires the slug.
 repo=$(git config --get remote.origin.url | sed -E 's#^(https://github\.com/|git@github\.com:)##; s#\.git$##')
+# A push builds its head, so the run sits on any commit from the image commit up to HEAD.
 # One line per run, newest last: reruns mean a commit can have several runs.
 run=$(gh run list -R "$repo" --workflow build-dev-images.yml \
-  --commit "$image_sha" --limit 50 --json status,conclusion,updatedAt,databaseId \
-  --jq '.[] | "\(.updatedAt) \(.databaseId) \(.status) \(.conclusion)"' | sort | tail -1)
+  --branch main --limit 100 --json status,conclusion,updatedAt,databaseId,headSha \
+  --jq '.[] | "\(.updatedAt) \(.databaseId) \(.status) \(.conclusion) \(.headSha)"' | sort |
+  while read -r line; do
+    sha=${line##* }
+    if git merge-base --is-ancestor "$image_sha" "$sha" 2>/dev/null &&
+      git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then echo "$line"; fi
+  done | tail -1)
 [ -n "$run" ] || die "no Build Dev Images run for image commit ${image_sha}"
-read -r _ run_id run_status run_conclusion <<<"$run"
+read -r _ run_id run_status run_conclusion _ <<<"$run"
 [ "$run_status" = completed ] || die "newest Build Dev Images run ${run_id} for ${image_sha} is ${run_status}"
 [ "$run_conclusion" = success ] || die "newest Build Dev Images run ${run_id} for ${image_sha} concluded ${run_conclusion}"
 ok "Build Dev Images run ${run_id} is green for image commit ${image_sha}"

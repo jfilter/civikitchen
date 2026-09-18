@@ -27,6 +27,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- `scripts/release.sh` finds the *Build Dev Images* run on the pushed head: a
+  push builds its last commit, so the run may sit on any commit from the newest
+  image commit up to `HEAD`, not only on that commit itself.
 - The template's `tests/phpunit/ckHeadless.php` passes PHPStan at the level of
   `phpstan-tests.neon.dist`: 1.25.0 shipped it with four type errors, which
   turned the opt-in *PHPStan (tests)* step red in every repo that enables it.
