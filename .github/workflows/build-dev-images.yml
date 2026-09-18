@@ -7,6 +7,8 @@ on:
       - 'docker/**'
       - 'toolbelt/**'
       - 'packages/**'
+      # The image tests hold the stamped extension template to the ck* gates.
+      - 'scaffold/**'
       - 'tests/images/**'
       - 'tests/scenario/**'
       - 'tests/e2e/**'

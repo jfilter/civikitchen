@@ -14,6 +14,15 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- The template's `tests/phpunit/ckHeadless.php` passes `ckfmt --check`: 1.25.1
+  shipped it with parentheses the formatter removes, which turned the *Format
+  check* step red. Run `ckinit --update`.
+- *Build Dev Images* also runs on `scaffold/**`, and its template gate analyses
+  the stamped extension with `phpstan-tests.neon.dist`: a template change is now
+  held to cklint, ckfmt and PHPStan before a release can carry it.
+
 ## [1.25.1] - 2026-09-18
 
 ### Added

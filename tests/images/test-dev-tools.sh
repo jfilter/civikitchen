@@ -1722,6 +1722,16 @@ else
             fail "stamped template fails ckfmt --check"
             echo "${TPL_FMT}"
         fi
+        # The opt-in tests config is the only one that reads tests/phpunit/;
+        # it scans the civix file and the class roots, so give it empty ones.
+        mkdir -p "${TPL_EXT}/Civi" "${TPL_EXT}/CRM"
+        printf '<?php\n' > "${TPL_EXT}/example_ext.civix.php"
+        if TPL_STAN="$(cd "${TPL_EXT}" && phpstan analyse -c phpstan-tests.neon.dist --no-progress 2>&1)"; then
+            ok "stamped template passes phpstan on the tests config"
+        else
+            fail "stamped template fails phpstan on the tests config"
+            echo "${TPL_STAN}"
+        fi
     else
         fail "ckinit could not stamp the template: ${TPL_OUT}"
     fi
