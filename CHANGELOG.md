@@ -14,6 +14,19 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- The managed headless bootstrap keeps the core foreign keys across runs. A
+  second `ckphpunit` against the same warm `civicrm_test` used to leave the
+  schema with almost none of them (285 -> 3 constraints), because
+  `CiviEnvBuilder::apply()` signs `CoreSchemaStep` before comparing signatures
+  and that generator drops every constraint it emits; on the warm path
+  `apply()` returns before re-adding them. `ck_headless()` now replays the
+  cached core schema SQL once per process. Tests expecting `ON DELETE CASCADE`
+  stop failing on every run but the first.
+- The change lands in `tests/phpunit/ckHeadless.php`, so consuming repos need
+  `ckinit --update`.
+
 ## [1.24.2] - 2026-09-14
 
 ### Fixed

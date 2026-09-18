@@ -19,6 +19,7 @@ declare(strict_types = 1);
  *   ck_headless()->sqlFile(__DIR__ . '/fixtures.sql')->apply();
  */
 function ck_headless(): \Civi\Test\CiviEnvBuilder {
+  ck_restore_core_foreign_keys();
   $info = ck_extension_info(dirname(__DIR__, 2));
   $builder = \Civi\Test::headless();
   // One step per extension, never one install() with the whole list: the
@@ -28,6 +29,25 @@ function ck_headless(): \Civi\Test\CiviEnvBuilder {
     $builder = $builder->install([trim((string) $required)]);
   }
   return $builder->install([trim((string) $info['key'])]);
+}
+
+/**
+ * CoreSchemaStep::getSig() drops the core foreign keys via safeRemoveFK();
+ * re-running its cached SQL once per process puts them back.
+ */
+function ck_restore_core_foreign_keys(): void {
+  static $restored = FALSE;
+  if ($restored) {
+    return;
+  }
+  $restored = TRUE;
+  \Civi\Test::asPreInstall(static function (): void {
+    $sql = (new \Civi\Test\CiviEnvBuilder\CoreSchemaStep())->getSql();
+    $use = 'USE `' . \Civi\Test::dsn('database') . '`;' . "\n";
+    if (\Civi\Test::execute($use . $sql['content']) === FALSE) {
+      throw new RuntimeException('ck_headless: could not restore the core foreign keys');
+    }
+  });
 }
 
 /**
