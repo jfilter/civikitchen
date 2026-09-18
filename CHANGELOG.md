@@ -14,6 +14,24 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-09-18
+
+### Added
+
+- `ckconform`'s `settings-metadata` check rejects a `table` pseudoconstant whose
+  keys core's settings code does not read. `key_column`/`label_column` and the
+  other snake_case spellings leave `keyColumn`/`labelColumn` `NULL`, and the
+  first page that loads options for settings fatals with "not of the type
+  MysqlColumnNameOrAlias" — `/civicrm/admin/theme` loads them for *every*
+  setting, so one malformed extension breaks an unrelated core screen. A
+  `table` pseudoconstant without both `keyColumn` and `labelColumn` fails for
+  the same reason. Findings are failures, not warnings.
+- The lifecycle gate runs the same check against the installed extension: after
+  re-enable, `cklifecycle` calls `Civi\Core\SettingsMetadata::getMetadata()`
+  with options loading on for every setting in `settings/*.setting.php`. Neither
+  install nor the test suite loads options, so this was previously invisible
+  until someone opened a settings page. Repos without settings are unaffected.
+
 ### Fixed
 
 - The managed headless bootstrap keeps the core foreign keys across runs. A
@@ -679,7 +697,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.24.2...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.25.0...HEAD
+[1.25.0]: https://github.com/jfilter/civikitchen/compare/v1.24.2...v1.25.0
 [1.24.2]: https://github.com/jfilter/civikitchen/compare/v1.24.1...v1.24.2
 [1.24.1]: https://github.com/jfilter/civikitchen/compare/v1.24.0...v1.24.1
 [1.24.0]: https://github.com/jfilter/civikitchen/compare/v1.23.0...v1.24.0
