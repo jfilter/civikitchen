@@ -34,7 +34,7 @@ function ck_headless(): \Civi\Test\CiviEnvBuilder {
 }
 
 /**
- * CoreSchemaStep::getSig() drops the core foreign keys via safeRemoveFK();
+ * CoreSchemaStep::getSig() drops the core foreign keys (civicrm-core#36980);
  * re-running its cached SQL once per process puts them back.
  */
 function ck_restore_core_foreign_keys(): void {
