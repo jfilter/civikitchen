@@ -14,6 +14,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- `ckconform`'s `api4-self-entity` check no longer reads an AngularJS
+  registration such as `.controller('AcmeCourseList', …)` as a call to a
+  missing APIv4 entity.
+
 ## [1.25.2] - 2026-09-18
 
 ### Fixed

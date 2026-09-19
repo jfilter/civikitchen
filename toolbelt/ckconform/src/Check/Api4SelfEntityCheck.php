@@ -41,6 +41,9 @@ final class Api4SelfEntityCheck implements Check
 
     private const EXTENSIONS = ['js', 'jsx', 'ts', 'tsx', 'mjs'];
 
+    /** angular.module(...).controller('AcmeCourseList', fn) names what it registers, not an entity. */
+    private const ANGULAR_REGISTRARS = ['controller', 'service', 'factory', 'provider', 'component'];
+
     public function name(): string
     {
         return 'api4-self-entity';
@@ -102,11 +105,19 @@ final class Api4SelfEntityCheck implements Check
     private function candidates(string $source): array
     {
         // ident, an optional generic (getEntities<Foo>(...)), then the literal.
-        $pattern = '/[A-Za-z_$][A-Za-z0-9_$]*\s*(?:<[^<>()]*>)?\s*\(\s*'
+        $pattern = '/(\.\s*)?([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:<[^<>()]*>)?\s*\(\s*'
             . '[\'"]([A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+)[\'"]/';
-        preg_match_all($pattern, $source, $matches);
+        preg_match_all($pattern, $source, $matches, PREG_SET_ORDER);
 
-        return array_values(array_unique($matches[1]));
+        $names = [];
+        foreach ($matches as $match) {
+            if ($match[1] !== '' && in_array($match[2], self::ANGULAR_REGISTRARS, true)) {
+                continue;
+            }
+            $names[] = $match[3];
+        }
+
+        return array_values(array_unique($names));
     }
 
     /**

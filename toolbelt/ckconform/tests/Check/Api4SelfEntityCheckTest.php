@@ -135,6 +135,25 @@ final class Api4SelfEntityCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new Api4SelfEntityCheck(), $context));
     }
 
+    /** AngularJS registers controllers and services under CamelCase names of its own. */
+    public function testAngularRegistrationsAreNotEntityReferences(): void
+    {
+        $context = $this->ext([
+            'ang/crmLedger/List.js' => "angular.module('crmLedger').controller('LedgerCourseList', function() {});\n"
+                . "angular.module('crmLedger')\n  .factory('LedgerStateStore', function() {});\n",
+        ]);
+        $this->assertPasses($this->run_(new Api4SelfEntityCheck(), $context));
+    }
+
+    /** A wrapper that merely shares a registrar's name is still a call. */
+    public function testAPlainFunctionNamedLikeARegistrarStillCounts(): void
+    {
+        $context = $this->ext([
+            'frontend/src/x.ts' => "const s = service('LedgerAdapter', 'get');\n",
+        ]);
+        $this->assertFails($this->run_(new Api4SelfEntityCheck(), $context), 'LedgerAdapter');
+    }
+
     public function testBuiltArtefactsAreNotScanned(): void
     {
         $context = $this->ext([
