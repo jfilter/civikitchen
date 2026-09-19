@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.25.3] - 2026-09-19
+
 ### Fixed
 
 - `ckconform`'s `api4-self-entity` check no longer reads an AngularJS
@@ -735,7 +737,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.25.2...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.25.3...HEAD
+[1.25.3]: https://github.com/jfilter/civikitchen/compare/v1.25.2...v1.25.3
 [1.25.2]: https://github.com/jfilter/civikitchen/compare/v1.25.1...v1.25.2
 [1.25.1]: https://github.com/jfilter/civikitchen/compare/v1.25.0...v1.25.1
 [1.25.0]: https://github.com/jfilter/civikitchen/compare/v1.24.2...v1.25.0
