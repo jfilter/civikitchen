@@ -237,6 +237,36 @@ grep -v 'CIVIKITCHEN MANAGED' "$work/legacy/.github/workflows/ci.yml" > "$work/l
 out=$("$root/scaffold/ckinit.php" --update "$work/legacy")
 echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
 grep -q 'BEGIN CIVIKITCHEN MANAGED caller' "$work/legacy/.github/workflows/ci.yml"
+# The release caller: seeded with the trigger for plain and pre-release tags.
+rel="$work/legacy/.github/workflows/release.yml"
+grep -qF "tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']" "$rel"
+grep -q 'extension-release.yml@v1' "$rel"
+# A repo without one gets it from --update; --check reports it missing first.
+/bin/rm "$rel"
+out=$("$root/scaffold/ckinit.php" --check "$work/legacy" 2>&1 || true)
+echo "$out" | grep -q 'missing   .github/workflows/release.yml' || { echo "a missing release caller was not reported: $out" >&2; exit 1; }
+"$root/scaffold/ckinit.php" --update "$work/legacy" >/dev/null
+test -f "$rel"
+# Inputs below the marker are the repo's and survive --update; an old trigger
+# inside the block is drift and gets refreshed.
+rewrite_with_sed 's|^# END CIVIKITCHEN MANAGED caller$|# END CIVIKITCHEN MANAGED caller\
+    with:\
+      # The install needs a payment processor no headless site has.\
+      smoke_test: false\
+      require_changelog: true|' "$rel"
+"$root/scaffold/ckinit.php" --check "$work/legacy" >/dev/null
+rewrite_with_sed "s|tags: \\['v\\[0-9\\]+.*$|tags: ['v*.*.*']|" "$rel"
+if "$root/scaffold/ckinit.php" --check "$work/legacy" >/dev/null 2>&1; then
+  echo "an old release trigger was not reported as drift" >&2
+  exit 1
+fi
+out=$("$root/scaffold/ckinit.php" --update "$work/legacy")
+echo "$out" | grep -q 'updated   .github/workflows/release.yml'
+grep -qF "'v[0-9]+.[0-9]+.[0-9]+-*'" "$rel"
+grep -q '# The install needs a payment processor no headless site has.' "$rel"
+grep -q 'smoke_test: false' "$rel"
+grep -q 'require_changelog: true' "$rel"
+"$root/scaffold/ckinit.php" --check "$work/legacy" >/dev/null
 # A repo that removed a block is reported, never silently rewritten.
 rewrite_with_sed '/CIVIKITCHEN MANAGED db/d' "$work/blocks/.docker/docker-compose.ci.yml"
 out=$("$root/scaffold/ckinit.php" --check "$work/blocks" 2>&1 || true)
@@ -278,8 +308,10 @@ grep -q 'BEGIN CIVIKITCHEN MANAGED job-base' "$mono/.github/workflows/ci.yml"
 grep -q 'working_directory: addon' "$mono/.github/workflows/ci.yml"
 grep -q '"extends": \["config:recommended"\]' "$mono/renovate.json"
 test -f "$mono/.gitattributes"
+# Releasing several extensions has no caller yet: none at the root either.
+test ! -e "$mono/.github/workflows/release.yml"
 # No root-only file below the root: GitHub and Renovate never read them there.
-for stray in renovate.json .github/workflows/ci.yml; do
+for stray in renovate.json .github/workflows/ci.yml .github/workflows/release.yml; do
   if [ -e "$mono/base/$stray" ]; then
     echo "root-only file was written into an extension directory: $stray" >&2
     exit 1

@@ -23,6 +23,7 @@ if (!is_file($yamlAutoload)) {
 const MANAGED_FILES = [
   '.gitattributes',
   '.github/workflows/ci.yml',
+  '.github/workflows/release.yml',
   '.docker/docker-compose.ci.yml',
   '.docker/db-init/01-grants.sql',
   '.docker/init.d/README.md',
@@ -69,10 +70,12 @@ const OPTIONAL_FILES = [
 
 /**
  * Files GitHub and Renovate only read at the repository root. For an extension
- * below the root they are neither written nor checked; the root pass owns them.
+ * below the root they are neither written nor checked; the root pass owns them,
+ * except release.yml, which a multi-extension repository does not get yet.
  */
 const ROOT_ONLY_FILES = [
   '.github/workflows/ci.yml',
+  '.github/workflows/release.yml',
   'renovate.json',
 ];
 
