@@ -28,13 +28,19 @@ use CiviKitchen\Ckconform\Reporter;
  * phpstan bootstrap resolves it there and the shared CI mounts every sibling
  * there. Only an extension's own mount carries its `<file>`.
  *
- * Any compose file the repo ships may carry the mount — the dev stack and the
- * one CI boots are usually the same file.
+ * Only the compose file the shared CI boots counts: `compose_file` from each
+ * scoped job calling extension-ci.yml, else that input's default. The dev
+ * stack is never booted in CI, and CI mounts only other-repository siblings
+ * itself, so a neighbour mounted in the dev file alone is missing there. A
+ * `compose_file` given as an expression is not guessed: not evaluated.
  */
 final class MonorepoRequiresMountedCheck implements Check
 {
     /** The service the site runs in, in the template's stacks and in shared CI. */
     private const SERVICE = 'app';
+
+    /** extension-ci.yml's `compose_file` default, relative to working_directory. */
+    private const CI_COMPOSE_FILE = '.docker/docker-compose.ci.yml';
 
     public function name(): string
     {
@@ -58,33 +64,37 @@ final class MonorepoRequiresMountedCheck implements Check
             return;
         }
 
-        $mounts = [];
-        $interpolated = [];
-        foreach ($context->composeFiles() as $composeFile) {
-            $error = null;
-            $mounts += $this->mounts($context, $composeFile, $interpolated, $error);
-            if ($error !== null) {
-                // What an unreadable stack mounts is unknown — say so rather than
-                // judge the mounts of the files that did parse.
-                $reporter->fail($this->name() . ' not evaluated: ' . $composeFile . ' ' . $error);
+        $composeFiles = $this->ciComposeFiles($context, $unresolved);
+        if ($unresolved !== null) {
+            $reporter->fail($this->name() . ' not evaluated: ' . $unresolved);
 
-                return;
-            }
+            return;
         }
 
         $problems = [];
         $unevaluated = [];
-        foreach ($required as $key => $directory) {
-            $target = $context->installPath($key);
-            $expected = realpath($context->repositoryRoot() . '/' . $directory);
-            $mounted = $mounts[$target] ?? null;
-            if ($mounted === null && isset($interpolated[$target])) {
-                $unevaluated[] = "{$this->name()} not evaluated: the mount of {$target} comes from"
-                    . " {$interpolated[$target]}, which compose interpolates at run time";
-            } elseif ($mounted === null) {
-                $problems[] = "{$key} is this repository's {$directory}/ but no compose file mounts it into the app service at {$target}";
-            } elseif ($mounted !== $expected) {
-                $problems[] = "{$target} is mounted from {$mounted}, not from this repository's {$directory}/";
+        foreach ($composeFiles as $composeFile) {
+            $error = null;
+            $interpolated = [];
+            $mounts = $this->mounts($context, $composeFile, $interpolated, $error);
+            if ($error !== null) {
+                $reporter->fail($this->name() . ' not evaluated: ' . $composeFile . ' ' . $error);
+
+                return;
+            }
+            foreach ($required as $key => $directory) {
+                $target = $context->installPath($key);
+                $expected = realpath($context->repositoryRoot() . '/' . $directory);
+                $mounted = $mounts[$target] ?? null;
+                if ($mounted === null && isset($interpolated[$target])) {
+                    $unevaluated[] = "{$this->name()} not evaluated: the mount of {$target} in {$composeFile} comes from"
+                        . " {$interpolated[$target]}, which compose interpolates at run time";
+                } elseif ($mounted === null) {
+                    $problems[] = "{$key} is this repository's {$directory}/ but the CI compose file {$composeFile}"
+                        . " does not mount it into the app service at {$target}";
+                } elseif ($mounted !== $expected) {
+                    $problems[] = "{$target} is mounted from {$mounted} in {$composeFile}, not from this repository's {$directory}/";
+                }
             }
         }
 
@@ -92,7 +102,7 @@ final class MonorepoRequiresMountedCheck implements Check
             $reporter->warn($message);
         }
         if ($problems === [] && $unevaluated === []) {
-            $reporter->ok('every same-repository dependency is mounted into the stack');
+            $reporter->ok('every same-repository dependency is mounted into the CI stack');
         }
         if ($problems === []) {
             return;
@@ -100,10 +110,37 @@ final class MonorepoRequiresMountedCheck implements Check
 
         $reporter->fail(
             'same-repository dependency not mounted: ' . implode('; ', $problems)
-            . ' — a required extension is looked up by its key (the template\'s phpstan bootstrap and the'
-            . ' shared CI\'s sibling mounts both do), so a mount named after its <file> is not found and'
-            . ' the stack boots without the dependency'
+            . ' — the shared CI boots only this file and mounts no same-repository neighbour itself; a required'
+            . ' extension is looked up by its key (the template\'s phpstan bootstrap and the shared CI\'s sibling'
+            . ' mounts both do), so a mount named after its <file> is not found and the stack boots without the dependency'
         );
+    }
+
+    /**
+     * The compose files the shared CI boots for this extension, relative to it.
+     * $unresolved names a `compose_file` that is not a literal string.
+     *
+     * @return list<string>
+     */
+    private function ciComposeFiles(Context $context, ?string &$unresolved): array
+    {
+        $unresolved = null;
+        $files = [];
+        foreach ($context->scopedJobs() as $label => $job) {
+            if (!is_string($job['uses'] ?? null) || !str_contains($job['uses'], 'extension-ci.yml')) {
+                continue;
+            }
+            $with = is_array($job['with'] ?? null) ? $job['with'] : [];
+            $value = $with['compose_file'] ?? self::CI_COMPOSE_FILE;
+            if (!is_string($value) || str_contains($value, '${{')) {
+                $unresolved = "{$label} sets compose_file to a value that is not a literal path";
+
+                return [];
+            }
+            $files[] = (string) preg_replace('#^(\./)+#', '', trim($value));
+        }
+
+        return $files === [] ? [self::CI_COMPOSE_FILE] : array_values(array_unique($files));
     }
 
     /**

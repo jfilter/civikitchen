@@ -35,7 +35,7 @@ final class Context
     /** @var array<string, string|null> */
     private array $workflowDataError = [];
 
-    /** @var array{scoped: array<string, string>, unparsed: list<string>, unreadable: list<string>}|null */
+    /** @var array{scoped: array<string, string>, jobs: array<string, array<mixed>>, unparsed: list<string>, unreadable: list<string>}|null */
     private ?array $workflowScope = null;
 
     public function __construct(
@@ -833,6 +833,17 @@ final class Context
     }
 
     /**
+     * The parsed twin of scopedWorkflows(): every job that judges this
+     * extension, `<workflow>:<job>` => the job's mapping.
+     *
+     * @return array<string, array<mixed>>
+     */
+    public function scopedJobs(): array
+    {
+        return $this->workflowScope()['jobs'];
+    }
+
+    /**
      * Why no CI job judges this extension, null when one does. Three causes,
      * each named: a workflow the parser could not read at all, a job that names
      * this directory but is written in a form the text-reading checks cannot
@@ -864,22 +875,27 @@ final class Context
      * `unparsed` names files the parser could not read, `unreadable` the jobs
      * that do name this extension but whose text could not be split out.
      *
-     * @return array{scoped: array<string, string>, unparsed: list<string>, unreadable: list<string>}
+     * @return array{scoped: array<string, string>, jobs: array<string, array<mixed>>, unparsed: list<string>, unreadable: list<string>}
      */
     private function workflowScope(): array
     {
         if ($this->workflowScope !== null) {
             return $this->workflowScope;
         }
-        $scope = ['scoped' => [], 'unparsed' => [], 'unreadable' => []];
+        $scope = ['scoped' => [], 'jobs' => [], 'unparsed' => [], 'unreadable' => []];
         foreach ($this->workflows() as $workflow) {
             $body = $this->read($workflow) ?? '';
-            if (!$this->isMonorepo()) {
-                $scope['scoped'][$workflow] = $body;
-                continue;
-            }
             $error = null;
             $jobs = $this->workflowData($workflow, $error)['jobs'] ?? null;
+            if (!$this->isMonorepo()) {
+                $scope['scoped'][$workflow] = $body;
+                foreach (is_array($jobs) ? $jobs : [] as $name => $job) {
+                    if (is_array($job)) {
+                        $scope['jobs'][$workflow . ':' . $name] = $job;
+                    }
+                }
+                continue;
+            }
             if (!is_array($jobs)) {
                 $scope['unparsed'][] = $workflow . ': ' . ($error ?? 'declares no jobs');
                 continue;
@@ -894,6 +910,7 @@ final class Context
                     continue;
                 }
                 $scope['scoped'][$workflow . ':' . $name] = $texts[(string) $name];
+                $scope['jobs'][$workflow . ':' . $name] = is_array($job) ? $job : [];
             }
         }
 

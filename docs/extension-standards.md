@@ -422,8 +422,12 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
     the whole file.
   - `monorepo-requires-mounted`: a `<requires>` key that is another extension of
     the same repository must be bind-mounted at `/var/www/html/ext/<key>` into the
-    `app` service of a compose file the repository ships — that is the service the
-    site runs in, so a mount into another service does not count — and under the
+    `app` service of the CI compose file — the `compose_file` the scoped job
+    passes to `extension-ci.yml`, else its default `.docker/docker-compose.ci.yml`;
+    a mount in the dev compose file alone does not count, because CI never boots
+    it, and a `compose_file` given as an expression is reported not evaluated.
+    The `app` service is the one the site runs in, so a mount into another
+    service does not count either — and under the
     dependency's **key**, not its
     `<file>`: that is where the template's `phpstanBootstrap.php` resolves a
     `<requires>` and where the shared CI mounts a sibling, so a dotted key like
