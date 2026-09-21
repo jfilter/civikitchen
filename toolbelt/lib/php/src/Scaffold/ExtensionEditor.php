@@ -99,6 +99,20 @@ final class ExtensionEditor
         $this->write($phpstanFile, $next);
     }
 
+    /** A new extension starts at 0.1.0: civix's `1.0` is no SemVer version and cannot be released. */
+    public function setInitialVersion(string $infoFile): void
+    {
+        $xml = $this->xml($infoFile);
+        $versions = (new DOMXPath($xml))->query('/extension/version');
+        if ($versions === false || $versions->length !== 1) {
+            throw new RuntimeException('info.xml needs one <version>');
+        }
+        $versions->item(0)->textContent = '0.1.0';
+        if ($xml->save($infoFile) === false) {
+            throw new RuntimeException('could not write info.xml');
+        }
+    }
+
     public function updatePolicy(string $scenarioLibrary, string $file, string $license, string $copyright): void
     {
         require_once $scenarioLibrary;

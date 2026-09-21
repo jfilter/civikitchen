@@ -58,6 +58,7 @@ cat > "$out/info.xml" <<EOF
   <file>$key</file>
   <name>$key</name>
   <description>FIXME</description>
+  <version>1.0</version>
   <license>$license</license>
   <authors><author><name>$author</name><email>$email</email><role>Maintainer</role></author></authors>
   <urls><url desc="Licensing">https://opensource.org/licenses/$license</url></urls>
@@ -115,6 +116,7 @@ proprietary="$work/output/proprietary"
 php -r '
   $xml = simplexml_load_file($argv[1] . "/info.xml");
   assert((string) $xml->license === "Proprietary");
+  assert((string) $xml->version === "0.1.0");
   assert((string) $xml->php_compatibility->ver[0] === "8.1");
   foreach ($xml->urls->url ?? [] as $url) { assert((string) $url["desc"] !== "Licensing"); }
   $composer = json_decode(file_get_contents($argv[1] . "/composer.json"), true, 512, JSON_THROW_ON_ERROR);

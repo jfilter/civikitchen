@@ -40,7 +40,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - **Breaking:** `ckconform` check `version-format`: `info.xml` `<version>`
   must be `X.Y.Z` or `X.Y.Z-<pre-release>` (SemVer 2.0, no build metadata),
   the only shapes the release workflow accepts. `2.2.7.1` or civix's default
-  `1.0` fail; move to a SemVer version with the next release.
+  `1.0` fail; move to a SemVer version with the next release. `ckcreate`
+  starts a new extension at `0.1.0`.
 
 - `extension-ci.yml` takes a `working_directory` input (default `.`): the
   extension's directory in a repository that holds several extensions. Every

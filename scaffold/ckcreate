@@ -212,6 +212,9 @@ php "$here/ckinit.php" --update "$generated"
 "$ck_cli" internal scaffold-php-floor \
   "$generated/composer.json" "$generated/info.xml" "$generated/phpstan.neon.dist"
 
+# civix writes <version>1.0</version>; version-format accepts only SemVer.
+"$ck_cli" internal scaffold-version "$generated/info.xml"
+
 # Add the repository policy to the one generated CiviKitchen config.
 "$ck_cli" internal scaffold-policy \
   "$here/../packages/civikitchen-scenario-schema/scenario.php" \

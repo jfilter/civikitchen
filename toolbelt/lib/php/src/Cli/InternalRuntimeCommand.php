@@ -172,6 +172,10 @@ final class InternalRuntimeCommand implements Command
                 $editor->alignPhpFloor($arguments[0], $arguments[1], $arguments[2]);
                 return 0;
             }
+            if ($operation === 'scaffold-version' && count($arguments) === 1) {
+                $editor->setInitialVersion($arguments[0]);
+                return 0;
+            }
             if ($operation === 'scaffold-policy' && count($arguments) === 4) {
                 $editor->updatePolicy($arguments[0], $arguments[1], $arguments[2], $arguments[3]);
                 return 0;

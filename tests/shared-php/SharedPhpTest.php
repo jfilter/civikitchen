@@ -413,6 +413,17 @@ final class SharedPhpTest extends TestCase
         self::assertStringContainsString('phpVersion: 80200', (string) file_get_contents($directory . '/phpstan.neon.dist'));
     }
 
+    public function testExtensionEditorSetsTheInitialVersion(): void
+    {
+        $info = $this->temporary . '/info.xml';
+        file_put_contents($info, '<extension><version>1.0</version></extension>');
+        (new ExtensionEditor())->setInitialVersion($info);
+        self::assertStringContainsString('<version>0.1.0</version>', (string) file_get_contents($info));
+        file_put_contents($info, '<extension></extension>');
+        $this->expectExceptionMessage('info.xml needs one <version>');
+        (new ExtensionEditor())->setInitialVersion($info);
+    }
+
     public function testRepositoryFilesUsesGitAndFiltersGeneratedAndVendoredPaths(): void
     {
         $root = $this->temporary . '/repo';
