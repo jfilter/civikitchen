@@ -689,6 +689,13 @@ in the history is not.
   rollback; a marker that survived can only have been committed. The fix it
   names is the right one: move schema work into `setUpHeadless()`, where the
   `CiviEnvBuilder` runs before the transaction opens.
+- **An unapplied headless builder installs nothing.** `CiviTestListener`
+  discards `setUpHeadless()`'s return value, so `return ck_headless();` builds
+  a `CiviEnvBuilder` that never runs; in a single-extension repo provisioning
+  already enabled the extension and the suite stays green. Call `->apply()` on
+  every chain, or on the variable the builder was assigned to later in the
+  method: `return ck_headless()->sqlFile(__DIR__ . '/fixtures.sql')->apply();`
+  (`ckconform` `headless-builder-applied`).
 - CI runs the suite **with** coverage: `ckcoverage` (or at minimum
   `phpunit --coverage-text`). `ckcoverage` runs through `ckphpunit`, so the
   canary above comes with it; nothing in the repo has to reference it.

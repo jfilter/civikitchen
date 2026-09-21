@@ -14,6 +14,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- `ckconform`'s `headless-builder-applied` check fails a `setUpHeadless()`
+  whose `ck_headless()` or `\Civi\Test::headless()` chain does not end in
+  `->apply()`: the test listener discards the returned builder, so nothing is
+  installed while the suite stays green.
+
 ## [1.25.3] - 2026-09-19
 
 ### Fixed

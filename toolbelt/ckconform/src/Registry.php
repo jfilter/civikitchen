@@ -22,6 +22,7 @@ final class Registry
         Check\CoverageSectionCheck::class,
         Check\CiCoverageCheck::class,
         Check\CoversNothingCheck::class,
+        Check\HeadlessBuilderAppliedCheck::class,
         Check\TestSuiteRequiredCheck::class,
         Check\ComposerJsonCheck::class,
         Check\AutoloadPathCheck::class,
