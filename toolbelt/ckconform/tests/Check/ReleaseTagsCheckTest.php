@@ -233,7 +233,7 @@ final class ReleaseTagsCheckTest extends CheckTestCase
                     ['info.xml' => $this->infoXml(extra: "<version>{$version}</version>")],
                     git: true,
                 );
-                $this->gitCommit("release {$version}");
+                $this->gitCommit("Release {$version}");
                 if ($tag !== null) {
                     $this->gitTag($tag);
                 }
@@ -251,7 +251,7 @@ final class ReleaseTagsCheckTest extends CheckTestCase
     private function bump(string $version, ?string $tag = null): void
     {
         $this->write('info.xml', $this->infoXml(extra: "<version>{$version}</version>"));
-        $this->gitCommit("release {$version}");
+        $this->gitCommit("Release {$version}");
         if ($tag !== null) {
             $this->gitTag($tag);
         }

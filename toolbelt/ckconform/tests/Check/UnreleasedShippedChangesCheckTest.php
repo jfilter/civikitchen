@@ -121,7 +121,7 @@ final class UnreleasedShippedChangesCheckTest extends CheckTestCase
             ['Civi/Thing.php' => '<?php'],
             ['Civi/Neighbour.php' => '<?php'],
         );
-        $this->gitCommit('release 1.0.0', '2020-01-01T00:00:00Z');
+        $this->gitCommit('Release 1.0.0', '2020-01-01T00:00:00Z');
         $this->gitTag('v1.0.0');
         $this->write('base/Civi/Neighbour.php', '<?php // the neighbour moves on');
         $this->gitCommit('neighbour', '2020-01-02T00:00:00Z');
@@ -135,7 +135,7 @@ final class UnreleasedShippedChangesCheckTest extends CheckTestCase
             '.github/workflows/release.yml' => self::RELEASE_CALLER,
             'Civi/Thing.php' => '<?php',
         ], git: true);
-        $this->gitCommit('release 1.0.0', '2020-01-01T00:00:00Z');
+        $this->gitCommit('Release 1.0.0', '2020-01-01T00:00:00Z');
         $this->gitTag('v1.0.0');
 
         return $context;
