@@ -1,0 +1,30 @@
+# extension-release.yml in its single-extension shape: one `stage: release`
+# job that builds, smoke-tests and publishes, here as a dry run. The publish job
+# derives the version from the archive and computes the release flags, then stops.
+#
+# Its own workflow rather than a job in Monorepo Self-Test: artifact names are
+# unique per run, and both would upload this extension's archive.
+name: Release Self-Test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'examples/monorepo/ckmonobase/**'
+      - '.github/workflows/extension-release.yml'
+      - '.github/workflows/release-self-test.yml'
+      - '.github/scripts/release-publish-flags.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: ${{ github.repository == 'jfilter/civikitchen' }}
+    permissions:
+      contents: write  # declared by the called publish job; a dry run writes nothing
+    uses: ./.github/workflows/extension-release.yml
+    with:
+      working_directory: examples/monorepo/ckmonobase
+      dry_run: true
+      image: ghcr.io/jfilter/civikitchen:standalone

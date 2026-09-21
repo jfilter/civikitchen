@@ -51,8 +51,8 @@ on:
       dry_run:
         description: >-
           Build and verify the version info.xml carries, without a tag, and
-          publish nothing: the publish job only lists the archives it would
-          attach.
+          publish nothing: the publish job computes the release it would make
+          and lists the archives it would attach.
         type: boolean
         default: false
       image:
@@ -661,20 +661,37 @@ jobs:
           CK_DIST: ${{ runner.temp }}/ckrelease-dist
         run: |
           set -euo pipefail
+          # Lockstep: every archive carries one version, and a tag names that version.
+          versions=()
+          for zip in "$CK_DIST"/*.zip; do
+            info=$(unzip -Z1 "$zip" | grep -E '^[^/]+/info\.xml$')
+            unzip -p "$zip" "$info" > "$RUNNER_TEMP/release-info.xml"
+            versions+=("$(php .civikitchen-ci/toolbelt/bin/ck internal xml-field "$RUNNER_TEMP/release-info.xml" version)")
+          done
+          distinct=$(printf '%s\n' "${versions[@]}" | sort -u)
+          if [ "$(wc -l <<< "$distinct")" -ne 1 ] || [ -z "$distinct" ]; then
+            echo "the archives carry different versions (${distinct//$'\n'/, }) — one release has one version" >&2
+            exit 1
+          fi
+          tag=v$distinct
+          if [ "$CK_DRY_RUN" != true ]; then
+            case "$GITHUB_REF" in
+              refs/tags/*) ;;
+              *) echo "extension-release only runs on a tag push (got $GITHUB_REF)" >&2; exit 1 ;;
+            esac
+            [ "$tag" = "$GITHUB_REF_NAME" ] \
+              || { echo "the archives carry $distinct, but the tag is $GITHUB_REF_NAME" >&2; exit 1; }
+          fi
+          gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
+            --jq '.[].ref' > "$RUNNER_TEMP/release-tags.txt"
+          flags=$(.civikitchen-ci/.github/scripts/release-publish-flags.sh "$tag" \
+            < "$RUNNER_TEMP/release-tags.txt")
+          echo "$flags"
           if [ "$CK_DRY_RUN" = true ]; then
-            echo "dry run: a release would carry"
+            echo "dry run: release $tag would carry"
             ls -1 "$CK_DIST"
             exit 0
           fi
-          case "$GITHUB_REF" in
-            refs/tags/*) ;;
-            *) echo "extension-release only runs on a tag push (got $GITHUB_REF)" >&2; exit 1 ;;
-          esac
-          gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
-            --jq '.[].ref' > "$RUNNER_TEMP/release-tags.txt"
-          flags=$(.civikitchen-ci/.github/scripts/release-publish-flags.sh "$GITHUB_REF_NAME" \
-            < "$RUNNER_TEMP/release-tags.txt")
-          echo "$flags"
           prerelease=$(sed -n 's/^prerelease=//p' <<< "$flags")
           latest=$(sed -n 's/^latest=//p' <<< "$flags")
           # A draft cannot be Latest; publishing it later decides that in the UI.
