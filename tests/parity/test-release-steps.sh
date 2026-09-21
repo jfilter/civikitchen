@@ -106,6 +106,15 @@ CK_EXT_KEY=org.example.addon CK_WD=addon run_step
 [ "$rc" -ne 0 ] || fail "a malformed sibling info.xml was ignored"
 case "$out" in *'other/info.xml carries no key'*) ;; *) fail "malformed sibling: $out" ;; esac
 
+# A failing parser aborts the step instead of reading as "no requirements".
+printf '<extension key="org.example.other"/>\n' > "$ws/other/info.xml"
+mkdir -p "$work/failphp"
+printf '#!/usr/bin/env bash\ncase " $* " in *" extension-requires "*) exit 70 ;; esac\nexec %q "$@"\n' "$(command -v php)" \
+  > "$work/failphp/php"
+chmod +x "$work/failphp/php"
+PATH="$work/failphp:$PATH" CK_EXT_KEY=org.example.addon CK_WD=addon run_step
+[ "$rc" -ne 0 ] || fail "a failing extension-requires was read as no requirements"
+
 # --- the pins union --------------------------------------------------------
 step "$workflow" dist 'Read the staged-release dependency pins'
 new_workspace pins
