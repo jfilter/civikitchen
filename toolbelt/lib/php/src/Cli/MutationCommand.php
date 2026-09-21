@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CiviKitchen\Toolbelt\Cli;
 
 use CiviKitchen\Toolbelt\Process\Runner;
+use CiviKitchen\Toolbelt\Repository\Files;
 
 final class MutationCommand implements Command
 {
@@ -87,7 +88,8 @@ final class MutationCommand implements Command
             echo 'ckmutate: mutating ', implode(' ', $directories), " (mutation_paths), floor {$floor}% MSI.\n";
         } else {
             $base = (string) (getenv('CK_MUTATE_BASE') ?: 'origin/main');
-            if ($this->runner->capture(['git', 'rev-parse', '--verify', '--quiet', $base])['status'] !== 0) {
+            $repository = new Files($this->checkoutRoot, $this->runner);
+            if ($repository->git(['rev-parse', '--verify', '--quiet', $base])['status'] !== 0) {
                 return $this->error("CK_MUTATE_BASE '{$base}' is not a resolvable ref - a shallow checkout needs fetch-depth: 0, or set mutation_paths.");
             }
             echo "ckmutate: mutating the lines changed against {$base}, floor {$floor}% MSI.\n";

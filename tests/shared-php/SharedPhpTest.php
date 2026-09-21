@@ -499,6 +499,62 @@ final class SharedPhpTest extends TestCase
         );
     }
 
+    public function testReleaseRoutesGitThroughTheGuardedEntryPoint(): void
+    {
+        $root = $this->temporary . '/release';
+        mkdir($root . '/.git', 0700, true);
+        file_put_contents($root . '/info.xml', '<extension key="org.example.safe"><file>safe</file><version>1.2.3</version></extension>');
+        // Fails the ref check, so the run stops right after the guarded rev-parses.
+        $runner = new class () extends Runner {
+            /** @var list<list<string>> */
+            public array $commands = [];
+
+            public function capture(array $command, ?array $environment = null, ?string $workingDirectory = null): array
+            {
+                $this->commands[] = $command;
+                if (str_ends_with($command[0], 'ckconform')) {
+                    return ['status' => 0, 'output' => "dir tests\n"];
+                }
+                return ['status' => in_array('--verify', $command, true) ? 1 : 0, 'output' => "true\n"];
+            }
+        };
+        $before = getcwd();
+        chdir($root);
+        ob_start();
+        try {
+            self::assertNotSame(0, (new ReleaseCommand(dirname(__DIR__, 2), $runner))
+                ->run(['dist', '--version', '1.2.3', '--output', $root . '/out']));
+        } finally {
+            ob_end_clean();
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+        $guard = 'safe.directory=' . (string) realpath($root);
+        $calls = array_values(array_filter($runner->commands, static fn(array $command): bool => $command[0] === 'git'));
+        self::assertCount(2, $calls);
+        foreach ($calls as $command) {
+            self::assertSame(['git', '-c', $guard], array_slice($command, 0, 3), implode(' ', $command));
+        }
+    }
+
+    public function testNoCommandBuildsAGitCommandLineOfItsOwn(): void
+    {
+        // The safe.directory guard exists once, in Files::gitCommand(); a literal
+        // git command line anywhere else is a call that would run unguarded.
+        $source = dirname(__DIR__, 2) . '/toolbelt/lib/php/src';
+        $offenders = [];
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS));
+        foreach ($iterator as $file) {
+            if (!$file instanceof SplFileInfo || $file->getExtension() !== 'php'
+                || $file->getPathname() === $source . '/Repository/Files.php') {
+                continue;
+            }
+            if (str_contains((string) file_get_contents($file->getPathname()), "['git',")) {
+                $offenders[] = $file->getFilename();
+            }
+        }
+        self::assertSame([], $offenders);
+    }
+
     public function testRunnerNamesAProgramThatIsNotOnPathInsteadOfSpawningIt(): void
     {
         $runner = new Runner();

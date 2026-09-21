@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CiviKitchen\Toolbelt\Cli;
 
 use CiviKitchen\Toolbelt\Process\Runner;
+use CiviKitchen\Toolbelt\Repository\Files;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -203,10 +204,11 @@ final class ReleaseCommand implements Command
         if ($status !== 0) {
             return $status;
         }
-        if ($this->runner->capture(['git', 'rev-parse', '--is-inside-work-tree'])['status'] !== 0) {
+        $repository = new Files($this->checkoutRoot, $this->runner);
+        if ($repository->git(['rev-parse', '--is-inside-work-tree'])['status'] !== 0) {
             return $this->error('not a git repository - the archive is built from tracked files.');
         }
-        if ($this->runner->capture(['git', 'rev-parse', '-q', '--verify', "{$ref}^{tree}"])['status'] !== 0) {
+        if ($repository->git(['rev-parse', '-q', '--verify', "{$ref}^{tree}"])['status'] !== 0) {
             return $this->error("cannot resolve ref: {$ref}");
         }
         if (!is_dir($outputDirectory) && !mkdir($outputDirectory, 0777, true) && !is_dir($outputDirectory)) {
@@ -223,7 +225,7 @@ final class ReleaseCommand implements Command
         foreach ([...$this->excludedDirectories, ...$this->excludedFiles] as $item) {
             $pathspec[] = ($item === '.env.*' ? ':(glob,exclude)' : ':(exclude)') . $item;
         }
-        $status = $this->runner->passthrough(['git', 'archive', '--format=zip', '-9', "--prefix={$this->metadata['key']}/", '-o', $zip, $tree, '--', '.', ...$pathspec]);
+        $status = $this->runner->passthrough($repository->gitCommand(['archive', '--format=zip', '-9', "--prefix={$this->metadata['key']}/", '-o', $zip, $tree, '--', '.', ...$pathspec]));
         if ($status !== 0) {
             return $status;
         }
@@ -253,7 +255,8 @@ final class ReleaseCommand implements Command
                 . "\n  Run {$build} first: the archive stages the build output the working tree holds.\n");
             return null;
         }
-        $tracked = $this->runner->capture(['git', '--literal-pathspecs', 'ls-tree', '-r', '--name-only', $ref, '--', ...$this->stagedPaths]);
+        $repository = new Files($this->checkoutRoot, $this->runner);
+        $tracked = $repository->git(['--literal-pathspecs', 'ls-tree', '-r', '--name-only', $ref, '--', ...$this->stagedPaths]);
         if ($tracked['status'] !== 0) {
             $this->error("cannot list {$ref}:\n" . rtrim($tracked['output']));
             return null;
@@ -270,14 +273,15 @@ final class ReleaseCommand implements Command
         }
         $environment = [...getenv(), 'GIT_INDEX_FILE' => "{$directory}/index"];
         try {
-            foreach ([['git', 'read-tree', $ref], ['git', '--literal-pathspecs', 'add', '--force', '--', ...$this->stagedPaths]] as $command) {
+            foreach ([$repository->gitCommand(['read-tree', $ref]),
+                $repository->gitCommand(['--literal-pathspecs', 'add', '--force', '--', ...$this->stagedPaths])] as $command) {
                 $result = $this->runner->capture($command, $environment);
                 if ($result['status'] !== 0) {
                     $this->error('could not stage the build output: ' . rtrim($result['output']));
                     return null;
                 }
             }
-            $tree = $this->runner->capture(['git', 'write-tree'], $environment);
+            $tree = $this->runner->capture($repository->gitCommand(['write-tree']), $environment);
             if ($tree['status'] !== 0) {
                 $this->error('could not stage the build output: ' . rtrim($tree['output']));
                 return null;

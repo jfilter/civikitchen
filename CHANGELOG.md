@@ -41,6 +41,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - A tool that is not on PATH is named in one line (`ck: phpcs was not found on
   PATH (...)`) instead of a raw `proc_open(): posix_spawn() failed` warning; a
   login shell that resets PATH is the usual cause.
+- `ckrelease` and `ckmutate` run git through the one guarded entry point, so they
+  no longer fail with "dubious ownership" on a differently owned mount.
 - The git-reading toolbelt libraries work from an extension subdirectory of a
   multi-extension repository: `cklint`'s changed-file list is scoped to the
   extension and printed relative to it, and the `safe.directory` guard names the
