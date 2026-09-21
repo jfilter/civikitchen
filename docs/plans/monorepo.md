@@ -1,7 +1,8 @@
 # Plan: several extensions in one repository
 
-Status: phases 1–3 implemented, not yet released; phases 4 and 5 open. The
-release part (phase 4) builds on the unified release path planned for v1.26.0.
+Status: phases 1–3 and 5 implemented, not yet released; phase 4 (release)
+open. It depends on the unified release path in
+[release-unification.md](release-unification.md).
 
 ## The layout this plan covers
 

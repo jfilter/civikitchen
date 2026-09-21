@@ -97,6 +97,89 @@ mounted beside this one, the CI equivalent of the sibling mounts in the dev
 compose file below — are two opt-in inputs and a `secrets:` block on the
 shared workflow: [extension-standards.md](extension-standards.md#private-dependencies).
 
+## Several extensions in one repository
+
+A repository can hold several extensions that ship together. Its root carries
+no `info.xml`; each extension sits in a direct subdirectory with its own
+`info.xml`, `civikitchen.yaml`, `composer.json` and test suite. Extensions
+nested deeper, and a repository that is an extension at its root and holds
+more below it, are not covered.
+
+Run `ckinit` at the root. There it manages `.gitattributes`, `renovate.json`
+and `.github/workflows/ci.yml`, then runs the usual per-extension pass on every
+direct subdirectory that has an `info.xml`. Run on an extension below the
+root, it skips the files GitHub and Renovate read only at the root
+(`.github/workflows/ci.yml`, `renovate.json`), and its CI compose file gets a
+second managed mount of the repository root at `/civikitchen-repo`.
+`cklint`, `ckfmt` and `ckconform` need `.git` and run there; everything that
+boots CiviCRM stays at `/var/www/html/ext/<key>`. The dev compose file is
+seeded, not managed, so an existing repository adds that mount by hand.
+
+The root workflow has one job per extension, each calling `extension-ci.yml`
+with the extension's `working_directory` (see
+[Reusable workflows](reusable-workflows.md)):
+
+```yaml
+jobs:
+  base:
+    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    with:
+      working_directory: base
+  addon:
+    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    with:
+      working_directory: addon
+      playwright: true
+```
+
+`ckinit` owns each job's id, `uses:` line and `working_directory`; inputs
+added after a job's END marker are the repository's. `--update` appends a job
+for a new extension directory and drops the job of one that is gone, and
+`--check` fails while the jobs and the directories disagree. Use static jobs,
+not a matrix: the workflow checks in `ckconform` pick the job whose
+`working_directory` names the extension and cannot evaluate `${{ matrix.* }}`.
+Every push runs every extension's jobs, each with its own stack.
+
+**Dependencies inside the repository.** An extension that `<requires>` a
+neighbour mounts the neighbour's directory itself, with a volume line after the
+managed block of its compose file. The target is the dependency's **key**, not
+its `<file>` name, because that is where a required extension is looked up:
+
+```yaml
+# END CIVIKITCHEN MANAGED app
+      - ../../base:/var/www/html/ext/org.example.base
+```
+
+The line belongs in the CI compose file (`compose_file`, default
+`.docker/docker-compose.ci.yml`): the shared CI boots only that file and mounts
+no same-repository neighbour itself, so a mount in the dev compose file alone
+does not reach CI. The `ckconform` check `monorepo-requires-mounted` fails when
+that file does not mount a same-repository dependency into the `app` service at
+that path. The order of the volume lines does not matter.
+
+**Versions move in lockstep.** All extensions carry the same `<version>` and
+`<releaseDate>`, so one `vX.Y.Z` tag describes all of them; the check
+`monorepo-version-lockstep` enforces it.
+
+**Releases are not supported yet.** `extension-release.yml` still maps one tag
+to one `info.xml` at the repository root, and `ckinit` stamps no release
+caller, so the `release-workflow` check fails for every extension in this
+layout. Release support is planned on top of the unified release path.
+
+[`examples/monorepo/`](../examples/monorepo/) is a two-extension tree, one
+requiring the other, that this repository's CI runs `extension-ci.yml`
+against.
+
+### What adopting it costs a repository
+
+Expect the first run of the real gates to be red: a repository that only
+validated its configuration has never been formatted by `ckfmt`, linted by
+`cklint`, analysed by PHPStan or tested in CI. Fix that debt per extension, in
+its own commits, before switching the root workflow over, rather than waiving
+it through `ignore_checks`. In the same change, delete the per-extension
+`.github/workflows/ci.yml` and `renovate.json` files and align the versions
+once.
+
 ## Provisioning hooks
 
 Anything a test setup needs beyond `cv ext:enable` — renderer config, seed

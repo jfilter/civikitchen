@@ -29,6 +29,18 @@ except that a break the consumers are adjusted for ships as a minor, marked
   composite step does not inherit the job's working directory.
   `examples/monorepo` plus `.github/workflows/monorepo-self-test.yml` exercise
   a two-extension repository where one extension requires the other.
+- Repositories of several extensions — a root without `info.xml`, one
+  extension per direct subdirectory — are supported for CI:
+  `ckinit` run at the root manages `.gitattributes`, `renovate.json` and a
+  root `.github/workflows/ci.yml` with one job per extension, then stamps each
+  extension; below the root it skips those root-only files and adds the
+  `/civikitchen-repo` mount. New `ckconform` checks `monorepo-requires-mounted`
+  (a same-repository `<requires>` must be mounted at `ext/<key>`) and
+  `monorepo-version-lockstep` (every `info.xml` carries the same version and
+  release date). Releasing such a repository is **not yet supported**:
+  `extension-release.yml` has no `working_directory`, and `release-workflow`
+  fails for its extensions. See
+  [Several extensions in one repository](docs/extension-development.md#several-extensions-in-one-repository).
 - `ckconform`'s `headless-builder-applied` check fails a `setUpHeadless()`
   whose `ck_headless()` or `\Civi\Test::headless()` chain does not end in
   `->apply()`: the test listener discards the returned builder, so nothing is

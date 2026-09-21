@@ -30,6 +30,12 @@ container paths follow from it too — everything that boots CiviCRM runs at
 file mounts at `/civikitchen-repo`. Its template drift check covers that
 directory, plus the repository's own managed files when the extension sits in a
 direct subdirectory of the root — the layout `ckinit` manages a root for.
+Concurrency groups carry the directory and compose project names the extension
+key, so one job per extension in the same caller does not cancel or tear down
+its neighbour. The value must be a plain relative path inside the repository.
+`extension-release.yml` has no such input yet. The layout itself — root
+workflow, same-repository dependencies, versions — is described in
+[Several extensions in one repository](extension-development.md#several-extensions-in-one-repository).
 
 All jobs resolve their runner in the same order:
 
