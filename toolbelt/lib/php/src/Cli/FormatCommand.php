@@ -52,7 +52,9 @@ final class FormatCommand implements Command
             : $this->checkoutRoot . '/toolbelt/oxfmt/node_modules/.bin/oxfmt';
         $failed = false;
 
-        $phpFiles = $repository->source(['php'], $paths);
+        // Untracked files included: a new file is exactly the one nobody has
+        // formatted yet, and --check is the gate that has to catch it.
+        $phpFiles = $repository->source(['php'], $paths, true, true);
         if ($phpFiles === []) {
             echo "ckfmt: no PHP files to format.\n";
         } else {
@@ -81,7 +83,7 @@ final class FormatCommand implements Command
             }
         }
 
-        $jsFiles = $repository->source(['js', 'mjs', 'cjs', 'ts', 'tsx'], $paths);
+        $jsFiles = $repository->source(['js', 'mjs', 'cjs', 'ts', 'tsx'], $paths, true, true);
         if ($jsFiles === []) {
             echo "ckfmt: no JavaScript or TypeScript to format.\n";
         } elseif (!is_executable($oxfmt)) {

@@ -514,6 +514,50 @@ final class SharedPhpTest extends TestCase
         }
     }
 
+    public function testFormatChecksUntrackedFilesToo(): void
+    {
+        $root = $this->temporary . '/fmt';
+        mkdir($root . '/Civi', 0700, true);
+        file_put_contents($root . '/info.xml', '<extension key="org.example.safe"><file>safe</file></extension>');
+        file_put_contents($root . '/Civi/Tracked.php', "<?php\n");
+        (new Runner())->capture(['git', 'init', '-q'], null, $root);
+        (new Runner())->capture(['git', 'add', '.'], null, $root);
+        (new Runner())->capture(['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-qm', 'fixture'], null, $root);
+        file_put_contents($root . '/Civi/Untracked.php', "<?php  class  Untracked {}\n");
+        // Real git, faked toolchain: the file list is what is under test.
+        $runner = new class () extends Runner {
+            /** @var list<list<string>> */
+            public array $commands = [];
+
+            public function capture(array $command, ?array $environment = null, ?string $workingDirectory = null): array
+            {
+                $this->commands[] = $command;
+                if ($command[0] === 'git') {
+                    return parent::capture($command, $environment, $workingDirectory);
+                }
+                return ['status' => 0, 'output' => $command[0] === 'sh' ? '/fake/mago' : ''];
+            }
+
+            public function passthrough(array $command, ?array $environment = null, ?string $workingDirectory = null): int
+            {
+                $this->commands[] = $command;
+                return 0;
+            }
+        };
+        $before = getcwd();
+        chdir($root);
+        ob_start();
+        try {
+            self::assertSame(0, (new FormatCommand(dirname(__DIR__, 2), $runner))->run(['--check']));
+        } finally {
+            ob_end_clean();
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+        $formatted = array_merge(...array_values(array_filter($runner->commands, static fn(array $command): bool => $command[0] === '/fake/mago')));
+        self::assertContains('Civi/Untracked.php', $formatted);
+        self::assertContains('Civi/Tracked.php', $formatted);
+    }
+
     /**
      * The first recorded command whose program is $program.
      *

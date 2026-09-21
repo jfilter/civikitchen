@@ -36,6 +36,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
   Drupal, whose nested `extensions` arg beats every `ruleset.xml`, so
   `--extensions=php` is passed on the command line even when the repo has its
   own `phpcs.xml.dist`.
+- `ckfmt --check` gates untracked files, which are exactly the ones nobody has
+  formatted yet.
 - The git-reading toolbelt libraries work from an extension subdirectory of a
   multi-extension repository: `cklint`'s changed-file list is scoped to the
   extension and printed relative to it, and the `safe.directory` guard names the
