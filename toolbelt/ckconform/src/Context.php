@@ -458,8 +458,12 @@ final class Context
     public function callsSharedRelease(): bool
     {
         foreach ($this->workflows() as $workflow) {
-            if (str_contains($this->read($workflow) ?? '', self::SHARED_RELEASE)) {
-                return true;
+            $jobs = $this->workflowData($workflow)['jobs'] ?? null;
+            foreach (is_array($jobs) ? $jobs : [] as $job) {
+                $uses = is_array($job) ? ($job['uses'] ?? null) : null;
+                if (is_string($uses) && basename(explode('@', $uses, 2)[0]) === self::SHARED_RELEASE) {
+                    return true;
+                }
             }
         }
 
@@ -931,6 +935,25 @@ final class Context
         }
 
         return false;
+    }
+
+    /**
+     * The scoped jobs whose parsed `uses:` calls the reusable workflow
+     * $workflowFile, as `<workflow>:<job>` labels.
+     *
+     * @return list<string>
+     */
+    public function scopedJobsCalling(string $workflowFile): array
+    {
+        $callers = [];
+        foreach ($this->scopedJobs() as $label => $job) {
+            $uses = $job['uses'] ?? null;
+            if (is_string($uses) && basename(explode('@', $uses, 2)[0]) === $workflowFile) {
+                $callers[] = $label;
+            }
+        }
+
+        return $callers;
     }
 
     /**

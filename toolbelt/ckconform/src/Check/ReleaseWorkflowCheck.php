@@ -46,7 +46,16 @@ final class ReleaseWorkflowCheck implements Check
             return;
         }
 
-        if ($context->scopedCallsShared(Context::SHARED_RELEASE)) {
+        $callers = $context->scopedJobsCalling(Context::SHARED_RELEASE);
+        if (count($callers) > 1) {
+            $reporter->fail(
+                'more than one job calls ' . Context::SHARED_RELEASE . ' (' . implode(', ', $callers)
+                . ') — one tag push would publish the release twice; keep the managed .github/workflows/release.yml'
+            );
+
+            return;
+        }
+        if ($callers !== []) {
             return;
         }
 

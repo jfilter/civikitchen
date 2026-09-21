@@ -70,4 +70,22 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
         self::assertSame([], $reporter->messages('warn'));
         self::assertStringContainsString('declared deliberate', implode('', $reporter->messages('ok')));
     }
+
+    public function testAMentionInACommentIsNoCaller(): void
+    {
+        $context = $this->repo([
+            '.github/workflows/ci.yml' => "# releases go through jfilter/civikitchen/.github/workflows/extension-release.yml@v1\nname: CI\njobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1\n",
+        ]);
+        $this->assertFails($this->run_(new ReleaseWorkflowCheck(), $context), 'no release workflow');
+    }
+
+    public function testFailsWhenTwoJobsCallTheSharedReleasePipeline(): void
+    {
+        $caller = "name: Release\njobs:\n  release:\n    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n";
+        $context = $this->repo([
+            '.github/workflows/release.yml' => $caller,
+            '.github/workflows/publish.yml' => $caller,
+        ]);
+        $this->assertFails($this->run_(new ReleaseWorkflowCheck(), $context), 'more than one job calls extension-release.yml');
+    }
 }
