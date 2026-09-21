@@ -28,6 +28,19 @@ final class ContextTest extends CheckTestCase
         );
     }
 
+    /** git trusts safe.directory only for the repository top level, not a monorepo extension below it. */
+    public function testIsIgnoredInAMonorepoExtensionUnderAForeignOwner(): void
+    {
+        $context = $this->monorepoExtension(['.gitignore' => "*.log\n"], []);
+        putenv('GIT_TEST_ASSUME_DIFFERENT_OWNER=1');
+        try {
+            self::assertTrue($context->isIgnored('debug.log'));
+            self::assertFalse($context->isIgnored('info.xml'));
+        } finally {
+            putenv('GIT_TEST_ASSUME_DIFFERENT_OWNER');
+        }
+    }
+
     public function testRequiredExtensionsIsEmptyWithoutInfoXmlOrRequires(): void
     {
         self::assertSame([], $this->repo([])->requiredExtensions());

@@ -616,14 +616,7 @@ final class Context
      */
     public function isIgnored(string $relative): bool
     {
-        // Same safe.directory as git(): under CI's uid mismatch a bare call
-        // fails with "dubious ownership", which would read as "not ignored".
-        $command = 'git -c ' . escapeshellarg('safe.directory=' . rtrim($this->root, '/'))
-            . ' -C ' . escapeshellarg($this->root)
-            . ' check-ignore -q ' . escapeshellarg($relative) . ' 2>/dev/null';
-        exec($command, $output, $status);
-
-        return $status === 0;
+        return $this->git(['check-ignore', '-q', '--', $relative]) !== null;
     }
 
     /**
