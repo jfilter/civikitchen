@@ -420,8 +420,29 @@ grep -q 'BEGIN CIVIKITCHEN MANAGED job-base' "$mono/.github/workflows/ci.yml"
 grep -q 'working_directory: addon' "$mono/.github/workflows/ci.yml"
 grep -q '"extends": \["config:recommended"\]' "$mono/renovate.json"
 test -f "$mono/.gitattributes"
-# Releasing several extensions has no caller yet: none at the root either.
-test ! -e "$mono/.github/workflows/release.yml"
+# The release caller: one build job per extension, needing the jobs of the
+# same-repository extensions it requires, and one publish job needing all.
+assert_release_jobs() {
+  php -r '
+    require $argv[1];
+    $jobs = \Symfony\Component\Yaml\Yaml::parseFile($argv[2])["jobs"] ?? [];
+    $actual = [];
+    foreach ($jobs as $id => $job) {
+      $actual[] = $id . "[" . implode(",", (array) ($job["needs"] ?? [])) . "](" . implode(",", array_map(
+        static fn ($k, $v) => "$k=" . var_export($v, TRUE),
+        array_keys($job["with"] ?? []),
+        $job["with"] ?? [],
+      )) . ")";
+    }
+    $actual = implode(" ", $actual);
+    if ($actual !== $argv[3]) {
+      fwrite(STDERR, "release jobs are \"$actual\", expected \"{$argv[3]}\"\n");
+      exit(1);
+    }
+  ' "$root/packages/civikitchen-scenario-schema/vendor/autoload.php" \
+    "$mono/.github/workflows/release.yml" "$1"
+}
+assert_release_jobs "addon[base](working_directory='addon',stage='build') base[](working_directory='base',stage='build') publish[addon,base](stage='publish')"
 # No root-only file below the root: GitHub and Renovate never read them there.
 for stray in renovate.json .github/workflows/ci.yml .github/workflows/release.yml; do
   if [ -e "$mono/base/$stray" ]; then
@@ -458,6 +479,22 @@ echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
 grep -q 'extension-ci.yml@v1' "$mono/.github/workflows/ci.yml"
 grep -q 'playwright: true' "$mono/.github/workflows/ci.yml"
 
+# The same for the release caller: repo-owned inputs and secrets after a job's
+# END marker survive, a stale managed line is drift that --update repairs.
+rewrite_with_sed 's|^  # END CIVIKITCHEN MANAGED job-addon$|  # END CIVIKITCHEN MANAGED job-addon\
+      smoke_test: false\
+    secrets:\
+      composer_app_id: ${{ secrets.APP_ID }}|' "$mono/.github/workflows/release.yml"
+"$root/scaffold/ckinit.php" --check "$mono" >/dev/null
+rewrite_with_sed 's|^      stage: publish$|      stage: release|' "$mono/.github/workflows/release.yml"
+out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
+echo "$out" | grep -q 'drifted   .github/workflows/release.yml' \
+  || { echo "a stale release publish job was not reported: $out" >&2; exit 1; }
+out=$("$root/scaffold/ckinit.php" --update "$mono")
+echo "$out" | grep -q 'updated   .github/workflows/release.yml'
+grep -q 'composer_app_id: ${{ secrets.APP_ID }}' "$mono/.github/workflows/release.yml"
+assert_release_jobs "addon[base](working_directory='addon',stage='build',smoke_test=false) base[](working_directory='base',stage='build') publish[addon,base](stage='publish')"
+
 # The jobs of the root caller, as YAML: job id => its `with:` inputs.
 assert_root_jobs() {
   php -r '
@@ -492,6 +529,7 @@ out=$("$root/scaffold/ckinit.php" --update "$mono")
 echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
 "$root/scaffold/ckinit.php" --check "$mono" >/dev/null
 assert_root_jobs "addon(working_directory='addon',playwright=true) base(working_directory='base') third(working_directory='third')"
+assert_release_jobs "addon[base](working_directory='addon',stage='build',smoke_test=false) base[](working_directory='base',stage='build') publish[addon,base,third](stage='publish') third[](working_directory='third',stage='build')"
 
 # A removed directory whose job carries no repo-owned input: --update drops it.
 /bin/rm -rf "$mono/third"
@@ -499,11 +537,12 @@ out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
 echo "$out" | grep -q 'drifted   .github/workflows/ci.yml' \
   || { echo "a job for a removed directory was not reported: $out" >&2; exit 1; }
 "$root/scaffold/ckinit.php" --update "$mono" >/dev/null
-if grep -q 'job-third' "$mono/.github/workflows/ci.yml"; then
+if grep -q 'job-third' "$mono/.github/workflows/ci.yml" "$mono/.github/workflows/release.yml"; then
   echo "--update kept the job of a removed directory" >&2
   exit 1
 fi
 "$root/scaffold/ckinit.php" --check "$mono" >/dev/null
+assert_release_jobs "addon[base](working_directory='addon',stage='build',smoke_test=false) base[](working_directory='base',stage='build') publish[addon,base](stage='publish')"
 assert_root_jobs "addon(working_directory='addon',playwright=true) base(working_directory='base')"
 
 # A removed directory whose job carries repo-owned inputs: refuse, touch nothing.
@@ -561,6 +600,65 @@ for stray in .github/workflows/ci.yml renovate.json .gitattributes foo.bar/compo
     exit 1
   fi
 done
+
+# A missing release caller is reported; the job of a directory named like the
+# publish job, or one requiring an extension that never releases, is refused.
+cp "$mono/.github/workflows/release.yml" "$work/mono-release.yml"
+/bin/rm "$mono/.github/workflows/release.yml"
+out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
+echo "$out" | grep -q 'missing   .github/workflows/release.yml' \
+  || { echo "a missing root release caller was not reported: $out" >&2; exit 1; }
+# Another workflow already calling the shared release blocks a second caller.
+mkdir -p "$mono/.github/workflows"
+printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+  > "$mono/.github/workflows/publish.yml"
+if out=$("$root/scaffold/ckinit.php" --update "$mono" 2>&1); then
+  echo "a second release caller was stamped beside an existing one" >&2
+  exit 1
+fi
+echo "$out" | grep -q 'publish.yml already calls extension-release.yml' \
+  || { echo "the existing release caller was not named: $out" >&2; exit 1; }
+test ! -e "$mono/.github/workflows/release.yml"
+/bin/rm "$mono/.github/workflows/publish.yml"
+cp "$work/mono-release.yml" "$mono/.github/workflows/release.yml"
+"$root/scaffold/ckinit.php" --check "$mono" >/dev/null
+
+for layout in publish-dir none-dependency; do
+  tree="$work/release-$layout"
+  mkdir -p "$tree"
+  git -C "$tree" init -q
+  make_keyed_extension "$tree/base" org.acme.base base
+  case "$layout" in
+    publish-dir)
+      make_keyed_extension "$tree/publish" org.acme.publish publish
+      expected="release job id 'publish'"
+      ;;
+    none-dependency)
+      make_keyed_extension "$tree/addon" org.acme.addon addon org.acme.base
+      printf '%s\n' 'version: 1' 'policy:' '  release:' '    mode: none' '    reason: internal glue' > "$tree/base/civikitchen.yaml"
+      expected='addon requires base, which declares release: none'
+      ;;
+  esac
+  if out=$("$root/scaffold/ckinit.php" "$tree" 2>&1); then
+    echo "the $layout layout was accepted" >&2
+    exit 1
+  fi
+  echo "$out" | grep -q "$expected" || { echo "the $layout refusal did not say why: $out" >&2; exit 1; }
+  test ! -e "$tree/.github/workflows/release.yml"
+done
+
+# Extensions that never release get no job; when none releases, there is no
+# release caller to write or check.
+none="$work/release-none"
+mkdir -p "$none"
+git -C "$none" init -q
+for extension in base addon; do
+  make_keyed_extension "$none/$extension" "org.acme.$extension" "$extension"
+  printf '%s\n' 'version: 1' 'policy:' '  release:' '    mode: none' '    reason: internal glue' > "$none/$extension/civikitchen.yaml"
+done
+"$root/scaffold/ckinit.php" --update "$none" >/dev/null
+test ! -e "$none/.github/workflows/release.yml"
+"$root/scaffold/ckinit.php" --check "$none" >/dev/null
 
 # A repository root that is neither an extension nor a monorepo stays an error.
 mkdir -p "$work/empty-root"

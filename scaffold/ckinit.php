@@ -70,8 +70,7 @@ const OPTIONAL_FILES = [
 
 /**
  * Files GitHub and Renovate only read at the repository root. For an extension
- * below the root they are neither written nor checked; the root pass owns them,
- * except release.yml, which a multi-extension repository does not get yet.
+ * below the root they are neither written nor checked; the root pass owns them.
  */
 const ROOT_ONLY_FILES = [
   '.github/workflows/ci.yml',
@@ -82,6 +81,9 @@ const ROOT_ONLY_FILES = [
 /** The managed release caller and the reusable workflow it calls. */
 const RELEASE_CALLER = '.github/workflows/release.yml';
 const SHARED_RELEASE = 'extension-release.yml';
+
+/** The root release caller's job that publishes every extension's archive. */
+const RELEASE_PUBLISH_JOB = 'publish';
 
 /** The compose files whose managed app block mounts the extension directory. */
 const COMPOSE_FILES = [
@@ -101,8 +103,9 @@ Usage:
 
 The target contains info.xml, or is the root of a repository whose direct
 subdirectories are extensions — then ckinit manages the root files
-(renovate.json, .gitattributes, one managed CI job block per extension) and
-runs the same pass for every extension directory. Files from scaffold/template/extension are copied
+(renovate.json, .gitattributes, one managed CI job block per extension, and a
+release caller with one build job per releasing extension plus the job that
+publishes them together) and runs the same pass for every extension directory. Files from scaffold/template/extension are copied
 recursively; __EXTKEY__ is replaced with info.xml's <file> value,
 __VENDOR__ with the vendor segment of the extension key and __RENOVATE_PRESET__
 with the renovate_preset policy key (default config:recommended).
@@ -615,6 +618,116 @@ TXT;
 }
 
 /**
+ * The root release caller: one managed build job per releasing extension,
+ * needing the jobs of the same-repository extensions it requires, and one
+ * publish job needing them all. Inputs after a block's END marker are the repo's.
+ *
+ * @param array<string, list<string>> $needs directory => directories it requires
+ */
+function rootReleaseYaml(array $needs): string {
+  $out = <<<'TXT'
+# Thin caller for a repository of several extensions, released in lockstep: one
+# vX.Y.Z tag releases all of them. Each extension's job builds, verifies and
+# smoke-tests its archive with civikitchen's reusable extension-release.yml;
+# the publish job creates the one GitHub release and attaches every archive.
+#
+# Managed by ckinit: job ids, `uses:`, working_directory, stage and needs.
+# Further `with:` inputs and `secrets:` for a job go after its END marker and
+# survive `ckinit --update`. An extension that never releases declares
+# `release: none` with a reason in its civikitchen.yaml and gets no job.
+#
+# The @v1 pin is the versioned contract, the same one ci.yml follows. See
+# civikitchen's docs/extension-releases.md.
+# BEGIN CIVIKITCHEN MANAGED header
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
+
+permissions:
+  contents: read
+
+jobs:
+# END CIVIKITCHEN MANAGED header
+
+TXT;
+  $jobList = static fn (array $directories): string =>
+    '[' . implode(', ', array_map('jobId', $directories)) . ']';
+  foreach ($needs as $directory => $required) {
+    $out .= "  # BEGIN CIVIKITCHEN MANAGED job-{$directory}\n"
+      . '  ' . jobId($directory) . ":\n"
+      . ($required === [] ? '' : '    needs: ' . $jobList($required) . "\n")
+      . "    permissions:\n"
+      . "      contents: write        # a called workflow can only narrow this\n"
+      . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n"
+      . "    with:\n"
+      . "      working_directory: {$directory}\n"
+      . "      stage: build\n"
+      . "  # END CIVIKITCHEN MANAGED job-{$directory}\n";
+  }
+  return $out . "  # BEGIN CIVIKITCHEN MANAGED publish\n"
+    . '  ' . RELEASE_PUBLISH_JOB . ":\n"
+    . '    needs: ' . $jobList(array_keys($needs)) . "\n"
+    . "    permissions:\n"
+    . "      contents: write        # creates the release\n"
+    . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n"
+    . "    with:\n"
+    . "      stage: publish\n"
+    . "  # END CIVIKITCHEN MANAGED publish\n";
+}
+
+/**
+ * Directory => same-repository directories it requires, for every extension
+ * that releases; NULL after reporting a layout no release caller can build.
+ *
+ * @param list<string> $extensions
+ * @return array<string, list<string>>|null
+ */
+function releaseNeeds(string $root, array $extensions): ?array {
+  $keys = [];
+  $requires = [];
+  $releasing = [];
+  foreach ($extensions as $directory) {
+    $previous = libxml_use_internal_errors(TRUE);
+    $xml = simplexml_load_file("{$root}/{$directory}/info.xml");
+    libxml_use_internal_errors($previous);
+    if ($xml === FALSE) {
+      fwrite(STDERR, "ckinit: cannot parse {$directory}/info.xml\n");
+      return NULL;
+    }
+    $keys[trim((string) $xml['key'])] = $directory;
+    $requires[$directory] = array_map(static fn ($ext): string => trim((string) $ext), $xml->xpath('requires/ext') ?: []);
+    $policy = "{$root}/{$directory}/civikitchen.yaml";
+    $declared = is_file($policy) ? (\CiviKitchen\Ckconform\Policy::parse((string) file_get_contents($policy))['release'][0] ?? '') : '';
+    if (!str_starts_with($declared, 'none')) {
+      $releasing[] = $directory;
+    }
+  }
+  $needs = [];
+  foreach ($releasing as $directory) {
+    if (jobId($directory) === RELEASE_PUBLISH_JOB) {
+      fwrite(STDERR, "ckinit: the extension directory '{$directory}' needs the release job id '"
+        . RELEASE_PUBLISH_JOB . "', which publishes the release; rename the directory\n");
+      return NULL;
+    }
+    $needs[$directory] = [];
+    foreach ($requires[$directory] as $key) {
+      if (!isset($keys[$key])) {
+        continue;
+      }
+      if (!in_array($keys[$key], $releasing, TRUE)) {
+        fwrite(STDERR, "ckinit: {$directory} requires {$keys[$key]}, which declares release: none — "
+          . "a lockstep release cannot install {$directory} without it\n");
+        return NULL;
+      }
+      $needs[$directory][] = $keys[$key];
+    }
+  }
+  return $needs;
+}
+
+/**
  * The repository-root pass: stamp the root-only files, then run the ordinary
  * per-extension pass for every direct subdirectory that is an extension.
  */
@@ -654,6 +767,11 @@ function runRootPass(string $root, string $mode, bool $force, string $yamlAutolo
   $policyFile = $root . '/civikitchen.yaml';
   $preset = renovatePreset(is_file($policyFile) ? (string) file_get_contents($policyFile) : NULL);
 
+  $needs = releaseNeeds($root, $extensions);
+  if ($needs === NULL) {
+    return 2;
+  }
+
   $templateDir = __DIR__ . '/template/extension';
   $rootFiles = [
     '.gitattributes' => (string) file_get_contents($templateDir . '/.gitattributes'),
@@ -664,6 +782,10 @@ function runRootPass(string $root, string $mode, bool $force, string $yamlAutolo
       (string) file_get_contents($templateDir . '/renovate.json'),
     ),
   ];
+  // Like a single extension's: no caller when nothing releases.
+  if ($needs !== []) {
+    $rootFiles[RELEASE_CALLER] = rootReleaseYaml($needs);
+  }
 
   if ($mode === 'seed' && !$force) {
     $conflicts = array_filter(array_keys($rootFiles), static fn (string $r): bool => file_exists($root . '/' . $r));
@@ -678,6 +800,13 @@ function runRootPass(string $root, string $mode, bool $force, string $yamlAutolo
   foreach ($rootFiles as $relative => $content) {
     $destination = $root . '/' . $relative;
     assertRegular($destination, $relative);
+    $others = $relative === RELEASE_CALLER && !is_file($destination) ? otherReleaseCallers($root) : [];
+    if ($others !== []) {
+      fwrite(STDOUT, "drifted   {$relative} (" . implode(', ', $others) . ' already calls ' . SHARED_RELEASE
+        . "; a second caller would publish every tag twice)\n");
+      $failed[] = $relative;
+      continue;
+    }
     if (!is_file($destination)) {
       if ($mode === 'check') {
         fwrite(STDOUT, "missing   {$relative}\n");
