@@ -397,6 +397,15 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   ```
 
   See [Releasing an extension](extension-releases.md).
+- `info.xml` `<version>` sits exactly at or just ahead of the tags.
+  `ckconform`'s `release-tag-coherence` fails when the version is ahead of the
+  newest tag (the bump was committed, the tag never cut) and when it is below
+  the highest `v*` tag reachable from `HEAD` — a repo tagged `v1.0.0` whose
+  `info.xml` went back to `0.1.0`, or a stray `v1.0.0-alpha1` above
+  `0.1.0-alpha3`. A release from there sorts under what is already published,
+  so the fix is to release a version above that tag. Ordering is SemVer 2.0
+  precedence (`1.0.0-alpha.2` < `1.0.0-alpha.10` < `1.0.0`); a tag that is not
+  SemVer is ignored.
 - `composer.json` with the extension metadata; no `node_modules`/`vendor`/build
   artifacts committed (frontend builds commit only `dist/`, or declare the
   uncommitted build under `policy.dist.build` so the release zip carries it).

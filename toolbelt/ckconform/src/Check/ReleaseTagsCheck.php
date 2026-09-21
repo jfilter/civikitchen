@@ -115,6 +115,11 @@ final class ReleaseTagsCheck implements Check
             static fn (string $version): bool => !in_array($version, $declaredUntagged, true),
         ));
         if ($untagged === []) {
+            $reporter->ok(sprintf(
+                'every earlier info.xml version is tagged or declared untagged (%d checked)',
+                count($earlier),
+            ));
+
             return;
         }
 

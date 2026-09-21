@@ -490,6 +490,25 @@ final class Context
     }
 
     /**
+     * The `v*` tags whose commit is an ancestor of HEAD, unordered — the
+     * releases this line of history has already published.
+     *
+     * @return list<string>
+     */
+    public function reachableTags(): array
+    {
+        $output = $this->git(['tag', '--merged', 'HEAD', '--list', 'v[0-9]*']);
+        if ($output === null) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map('trim', explode("\n", $output)),
+            static fn (string $tag): bool => $tag !== '',
+        ));
+    }
+
+    /**
      * The distinct `<version>` values info.xml has carried, oldest first.
      *
      * Ordered by history, not by version_compare: what a release rule needs to

@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
+use CiviKitchen\Ckconform\SemVer;
 
 /**
  * `info.xml` ahead of the newest tag means the release commit was written and
@@ -17,9 +18,10 @@ use CiviKitchen\Ckconform\Reporter;
  * mistake, not a state of work: the bump is the last step before the tag, and
  * `ckrelease` derives everything it builds from that number.
  *
- * The opposite order (a tag ahead of info.xml) is not judged here: it cannot
- * come out of the pipeline, since `ckrelease check` refuses the tag whose
- * version info.xml does not carry.
+ * `info.xml` below a reachable tag fails too: a release cut from there sorts
+ * under what is already published, so no consumer ever receives it as an
+ * update. The comparison is SemVer precedence against the highest reachable
+ * tag; a tag or version outside SemVer is left to version-format.
  */
 final class ReleaseTagCoherenceCheck implements Check
 {
@@ -40,7 +42,31 @@ final class ReleaseTagCoherenceCheck implements Check
             return;
         }
 
-        if (version_compare($version, $history->version(), '>')) {
+        if (!SemVer::valid($version)) {
+            return;
+        }
+
+        $highest = null;
+        foreach ($context->reachableTags() as $tag) {
+            $tagVersion = substr($tag, 1);
+            if (SemVer::valid($tagVersion) && ($highest === null || SemVer::compare($tagVersion, substr($highest, 1)) > 0)) {
+                $highest = $tag;
+            }
+        }
+        if ($highest !== null && SemVer::compare($version, substr($highest, 1)) < 0) {
+            $reporter->fail(sprintf(
+                'info.xml <version> %s is below the tag %s — a release from here sorts under what is already '
+                . 'published and reaches no consumer as an update; release a version above %s',
+                $version,
+                $highest,
+                substr($highest, 1),
+            ));
+
+            return;
+        }
+
+        $newest = $history->version();
+        if (SemVer::valid($newest) && SemVer::compare($version, $newest) > 0) {
             $reporter->fail(sprintf(
                 'info.xml <version> %s is ahead of the newest tag %s — the bump was committed but never tagged, '
                 . 'so nothing released carries it (git tag -a v%s && git push origin v%s)',

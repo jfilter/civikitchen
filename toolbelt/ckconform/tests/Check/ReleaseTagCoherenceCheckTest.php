@@ -21,6 +21,60 @@ final class ReleaseTagCoherenceCheckTest extends CheckTestCase
         );
     }
 
+    public function testFailsWhenInfoXmlIsBelowAnExistingTag(): void
+    {
+        $context = $this->released('0.1.0', 'v1.0.0');
+        $this->assertFails(
+            $this->run_(new ReleaseTagCoherenceCheck(), $context),
+            'info.xml <version> 0.1.0 is below the tag v1.0.0',
+        );
+        $this->assertFails($this->run_(new ReleaseTagCoherenceCheck(), $context), 'release a version above 1.0.0');
+    }
+
+    public function testFailsWhenAStrayPreReleaseTagOutranksThePreRelease(): void
+    {
+        $context = $this->released('0.1.0-alpha3', 'v0.1.0-alpha2');
+        $this->gitTag('v1.0.0-alpha1');
+        $this->assertFails(
+            $this->run_(new ReleaseTagCoherenceCheck(), $context),
+            'info.xml <version> 0.1.0-alpha3 is below the tag v1.0.0-alpha1',
+        );
+    }
+
+    public function testComparesTheHighestTagNotTheNearestOne(): void
+    {
+        $context = $this->released('1.0.0', 'v2.0.0');
+        $this->write('Civi/Later.php', '<?php');
+        $this->gitCommit('later');
+        $this->gitTag('v1.0.0');
+        $this->assertFails($this->run_(new ReleaseTagCoherenceCheck(), $context), 'below the tag v2.0.0');
+    }
+
+    public function testPassesWhenTheVersionIsAboveEveryTag(): void
+    {
+        $context = $this->released('1.0.0', 'v1.0.0');
+        $this->gitTag('v1.0.0-alpha.10');
+        $this->gitTag('v1.0.0-alpha.2');
+        $this->assertPasses($this->run_(new ReleaseTagCoherenceCheck(), $context));
+    }
+
+    public function testOrdersNumericPreReleaseIdentifiersNumerically(): void
+    {
+        $context = $this->released('1.0.0-alpha.2', 'v1.0.0-alpha.10');
+        $this->assertFails(
+            $this->run_(new ReleaseTagCoherenceCheck(), $context),
+            'info.xml <version> 1.0.0-alpha.2 is below the tag v1.0.0-alpha.10',
+        );
+    }
+
+    public function testIgnoresATagThatIsNotSemver(): void
+    {
+        $context = $this->released('1.0.0', 'v1.0.0');
+        $this->gitTag('v9.0');
+        $this->gitTag('v10.0.0.1');
+        $this->assertSilent($this->run_(new ReleaseTagCoherenceCheck(), $context));
+    }
+
     public function testSilentWhenTheVersionMatchesTheNewestTag(): void
     {
         $this->assertSilent($this->run_(new ReleaseTagCoherenceCheck(), $this->released('1.0.0', 'v1.0.0')));

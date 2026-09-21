@@ -13,7 +13,7 @@ final class ReleaseTagsCheckTest extends CheckTestCase
     public function testPassesWhenEveryEarlierVersionWasTagged(): void
     {
         $context = $this->history(['0.1.0' => 'v0.1.0', '0.2.0' => 'v0.2.0', '0.3.0' => null]);
-        $this->assertSilent($this->run_(new ReleaseTagsCheck(), $context));
+        $this->assertOk($this->run_(new ReleaseTagsCheck(), $context), 'every earlier info.xml version is tagged');
     }
 
     public function testFailsAndNamesTheVersionThatWasNeverTagged(): void
@@ -33,7 +33,7 @@ final class ReleaseTagsCheckTest extends CheckTestCase
     public function testPassesForAFreshRepoAtItsFirstVersion(): void
     {
         $context = $this->history(['0.1.0' => null]);
-        $this->assertSilent($this->run_(new ReleaseTagsCheck(), $context));
+        $this->assertOk($this->run_(new ReleaseTagsCheck(), $context), 'every earlier info.xml version is tagged');
     }
 
     public function testPassesWhenTheCurrentVersionIsTheOnlyUntaggedOne(): void
@@ -41,7 +41,7 @@ final class ReleaseTagsCheckTest extends CheckTestCase
         // The window between the bump commit and the tag push, which
         // release-tag-coherence owns.
         $context = $this->history(['1.0.0' => 'v1.0.0', '1.1.0' => null]);
-        $this->assertSilent($this->run_(new ReleaseTagsCheck(), $context));
+        $this->assertOk($this->run_(new ReleaseTagsCheck(), $context), 'every earlier info.xml version is tagged');
     }
 
     public function testTheRepoMayDeclareThatItCutsNoReleases(): void
@@ -61,7 +61,7 @@ final class ReleaseTagsCheckTest extends CheckTestCase
         $context = $this->history(['1.0.0' => 'v1.0.0', '1.1.0' => null, '1.2.0' => 'v1.2.0']);
         $this->write('civikitchen.yaml', $this->policyFixture("untagged_versions=1.1.0 -- bump re-scoped before release\n"));
         $this->gitCommit('policy');
-        $this->assertSilent($this->run_(new ReleaseTagsCheck(), $context));
+        $this->assertOk($this->run_(new ReleaseTagsCheck(), $context), 'every earlier info.xml version is tagged');
     }
 
     public function testFailsForTheVersionThatIsNotDeclared(): void
@@ -215,7 +215,7 @@ final class ReleaseTagsCheckTest extends CheckTestCase
         );
 
         $tagged = $this->history(['1.0-beta1' => 'v1.0-beta1', '1.0.0' => 'v1.0.0']);
-        $this->assertSilent($this->run_(new ReleaseTagsCheck(), $tagged));
+        $this->assertOk($this->run_(new ReleaseTagsCheck(), $tagged), 'every earlier info.xml version is tagged');
     }
 
     /**

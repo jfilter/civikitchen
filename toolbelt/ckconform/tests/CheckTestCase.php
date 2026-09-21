@@ -234,6 +234,13 @@ abstract class CheckTestCase extends TestCase
         }
     }
 
+    protected function assertOk(Reporter $reporter, string $needle = ''): void
+    {
+        self::assertSame([], array_filter($reporter->results(), static fn (array $r): bool => $r['level'] !== 'ok'),
+            'expected only ok, got: ' . $reporter->render());
+        self::assertStringContainsString($needle, implode("\n", $reporter->messages('ok')));
+    }
+
     protected function assertSilent(Reporter $reporter): void
     {
         self::assertSame([], $reporter->results(), 'expected no output, got: ' . $reporter->render());
