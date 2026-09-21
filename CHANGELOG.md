@@ -36,11 +36,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
   extension, so two build jobs of one run neither collide nor tear down each
   other's stack. The publish job computes the pre-release and Latest flags
   itself.
-- `ckconform`'s `release-workflow` evaluates each extension of a repository of
-  several extensions instead of warning "not evaluated": it fails when no job
-  calls `extension-release.yml` with the extension's `working_directory`, when
-  that job runs another stage than `build`, or when no `stage: publish` job
-  needs it.
+- **Breaking:** `ckconform`'s `release-workflow` evaluates each extension of a
+  repository of several extensions instead of warning "not evaluated": it
+  fails when no job calls `extension-release.yml` with the extension's
+  `working_directory`, when that job runs another stage than `build`, or when
+  no `stage: publish` job needs it. The template drift check reports the root
+  `.github/workflows/release.yml` missing in the same repositories. Run
+  `ckinit --update` at the root, or declare `release: none` with a reason in
+  every extension that never releases.
 
 ## [1.26.0] - 2026-09-21
 
