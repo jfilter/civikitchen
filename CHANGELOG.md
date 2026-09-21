@@ -16,6 +16,19 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Added
 
+- `extension-ci.yml` takes a `working_directory` input (default `.`): the
+  extension's directory in a repository that holds several extensions. Every
+  job runs there, `compose_file`, the cache lockfile, artifact and scan paths
+  follow it, concurrency groups and compose project names are per extension,
+  and the container paths are derived once — CiviCRM work stays at
+  `/var/www/html/ext/<key>`, the git-reading tools run at the same directory
+  under the `/civikitchen-repo` mount. The template drift check covers the
+  extension directory, and the repository's own managed files when the
+  extension is a direct subdirectory of the root. The shared
+  private-dependency action takes the directory as an input, because a
+  composite step does not inherit the job's working directory.
+  `examples/monorepo` plus `.github/workflows/monorepo-self-test.yml` exercise
+  a two-extension repository where one extension requires the other.
 - `ckconform`'s `headless-builder-applied` check fails a `setUpHeadless()`
   whose `ck_headless()` or `\Civi\Test::headless()` chain does not end in
   `->apply()`: the test listener discards the returned builder, so nothing is

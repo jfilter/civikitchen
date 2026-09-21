@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<extension key="de.civico.ckmonobase" type="module">
+  <file>ckmonobase</file>
+  <name>CK Mono Base</name>
+  <description>Example extension: the dependency of ckmonoaddon in the same repository.</description>
+  <license>AGPL-3.0-or-later</license>
+  <maintainer>
+    <author>civico GmbH</author>
+    <email>hi@example.org</email>
+  </maintainer>
+  <urls>
+    <url desc="Main Extension Page">https://example.org/ckmonobase</url>
+  </urls>
+  <releaseDate>2026-01-01</releaseDate>
+  <version>1.0.0</version>
+  <develStage>stable</develStage>
+  <compatibility>
+    <ver>6.0</ver>
+  </compatibility>
+  <classloader>
+    <psr4 prefix="Civi\" path="Civi"/>
+  </classloader>
+</extension>

@@ -30,8 +30,19 @@ on:
           only: a value that differs from info.xml fails the run.
         type: string
         default: ''
+      working_directory:
+        description: >-
+          The extension's directory inside the repository, for a repository
+          that holds several extensions. Everything is resolved against it:
+          every job's working directory, compose_file, the cache, artifact and
+          scan paths, and the drift check. The default is the repository root,
+          the one-extension layout.
+        type: string
+        default: '.'
       compose_file:
-        description: 'Compose file that brings up the CiviCRM stack'
+        description: >-
+          Compose file that brings up the CiviCRM stack, relative to
+          working_directory
         type: string
         default: '.docker/docker-compose.ci.yml'
       check_template:
@@ -227,37 +238,82 @@ jobs:
     # reusable workflow github.job is the CALLER's job id, the same for every
     # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-key
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-key
       cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    # No defaults.run.working-directory here, unlike every other job: a
+    # working_directory that does not exist has to produce the message below
+    # rather than a runner error about a missing directory.
     outputs:
       key: ${{ steps.key.outputs.key }}
+      key_slug: ${{ steps.key.outputs.key_slug }}
+      ext_path: ${{ steps.key.outputs.ext_path }}
+      tool_path: ${{ steps.key.outputs.tool_path }}
+      repo_path: ${{ steps.key.outputs.repo_path }}
     env:
       CK_EXT_KEY_INPUT: ${{ inputs.key }}
+      CK_WORKING_DIRECTORY: ${{ inputs.working_directory }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - name: Read the extension key from info.xml
+      - name: Validate working_directory and read the extension key from info.xml
         id: key
         run: |
           set -euo pipefail
-          [ -f info.xml ] || { echo "no info.xml at the repository root — this is not a CiviCRM extension" >&2; exit 1; }
+          wd=${CK_WORKING_DIRECTORY#./}
+          wd=${wd%/}
+          case "$wd" in
+            '') echo "working_directory is empty — '.' is the repository root" >&2; exit 1 ;;
+            /*) echo "working_directory must be relative to the repository root (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
+            ..|../*|*/..|*/../*) echo "working_directory must stay inside the repository (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
+            *//*|*/./*) echo "working_directory must be a plain relative path (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
+          esac
+          # The value becomes a container path in `cd`, a compose path and a
+          # $GITHUB_OUTPUT line; ckinit refuses whitespace in a directory name too.
+          [ "$wd" = . ] || [[ "$wd" =~ ^[A-Za-z0-9._][A-Za-z0-9._/-]*$ ]] \
+            || { echo "working_directory may hold only letters, digits, '.', '_', '-' and '/' (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1; }
+          [ -d "$wd" ] \
+            || { echo "working_directory '$CK_WORKING_DIRECTORY' is not a directory in this repository" >&2; exit 1; }
+          [ -f "$wd/info.xml" ] \
+            || { echo "no info.xml in '$CK_WORKING_DIRECTORY' — this is not a CiviCRM extension" >&2; exit 1; }
           # shellcheck disable=SC2016  # the $vars belong to PHP, not the shell.
           key=$(php -r '
             libxml_use_internal_errors(TRUE);
             $xml = simplexml_load_file($argv[1]);
             if ($xml === FALSE) { fwrite(STDERR, "cannot parse {$argv[1]}\n"); exit(2); }
             echo trim((string) $xml->file);
-          ' info.xml)
+          ' "$wd/info.xml")
           [[ "$key" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] \
             || { echo "info.xml <file> is not a usable extension directory name (got: '$key')" >&2; exit 1; }
           if [ -n "$CK_EXT_KEY_INPUT" ] && [ "$CK_EXT_KEY_INPUT" != "$key" ]; then
             echo "the key input ($CK_EXT_KEY_INPUT) does not match info.xml <file> ($key) — drop the input or fix info.xml" >&2
             exit 1
           fi
-          echo "extension key: $key"
-          echo "key=$key" >> "$GITHUB_OUTPUT"
+          # The two container paths every stack job works from, derived once.
+          # ext/<key> is what provisioning enabled and what <requires> was
+          # resolved against, so everything that boots CiviCRM runs there. The
+          # git-reading tools need the checkout, which for an extension below
+          # the root is the second mount, /civikitchen-repo — the same host
+          # directory, so their writes land in the right place.
+          ext_path="/var/www/html/ext/$key"
+          if [ "$wd" = . ]; then
+            repo_path="$ext_path"
+            tool_path="$ext_path"
+          else
+            repo_path=/civikitchen-repo
+            tool_path="$repo_path/$wd"
+          fi
+          echo "extension key: $key (working directory: $wd, git tools run in $tool_path)"
+          {
+            echo "key=$key"
+            # Compose rejects an explicit project name holding uppercase, which
+            # an extension key may carry; the key itself stays as it is.
+            echo "key_slug=${key,,}"
+            echo "ext_path=$ext_path"
+            echo "tool_path=$tool_path"
+            echo "repo_path=$repo_path"
+          } >> "$GITHUB_OUTPUT"
 
   # Template drift: the tooling files civikitchen owns (CI caller, test
   # bootstraps, CI compose stack) must match the template, or
@@ -273,10 +329,13 @@ jobs:
     # reusable workflow github.job is the CALLER's job id, the same for every
     # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-template
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-template
       cancel-in-progress: true
     if: ${{ inputs.check_template }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -331,16 +390,31 @@ jobs:
           repository: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
           token: ${{ steps.app.outputs.token || github.token }}
           path: .civikitchen-siblings/policy
+      # The helper checkouts live at the workspace root, not in the extension
+      # directory, so they are addressed absolutely.
       - name: Check template drift (ckinit --check)
         env:
           CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
+          CK_WORKING_DIRECTORY: ${{ inputs.working_directory }}
         run: |
+          set -euo pipefail
           composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
-            --working-dir=.civikitchen-ci/packages/civikitchen-scenario-schema
+            --working-dir="$GITHUB_WORKSPACE/.civikitchen-ci/packages/civikitchen-scenario-schema"
           if [ -n "$CK_POLICY_DEFAULTS" ]; then
-            export CK_DEFAULT_CONFIG="$PWD/.civikitchen-siblings/policy/civikitchen.yaml"
+            export CK_DEFAULT_CONFIG="$GITHUB_WORKSPACE/.civikitchen-siblings/policy/civikitchen.yaml"
           fi
-          php .civikitchen-ci/scaffold/ckinit.php --check .
+          php "$GITHUB_WORKSPACE/.civikitchen-ci/scaffold/ckinit.php" --check .
+          # The root-managed files (the caller workflow, renovate.json) belong to
+          # the repository, and ckinit manages a root whose DIRECT subdirectories
+          # are the extensions. Every extension's job checks them: the check is
+          # cheap and idempotent, and callers are independent jobs with no first
+          # one to single out.
+          wd=${CK_WORKING_DIRECTORY#./}
+          wd=${wd%/}
+          case "$wd" in
+            .|*/*) ;;
+            *) php "$GITHUB_WORKSPACE/.civikitchen-ci/scaffold/ckinit.php" --check "$GITHUB_WORKSPACE" ;;
+          esac
 
   # Known vulnerabilities in the dependencies the repo actually ships. Read from
   # the committed lockfiles, not from the ranges in composer.json/package.json:
@@ -366,9 +440,12 @@ jobs:
     # reusable workflow github.job is the CALLER's job id, the same for every
     # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-osv
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-osv
       cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -407,7 +484,7 @@ jobs:
           chmod +x "$RUNNER_TEMP/osv-scanner"
           "$RUNNER_TEMP/osv-scanner" --version
 
-      # Named lockfiles at the repository ROOT, one -L each, instead of letting
+      # Named lockfiles in the extension directory, one -L each, instead of letting
       # the scanner walk the tree: a directory scan also finds the lockfiles
       # inside vendor/ and node_modules/ once a previous step has materialized
       # them, and a dependency's own lockfile is not what this repo ships.
@@ -420,7 +497,7 @@ jobs:
       # prints what it did NOT scan is the difference between an honest pass
       # and a green tick over nothing.
       #
-      # Exceptions live in an osv-scanner.toml in the repo root, which the
+      # Exceptions live in an osv-scanner.toml beside those lockfiles, which the
       # scanner picks up on its own because it sits beside the lockfiles — no
       # flag, no input here. It excuses a single advisory
       # ([[IgnoredVulns]] with id/reason and an ignoreUntil date that makes the
@@ -438,7 +515,7 @@ jobs:
             fi
           done
           if [ ${#args[@]} -eq 0 ]; then
-            echo "no composer.lock, package-lock.json or bun.lock in the repository root — no dependencies to scan"
+            echo "no composer.lock, package-lock.json or bun.lock in the extension directory — no dependencies to scan"
             exit 0
           fi
           # 128 is osv-scanner's "no packages found" — a lockfile that locks
@@ -458,9 +535,12 @@ jobs:
   # expiring .trivyignore.yaml entry.
   security:
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-security
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-security
       cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -477,7 +557,7 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
       - name: Install trivy
-        run: .civikitchen-ci/.github/scripts/install-trivy.sh
+        run: '"$GITHUB_WORKSPACE/.civikitchen-ci/.github/scripts/install-trivy.sh"'
 
       # Scan repository-owned source, including tests and fixtures. Materialized
       # dependency trees and CiviKitchen's helper checkout are separate trust
@@ -511,7 +591,7 @@ jobs:
     # reusable workflow github.job is the CALLER's job id, the same for every
     # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-ci
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-ci
       cancel-in-progress: true
     needs: key
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -520,6 +600,11 @@ jobs:
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ needs.key.outputs.key }}
+      # Where CiviCRM has the extension enabled, and where the git-reading
+      # tools see the same directory inside the checkout — derived by `key`.
+      CK_EXT_PATH: ${{ needs.key.outputs.ext_path }}
+      CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
+      CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
       # Read by the compose file's ${CIVIKITCHEN_IMAGE:-<default>}; `:-` treats
       # the empty default as unset, so not passing `image` changes nothing.
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
@@ -530,7 +615,10 @@ jobs:
       # ubuntu-latest, where every job gets its own VM; a self-hosted runner
       # with several job slots on one host hits it. The env var outranks the
       # file's `name:`, so consuming repos need no change.
-      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-ci
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-ci
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -592,6 +680,12 @@ jobs:
           # the usual way round because a ternary whose first branch is the
           # empty string collapses into its second.
           cache: ${{ !inputs.bun && 'npm' || '' }}
+          # setup-node runs at the workspace root, so the lockfiles it keys on
+          # are named relative to that — the three names it searches itself.
+          cache-dependency-path: |
+            ${{ inputs.working_directory }}/package-lock.json
+            ${{ inputs.working_directory }}/npm-shrinkwrap.json
+            ${{ inputs.working_directory }}/yarn.lock
 
       - name: Set up Bun
         if: ${{ inputs.bun }}
@@ -600,7 +694,7 @@ jobs:
           # The repo pins its Bun in package.json ("packageManager": "bun@x.y.z"),
           # next to its lockfile; an unpinned setup would test whatever Bun
           # shipped this week.
-          bun-version-file: package.json
+          bun-version-file: ${{ inputs.working_directory }}/package.json
 
       # --ignore-scripts is deliberate and not configurable — see the input
       # description. A package that genuinely needs a build step should run it
@@ -674,6 +768,7 @@ jobs:
           app_id: ${{ secrets.composer_app_id }}
           app_private_key: ${{ secrets.composer_app_private_key }}
           ext_key: ${{ needs.key.outputs.key }}
+          working_directory: ${{ inputs.working_directory }}
 
       - name: Start CiviCRM stack
         id: stack
@@ -708,10 +803,10 @@ jobs:
           # checkout above sits below the extension's mount. Empty = no layer.
           defaults=""
           if [ -n "$CK_POLICY_DEFAULTS" ]; then
-            defaults="/var/www/html/ext/$CK_EXT_KEY/.civikitchen-siblings/policy/civikitchen.yaml"
+            defaults="$CK_REPO_PATH/.civikitchen-siblings/policy/civikitchen.yaml"
           fi
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data -e "CK_DEFAULT_CONFIG=$defaults" app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cklint --all && ckconform && ckcivix --check"
+            "cd \"$CK_TOOL_PATH\" && cklint --all && ckconform && ckcivix --check"
       # Most phpcs and formatter findings are one local command away.
       - name: How to fix lint findings locally
         if: failure()
@@ -725,13 +820,13 @@ jobs:
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && ckfmt --check"
+            "cd \"$CK_TOOL_PATH\" && ckfmt --check"
 
       - name: PHPUnit + coverage floor
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && ckcoverage tests/phpunit"
+            "cd \"$CK_EXT_PATH\" && ckcoverage tests/phpunit"
 
       - name: Additional PHPUnit suite
         if: ${{ !cancelled() && steps.stack.outcome == 'success' && inputs.extra_phpunit_config != '' }}
@@ -739,15 +834,15 @@ jobs:
           CK_EXTRA_PHPUNIT_CONFIG: ${{ inputs.extra_phpunit_config }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data \
-            -e "CK_EXT_KEY=$CK_EXT_KEY" \
+            -e "CK_EXT_PATH=$CK_EXT_PATH" \
             -e "CK_EXTRA_PHPUNIT_CONFIG=$CK_EXTRA_PHPUNIT_CONFIG" app bash -c \
-            'cd "/var/www/html/ext/$CK_EXT_KEY" && phpunit -c "$CK_EXTRA_PHPUNIT_CONFIG"'
+            'cd "$CK_EXT_PATH" && phpunit -c "$CK_EXTRA_PHPUNIT_CONFIG"'
 
       - name: PHPStan
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && phpstan analyse --no-progress"
+            "cd \"$CK_EXT_PATH\" && phpstan analyse --no-progress"
 
       # Second, separate pass over tests/phpunit. The FILE is the switch —
       # there is no input to set: a repo whose test code is level-10 clean
@@ -759,7 +854,7 @@ jobs:
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && \
+            "cd \"$CK_EXT_PATH\" && \
              if [ -f phpstan-tests.neon ]; then phpstan analyse -c phpstan-tests.neon --no-progress; \
              elif [ -f phpstan-tests.neon.dist ]; then phpstan analyse -c phpstan-tests.neon.dist --no-progress; \
              else echo 'no phpstan-tests.neon.dist — test analysis not enabled'; fi"
@@ -772,14 +867,14 @@ jobs:
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && ckcompat"
+            "cd \"$CK_TOOL_PATH\" && ckcompat"
 
       # Passes silently for the many extensions that depend on core alone.
       - name: Dependency manifest (ckdeps)
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && ckdeps"
+            "cd \"$CK_EXT_PATH\" && ckdeps"
 
       # Taint analysis (psalm, CiviCRM stubs) — BLOCKING for the classes where
       # a true positive is an outright vulnerability (TaintedSql/Shell/Include/
@@ -804,7 +899,7 @@ jobs:
             exit 0
           fi
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cktaint"
+            "cd \"$CK_TOOL_PATH\" && cktaint"
 
       - name: Taint analysis summary
         if: ${{ !cancelled() && steps.cktaint.outcome != 'skipped' }}
@@ -851,7 +946,7 @@ jobs:
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cksmarty"
+            "cd \"$CK_EXT_PATH\" && cksmarty"
 
       # JS/TS linting with the image's pinned oxlint toolchain and the bundled
       # baseline config — the same arrangement as cklint and the bundled phpcs
@@ -866,7 +961,7 @@ jobs:
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && ckeslint"
+            "cd \"$CK_TOOL_PATH\" && ckeslint"
 
       # Same lifecycle block as the compat job below — deliberately duplicated
       # rather than factored out: a reusable workflow cannot share steps
@@ -881,7 +976,7 @@ jobs:
         run: |
           set -o pipefail
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cklifecycle" 2>&1 | tee /tmp/cklifecycle.md
+            "cd \"$CK_EXT_PATH\" && cklifecycle" 2>&1 | tee "$RUNNER_TEMP/cklifecycle.md"
 
       # The report is the point of the step, so it is published whether the
       # gate passed or failed — a leftover table named in a job summary gets
@@ -889,7 +984,7 @@ jobs:
       - name: Lifecycle summary
         if: ${{ !cancelled() && steps.lifecycle.outcome != 'skipped' }}
         run: |
-          sed -n '/^### Lifecycle gate/,$p' /tmp/cklifecycle.md >> "$GITHUB_STEP_SUMMARY" || true
+          sed -n '/^### Lifecycle gate/,$p' "$RUNNER_TEMP/cklifecycle.md" >> "$GITHUB_STEP_SUMMARY" || true
 
       # A failed stack is a stack trace of nothing without its logs.
       - name: App logs on failure
@@ -923,7 +1018,7 @@ jobs:
     # reusable workflow github.job is the CALLER's job id, the same for every
     # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-upgrade
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-upgrade
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.upgrade_from_last_release }}
@@ -931,9 +1026,17 @@ jobs:
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ needs.key.outputs.key }}
+      # Where CiviCRM has the extension enabled, and where the git-reading
+      # tools see the same directory inside the checkout — derived by `key`.
+      CK_EXT_PATH: ${{ needs.key.outputs.ext_path }}
+      CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
+      CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
       # One compose project per job — see the note in `ci`.
-      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-upgrade
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-upgrade
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     steps:
       # Full history: the previous release tag has to be checkoutable.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -968,6 +1071,7 @@ jobs:
           app_id: ${{ secrets.composer_app_id }}
           app_private_key: ${{ secrets.composer_app_private_key }}
           ext_key: ${{ needs.key.outputs.key }}
+          working_directory: ${{ inputs.working_directory }}
 
       # Newest tag reachable from this commit — on a PR that is the merge
       # commit, so it is the release the change would be shipped on top of.
@@ -981,7 +1085,7 @@ jobs:
           prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
           [ -n "$prev" ] \
             || { echo "no reachable tag: nothing has been released yet, so there is no upgrade path to test" >&2; exit 1; }
-          git cat-file -e "$prev:$CK_COMPOSE_FILE" 2>/dev/null \
+          git cat-file -e "$prev:./$CK_COMPOSE_FILE" 2>/dev/null \
             || { echo "$prev predates $CK_COMPOSE_FILE — the release cannot boot its own stack; test the upgrade from the next release on" >&2; exit 1; }
           echo "previous release: $prev"
           {
@@ -1038,16 +1142,16 @@ jobs:
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "set -e
-             cd /var/www/html/ext/$CK_EXT_KEY
+             cd \"$CK_EXT_PATH\"
              cv flush
              cv upgrade:db --mode=ext"
           pending=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_Upgrades::hasPending() ? \"pending\" : \"clean\";'" \
+            "cd \"$CK_EXT_PATH\" && cv ev 'echo CRM_Extension_Upgrades::hasPending() ? \"pending\" : \"clean\";'" \
             | tr -d '[:space:]')
           [ "$pending" = clean ] \
             || { echo "upgrade: extension upgrades still pending after cv upgrade:db" >&2; exit 1; }
           status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
+            "cd \"$CK_EXT_PATH\" && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
             | tr -d '[:space:]')
           [ "$status" = installed ] \
             || { echo "upgrade: extension ended up '$status', expected 'installed'" >&2; exit 1; }
@@ -1097,7 +1201,7 @@ jobs:
     # reusable workflow github.job is the CALLER's job id, the same for every
     # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-schema-parity
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-schema-parity
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.schema_parity }}
@@ -1105,9 +1209,17 @@ jobs:
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ needs.key.outputs.key }}
+      # Where CiviCRM has the extension enabled, and where the git-reading
+      # tools see the same directory inside the checkout — derived by `key`.
+      CK_EXT_PATH: ${{ needs.key.outputs.ext_path }}
+      CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
+      CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
       # One compose project per job — see the note in `ci`.
-      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-schema-parity
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-schema-parity
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     steps:
       # Full history: the previous release tag has to be checkoutable.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -1142,6 +1254,7 @@ jobs:
           app_id: ${{ secrets.composer_app_id }}
           app_private_key: ${{ secrets.composer_app_private_key }}
           ext_key: ${{ needs.key.outputs.key }}
+          working_directory: ${{ inputs.working_directory }}
 
       # Two cheap questions before anything boots, because the expensive part of
       # this job is two CiviCRM installs and neither is worth paying for if the
@@ -1176,7 +1289,7 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if ! git cat-file -e "$prev:$CK_COMPOSE_FILE" 2>/dev/null; then
+          if ! git cat-file -e "$prev:./$CK_COMPOSE_FILE" 2>/dev/null; then
             echo "schema parity: $prev predates $CK_COMPOSE_FILE — that release cannot boot its own stack."
             echo "run=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -1244,7 +1357,7 @@ jobs:
           set -euo pipefail
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "set -e
-             cd /var/www/html/ext/$CK_EXT_KEY
+             cd \"$CK_EXT_PATH\"
              cv flush
              cv upgrade:db --mode=ext
              ckschemadiff dump \"\${CIVICRM_DB_NAME:-civicrm}\" /tmp/ck-schema-upgraded.sql"
@@ -1282,7 +1395,7 @@ jobs:
             "$RUNNER_TEMP/ck-schema-upgraded.sql" app:/tmp/ck-schema-upgraded.sql
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "set -e
-             cd /var/www/html/ext/$CK_EXT_KEY
+             cd \"$CK_EXT_PATH\"
              ckschemadiff dump \"\${CIVICRM_DB_NAME:-civicrm}\" /tmp/ck-schema-fresh.sql
              ckschemadiff diff /tmp/ck-schema-fresh.sql /tmp/ck-schema-upgraded.sql"
 
@@ -1323,7 +1436,7 @@ jobs:
     # reusable workflow github.job is the CALLER's job id, the same for every
     # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-mutation
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-mutation
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.mutation }}
@@ -1331,9 +1444,17 @@ jobs:
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ needs.key.outputs.key }}
+      # Where CiviCRM has the extension enabled, and where the git-reading
+      # tools see the same directory inside the checkout — derived by `key`.
+      CK_EXT_PATH: ${{ needs.key.outputs.ext_path }}
+      CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
+      CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
       # One compose project per job — see the note in `ci`.
-      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-mutation
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-mutation
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     steps:
       # Full history: without mutation_paths ckmutate mutates the lines changed
       # against CK_MUTATE_BASE, and a shallow clone has no base to diff.
@@ -1369,6 +1490,7 @@ jobs:
           app_id: ${{ secrets.composer_app_id }}
           app_private_key: ${{ secrets.composer_app_private_key }}
           ext_key: ${{ needs.key.outputs.key }}
+          working_directory: ${{ inputs.working_directory }}
 
       - name: Start CiviCRM stack
         id: stack
@@ -1385,12 +1507,15 @@ jobs:
 
       # safe.directory first: the mount belongs to the runner user, and the
       # changed-lines mode (no mutation_paths) shells out to git as www-data.
+      # Infection runs the suite, so this stays on the CiviCRM path — where an
+      # extension below the repository root has no .git of its own, and the
+      # changed-lines mode needs mutation_paths in civikitchen.yaml instead.
       - name: Mutation testing (ckmutate)
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "git config --global --add safe.directory /var/www/html/ext/$CK_EXT_KEY
-             cd /var/www/html/ext/$CK_EXT_KEY && ckmutate"
+            "git config --global --add safe.directory $CK_REPO_PATH
+             cd \"$CK_EXT_PATH\" && ckmutate"
 
       - name: App logs on failure
         if: failure()
@@ -1429,7 +1554,7 @@ jobs:
     # reusable workflow github.job is the CALLER's job id, the same for every
     # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-core-upgrade
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-core-upgrade
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.core_upgrade_from != '' }}
@@ -1437,6 +1562,11 @@ jobs:
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ needs.key.outputs.key }}
+      # Where CiviCRM has the extension enabled, and where the git-reading
+      # tools see the same directory inside the checkout — derived by `key`.
+      CK_EXT_PATH: ${{ needs.key.outputs.ext_path }}
+      CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
+      CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
       CK_CORE_FROM: ${{ inputs.core_upgrade_from }}
       # The job-level image is the upgrade TARGET: the run's normal image, or
       # empty for the compose file's own default. Only the first boot overrides
@@ -1444,7 +1574,10 @@ jobs:
       # image this pipeline actually tests on.
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
       # One compose project per job — see the note in `ci`.
-      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-core-upgrade
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-core-upgrade
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -1482,6 +1615,7 @@ jobs:
           app_id: ${{ secrets.composer_app_id }}
           app_private_key: ${{ secrets.composer_app_private_key }}
           ext_key: ${{ needs.key.outputs.key }}
+          working_directory: ${{ inputs.working_directory }}
 
       # The one thing that stops a naive image swap from being an upgrade.
       #
@@ -1573,7 +1707,7 @@ jobs:
           if [ -f tests/upgrade/seed.php ]; then
             docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
               "set -e
-               cd /var/www/html/ext/$CK_EXT_KEY
+               cd \"$CK_EXT_PATH\"
                cv scr tests/upgrade/seed.php"
           else
             echo "no tests/upgrade/seed.php: this run tests that the site boots on the new core and upgrades cleanly with $CK_EXT_KEY enabled — and nothing about the extension's own records."
@@ -1635,7 +1769,7 @@ jobs:
           set -euo pipefail
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "set -e
-             cd /var/www/html/ext/$CK_EXT_KEY
+             cd \"$CK_EXT_PATH\"
              cv upgrade:db"
           versions=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
             "cv ev 'echo CRM_Core_BAO_Domain::version(), \"|\", CRM_Utils_System::version();'" \
@@ -1648,12 +1782,12 @@ jobs:
           [ "$code_version" != "$CK_CORE_FROM_VERSION" ] \
             || { echo "core upgrade: core_upgrade_from is CiviCRM $CK_CORE_FROM_VERSION, and so is the image this run tests on — point it at an OLDER minor, or turn the input off" >&2; exit 1; }
           pending=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_Upgrades::hasPending() ? \"pending\" : \"clean\";'" \
+            "cd \"$CK_EXT_PATH\" && cv ev 'echo CRM_Extension_Upgrades::hasPending() ? \"pending\" : \"clean\";'" \
             | tr -d '[:space:]')
           [ "$pending" = clean ] \
             || { echo "core upgrade: extension upgrades still pending after cv upgrade:db" >&2; exit 1; }
           status=$(docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
+            "cd \"$CK_EXT_PATH\" && cv ev 'echo CRM_Extension_System::singleton()->getManager()->getStatus(\"$CK_EXT_KEY\");'" \
             | tr -d '[:space:]')
           [ "$status" = installed ] \
             || { echo "core upgrade: extension ended up '$status', expected 'installed'" >&2; exit 1; }
@@ -1667,7 +1801,7 @@ jobs:
           if [ -f tests/upgrade/assert.php ]; then
             docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
               "set -e
-               cd /var/www/html/ext/$CK_EXT_KEY
+               cd \"$CK_EXT_PATH\"
                cv scr tests/upgrade/assert.php"
           else
             echo "no tests/upgrade/assert.php: the upgrade itself passed, but nothing checked what became of the extension's own records."
@@ -1702,7 +1836,7 @@ jobs:
     # reusable workflow github.job is the CALLER's job id, the same for every
     # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-compat-images
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-compat-images
       cancel-in-progress: true
     if: ${{ inputs.matrix_images != '' }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -1740,7 +1874,7 @@ jobs:
     # reusable workflow github.job is the CALLER's job id, the same for every
     # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-compat
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-compat
       cancel-in-progress: true
     needs: [compat-images, key]
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -1752,9 +1886,17 @@ jobs:
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ needs.key.outputs.key }}
+      # Where CiviCRM has the extension enabled, and where the git-reading
+      # tools see the same directory inside the checkout — derived by `key`.
+      CK_EXT_PATH: ${{ needs.key.outputs.ext_path }}
+      CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
+      CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
       CIVIKITCHEN_IMAGE: ${{ matrix.image }}
       # One compose project per job — see the note in `ci`.
-      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-compat-${{ strategy.job-index }}
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-compat-${{ strategy.job-index }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -1782,6 +1924,7 @@ jobs:
           app_id: ${{ secrets.composer_app_id }}
           app_private_key: ${{ secrets.composer_app_private_key }}
           ext_key: ${{ needs.key.outputs.key }}
+          working_directory: ${{ inputs.working_directory }}
 
       - name: Validate inputs
         run: |
@@ -1806,7 +1949,7 @@ jobs:
       - name: PHPUnit
         run: |
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && CIVICRM_UF=UnitTests ckphpunit tests/phpunit"
+            "cd \"$CK_EXT_PATH\" && CIVICRM_UF=UnitTests ckphpunit tests/phpunit"
 
       - name: Lifecycle smoke + gate (cklifecycle)
         id: lifecycle
@@ -1814,7 +1957,7 @@ jobs:
         run: |
           set -o pipefail
           docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd /var/www/html/ext/$CK_EXT_KEY && cklifecycle" 2>&1 | tee /tmp/cklifecycle.md
+            "cd \"$CK_EXT_PATH\" && cklifecycle" 2>&1 | tee "$RUNNER_TEMP/cklifecycle.md"
 
       # The report is the point of the step, so it is published whether the
       # gate passed or failed — a leftover table named in a job summary gets
@@ -1822,7 +1965,7 @@ jobs:
       - name: Lifecycle summary
         if: ${{ !cancelled() && steps.lifecycle.outcome != 'skipped' }}
         run: |
-          sed -n '/^### Lifecycle gate/,$p' /tmp/cklifecycle.md >> "$GITHUB_STEP_SUMMARY" || true
+          sed -n '/^### Lifecycle gate/,$p' "$RUNNER_TEMP/cklifecycle.md" >> "$GITHUB_STEP_SUMMARY" || true
 
       - name: App logs on failure
         if: failure()
@@ -1859,7 +2002,7 @@ jobs:
     # reusable workflow github.job is the CALLER's job id, the same for every
     # job here, and one shared group cancels the run against itself.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-playwright
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-playwright
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.playwright }}
@@ -1867,9 +2010,17 @@ jobs:
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ needs.key.outputs.key }}
+      # Where CiviCRM has the extension enabled, and where the git-reading
+      # tools see the same directory inside the checkout — derived by `key`.
+      CK_EXT_PATH: ${{ needs.key.outputs.ext_path }}
+      CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
+      CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
       CIVIKITCHEN_IMAGE: ${{ inputs.image }}
       # One compose project per job — see the note in `ci`.
-      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-playwright
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-playwright
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -1902,6 +2053,7 @@ jobs:
           app_id: ${{ secrets.composer_app_id }}
           app_private_key: ${{ secrets.composer_app_private_key }}
           ext_key: ${{ needs.key.outputs.key }}
+          working_directory: ${{ inputs.working_directory }}
 
       # Two things the CI stack deliberately lacks, added here instead of in
       # the template compose file — that one is template-managed, and no repo
@@ -1952,6 +2104,10 @@ jobs:
           # when the repo is on Bun, and setup-node fails the step over it.
           node-version: ${{ inputs.node_version }}
           cache: ${{ !inputs.bun && 'npm' || '' }}
+          cache-dependency-path: |
+            ${{ inputs.working_directory }}/package-lock.json
+            ${{ inputs.working_directory }}/npm-shrinkwrap.json
+            ${{ inputs.working_directory }}/yarn.lock
 
       - name: Set up Bun
         if: ${{ inputs.bun }}
@@ -1960,7 +2116,7 @@ jobs:
           # The repo pins its Bun in package.json ("packageManager": "bun@x.y.z"),
           # next to its lockfile; an unpinned setup would test whatever Bun
           # shipped this week.
-          bun-version-file: package.json
+          bun-version-file: ${{ inputs.working_directory }}/package.json
 
       # Same --ignore-scripts rule as the ci job: this job installs the
       # extension's own tree, and a browser test repo is exactly where an
@@ -2027,9 +2183,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-${{ needs.key.outputs.key }}
+          # Artifact paths are workspace-relative, not run-step-relative.
           path: |
-            playwright-report/
-            test-results/
+            ${{ inputs.working_directory }}/playwright-report/
+            ${{ inputs.working_directory }}/test-results/
           if-no-files-found: ignore
           retention-days: 7
 

@@ -1,0 +1,42 @@
+# extension-ci.yml against a repository that holds two extensions, one
+# requiring the other: the self-test for `working_directory`. One static job
+# per extension, the shape ckinit stamps into a monorepo's root caller.
+#
+# `uses: ./…` resolves against the CALLING repository, which here is this one,
+# so the workflow under test is the one in the branch that triggered the run.
+#
+# Not on every push: each job boots its own CiviCRM stack. The paths below are
+# what the run executes — the example tree, the workflow, the shared action, and
+# the scaffold and toolbelt code the jobs call.
+#
+# The ROOT pass of the template drift check is not exercised here: the example
+# tree sits below examples/, while ckinit manages a root whose direct
+# subdirectories are the extensions. tests/ckinit/test-ckinit.sh covers it.
+name: Monorepo Self-Test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'examples/monorepo/**'
+      - '.github/workflows/extension-ci.yml'
+      - '.github/workflows/monorepo-self-test.yml'
+      - '.github/actions/private-deps/**'
+      - 'scaffold/**'
+      - 'toolbelt/**'
+
+permissions:
+  contents: read
+
+jobs:
+  base:
+    if: ${{ github.repository == 'jfilter/civikitchen' }}
+    uses: ./.github/workflows/extension-ci.yml
+    with:
+      working_directory: examples/monorepo/ckmonobase
+
+  addon:
+    if: ${{ github.repository == 'jfilter/civikitchen' }}
+    uses: ./.github/workflows/extension-ci.yml
+    with:
+      working_directory: examples/monorepo/ckmonoaddon

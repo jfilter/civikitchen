@@ -28,6 +28,11 @@ inputs:
   app_private_key:
     description: GitHub App private key (secrets.composer_app_private_key).
     default: ''
+  working_directory:
+    description: >-
+      The extension's directory inside the repository. Composite steps do not
+      inherit the calling job's defaults.run.working-directory.
+    default: '.'
   ext_key:
     description: >-
       This extension's key — the last entry of the enable list. Empty writes
@@ -201,6 +206,7 @@ runs:
     - name: Composer install (private packages over HTTPS)
       if: ${{ inputs.composer_install == 'true' }}
       shell: bash
+      working-directory: ${{ inputs.working_directory }}
       env:
         CK_COMPOSER_TOKEN: ${{ steps.app.outputs.token || github.token }}
       run: |
