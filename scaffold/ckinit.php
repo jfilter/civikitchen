@@ -79,6 +79,10 @@ const ROOT_ONLY_FILES = [
   'renovate.json',
 ];
 
+/** The managed release caller and the reusable workflow it calls. */
+const RELEASE_CALLER = '.github/workflows/release.yml';
+const SHARED_RELEASE = 'extension-release.yml';
+
 /** The compose files whose managed app block mounts the extension directory. */
 const COMPOSE_FILES = [
   '.docker/docker-compose.ci.yml',
@@ -336,6 +340,172 @@ if ($conflicts !== []) {
   fwrite(STDERR, "Re-run with --force only after reviewing these files,\n");
   fwrite(STDERR, "or --update to refresh just the template-managed files.\n");
   exit(1);
+}
+
+/** Does a parsed job call the shared release workflow through `uses:`? */
+function callsSharedRelease(mixed $job): bool {
+  $uses = is_array($job) ? ($job['uses'] ?? NULL) : NULL;
+  return is_string($uses) && basename(explode('@', $uses, 2)[0]) === SHARED_RELEASE;
+}
+
+/**
+ * Workflow files other than the managed caller whose jobs call the shared
+ * release workflow; a file that does not parse is named as well.
+ *
+ * @return list<string>
+ */
+function otherReleaseCallers(string $target): array {
+  $found = [];
+  foreach (glob($target . '/.github/workflows/*.{yml,yaml}', GLOB_BRACE) ?: [] as $path) {
+    $relative = substr($path, strlen($target) + 1);
+    if ($relative === RELEASE_CALLER) {
+      continue;
+    }
+    try {
+      $parsed = \Symfony\Component\Yaml\Yaml::parse((string) file_get_contents($path));
+    }
+    catch (\Symfony\Component\Yaml\Exception\ParseException $e) {
+      $found[] = "{$relative} (unparsable, cannot rule it out)";
+      continue;
+    }
+    $jobs = is_array($parsed) ? ($parsed['jobs'] ?? NULL) : NULL;
+    foreach (is_array($jobs) ? $jobs : [] as $job) {
+      if (callsSharedRelease($job)) {
+        $found[] = $relative;
+        break;
+      }
+    }
+  }
+  return $found;
+}
+
+/**
+ * A release caller from before the markers, rewritten onto the template with
+ * its caller job's `with:` and `secrets:` carried over as written. Returns the
+ * new text, or NULL and the paths of repo-owned content it cannot place.
+ *
+ * @return array{?string, list<string>}
+ */
+function migrateReleaseCaller(string $existing, string $template): array {
+  try {
+    $old = \Symfony\Component\Yaml\Yaml::parse($existing);
+  }
+  catch (\Symfony\Component\Yaml\Exception\ParseException $e) {
+    return [NULL, ['the whole file (' . $e->getMessage() . ')']];
+  }
+  $wanted = \Symfony\Component\Yaml\Yaml::parse($template);
+  $jobs = is_array($old) && is_array($old['jobs'] ?? NULL) ? $old['jobs'] : [];
+  $callers = array_keys(array_filter($jobs, 'callsSharedRelease'));
+  if (count($callers) !== 1) {
+    return [NULL, ['the whole file (no single job calls ' . SHARED_RELEASE . ')']];
+  }
+  $id = (string) $callers[0];
+  $carried = array_intersect_key($jobs[$id], ['with' => TRUE, 'secrets' => TRUE]);
+
+  // Everything but the carried inputs and the tag trigger must match the template.
+  $rest = $old;
+  unset($rest['jobs'][$id]);
+  $rest['jobs']['release'] = array_diff_key($jobs[$id], $carried);
+  if (isset($rest['on']['push']['tags'])) {
+    $rest['on']['push']['tags'] = $wanted['on']['push']['tags'];
+  }
+  $lost = yamlDifferences($rest, $wanted);
+  if ($id !== 'release') {
+    $lost[] = "jobs.{$id} (job id)";
+  }
+  if ($lost !== []) {
+    return [NULL, $lost];
+  }
+
+  $migrated = $template . carriedInputs($existing, $id);
+  $parsed = \Symfony\Component\Yaml\Yaml::parse($migrated);
+  $now = array_intersect_key($parsed['jobs']['release'] ?? [], ['with' => TRUE, 'secrets' => TRUE]);
+  ksort($now);
+  ksort($carried);
+  if ($now !== $carried) {
+    return [NULL, ["jobs.{$id}.with / jobs.{$id}.secrets (not carried over intact)"]];
+  }
+  return [$migrated, []];
+}
+
+/**
+ * Dotted paths where $have differs from $want: keys only one side has, and
+ * values that differ.
+ *
+ * @return list<string>
+ */
+function yamlDifferences(mixed $have, mixed $want, string $path = ''): array {
+  if (!is_array($have) || !is_array($want) || array_is_list($have) || array_is_list($want)) {
+    return $have === $want ? [] : [$path === '' ? 'the whole file' : $path];
+  }
+  $differences = [];
+  foreach (array_unique(array_merge(array_keys($have), array_keys($want))) as $key) {
+    $at = $path === '' ? (string) $key : "{$path}.{$key}";
+    if (!array_key_exists($key, $have) || !array_key_exists($key, $want)) {
+      $differences[] = $at;
+      continue;
+    }
+    array_push($differences, ...yamlDifferences($have[$key], $want[$key], $at));
+  }
+  return $differences;
+}
+
+/**
+ * The `with:` and `secrets:` blocks of job $id as written, comments included,
+ * re-indented to the template's four-space job keys.
+ */
+function carriedInputs(string $existing, string $id): string {
+  $lines = preg_split('/(?<=\n)/', $existing) ?: [];
+  $jobIndent = NULL;
+  $keyIndent = NULL;
+  $capturing = FALSE;
+  $pending = '';
+  $out = '';
+  foreach ($lines as $line) {
+    $indent = strlen($line) - strlen(ltrim($line, ' '));
+    $blank = trim($line) === '';
+    $comment = str_starts_with(ltrim($line), '#');
+    if ($jobIndent === NULL) {
+      if (preg_match('/^(\s+)' . preg_quote($id, '/') . ':\s*(#.*)?$/', rtrim($line, "\n"), $m) === 1) {
+        $jobIndent = strlen($m[1]);
+      }
+      continue;
+    }
+    if (!$blank && !$comment && $indent <= $jobIndent) {
+      break;
+    }
+    if ($blank) {
+      if ($capturing) {
+        $pending .= $line;
+      }
+      continue;
+    }
+    $keyIndent ??= $indent;
+    if ($comment && $indent <= $keyIndent) {
+      $pending .= $line;
+      continue;
+    }
+    if (!$comment && $indent === $keyIndent) {
+      $capturing = preg_match('/^\s*(with|secrets):/', $line) === 1;
+      if (!$capturing) {
+        $pending = '';
+        continue;
+      }
+    }
+    if ($capturing) {
+      $out .= $pending . $line;
+    }
+    $pending = '';
+  }
+  if ($capturing && $pending !== '' && trim($pending) !== '') {
+    $out .= $pending;
+  }
+  if (trim($out) === '') {
+    return '';
+  }
+  $shift = 4 - (int) $keyIndent;
+  return (string) preg_replace_callback('/^( *)(?=\S)/m', static fn (array $m): string =>
+    str_repeat(' ', max(0, strlen($m[1]) + $shift)), rtrim($out) . "\n");
 }
 
 /** The git repository root at or above $directory, NULL when there is none. */
@@ -771,12 +941,50 @@ if ($mode === 'seed') {
   exit(0);
 }
 
+// The release caller is checked before anything is written: a caller in
+// another workflow, or repo-owned content --update cannot carry over, stops it.
+$blocked = [];
+foreach ($files as $index => [$destination, $relative, , $content]) {
+  if ($relative !== RELEASE_CALLER || isset($custom[$relative])) {
+    continue;
+  }
+  if (!is_file($destination)) {
+    $others = otherReleaseCallers($target);
+    if ($others !== []) {
+      $blocked[$relative] = implode(', ', $others) . ' already calls ' . SHARED_RELEASE . '; a second caller would publish every tag twice';
+    }
+    continue;
+  }
+  $existing = (string) file_get_contents($destination);
+  if (managedBlocks($existing, $relative) !== []) {
+    continue;
+  }
+  [$migrated, $lost] = migrateReleaseCaller($existing, $content);
+  if ($lost !== []) {
+    $blocked[$relative] = 'would drop: ' . implode(', ', $lost);
+    continue;
+  }
+  $files[$index][3] = (string) $migrated;
+}
+if ($blocked !== [] && $mode === 'update') {
+  foreach ($blocked as $relative => $why) {
+    fwrite(STDERR, "ckinit: refusing to update {$relative}: {$why}\n");
+  }
+  fwrite(STDERR, "Nothing was written. Move that content by hand, then run --update again.\n");
+  exit(1);
+}
+
 // --update / --check: managed files converge on the template, missing files
 // (managed or seeded) count, seeded files the repo edited are its business.
 $drifted = [];
 $missing = [];
 foreach ($files as [$destination, $relative, $perms, $content]) {
   $managed = in_array($relative, MANAGED_FILES, TRUE);
+  if (isset($blocked[$relative])) {
+    fwrite(STDOUT, "drifted   {$relative} ({$blocked[$relative]})\n");
+    $drifted[] = $relative;
+    continue;
+  }
   if (isset($custom[$relative])) {
     fwrite(STDOUT, "custom    {$relative} (civikitchen.yaml template_custom)\n");
     continue;

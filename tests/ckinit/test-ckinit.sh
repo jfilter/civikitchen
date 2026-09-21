@@ -267,6 +267,107 @@ grep -q '# The install needs a payment processor no headless site has.' "$rel"
 grep -q 'smoke_test: false' "$rel"
 grep -q 'require_changelog: true' "$rel"
 "$root/scaffold/ckinit.php" --check "$work/legacy" >/dev/null
+# A caller from before the markers: --update keeps the job's inputs and secrets
+# as written, comments included, and replaces the rest with the template.
+adopt="$work/adopt"
+make_extension "$adopt"
+"$root/scaffold/ckinit.php" "$adopt" >/dev/null
+cat > "$adopt/.github/workflows/release.yml" <<'YAML'
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+    with:
+      # The dependency release is pinned in civikitchen.yaml.
+      composer_app_repositories: exampledep
+      composer_install: true
+    secrets:
+      # Read-only GitHub App for the private dependency.
+      composer_app_id: ${{ vars.EXAMPLE_APP_ID }}
+      composer_app_private_key: ${{ secrets.EXAMPLE_APP_KEY }}
+YAML
+out=$("$root/scaffold/ckinit.php" --check "$adopt" 2>&1 || true)
+echo "$out" | grep -q 'drifted   .github/workflows/release.yml$' || { echo "a marker-less caller was not plain drift: $out" >&2; exit 1; }
+"$root/scaffold/ckinit.php" --update "$adopt" >/dev/null
+arel="$adopt/.github/workflows/release.yml"
+grep -q 'BEGIN CIVIKITCHEN MANAGED caller' "$arel"
+grep -qF "'v[0-9]+.[0-9]+.[0-9]+-*'" "$arel"
+for kept in '# The dependency release is pinned in civikitchen.yaml.' 'composer_app_repositories: exampledep' \
+  'composer_install: true' '# Read-only GitHub App for the private dependency.' \
+  'composer_app_id: ${{ vars.EXAMPLE_APP_ID }}' 'composer_app_private_key: ${{ secrets.EXAMPLE_APP_KEY }}'; do
+  grep -qF "$kept" "$arel" || { echo "--update dropped '$kept' from the release caller" >&2; exit 1; }
+done
+php -r '
+  require $argv[1];
+  $job = \Symfony\Component\Yaml\Yaml::parseFile($argv[2])["jobs"]["release"];
+  assert($job["with"] === ["composer_app_repositories" => "exampledep", "composer_install" => true]);
+  assert(count($job["secrets"]) === 2);
+' "$root/packages/civikitchen-scenario-schema/vendor/autoload.php" "$arel"
+"$root/scaffold/ckinit.php" --check "$adopt" >/dev/null
+
+# Repo-owned content --update cannot place: nothing is written, both modes name it.
+cat > "$arel" <<'YAML'
+name: Release
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+env:
+  EXAMPLE: 1
+permissions:
+  contents: read
+jobs:
+  release:
+    permissions:
+      contents: write
+    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+YAML
+cp "$arel" "$work/adopt-before.yml"
+/bin/rm "$adopt/tests/e2e/lib.sh"
+out=$("$root/scaffold/ckinit.php" --check "$adopt" 2>&1 || true)
+echo "$out" | grep -q 'would drop: .*on.workflow_dispatch' || { echo "--check did not name the lost trigger: $out" >&2; exit 1; }
+echo "$out" | grep -q 'would drop: .*env' || { echo "--check did not name the lost env: $out" >&2; exit 1; }
+if out=$("$root/scaffold/ckinit.php" --update "$adopt" 2>&1); then
+  echo "--update accepted a caller it would have cut down" >&2
+  exit 1
+fi
+echo "$out" | grep -q 'would drop: .*on.workflow_dispatch'
+cmp -s "$arel" "$work/adopt-before.yml" || { echo "--update rewrote a caller it refused" >&2; exit 1; }
+test ! -e "$adopt/tests/e2e/lib.sh" || { echo "--update wrote files after refusing" >&2; exit 1; }
+
+# A caller in another workflow: --update creates no second one next to it.
+/bin/rm "$arel"
+cat > "$adopt/.github/workflows/publish.yml" <<'YAML'
+name: Publish
+on:
+  push:
+    tags: ['v*']
+jobs:
+  publish:
+    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+YAML
+if out=$("$root/scaffold/ckinit.php" --update "$adopt" 2>&1); then
+  echo "--update created a second release caller" >&2
+  exit 1
+fi
+echo "$out" | grep -q '.github/workflows/publish.yml already calls extension-release.yml'
+test ! -e "$arel"
+# A mention in a comment is no caller.
+printf '%s\n' '# see extension-release.yml' 'name: Publish' 'on: push' 'jobs:' '  x:' '    runs-on: ubuntu-latest' \
+  '    steps: [{run: "true"}]' > "$adopt/.github/workflows/publish.yml"
+"$root/scaffold/ckinit.php" --update "$adopt" >/dev/null
+test -f "$arel"
+
 # A repo that removed a block is reported, never silently rewritten.
 rewrite_with_sed '/CIVIKITCHEN MANAGED db/d' "$work/blocks/.docker/docker-compose.ci.yml"
 out=$("$root/scaffold/ckinit.php" --check "$work/blocks" 2>&1 || true)
