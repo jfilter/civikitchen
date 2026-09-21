@@ -258,6 +258,27 @@ if echo "$out" | grep -q 'release.yml'; then
 fi
 "$root/scaffold/ckinit.php" --update "$work/norelease" >/dev/null
 test ! -e "$work/norelease/.github/workflows/release.yml"
+# A managed caller left behind by release: none still publishes every tag:
+# drift for --check, deleted by --update unless the repository owns lines in it.
+cp -R "$work/legacy" "$work/stalerelease"
+cp "$work/norelease/civikitchen.yaml" "$work/stalerelease/civikitchen.yaml"
+out=$("$root/scaffold/ckinit.php" --check "$work/stalerelease" 2>&1 || true)
+echo "$out" | grep -q 'drifted   .github/workflows/release.yml (release: none' \
+  || { echo "a caller left behind by release: none was not reported: $out" >&2; exit 1; }
+cp -R "$work/stalerelease" "$work/stalerelease-owned"
+out=$("$root/scaffold/ckinit.php" --update "$work/stalerelease")
+echo "$out" | grep -q 'removed   .github/workflows/release.yml'
+test ! -e "$work/stalerelease/.github/workflows/release.yml"
+"$root/scaffold/ckinit.php" --check "$work/stalerelease" >/dev/null
+printf '%s\n' '    secrets:' '      composer_app_id: ${{ secrets.APP_ID }}' >> "$work/stalerelease-owned/.github/workflows/release.yml"
+cp "$work/stalerelease-owned/.github/workflows/release.yml" "$work/stalerelease-owned.yml"
+if out=$("$root/scaffold/ckinit.php" --update "$work/stalerelease-owned" 2>&1); then
+  echo "--update deleted a release caller carrying repository lines" >&2
+  exit 1
+fi
+echo "$out" | grep -q 'composer_app_id' || { echo "the refusal did not name the repository lines: $out" >&2; exit 1; }
+cmp -s "$work/stalerelease-owned/.github/workflows/release.yml" "$work/stalerelease-owned.yml" \
+  || { echo "--update touched a release caller it refused to delete" >&2; exit 1; }
 # Inputs below the marker are the repo's and survive --update; an old trigger
 # inside the block is drift and gets refreshed.
 rewrite_with_sed 's|^# END CIVIKITCHEN MANAGED caller$|# END CIVIKITCHEN MANAGED caller\
@@ -371,13 +392,20 @@ if out=$("$root/scaffold/ckinit.php" --update "$adopt" 2>&1); then
   echo "--update created a second release caller" >&2
   exit 1
 fi
-echo "$out" | grep -q '.github/workflows/publish.yml already calls extension-release.yml'
+echo "$out" | grep -q '.github/workflows/publish.yml also calls extension-release.yml'
 test ! -e "$arel"
 # A mention in a comment is no caller.
 printf '%s\n' '# see extension-release.yml' 'name: Publish' 'on: push' 'jobs:' '  x:' '    runs-on: ubuntu-latest' \
   '    steps: [{run: "true"}]' > "$adopt/.github/workflows/publish.yml"
 "$root/scaffold/ckinit.php" --update "$adopt" >/dev/null
 test -f "$arel"
+# A second caller beside the managed one is drift as well.
+printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+  > "$adopt/.github/workflows/publish.yml"
+out=$("$root/scaffold/ckinit.php" --check "$adopt" 2>&1 || true)
+echo "$out" | grep -q 'publish.yml also calls extension-release.yml' \
+  || { echo "a second caller beside release.yml was not reported: $out" >&2; exit 1; }
+/bin/rm "$adopt/.github/workflows/publish.yml"
 
 # A repo that removed a block is reported, never silently rewritten.
 rewrite_with_sed '/CIVIKITCHEN MANAGED db/d' "$work/blocks/.docker/docker-compose.ci.yml"
@@ -616,10 +644,34 @@ if out=$("$root/scaffold/ckinit.php" --update "$mono" 2>&1); then
   echo "a second release caller was stamped beside an existing one" >&2
   exit 1
 fi
-echo "$out" | grep -q 'publish.yml already calls extension-release.yml' \
+echo "$out" | grep -q 'publish.yml also calls extension-release.yml' \
   || { echo "the existing release caller was not named: $out" >&2; exit 1; }
 test ! -e "$mono/.github/workflows/release.yml"
 /bin/rm "$mono/.github/workflows/publish.yml"
+cp "$work/mono-release.yml" "$mono/.github/workflows/release.yml"
+"$root/scaffold/ckinit.php" --check "$mono" >/dev/null
+# ... and beside an existing root caller too.
+printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+  > "$mono/.github/workflows/publish.yml"
+out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
+echo "$out" | grep -q 'publish.yml also calls extension-release.yml' \
+  || { echo "a second caller beside the root release.yml was not reported: $out" >&2; exit 1; }
+/bin/rm "$mono/.github/workflows/publish.yml"
+# A hand-written root caller: its inputs and secrets are never overwritten.
+printf '%s\n' 'name: Release' 'on: {push: {tags: ["v*"]}}' 'jobs:' '  release:' \
+  '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+  '    with: {working_directory: base}' '    secrets:' '      composer_app_id: ${{ secrets.APP_ID }}' \
+  > "$mono/.github/workflows/release.yml"
+cp "$mono/.github/workflows/release.yml" "$work/mono-handwritten.yml"
+out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
+echo "$out" | grep -q 'drifted   .github/workflows/release.yml (no managed markers' \
+  || { echo "a hand-written root release caller was not reported: $out" >&2; exit 1; }
+if "$root/scaffold/ckinit.php" --update "$mono" >/dev/null 2>&1; then
+  echo "--update accepted a hand-written root release caller" >&2
+  exit 1
+fi
+cmp -s "$mono/.github/workflows/release.yml" "$work/mono-handwritten.yml" \
+  || { echo "--update overwrote a hand-written root release caller" >&2; exit 1; }
 cp "$work/mono-release.yml" "$mono/.github/workflows/release.yml"
 "$root/scaffold/ckinit.php" --check "$mono" >/dev/null
 
@@ -657,6 +709,29 @@ for extension in base addon; do
   printf '%s\n' 'version: 1' 'policy:' '  release:' '    mode: none' '    reason: internal glue' > "$none/$extension/civikitchen.yaml"
 done
 "$root/scaffold/ckinit.php" --update "$none" >/dev/null
+test ! -e "$none/.github/workflows/release.yml"
+"$root/scaffold/ckinit.php" --check "$none" >/dev/null
+# A root caller left from when they did release: drift, deleted by --update
+# unless the repository owns lines in it.
+/bin/rm "$none"/*/civikitchen.yaml
+"$root/scaffold/ckinit.php" --update "$none" >/dev/null
+cp "$none/.github/workflows/release.yml" "$work/none-release.yml"
+for extension in base addon; do
+  printf '%s\n' 'version: 1' 'policy:' '  release:' '    mode: none' '    reason: internal glue' > "$none/$extension/civikitchen.yaml"
+done
+out=$("$root/scaffold/ckinit.php" --check "$none" 2>&1 || true)
+echo "$out" | grep -q 'drifted   .github/workflows/release.yml (release: none' \
+  || { echo "a root caller left behind by release: none was not reported: $out" >&2; exit 1; }
+printf '%s\n' '      smoke_test: false' >> "$none/.github/workflows/release.yml"
+if out=$("$root/scaffold/ckinit.php" --update "$none" 2>&1); then
+  echo "--update deleted a root release caller carrying repository lines" >&2
+  exit 1
+fi
+echo "$out" | grep -q 'smoke_test: false' || { echo "the refusal did not name the repository lines: $out" >&2; exit 1; }
+test -f "$none/.github/workflows/release.yml"
+cp "$work/none-release.yml" "$none/.github/workflows/release.yml"
+out=$("$root/scaffold/ckinit.php" --update "$none")
+echo "$out" | grep -q 'removed   .github/workflows/release.yml'
 test ! -e "$none/.github/workflows/release.yml"
 "$root/scaffold/ckinit.php" --check "$none" >/dev/null
 

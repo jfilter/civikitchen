@@ -386,6 +386,45 @@ function otherReleaseCallers(string $target): array {
 }
 
 /**
+ * Repository-owned lines of a managed file: anything but comments and blank
+ * lines outside its managed blocks, or the whole file when it has none.
+ *
+ * @return list<string>
+ */
+function repositoryOwnedLines(string $content, string $relative): array {
+  if (managedBlocks($content, $relative) === []) {
+    return ['the whole file (no managed markers)'];
+  }
+  [$leading, $segments] = managedSegments($content);
+  $outside = $leading . implode('', array_column($segments, 'trailing'));
+  return array_values(array_filter(
+    array_map('trim', explode("\n", $outside)),
+    static fn (string $line): bool => $line !== '' && !str_starts_with($line, '#'),
+  ));
+}
+
+/**
+ * The drift of a release caller left behind when nothing releases: NULL when
+ * --update may delete it, else why it stays. A tag push would still publish.
+ */
+function staleReleaseCaller(string $destination, string $mode): ?string {
+  $owned = repositoryOwnedLines((string) file_get_contents($destination), RELEASE_CALLER);
+  if ($owned !== []) {
+    return 'release: none, but it still publishes every tag and carries repository lines — delete it by hand: '
+      . implode(' | ', $owned);
+  }
+  return $mode === 'check' ? 'release: none, but it still publishes every tag' : NULL;
+}
+
+function removeReleaseCaller(string $destination): void {
+  if (!unlink($destination)) {
+    fwrite(STDERR, 'ckinit: cannot delete ' . RELEASE_CALLER . "\n");
+    exit(1);
+  }
+  fwrite(STDOUT, 'removed   ' . RELEASE_CALLER . " (release: none)\n");
+}
+
+/**
  * A release caller from before the markers, rewritten onto the template with
  * its caller job's `with:` and `secrets:` carried over as written. Returns the
  * new text, or NULL and the paths of repo-owned content it cannot place.
@@ -786,6 +825,19 @@ function runRootPass(string $root, string $mode, bool $force, string $yamlAutolo
   if ($needs !== []) {
     $rootFiles[RELEASE_CALLER] = rootReleaseYaml($needs);
   }
+  $failed = [];
+  $releaseDestination = $root . '/' . RELEASE_CALLER;
+  if ($needs === [] && $mode !== 'seed' && (is_file($releaseDestination) || is_link($releaseDestination))) {
+    assertRegular($releaseDestination, RELEASE_CALLER);
+    $why = staleReleaseCaller($releaseDestination, $mode);
+    if ($why === NULL) {
+      removeReleaseCaller($releaseDestination);
+    }
+    else {
+      fwrite(STDOUT, 'drifted   ' . RELEASE_CALLER . " ({$why})\n");
+      $failed[] = RELEASE_CALLER;
+    }
+  }
 
   if ($mode === 'seed' && !$force) {
     $conflicts = array_filter(array_keys($rootFiles), static fn (string $r): bool => file_exists($root . '/' . $r));
@@ -796,14 +848,13 @@ function runRootPass(string $root, string $mode, bool $force, string $yamlAutolo
     }
   }
 
-  $failed = [];
   foreach ($rootFiles as $relative => $content) {
     $destination = $root . '/' . $relative;
     assertRegular($destination, $relative);
-    $others = $relative === RELEASE_CALLER && !is_file($destination) ? otherReleaseCallers($root) : [];
+    $others = $relative === RELEASE_CALLER ? otherReleaseCallers($root) : [];
     if ($others !== []) {
-      fwrite(STDOUT, "drifted   {$relative} (" . implode(', ', $others) . ' already calls ' . SHARED_RELEASE
-        . "; a second caller would publish every tag twice)\n");
+      fwrite(STDOUT, "drifted   {$relative} (" . implode(', ', $others) . ' also calls ' . SHARED_RELEASE
+        . "; two callers would publish every tag twice)\n");
       $failed[] = $relative;
       continue;
     }
@@ -825,6 +876,13 @@ function runRootPass(string $root, string $mode, bool $force, string $yamlAutolo
     $blocks = managedBlocks($content, $relative);
     $rendered = $content;
     $repoBlocks = managedBlocks($existing, $relative);
+    // A hand-written caller holds inputs and secrets no marker says are the repository's.
+    if ($blocks !== [] && $repoBlocks === []) {
+      fwrite(STDOUT, "drifted   {$relative} (no managed markers — ckinit would drop its inputs and secrets; "
+        . "replace it by hand with the managed jobs, repository lines after their END markers)\n");
+      $failed[] = $relative;
+      continue;
+    }
     if ($blocks !== [] && $repoBlocks !== []) {
       // One block per extension directory, so a changed set is an added or
       // removed extension: --update reconciles it, --check reports it.
@@ -1080,11 +1138,12 @@ foreach ($files as $index => [$destination, $relative, , $content]) {
   if ($relative !== RELEASE_CALLER || isset($custom[$relative])) {
     continue;
   }
+  $others = otherReleaseCallers($target);
+  if ($others !== []) {
+    $blocked[$relative] = implode(', ', $others) . ' also calls ' . SHARED_RELEASE . '; two callers would publish every tag twice';
+    continue;
+  }
   if (!is_file($destination)) {
-    $others = otherReleaseCallers($target);
-    if ($others !== []) {
-      $blocked[$relative] = implode(', ', $others) . ' already calls ' . SHARED_RELEASE . '; a second caller would publish every tag twice';
-    }
     continue;
   }
   $existing = (string) file_get_contents($destination);
@@ -1097,6 +1156,18 @@ foreach ($files as $index => [$destination, $relative, , $content]) {
     continue;
   }
   $files[$index][3] = (string) $migrated;
+}
+$retire = FALSE;
+$releaseDestination = $target . '/' . RELEASE_CALLER;
+if ($releasesNothing && !$belowRoot && !isset($custom[RELEASE_CALLER]) && (is_file($releaseDestination) || is_link($releaseDestination))) {
+  assertRegular($releaseDestination, RELEASE_CALLER);
+  $why = staleReleaseCaller($releaseDestination, $mode);
+  if ($why === NULL) {
+    $retire = TRUE;
+  }
+  else {
+    $blocked[RELEASE_CALLER] = $why;
+  }
 }
 if ($blocked !== [] && $mode === 'update') {
   foreach ($blocked as $relative => $why) {
@@ -1168,6 +1239,16 @@ foreach ($files as [$destination, $relative, $perms, $content]) {
   else {
     fwrite(STDOUT, "drifted   {$relative}\n");
   }
+}
+
+// Not among the rendered files when nothing releases, so reported here.
+if ($retire) {
+  removeReleaseCaller($releaseDestination);
+  $drifted[] = RELEASE_CALLER;
+}
+elseif ($releasesNothing && isset($blocked[RELEASE_CALLER])) {
+  fwrite(STDOUT, 'drifted   ' . RELEASE_CALLER . " ({$blocked[RELEASE_CALLER]})\n");
+  $drifted[] = RELEASE_CALLER;
 }
 
 if ($mode === 'update') {

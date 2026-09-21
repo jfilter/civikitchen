@@ -44,6 +44,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `.github/workflows/release.yml` missing in the same repositories. Run
   `ckinit --update` at the root, or declare `release: none` with a reason in
   every extension that never releases.
+- **Breaking:** a `release.yml` left behind by `release: none` is drift for
+  `ckinit --check`, in a single extension as at the root of several;
+  `--update` deletes it unless it carries lines outside its managed blocks.
+  A second workflow calling `extension-release.yml` is drift also when
+  `release.yml` exists.
 
 ## [1.26.0] - 2026-09-21
 

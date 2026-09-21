@@ -198,7 +198,11 @@ A job needs the jobs of the same-repository extensions its extension
 `<requires>`: the smoke test installs their archives from the same run, since
 no pinned release of them exists yet. If one build job fails, nothing is
 published. An extension that declares `release: none` gets no job; `ckinit`
-refuses a releasing extension that requires one of those. The
+refuses a releasing extension that requires one of those. When none releases,
+`--check` reports a leftover `release.yml` and `--update` deletes it, unless
+lines outside its managed blocks belong to the repository. `ckinit` never
+overwrites a root `release.yml` without managed markers, and reports a second
+workflow calling `extension-release.yml`. The
 `release-workflow` check fails an extension whose job is missing, runs another
 stage than `build`, or is not needed by a `stage: publish` job.
 
