@@ -25,7 +25,7 @@ final class SemVer
         preg_match(self::PATTERN, $a, $left);
         preg_match(self::PATTERN, $b, $right);
         for ($i = 1; $i <= 3; $i++) {
-            $order = (int) $left[$i] <=> (int) $right[$i];
+            $order = self::compareNumeric($left[$i], $right[$i]);
             if ($order !== 0) {
                 return $order;
             }
@@ -58,7 +58,7 @@ final class SemVer
         $aNumeric = ctype_digit($a);
         $bNumeric = ctype_digit($b);
         if ($aNumeric && $bNumeric) {
-            return (int) $a <=> (int) $b;
+            return self::compareNumeric($a, $b);
         }
         if ($aNumeric !== $bNumeric) {
             // Numeric identifiers rank below alphanumeric ones.
@@ -66,5 +66,11 @@ final class SemVer
         }
 
         return strcmp($a, $b) <=> 0;
+    }
+
+    /** Digit strings without leading zeros, of any length: longer is larger. */
+    private static function compareNumeric(string $a, string $b): int
+    {
+        return [strlen($a), $a] <=> [strlen($b), $b];
     }
 }

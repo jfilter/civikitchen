@@ -25,6 +25,12 @@ final class SemVerTest extends TestCase
         }
     }
 
+    public function testOrdersNumbersBeyondTheIntegerRange(): void
+    {
+        self::assertLessThan(0, SemVer::compare('1.0.0-999999999999999999999', '1.0.0-1000000000000000000000'));
+        self::assertLessThan(0, SemVer::compare('99999999999999999999.0.0', '100000000000000000000.0.0'));
+    }
+
     public function testRejectsWhatIsNotSemver(): void
     {
         foreach (['1.0', '2.2.7.1', '01.0.0', '1.0.0-01', '1.0.0-', 'v1.0.0', ''] as $version) {
