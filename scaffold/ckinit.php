@@ -348,10 +348,24 @@ if ($conflicts !== []) {
   exit(1);
 }
 
-/** Does a parsed job call the shared release workflow through `uses:`? */
-function callsSharedRelease(mixed $job): bool {
+/** Does a parsed job publish through the shared release workflow? A dry run publishes nothing. */
+function publishesRelease(mixed $job): bool {
   $uses = is_array($job) ? ($job['uses'] ?? NULL) : NULL;
-  return is_string($uses) && basename(explode('@', $uses, 2)[0]) === SHARED_RELEASE;
+  $dryRun = is_array($job) && is_array($job['with'] ?? NULL) ? ($job['with']['dry_run'] ?? FALSE) : FALSE;
+  return is_string($uses) && basename(explode('@', $uses, 2)[0]) === SHARED_RELEASE
+    && $dryRun !== TRUE && $dryRun !== 'true';
+}
+
+/** Whether a workflow has a job that publishes releases; one that does not parse cannot be ruled out. */
+function workflowPublishesRelease(string $content): bool {
+  try {
+    $parsed = \Symfony\Component\Yaml\Yaml::parse($content);
+  }
+  catch (\Symfony\Component\Yaml\Exception\ParseException $e) {
+    return TRUE;
+  }
+  $jobs = is_array($parsed) ? ($parsed['jobs'] ?? NULL) : NULL;
+  return array_filter(is_array($jobs) ? $jobs : [], 'publishesRelease') !== [];
 }
 
 /**
@@ -376,7 +390,7 @@ function otherReleaseCallers(string $target): array {
     }
     $jobs = is_array($parsed) ? ($parsed['jobs'] ?? NULL) : NULL;
     foreach (is_array($jobs) ? $jobs : [] as $job) {
-      if (callsSharedRelease($job)) {
+      if (publishesRelease($job)) {
         $found[] = $relative;
         break;
       }
@@ -440,7 +454,7 @@ function migrateReleaseCaller(string $existing, string $template): array {
   }
   $wanted = \Symfony\Component\Yaml\Yaml::parse($template);
   $jobs = is_array($old) && is_array($old['jobs'] ?? NULL) ? $old['jobs'] : [];
-  $callers = array_keys(array_filter($jobs, 'callsSharedRelease'));
+  $callers = array_keys(array_filter($jobs, 'publishesRelease'));
   if (count($callers) !== 1) {
     return [NULL, ['the whole file (no single job calls ' . SHARED_RELEASE . ')']];
   }
@@ -829,13 +843,15 @@ function runRootPass(string $root, string $mode, bool $force, string $yamlAutolo
   $releaseDestination = $root . '/' . RELEASE_CALLER;
   if ($needs === [] && $mode !== 'seed' && (is_file($releaseDestination) || is_link($releaseDestination))) {
     assertRegular($releaseDestination, RELEASE_CALLER);
-    $why = staleReleaseCaller($releaseDestination, $mode);
-    if ($why === NULL) {
-      removeReleaseCaller($releaseDestination);
-    }
-    else {
-      fwrite(STDOUT, 'drifted   ' . RELEASE_CALLER . " ({$why})\n");
-      $failed[] = RELEASE_CALLER;
+    if (workflowPublishesRelease((string) file_get_contents($releaseDestination))) {
+      $why = staleReleaseCaller($releaseDestination, $mode);
+      if ($why === NULL) {
+        removeReleaseCaller($releaseDestination);
+      }
+      else {
+        fwrite(STDOUT, 'drifted   ' . RELEASE_CALLER . " ({$why})\n");
+        $failed[] = RELEASE_CALLER;
+      }
     }
   }
 
@@ -1161,12 +1177,15 @@ $retire = FALSE;
 $releaseDestination = $target . '/' . RELEASE_CALLER;
 if ($releasesNothing && !$belowRoot && !isset($custom[RELEASE_CALLER]) && (is_file($releaseDestination) || is_link($releaseDestination))) {
   assertRegular($releaseDestination, RELEASE_CALLER);
-  $why = staleReleaseCaller($releaseDestination, $mode);
-  if ($why === NULL) {
-    $retire = TRUE;
-  }
-  else {
-    $blocked[RELEASE_CALLER] = $why;
+  // A release.yml that calls no release (a docs build on tags) is the repository's.
+  if (workflowPublishesRelease((string) file_get_contents($releaseDestination))) {
+    $why = staleReleaseCaller($releaseDestination, $mode);
+    if ($why === NULL) {
+      $retire = TRUE;
+    }
+    else {
+      $blocked[RELEASE_CALLER] = $why;
+    }
   }
 }
 if ($blocked !== [] && $mode === 'update') {

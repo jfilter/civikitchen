@@ -279,6 +279,15 @@ fi
 echo "$out" | grep -q 'composer_app_id' || { echo "the refusal did not name the repository lines: $out" >&2; exit 1; }
 cmp -s "$work/stalerelease-owned/.github/workflows/release.yml" "$work/stalerelease-owned.yml" \
   || { echo "--update touched a release caller it refused to delete" >&2; exit 1; }
+# A release.yml that calls no release is the repository's, release: none or not.
+printf '%s\n' 'name: Docs' 'on: {push: {tags: ["v*"]}}' 'jobs:' '  docs:' '    runs-on: ubuntu-latest' \
+  '    steps: [{run: "true"}]' > "$work/stalerelease/.github/workflows/release.yml"
+cp "$work/stalerelease/.github/workflows/release.yml" "$work/docs-release.yml"
+"$root/scaffold/ckinit.php" --check "$work/stalerelease" >/dev/null \
+  || { echo "a release.yml that publishes nothing was reported under release: none" >&2; exit 1; }
+"$root/scaffold/ckinit.php" --update "$work/stalerelease" >/dev/null
+cmp -s "$work/stalerelease/.github/workflows/release.yml" "$work/docs-release.yml" \
+  || { echo "--update touched a release.yml that publishes nothing" >&2; exit 1; }
 # Inputs below the marker are the repo's and survive --update; an old trigger
 # inside the block is drift and gets refreshed.
 rewrite_with_sed 's|^# END CIVIKITCHEN MANAGED caller$|# END CIVIKITCHEN MANAGED caller\
@@ -406,6 +415,12 @@ out=$("$root/scaffold/ckinit.php" --check "$adopt" 2>&1 || true)
 echo "$out" | grep -q 'publish.yml also calls extension-release.yml' \
   || { echo "a second caller beside release.yml was not reported: $out" >&2; exit 1; }
 /bin/rm "$adopt/.github/workflows/publish.yml"
+# A dry-run caller publishes nothing, so it is no second caller.
+printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+  '    with:' '      dry_run: true' > "$adopt/.github/workflows/release-dry-run.yml"
+"$root/scaffold/ckinit.php" --check "$adopt" >/dev/null \
+  || { echo "a dry-run caller was counted as a second release caller" >&2; exit 1; }
+/bin/rm "$adopt/.github/workflows/release-dry-run.yml"
 
 # A repo that removed a block is reported, never silently rewritten.
 rewrite_with_sed '/CIVIKITCHEN MANAGED db/d' "$work/blocks/.docker/docker-compose.ci.yml"
@@ -657,6 +672,11 @@ out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
 echo "$out" | grep -q 'publish.yml also calls extension-release.yml' \
   || { echo "a second caller beside the root release.yml was not reported: $out" >&2; exit 1; }
 /bin/rm "$mono/.github/workflows/publish.yml"
+printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+  '    with: {dry_run: true, working_directory: base}' > "$mono/.github/workflows/release-dry-run.yml"
+"$root/scaffold/ckinit.php" --check "$mono" >/dev/null \
+  || { echo "a dry-run caller was counted as a second root release caller" >&2; exit 1; }
+/bin/rm "$mono/.github/workflows/release-dry-run.yml"
 # A hand-written root caller: its inputs and secrets are never overwritten.
 printf '%s\n' 'name: Release' 'on: {push: {tags: ["v*"]}}' 'jobs:' '  release:' \
   '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
@@ -734,6 +754,13 @@ out=$("$root/scaffold/ckinit.php" --update "$none")
 echo "$out" | grep -q 'removed   .github/workflows/release.yml'
 test ! -e "$none/.github/workflows/release.yml"
 "$root/scaffold/ckinit.php" --check "$none" >/dev/null
+printf '%s\n' 'name: Docs' 'on: {push: {tags: ["v*"]}}' 'jobs:' '  docs:' '    runs-on: ubuntu-latest' \
+  '    steps: [{run: "true"}]' > "$none/.github/workflows/release.yml"
+"$root/scaffold/ckinit.php" --check "$none" >/dev/null \
+  || { echo "a root release.yml that publishes nothing was reported under release: none" >&2; exit 1; }
+"$root/scaffold/ckinit.php" --update "$none" >/dev/null
+grep -q 'name: Docs' "$none/.github/workflows/release.yml" \
+  || { echo "--update touched a root release.yml that publishes nothing" >&2; exit 1; }
 
 # A repository root that is neither an extension nor a monorepo stays an error.
 mkdir -p "$work/empty-root"
