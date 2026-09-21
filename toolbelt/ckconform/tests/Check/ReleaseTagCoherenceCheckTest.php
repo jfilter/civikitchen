@@ -41,6 +41,15 @@ final class ReleaseTagCoherenceCheckTest extends CheckTestCase
         );
     }
 
+    public function testSilentWhenTheRepoDeclaresNoReleases(): void
+    {
+        // A fixture below the root of a released repository sees that
+        // repository's tags; a repo that publishes nothing has none to order.
+        $context = $this->released('0.1.0', 'v1.0.0');
+        $this->write('civikitchen.yaml', $this->policyFixture("release=none -- fixture, never published\n"));
+        $this->assertSilent($this->run_(new ReleaseTagCoherenceCheck(), $context));
+    }
+
     public function testComparesTheHighestTagNotTheNearestOne(): void
     {
         $context = $this->released('1.0.0', 'v2.0.0');

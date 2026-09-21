@@ -22,6 +22,9 @@ use CiviKitchen\Ckconform\SemVer;
  * under what is already published, so no consumer ever receives it as an
  * update. The comparison is SemVer precedence against the highest reachable
  * tag; a tag or version outside SemVer is left to version-format.
+ *
+ * A repo that declares `release: none` publishes nothing, so no tag it can
+ * see has a version to be ordered against.
  */
 final class ReleaseTagCoherenceCheck implements Check
 {
@@ -33,7 +36,7 @@ final class ReleaseTagCoherenceCheck implements Check
     public function run(Context $context, Reporter $reporter): void
     {
         $version = $context->infoVersion();
-        if ($version === '') {
+        if ($version === '' || $context->policyValue('release') !== null) {
             return;
         }
 
