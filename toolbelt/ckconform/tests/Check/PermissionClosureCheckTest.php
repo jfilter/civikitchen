@@ -487,6 +487,7 @@ final class PermissionClosureCheckTest extends CheckTestCase
             'myext.php' => self::HOOK,
             'Civi/Api4/Thing.php' => <<<'PHP'
                 <?php
+                namespace Civi\Api4;
                 class Thing {
                   public static function permissions(): array {
                     return [
@@ -509,6 +510,7 @@ final class PermissionClosureCheckTest extends CheckTestCase
             'myext.php' => self::HOOK,
             'Civi/Api4/Thing.php' => <<<'PHP'
                 <?php
+                namespace Civi\Api4;
                 class Thing {
                   public static function permissions() {
                     $permissions = \CRM_Core_Permission::getEntityActionPermissions()['default'];
@@ -534,6 +536,30 @@ final class PermissionClosureCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'schema/Role.entityType.php' => "<?php\nreturn ['getFields' => fn() => ['permissions' => ['title' => 'Permissions', 'sql_type' => 'text']]];\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    public function testAPermissionsMethodOutsideApi4IsNoActionMap(): void
+    {
+        $context = $this->repo([
+            'CRM/Myext/Page/Thing.php' => <<<'PHP'
+                <?php
+                namespace Civi\Myext;
+                class Thing {
+                  public function permissions(): array {
+                    return ['label' => ['Some page title']];
+                  }
+                }
+                PHP,
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    public function testANestedPermissionsKeyInAnAngularModuleIsNotRead(): void
+    {
+        $context = $this->repo([
+            'ang/myext.ang.php' => "<?php\nreturn ['js' => ['ang/myext.js'], 'settings' => ['permissions' => ['Some label text']]];\n",
         ], git: true);
         $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
     }

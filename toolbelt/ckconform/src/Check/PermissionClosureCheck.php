@@ -202,7 +202,7 @@ final class PermissionClosureCheck implements Check
             } elseif (str_ends_with($file, '.php')) {
                 $tokens = $this->tokens($contents);
                 array_push($defined, ...$this->definedIn($tokens));
-                $permissions = $this->fromPhp($tokens);
+                $permissions = $this->fromPhp($tokens, str_ends_with($file, '.ang.php'));
             } elseif (str_ends_with($file, '.aff.json')) {
                 $permissions = $this->fromAffJson($contents);
             }
@@ -356,7 +356,7 @@ final class PermissionClosureCheck implements Check
      * @param  list<\PhpToken> $tokens
      * @return list<string>
      */
-    private function fromPhp(array $tokens): array
+    private function fromPhp(array $tokens, bool $angularModule): array
     {
         $found = [];
         foreach (array_keys($tokens) as $i) {
@@ -372,7 +372,7 @@ final class PermissionClosureCheck implements Check
             }
         }
 
-        array_push($found, ...$this->permissionSpecs($tokens));
+        array_push($found, ...$this->permissionSpecs($tokens, $angularModule));
 
         return array_values(array_filter(
             array_map('trim', $found),
@@ -408,21 +408,23 @@ final class PermissionClosureCheck implements Check
      * @param  list<\PhpToken> $tokens
      * @return list<string>
      */
-    private function permissionSpecs(array $tokens): array
+    private function permissionSpecs(array $tokens, bool $angularModule): array
     {
         $count = count($tokens);
         $found = [];
+        $depth = 0;
         for ($i = 0; $i + 2 < $count; $i++) {
-            if ($tokens[$i]->is(["'permission'", '"permission"', "'permissions'", '"permissions"'])
-                && $tokens[$i + 1]->is(T_DOUBLE_ARROW)
-            ) {
+            $depth += $tokens[$i]->is(self::OPENERS) ? 1 : ($tokens[$i]->is([']', ')', '}']) ? -1 : 0);
+            $plural = $tokens[$i]->is(["'permissions'", '"permissions"'])
+                && (!$angularModule || $depth === 1);
+            if (($plural || $tokens[$i]->is(["'permission'", '"permission"'])) && $tokens[$i + 1]->is(T_DOUBLE_ARROW)) {
                 array_push($found, ...$this->valueLiterals($tokens, $i + 2));
             }
         }
 
         // An APIv4 entity's permissions(): action name => permission list,
         // returned as a literal or assigned as $permissions['action'] = [...].
-        $body = $this->functionBodies($tokens, '/^permissions$/i');
+        $body = $this->inNamespace($tokens, 'Civi\\Api4\\') ? $this->functionBodies($tokens, '/^permissions$/i') : [];
         foreach (array_keys($body) as $i) {
             if (self::tokenIs($body, $i, T_CONSTANT_ENCAPSED_STRING) && self::tokenIs($body, $i + 1, T_DOUBLE_ARROW)) {
                 array_push($found, ...$this->valueLiterals($body, $i + 2));
@@ -434,6 +436,24 @@ final class PermissionClosureCheck implements Check
         }
 
         return $found;
+    }
+
+    /**
+     * Whether the file declares a namespace starting with $prefix.
+     *
+     * @param list<\PhpToken> $tokens
+     */
+    private function inNamespace(array $tokens, string $prefix): bool
+    {
+        foreach ($tokens as $i => $token) {
+            if ($token->is(T_NAMESPACE) && self::tokenIs($tokens, $i + 1, [T_NAME_QUALIFIED, T_STRING])
+                && str_starts_with(ltrim($tokens[$i + 1]->text, '\\') . '\\', $prefix)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
