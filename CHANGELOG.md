@@ -55,6 +55,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Changed
 
+- `ckcreate` seeds `composer.json` with `phpunit/phpunit` in `require-dev`,
+  which the seeded `phpstan-tests.neon.dist` needs to resolve `TestCase`.
 - `ckconform` check `release-tags` prints an `ok` line when it evaluated the
   history and found nothing, so a pass is distinguishable from a skipped run.
 - **Breaking:** `ckconform` check `release-tag-coherence` also fails when
@@ -62,6 +64,7 @@ except that a break the consumers are adjusted for ships as a minor, marked
   (SemVer 2.0 precedence, pre-releases included; non-SemVer tags are ignored).
   A release from that state sorts under the existing tag. Release a version
   above the tag named in the message.
+  A repo declaring `release: none` is not evaluated.
 - **Breaking:** `.github/workflows/release.yml`, the caller of
   `extension-release.yml`, is a template-managed file with the trigger for
   plain and pre-release tags. The template drift job reports a repo without it

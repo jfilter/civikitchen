@@ -21,3 +21,8 @@ scenario:
     - lifecycle
     - smarty
     - taint
+
+policy:
+  release:
+    mode: none
+    reason: fixture for the monorepo self-test, never published

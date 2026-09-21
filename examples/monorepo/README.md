@@ -20,9 +20,10 @@ of the same checkout.
   subdirectories only) and judges the workflow file as a whole. The
   several-extensions checks are covered by `ckconform`'s own fixtures; this
   tree exercises the workflow.
-- Neither example carries a civix scaffold: no `<civix><format>`, no
-  `*.civix.php`, and the classloader for `Civi\` is declared in `info.xml`.
-  The addon's class uses the base's, which only resolves once the base is
+- Both examples carry a civix scaffold like any extension the CI gates
+  (`ckcivix --check` fails without one), and declare `release: none`: they
+  are fixtures, and the tags they can see are this repository's.
+- The addon's class uses the base's, which only resolves once the base is
   installed in the same site.
 - The root-only files (`renovate.json`, `.github/workflows/ci.yml`) belong to
   the repository, so neither extension directory carries one. The caller here

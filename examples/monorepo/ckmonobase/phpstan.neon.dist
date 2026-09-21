@@ -23,6 +23,8 @@ parameters:
 	paths:
 		- Civi
 		- ckmonobase.php
+	scanFiles:
+		- ckmonobase.civix.php
 	# scanDirectories:
 	#	# phpstanBootstrap.php already autoloads core's own ext packages and
 	#	# every extension in info.xml <requires>. Add here what neither

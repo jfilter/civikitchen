@@ -20,4 +20,8 @@
   <classloader>
     <psr4 prefix="Civi\" path="Civi"/>
   </classloader>
+  <civix>
+    <namespace>CRM/Ckmonobase</namespace>
+    <format>25.10.2</format>
+  </civix>
 </extension>
