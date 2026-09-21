@@ -371,6 +371,44 @@ final class SharedPhpTest extends TestCase
         self::assertContains('org.example.staged/ang/app.bundle.js', $entries);
     }
 
+    public function testReleaseFromAnExtensionDirectoryArchivesThatExtensionAlone(): void
+    {
+        $repository = $this->temporary . '/monorepo';
+        $this->write($repository, 'base/info.xml', '<extension key="org.example.base"><file>base</file><version>1.0.0</version></extension>');
+        $this->write($repository, 'base/base.php', '<?php');
+        $this->write($repository, 'base/tests/BaseTest.php', '<?php');
+        $this->write($repository, 'base/.gitignore', "/vendor/\n");
+        $this->write($repository, 'addon/info.xml', '<extension key="org.example.addon"><file>addon</file><version>1.0.0</version></extension>');
+        $this->write($repository, 'addon/addon.php', '<?php');
+        $this->git($repository, 'init', '-q');
+        $this->git($repository, 'add', '-A');
+        $this->git($repository, '-c', 'user.name=ck', '-c', 'user.email=ck@example.org', 'commit', '-q', '-m', 'fixture');
+        // The composer_install path: vendor/ added to the index, archived from the written tree.
+        $this->write($repository, 'base/vendor/autoload.php', '<?php');
+        $this->git($repository . '/base', 'add', '--force', 'vendor');
+        $tree = $this->git($repository . '/base', 'write-tree');
+
+        foreach (['HEAD' => false, $tree => true] as $ref => $vendored) {
+            $output = $this->temporary . '/dist-' . ($vendored ? 'tree' : 'head');
+            $status = $this->inRepository($repository . '/base', static fn (): int => (new ReleaseCommand(dirname(__DIR__, 2)))
+                ->run(['dist', '--version', 'v1.0.0', '--ref', (string) $ref, '--output', $output]));
+            self::assertSame(0, $status, (string) $ref);
+            $entries = [];
+            $zip = new ZipArchive();
+            self::assertTrue($zip->open($output . '/org.example.base-1.0.0.zip'));
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $entries[] = (string) $zip->getNameIndex($index);
+            }
+            $zip->close();
+            self::assertContains('org.example.base/info.xml', $entries);
+            self::assertContains('org.example.base/base.php', $entries);
+            self::assertSame($vendored, in_array('org.example.base/vendor/autoload.php', $entries, true));
+            foreach ($entries as $entry) {
+                self::assertDoesNotMatchRegularExpression('#addon|/base/|/tests/#', $entry);
+            }
+        }
+    }
+
     public function testVerifyRequiresEveryDeclaredBuildOutputInTheArchive(): void
     {
         $repository = $this->stagedRepository(['ang/app.bundle.js']);
