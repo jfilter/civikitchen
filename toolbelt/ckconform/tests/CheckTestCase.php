@@ -69,8 +69,7 @@ abstract class CheckTestCase extends TestCase
         }
 
         if ($git) {
-            $this->git('init -q');
-            $this->git('add -A');
+            $this->gitInit();
         }
 
         return new Context($this->dir, $this->coreDir());
@@ -94,8 +93,7 @@ abstract class CheckTestCase extends TestCase
                 file_put_contents($full, $contents);
             }
         }
-        $this->git('init -q');
-        $this->git('add -A');
+        $this->gitInit();
 
         return new Context($this->dir . '/extensions/example', $this->coreDir());
     }
@@ -216,6 +214,20 @@ abstract class CheckTestCase extends TestCase
      * no global config, stays green — which is the worst version of a flaky
      * test. Point both the global and system config at nowhere instead.
      */
+    /**
+     * Fixture repositories are created without git's background maintenance:
+     * it runs detached after a commit and removing its lock file mid-teardown
+     * aborts the recursive delete.
+     */
+    private function gitInit(): void
+    {
+        $this->git('init -q');
+        foreach (['maintenance.auto false', 'gc.auto 0', 'gc.autoDetach false'] as $setting) {
+            $this->git('config ' . $setting);
+        }
+        $this->git('add -A');
+    }
+
     protected function git(string $args, string $env = ''): void
     {
         exec(
