@@ -670,7 +670,8 @@ jobs:
           # Lockstep: every archive carries one version, and a tag names that version.
           versions=()
           for zip in "$CK_DIST"/*.zip; do
-            info=$(unzip -Z1 "$zip" | grep -E '^[^/]+/info\.xml$')
+            info=$(unzip -Z1 "$zip" | grep -E '^[^/]+/info\.xml$' || true)
+            [ -n "$info" ] || { echo "${zip##*/} has no <key>/info.xml at its top level — not an extension archive" >&2; exit 1; }
             unzip -p "$zip" "$info" > "$RUNNER_TEMP/release-info.xml"
             versions+=("$(php .civikitchen-ci/toolbelt/bin/ck internal xml-field "$RUNNER_TEMP/release-info.xml" version)")
           done

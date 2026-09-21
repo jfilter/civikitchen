@@ -170,24 +170,65 @@ archive() {
   printf '<extension key="%s"><version>%s</version></extension>\n' "$1" "$2" > "$work/src/$1/info.xml"
   (cd "$work/src" && zip -q "$dist/$1-$2.zip" "$1/info.xml")
 }
-printf '#!/usr/bin/env bash\nprintf "refs/tags/v0.9.0\\n"\n' > "$work/bin/gh"
+# The gh stub logs every call; `api` lists $GH_TAGS, `release view` finds a
+# release only when GH_RELEASE_EXISTS=1.
+cat > "$work/bin/gh" <<'SH'
+#!/usr/bin/env bash
+echo "$*" >> "$GH_LOG"
+case "$1 ${2:-}" in
+  'api '*) printf '%s\n' $GH_TAGS ;;
+  'release view') [ "${GH_RELEASE_EXISTS:-0}" = 1 ] ;;
+esac
+SH
 chmod +x "$work/bin/gh"
+# publish <ref> <dry run> [draft]: runs the step, $calls holds the gh calls.
+publish() {
+  : > "$work/gh.log"
+  PATH="$work/bin:$PATH" GH_LOG="$work/gh.log" GITHUB_REPOSITORY=example-org/mono \
+    GITHUB_REF="$1" GITHUB_REF_NAME="${1##*/}" CK_DRY_RUN="$2" CK_DRAFT="${3:-false}" CK_DIST=$dist run_step
+  calls=$(cat "$work/gh.log")
+}
+export GH_TAGS='refs/tags/v0.9.0'
 archive org.example.base 1.0.0
 archive org.example.addon 1.0.0
-PATH="$work/bin:$PATH" GITHUB_REPOSITORY=example-org/mono GITHUB_REF=refs/heads/main \
-  CK_DRY_RUN=true CK_DRAFT=false CK_DIST=$dist run_step
+publish refs/heads/main true
 [ "$rc" -eq 0 ] || fail "dry-run publish failed: $out"
 case "$out" in *'latest=true'*'dry run: release v1.0.0 would carry'*) ;; *) fail "dry-run publish: $out" ;; esac
+case "$calls" in *release*) fail "a dry run called gh release: $calls" ;; esac
 
-PATH="$work/bin:$PATH" GITHUB_REPOSITORY=example-org/mono GITHUB_REF=refs/tags/v1.0.1 GITHUB_REF_NAME=v1.0.1 \
-  CK_DRY_RUN=false CK_DRAFT=false CK_DIST=$dist run_step
+publish refs/tags/v1.0.1 false
 [ "$rc" -ne 0 ] || fail "archives of 1.0.0 were published under v1.0.1"
+case "$out" in *'the archives carry 1.0.0, but the tag is v1.0.1'*) ;; *) fail "tag mismatch: $out" ;; esac
 
-rm "$dist/org.example.addon-1.0.0.zip"
+# A real run: create with the computed flags, or replace the assets of an existing release.
+publish refs/tags/v1.0.0 false
+[ "$rc" -eq 0 ] || fail "publish failed: $out"
+grep -qx "release create v1.0.0 --verify-tag --title v1.0.0 --generate-notes --latest=true $dist/org.example.addon-1.0.0.zip $dist/org.example.base-1.0.0.zip" \
+  "$work/gh.log" || fail "unexpected release create: $calls"
+GH_TAGS='refs/tags/v0.9.0 refs/tags/v2.0.0' publish refs/tags/v1.0.0 false
+grep -q '^release create v1.0.0 .*--latest=false ' "$work/gh.log" || fail "an older version took Latest: $calls"
+publish refs/tags/v1.0.0 false true
+grep -q '^release create v1.0.0 .*--generate-notes --draft ' "$work/gh.log" || fail "a draft was not created as one: $calls"
+case "$calls" in *--latest*) fail "a draft was given Latest: $calls" ;; esac
+GH_RELEASE_EXISTS=1 publish refs/tags/v1.0.0 false
+grep -qx "release upload v1.0.0 $dist/org.example.addon-1.0.0.zip $dist/org.example.base-1.0.0.zip --clobber" "$work/gh.log" \
+  || fail "an existing release did not get its assets replaced: $calls"
+case "$calls" in *'release create'*) fail "an existing release was created again: $calls" ;; esac
+
+rm "$dist"/*.zip
+archive org.example.base 1.1.0-beta.1
+publish refs/tags/v1.1.0-beta.1 false
+grep -q '^release create v1.1.0-beta.1 .*--latest=false --prerelease ' "$work/gh.log" || fail "a pre-release was not flagged: $calls"
+
 archive org.example.addon 1.1.0
-PATH="$work/bin:$PATH" GITHUB_REPOSITORY=example-org/mono GITHUB_REF=refs/heads/main \
-  CK_DRY_RUN=true CK_DRAFT=false CK_DIST=$dist run_step
+publish refs/heads/main true
 [ "$rc" -ne 0 ] || fail "archives of two versions passed as one release"
-case "$out" in *'different versions (1.0.0, 1.1.0)'*) ;; *) fail "version mismatch: $out" ;; esac
+case "$out" in *'different versions (1.1.0, 1.1.0-beta.1)'*) ;; *) fail "version mismatch: $out" ;; esac
+
+rm "$dist"/*.zip
+printf 'x' > "$work/src/readme.txt"
+(cd "$work/src" && zip -q "$dist/stray.zip" readme.txt)
+publish refs/heads/main true
+case "$out" in *'stray.zip has no <key>/info.xml at its top level'*) ;; *) fail "archive without info.xml: $out" ;; esac
 
 echo "release step tests passed"
