@@ -13,8 +13,9 @@ use CiviKitchen\Ckconform\Reporter;
  * branch, which moves under it, and no site ever installs a verified archive.
  *
  * The caller is a template-managed file, so `ckinit --update` adopts it; the
- * only way out is `release: none` with a reason. A repository of several
- * extensions has no release caller yet and is not evaluated.
+ * only way out is `release: none` with a reason. In a repository of several
+ * extensions the job whose working_directory is this extension builds it, and a
+ * publish job needing that job releases every extension under one tag.
  */
 final class ReleaseWorkflowCheck implements Check
 {
@@ -40,12 +41,6 @@ final class ReleaseWorkflowCheck implements Check
             return;
         }
 
-        if ($context->isMonorepo()) {
-            $reporter->warn("{$this->name()} not evaluated: releases of multi-extension repositories are not supported yet");
-
-            return;
-        }
-
         $callers = $context->scopedJobsCalling(Context::SHARED_RELEASE);
         if (count($callers) > 1) {
             $reporter->fail(
@@ -56,6 +51,19 @@ final class ReleaseWorkflowCheck implements Check
             return;
         }
         if ($callers !== []) {
+            if ($context->isMonorepo()) {
+                $this->judgeLockstep($context, $reporter, $callers[0]);
+            }
+
+            return;
+        }
+        if ($context->isMonorepo()) {
+            $reporter->fail(
+                'no job calls ' . Context::SHARED_RELEASE . ' with working_directory: ' . $context->extensionDirectory()
+                . ' — the repository\'s release leaves this extension out; run ckinit --update on the repository root, '
+                . 'or declare release: none with a reason; see docs/extension-releases.md'
+            );
+
             return;
         }
 
@@ -64,5 +72,35 @@ final class ReleaseWorkflowCheck implements Check
             . 'so a consumer has no immutable ref to pin and installs a moving branch instead; '
             . 'run ckinit --update, or declare release: none with a reason; see docs/extension-releases.md'
         );
+    }
+
+    /** One tag, one release: this extension's job only builds, a publish job needs it. */
+    private function judgeLockstep(Context $context, Reporter $reporter, string $label): void
+    {
+        $at = (int) strrpos($label, ':');
+        [$workflow, $name] = [substr($label, 0, $at), substr($label, $at + 1)];
+        $stage = self::input($context->scopedJobs()[$label], 'stage') ?? 'release';
+        if ($stage !== 'build') {
+            $reporter->fail(
+                "{$label} runs stage: " . (is_scalar($stage) ? (string) $stage : '?') . ' — in a repository of several '
+                . 'extensions each extension\'s job runs stage: build, and one stage: publish job releases them together'
+            );
+
+            return;
+        }
+        foreach ($context->jobsCalling(Context::SHARED_RELEASE)[$workflow] ?? [] as $job) {
+            if (self::input($job, 'stage') === 'publish' && in_array($name, (array) ($job['needs'] ?? []), true)) {
+                return;
+            }
+        }
+        $reporter->fail(
+            "no stage: publish job in {$workflow} needs {$name} — this extension's archive would be missing from the release"
+        );
+    }
+
+    /** @param array<mixed> $job */
+    private static function input(array $job, string $name): mixed
+    {
+        return is_array($job['with'] ?? null) ? ($job['with'][$name] ?? null) : null;
     }
 }

@@ -441,17 +441,29 @@ final class Context
      */
     public function callsSharedRelease(): bool
     {
+        return $this->jobsCalling(self::SHARED_RELEASE) !== [];
+    }
+
+    /**
+     * Every job of every workflow whose parsed `uses:` calls the reusable
+     * workflow $workflowFile, whatever extension it runs: workflow => job name => job.
+     *
+     * @return array<string, array<string, array<mixed>>>
+     */
+    public function jobsCalling(string $workflowFile): array
+    {
+        $callers = [];
         foreach ($this->workflows() as $workflow) {
             $jobs = $this->workflowData($workflow)['jobs'] ?? null;
-            foreach (is_array($jobs) ? $jobs : [] as $job) {
+            foreach (is_array($jobs) ? $jobs : [] as $name => $job) {
                 $uses = is_array($job) ? ($job['uses'] ?? null) : null;
-                if (is_string($uses) && basename(explode('@', $uses, 2)[0]) === self::SHARED_RELEASE) {
-                    return true;
+                if (is_string($uses) && basename(explode('@', $uses, 2)[0]) === $workflowFile) {
+                    $callers[$workflow][(string) $name] = $job;
                 }
             }
         }
 
-        return false;
+        return $callers;
     }
 
     /**
