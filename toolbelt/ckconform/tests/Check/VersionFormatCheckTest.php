@@ -40,7 +40,9 @@ final class VersionFormatCheckTest extends CheckTestCase
     /** @dataProvider unreleasable */
     public function testFailsOnAVersionNoReleaseCanCarry(string $version): void
     {
-        $this->assertFails($this->run_(new VersionFormatCheck(), $this->versioned($version)), "'{$version}' is not X.Y.Z");
+        $reporter = $this->run_(new VersionFormatCheck(), $this->versioned($version));
+        $this->assertFails($reporter, "'{$version}' is not X.Y.Z");
+        $this->assertFails($reporter, 'set <version> to a SemVer version such as 0.1.0 and release it');
     }
 
     public function testFailsWithoutAVersion(): void

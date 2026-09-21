@@ -40,7 +40,8 @@ final class VersionFormatCheck implements Check
         $shown = $version === '' ? 'is missing' : "'{$version}' is not X.Y.Z or X.Y.Z-<pre-release>";
         $reporter->fail(
             "info.xml <version> {$shown} (SemVer 2.0, no leading zeros, no build metadata) — "
-            . 'the release workflow accepts no other tag, so this version can never be released'
+            . 'the release workflow accepts no other tag, so this version can never be released; '
+            . 'set <version> to a SemVer version such as 0.1.0 and release it'
         );
     }
 }

@@ -90,6 +90,9 @@ A caller written before the markers is replaced whole on `--update`; move its
 
 Then, once:
 
+- give `info.xml` a SemVer `<version>` (`X.Y.Z` or `X.Y.Z-<pre-release>`).
+  `civix generate:module` writes `1.0`, which `ckconform`'s `version-format`
+  fails; set it to `0.1.0` and release that. `ckcreate` does this for you,
 - add `.ckrelease/` to `.gitignore` (where `ckrelease dist` writes locally),
 - run `ckrelease check` and fix whatever it says before the first tag.
 
