@@ -23,6 +23,15 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- `ckcoverage` and `ckmutate` read a policy value of `0` as configured: a
+  `policy.coverage.minimum` of `0` is a floor that is met, no longer an absent
+  key reported as "reporting only".
+- `ckcoverage` fails with its own message when the run executed no test, and
+  with a second one when every test it listed was skipped; phpunit exits 0 on
+  "No tests executed!" and on a suite of skips alike. A `--log-junit` the caller
+  passes is read instead of a second log of our own.
+- `policy.tests` with `mode: optional` also opts a repo out of `ckcoverage`
+  when it carries a phpunit config, which every civix scaffold does.
 - The git-reading toolbelt libraries work from an extension subdirectory of a
   multi-extension repository: `cklint`'s changed-file list is scoped to the
   extension and printed relative to it, and the `safe.directory` guard names the

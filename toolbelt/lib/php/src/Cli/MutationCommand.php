@@ -110,7 +110,11 @@ final class MutationCommand implements Command
         $binary = is_executable($this->checkoutRoot . '/toolbelt/bin/ckconform')
             ? $this->checkoutRoot . '/toolbelt/bin/ckconform' : 'ckconform';
         $result = $this->runner->capture([$binary, '--policy', $key]);
-        return $result['status'] === 0 ? trim(strtok($result['output'], "\n") ?: '') : '';
+        if ($result['status'] !== 0) {
+            return '';
+        }
+        $first = strtok($result['output'], "\n");
+        return $first === false ? '' : trim($first);
     }
 
     private function findExecutable(string $name): ?string

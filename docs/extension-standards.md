@@ -663,7 +663,10 @@ in the history is not.
 
 - Every extension with PHP source needs `tests/phpunit`. A config-only
   extension may opt out in `civikitchen.yaml` — `policy.tests` with `mode: optional` and a reason — and
-  the reason is not optional.
+  the reason is not optional. The opt-out holds whether or not the repo carries
+  a phpunit config: the civix scaffold ships one, so `ckcoverage` treats a
+  declared opt-out as nothing to measure rather than demanding the config be
+  deleted.
 - `phpunit.xml.dist` must declare a `<coverage>` section scoped to real
   extension code (exclude the civix shim and DAO/BAO boilerplate). Without it
   `--coverage-text` measures nothing while still looking like a passing gate.
@@ -699,8 +702,13 @@ in the history is not.
 - CI runs the suite **with** coverage: `ckcoverage` (or at minimum
   `phpunit --coverage-text`). `ckcoverage` runs through `ckphpunit`, so the
   canary above comes with it; nothing in the repo has to reference it.
+- `ckcoverage` fails when the run executed no test at all, and when every test
+  it listed was skipped — phpunit prints "No tests executed!" or a suite of
+  skips and exits 0 either way, which is not a passing suite. Only
+  `policy.tests` with `mode: optional` makes such a run acceptable.
 - `ckcoverage` reports line coverage and fails below the `policy.coverage.minimum` floor
-  in `civikitchen.yaml`. Adopt it in that order: **measure first, set the floor to
+  in `civikitchen.yaml`; `minimum: 0` is a floor that is always met, not an
+  absent key. Adopt it in that order: **measure first, set the floor to
   what you actually have, then ratchet it up.** A floor nobody measured only
   teaches people to ignore a red build — and a floor must never be lowered to
   turn one green.

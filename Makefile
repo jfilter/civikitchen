@@ -215,7 +215,7 @@ test-parity: ## Toolbelt components vs. Dockerfile COPY parity
 test-vendored-paths: ## civikitchen.yaml vendored_paths file-list exclusion
 	bash tests/toolbelt/test-vendored-paths.sh
 
-test-ckcoverage: ## ckcoverage uses collision-free temporary logs
+test-ckcoverage: $(SCENARIO_YAML_STAMP) ## ckcoverage temporary logs, coverage floor, tests opt-out
 	bash tests/toolbelt/test-ckcoverage.sh
 
 # A doctor that cannot fail is worse than none: it reports a healthy host while
