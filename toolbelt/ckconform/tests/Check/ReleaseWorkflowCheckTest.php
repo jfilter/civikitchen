@@ -66,13 +66,60 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
             . "    with:\n      stage: publish\n";
     }
 
-    private function monorepoRelease(string $caller): \CiviKitchen\Ckconform\Context
+    private function monorepoRelease(string $caller, bool $exampleRequiresBase = false): \CiviKitchen\Ckconform\Context
     {
+        $requires = $exampleRequiresBase ? '<requires><ext>base</ext></requires>' : '';
+
         return $this->monorepoExtension(
             ['.github/workflows/release.yml' => $caller],
-            [],
+            ['info.xml' => $this->infoXml(extra: $requires)],
             ['info.xml' => $this->infoXml(key: 'base')],
         );
+    }
+
+    /** A release job: $name building $directory at $stage, needing $needs. */
+    private static function releaseJob(string $name, string $stage, string $needs = '', string $directory = ''): string
+    {
+        return "  {$name}:\n" . ($needs === '' ? '' : "    needs: {$needs}\n")
+            . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n"
+            . "    with:\n" . ($directory === '' ? '' : "      working_directory: {$directory}\n")
+            . "      stage: {$stage}\n";
+    }
+
+    public function testABuildJobNeedsTheBuildJobsOfTheSameRepositoryExtensionsItRequires(): void
+    {
+        $caller = "name: Release\njobs:\n" . self::releaseJob('base', 'build', directory: 'base')
+            . self::releaseJob('example', 'build', '[base]', 'example')
+            . self::releaseJob('publish', 'publish', '[base, example]');
+        $this->assertSilent($this->run_(new ReleaseWorkflowCheck(), $this->monorepoRelease($caller, true)));
+    }
+
+    public function testABuildJobThatDoesNotNeedTheBuildOfARequiredExtensionFails(): void
+    {
+        $this->assertFails(
+            $this->run_(new ReleaseWorkflowCheck(), $this->monorepoRelease($this->rootReleaseCaller(), true)),
+            'release.yml:example does not need base, which builds base it requires',
+        );
+    }
+
+    public function testARequiredExtensionWithoutABuildJobFails(): void
+    {
+        $caller = "name: Release\njobs:\n" . self::releaseJob('example', 'build', directory: 'example')
+            . self::releaseJob('publish', 'publish', '[example]');
+        $this->assertFails(
+            $this->run_(new ReleaseWorkflowCheck(), $this->monorepoRelease($caller, true)),
+            'example requires base, but no stage: build job in ../.github/workflows/release.yml builds base',
+        );
+    }
+
+    public function testNeedsAreFollowedThroughIntermediateJobs(): void
+    {
+        $gate = "  gate:\n    needs: [base]\n    runs-on: ubuntu-latest\n    steps: [{run: 'true'}]\n";
+        $collect = "  collect:\n    needs: [base, example]\n    runs-on: ubuntu-latest\n    steps: [{run: 'true'}]\n";
+        $caller = "name: Release\njobs:\n" . self::releaseJob('base', 'build', directory: 'base') . $gate
+            . self::releaseJob('example', 'build', 'gate', 'example') . $collect
+            . self::releaseJob('publish', 'publish', 'collect');
+        $this->assertSilent($this->run_(new ReleaseWorkflowCheck(), $this->monorepoRelease($caller, true)));
     }
 
     public function testAMultiExtensionRepositoryPassesWithTheLockstepCaller(): void

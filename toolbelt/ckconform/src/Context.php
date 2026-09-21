@@ -445,6 +445,18 @@ final class Context
     }
 
     /**
+     * A workflow's parsed jobs, name => job; empty when it does not parse.
+     *
+     * @return array<array-key, array<mixed>>
+     */
+    public function jobsOf(string $workflow): array
+    {
+        $jobs = $this->workflowData($workflow)['jobs'] ?? null;
+
+        return is_array($jobs) ? array_filter($jobs, 'is_array') : [];
+    }
+
+    /**
      * Every job of every workflow whose parsed `uses:` calls the reusable
      * workflow $workflowFile, whatever extension it runs: workflow => job name => job.
      *
@@ -1025,7 +1037,7 @@ final class Context
      *
      * @param array<mixed> $job
      */
-    private function jobDirectory(array $job): string
+    public function jobDirectory(array $job): string
     {
         foreach ([['with', 'working_directory'], ['defaults', 'run', 'working-directory']] as $path) {
             $value = $job;

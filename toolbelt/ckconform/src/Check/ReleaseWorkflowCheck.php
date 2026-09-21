@@ -74,7 +74,10 @@ final class ReleaseWorkflowCheck implements Check
         );
     }
 
-    /** One tag, one release: this extension's job only builds, a publish job needs it. */
+    /**
+     * One tag, one release: this extension's job only builds, needs the build
+     * jobs of the same-repository extensions it requires, and a publish job needs it.
+     */
     private function judgeLockstep(Context $context, Reporter $reporter, string $label): void
     {
         $at = (int) strrpos($label, ':');
@@ -88,14 +91,76 @@ final class ReleaseWorkflowCheck implements Check
 
             return;
         }
-        foreach ($context->jobsCalling(Context::SHARED_RELEASE)[$workflow] ?? [] as $job) {
-            if (self::input($job, 'stage') === 'publish' && in_array($name, (array) ($job['needs'] ?? []), true)) {
+        $jobs = $context->jobsOf($workflow);
+        $callers = $context->jobsCalling(Context::SHARED_RELEASE)[$workflow] ?? [];
+        foreach ($this->requiredSiblings($context) as $key => $directory) {
+            $builders = array_keys(array_filter(
+                $callers,
+                static fn (array $job): bool => self::input($job, 'stage') === 'build' && $context->jobDirectory($job) === $directory,
+            ));
+            if ($builders === []) {
+                $reporter->fail(
+                    "{$name} requires {$key}, but no stage: build job in {$workflow} builds {$directory} — "
+                    . 'the smoke test installs it from this run, so it has to release in lockstep'
+                );
+            } elseif (!self::reaches($jobs, $name, (string) $builders[0])) {
+                $reporter->fail(
+                    "{$label} does not need {$builders[0]}, which builds {$key} it requires — "
+                    . 'its smoke test would look for that archive before it exists'
+                );
+            }
+        }
+        foreach ($callers as $publisher => $job) {
+            if (self::input($job, 'stage') === 'publish' && self::reaches($jobs, (string) $publisher, $name)) {
                 return;
             }
         }
         $reporter->fail(
             "no stage: publish job in {$workflow} needs {$name} — this extension's archive would be missing from the release"
         );
+    }
+
+    /**
+     * Same-repository extensions this one requires: key => directory.
+     *
+     * @return array<string, string>
+     */
+    private function requiredSiblings(Context $context): array
+    {
+        $own = $context->extensionDirectory();
+        $directories = [];
+        foreach ($context->repositoryExtensions() as $directory => $info) {
+            if ((string) $directory !== $own) {
+                $directories[trim((string) $info['key'])] = (string) $directory;
+            }
+        }
+
+        return array_intersect_key($directories, array_flip($context->requiredExtensions()));
+    }
+
+    /**
+     * Whether $from needs $to, directly or through the jobs it needs.
+     *
+     * @param array<array-key, array<mixed>> $jobs
+     */
+    private static function reaches(array $jobs, string $from, string $to): bool
+    {
+        $seen = [];
+        $queue = [$from];
+        while ($queue !== []) {
+            foreach ((array) ($jobs[array_shift($queue)]['needs'] ?? []) as $need) {
+                if (!is_string($need) || isset($seen[$need])) {
+                    continue;
+                }
+                if ($need === $to) {
+                    return true;
+                }
+                $seen[$need] = true;
+                $queue[] = $need;
+            }
+        }
+
+        return false;
     }
 
     /** @param array<mixed> $job */

@@ -204,7 +204,9 @@ lines outside its managed blocks belong to the repository. `ckinit` never
 overwrites a root `release.yml` without managed markers, and reports a second
 workflow calling `extension-release.yml`. The
 `release-workflow` check fails an extension whose job is missing, runs another
-stage than `build`, or is not needed by a `stage: publish` job.
+stage than `build`, does not need the build jobs of the same-repository
+extensions it requires, or is not needed by a `stage: publish` job. A job
+needed through intermediate jobs counts as needed.
 
 [`examples/monorepo/`](../examples/monorepo/) is a two-extension tree, one
 requiring the other, that this repository's CI runs `extension-ci.yml` and a

@@ -39,8 +39,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - **Breaking:** `ckconform`'s `release-workflow` evaluates each extension of a
   repository of several extensions instead of warning "not evaluated": it
   fails when no job calls `extension-release.yml` with the extension's
-  `working_directory`, when that job runs another stage than `build`, or when
-  no `stage: publish` job needs it. The template drift check reports the root
+  `working_directory`, when that job runs another stage than `build`, when it
+  does not need the build jobs of the same-repository extensions it requires,
+  or when no `stage: publish` job needs it, directly or through other jobs. The template drift check reports the root
   `.github/workflows/release.yml` missing in the same repositories. Run
   `ckinit --update` at the root, or declare `release: none` with a reason in
   every extension that never releases.
