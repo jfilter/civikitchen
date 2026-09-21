@@ -436,6 +436,10 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
     Only the mount is checked — the entrypoint enables every directory mounted
     under the extension directory and resolves each one's `<requires>` first, so
     the order of the volume lines does not matter.
+  - `monorepo-version-lockstep`: every `info.xml` of the repository carries the
+    same `<version>` and `<releaseDate>`. One `vX.Y.Z` tag releases all of them,
+    which keeps `release-tags`, `release-tag-coherence` and the Latest
+    computation correct — but only while the numbers move together.
   - The release checks read the extension's own directory: a commit touching
     only a neighbour is no unreleased change to this extension.
 - Dev stack: `.docker/docker-compose.yml` on a civikitchen image. **Every image

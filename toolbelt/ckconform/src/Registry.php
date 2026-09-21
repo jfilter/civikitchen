@@ -32,6 +32,7 @@ final class Registry
         Check\ReleaseTagCoherenceCheck::class,
         Check\ReleaseTagsCheck::class,
         Check\UnreleasedShippedChangesCheck::class,
+        Check\MonorepoVersionLockstepCheck::class,
         Check\ConfigWithoutRunnerCheck::class,
         Check\RequiredExtensionsCheck::class,
         Check\MonorepoRequiresMountedCheck::class,
