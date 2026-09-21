@@ -12,10 +12,9 @@ use CiviKitchen\Ckconform\Reporter;
  * Without a release there is no immutable ref: a consumer can pin nothing but a
  * branch, which moves under it, and no site ever installs a verified archive.
  *
- * A warning, not a failure. Adoption is one caller workflow per repo and the
- * pipeline is deliberately not template-managed (docs/extension-releases.md),
- * so failing here would turn the fleet red for a state every unadopted repo is
- * in — the exact fleet round that decision avoids.
+ * The caller is a template-managed file, so `ckinit --update` adopts it; the
+ * only way out is `release: none` with a reason. A repository of several
+ * extensions has no release caller yet and is not evaluated.
  */
 final class ReleaseWorkflowCheck implements Check
 {
@@ -41,14 +40,20 @@ final class ReleaseWorkflowCheck implements Check
             return;
         }
 
+        if ($context->isMonorepo()) {
+            $reporter->warn("{$this->name()} not evaluated: releases of multi-extension repositories are not supported yet");
+
+            return;
+        }
+
         if ($context->scopedCallsShared(Context::SHARED_RELEASE)) {
             return;
         }
 
-        $reporter->warn(
+        $reporter->fail(
             'no release workflow (' . Context::SHARED_RELEASE . ') — nothing cuts a tagged, verified archive, '
             . 'so a consumer has no immutable ref to pin and installs a moving branch instead; '
-            . 'see docs/extension-releases.md'
+            . 'run ckinit --update, or declare release: none with a reason; see docs/extension-releases.md'
         );
     }
 }
