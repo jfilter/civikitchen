@@ -163,8 +163,9 @@ that path. The order of the volume lines does not matter.
 
 **Releases are not supported yet.** `extension-release.yml` still maps one tag
 to one `info.xml` at the repository root, and `ckinit` stamps no release
-caller, so the `release-workflow` check fails for every extension in this
-layout. Release support is planned on top of the unified release path.
+caller, so the `release-workflow` check reports itself not evaluated for every
+extension in this layout. Release support is planned on top of the unified
+release path.
 
 [`examples/monorepo/`](../examples/monorepo/) is a two-extension tree, one
 requiring the other, that this repository's CI runs `extension-ci.yml`

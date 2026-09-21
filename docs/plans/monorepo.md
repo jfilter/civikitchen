@@ -227,8 +227,9 @@ Each phase ships with the fixture that would have failed before it.
    two-extension example tree, one extension requiring the other.
 4. **Release.** `working_directory` in `extension-release.yml` and `ckrelease`,
    keyed artifact names, the single release job, and a managed release caller
-   in the root pass of `ckinit` — until then `release-workflow` fails for every
-   extension of such a repository, because nothing stamps the job it looks for.
+   in the root pass of `ckinit` — until then `release-workflow` warns "not
+   evaluated" for every extension of such a repository, and `ckinit` stamps
+   `release.yml` neither at the root nor below it.
    `ReleaseCommand` calls git without the `safe.directory` guard. After the unified release path
    has landed.
 5. **Documentation.** A "Several extensions in one repository" section in

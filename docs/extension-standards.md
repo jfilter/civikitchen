@@ -361,8 +361,17 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   installable zip (dev/CI files excluded), installs it into a fresh CiviCRM and
   publishes the GitHub release. The version lives in `info.xml` and
   `composer.json` and they are bumped together; `ckrelease check` is what says
-  so out loud. See [Releasing an extension](extension-releases.md). Not a
-  template-managed file yet, so adoption is per repo and one line.
+  so out loud. See [Releasing an extension](extension-releases.md). The caller
+  `.github/workflows/release.yml` is a template-managed file, so `ckinit
+  --update` adopts it. `ckconform`'s `release-workflow` fails when no workflow
+  calls `extension-release.yml`; the only opt-out is `policy.release: none`
+  with a reason. In a repository of several extensions it reports itself not
+  evaluated, because releasing that layout is not supported yet.
+- `info.xml` `<version>` is `X.Y.Z` or `X.Y.Z-<pre-release>`: SemVer 2.0
+  without build metadata, no leading zeros. `ckconform`'s `version-format`
+  fails on anything else — `2.2.7.1`, `1.0`, `1.3.0+build.5` — because the
+  release workflow accepts no other tag, so such a version can never be
+  released.
 - Every version the repo has moved past carries its `v<version>` tag.
   `ckconform`'s `release-tags` reads the `<version>` history of `info.xml` and
   the repo's tags: a number that was bumped through and never tagged is a
@@ -411,8 +420,8 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   that layout from the filesystem; nothing is declared in `civikitchen.yaml`.
   What changes there, and only there:
   - The workflow-reading checks (`ci-coverage`, `npm-install`,
-    `playwright-diagnostics`, `config-without-runner`, `release-workflow`, and
-    `ci-workflow`'s lint step) judge
+    `playwright-diagnostics`, `config-without-runner`, and `ci-workflow`'s lint
+    step) judge
     the job that runs *this* extension — the caller job whose
     `with.working_directory`, or the steps job whose
     `defaults.run.working-directory`, names its directory. A neighbour's job says

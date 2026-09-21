@@ -56,34 +56,59 @@ list next to it warns as well.
 
 ## Adopting it in a repo
 
-```yaml
-# .github/workflows/release.yml
-name: Release
+The caller `.github/workflows/release.yml` is a template-managed file:
 
+```bash
+/path/to/civikitchen/scaffold/ckinit.php --update .
+```
+
+writes it, and the template drift job in CI keeps it in line afterwards. The
+managed part is the trigger, the permissions and the `uses:` line:
+
+```yaml
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
-
-permissions:
-  contents: read
-
-jobs:
-  release:
-    permissions:
-      contents: write        # a called workflow can only narrow this
-    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
 ```
 
-That is the whole adoption. Then, once:
+GitHub matches a tag filter against the whole tag name, so the second pattern
+is what lets a pre-release tag (`v1.3.0-rc.1`) start a run.
+
+Inputs and secrets for the call go below the `# END CIVIKITCHEN MANAGED caller`
+marker and survive `ckinit --update`:
+
+```yaml
+# END CIVIKITCHEN MANAGED caller
+    with:
+      # The install needs a payment processor no headless site can reach.
+      smoke_test: false
+      require_changelog: true
+```
+
+A caller written before the markers is replaced whole on `--update`; move its
+`with:` and `secrets:` below the marker again and review the diff.
+
+Then, once:
 
 - add `.ckrelease/` to `.gitignore` (where `ckrelease dist` writes locally),
 - run `ckrelease check` and fix whatever it says before the first tag.
 
-The caller is intentionally *not* a template-managed file. Managed files are
-compared byte-for-byte in every repo's CI, so adding one turns the whole fleet's
-drift job red until each repo runs `ckinit --update` — a fleet round, before a
-single repo has released anything through this. Repos adopt one at a time; the
-file can be promoted into the template later, when it has earned it.
+A repo that never releases declares that instead, with the reason, and lists
+the caller as its own deviation so `ckinit` does not keep recreating it:
+
+```yaml
+policy:
+  release:
+    mode: none
+    reason: internal tooling, never installed on a site
+  template_custom:
+    paths: [.github/workflows/release.yml]
+    reason: the repo cuts no releases
+```
+
+`ckconform`'s `release-workflow` fails a repo that does neither. A repository
+of several extensions gets no release caller yet; there the check reports
+itself not evaluated.
 
 ### Inputs
 
@@ -103,7 +128,7 @@ file can be promoted into the template later, when it has earned it.
 # on a clean main
 $EDITOR info.xml composer.json CHANGELOG.md   # the version bump
 ckrelease check                               # before committing, not after
-git commit -am 'release 1.3.0'
+git commit -am 'Release 1.3.0'
 git tag -a v1.3.0 -m 'v1.3.0' && git push origin main v1.3.0
 ```
 

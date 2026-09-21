@@ -1,6 +1,7 @@
 # Plan: one release path for every extension repo
 
-Status: draft, targeted at v1.26.0. Not started.
+Status: steps 1–3 and "Also in this round" implemented, not yet released;
+steps 4–5 open. Targeted at v1.26.0.
 
 ## Where things stand
 
@@ -95,7 +96,11 @@ The consequences observed while cutting v1.23.0:
 
 - Which repos genuinely never release (tools, internal-only extensions) and
   get `release=none`.
-- Whether `require_changelog` becomes the default in the managed caller, which
-  would need a `CHANGELOG.md` in every releasing repo first.
-- Whether the smoke test stays mandatory for repos whose install cannot be
-  reached headless (`smoke_test: false` with a reason in the caller today).
+
+## Decided
+
+- `require_changelog` stays opt-in; the managed caller does not set it.
+- The smoke test stays on by default; a repo whose install cannot be reached
+  headless sets `smoke_test: false` with a reason comment. Both inputs live
+  below the managed block of the caller, so `ckinit --update` keeps them; no
+  policy key is involved.
