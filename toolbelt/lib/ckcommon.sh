@@ -32,7 +32,22 @@ ck_require_extension_root() {
 # the tool runs as www-data, and git calls that mismatch dubious ownership —
 # `ls-files` then silently reports NOTHING, which every caller here would
 # misread as "this repo has no files of that kind".
-ck_git() { git -c safe.directory="$PWD" "$@"; }
+#
+# The value is the WORKTREE ROOT, not the cwd: an extension subdirectory of a
+# multi-extension repo is not the directory git refuses. Walked rather than
+# asked, because `rev-parse --show-toplevel` is itself refused under dubious
+# ownership; `.git` is a file in a linked worktree and a directory otherwise.
+ck_git_root() {
+    local dir="$PWD"
+    while [ -n "$dir" ]; do
+        if [ -e "$dir/.git" ]; then printf '%s' "$dir"; return 0; fi
+        [ "$dir" != / ] || break
+        dir=$(dirname "$dir")
+    done
+    printf '%s' "$PWD"
+}
+
+ck_git() { git -c safe.directory="$(ck_git_root)" "$@"; }
 
 ck_in_git_repo() { ck_git rev-parse --is-inside-work-tree >/dev/null 2>&1; }
 

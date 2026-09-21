@@ -172,6 +172,9 @@ test-ckcivix: ## ckcivix current/behind/missing/update checks (fake civix)
 test-ck: ## Unified ck dispatcher and compatibility aliases
 	bash tests/toolbelt/test-ck.sh
 
+test-ckcommon-git: ## ck_git trusts the worktree root, not the cwd
+	bash tests/toolbelt/test-ckcommon-git.sh
+
 test-composer-deps: ## ckdeps ignore patterns: core-provided classes only
 	php tests/toolbelt/test-composer-deps.php
 

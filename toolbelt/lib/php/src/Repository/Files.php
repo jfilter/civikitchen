@@ -56,7 +56,9 @@ final class Files
     /** @return list<string> */
     public function changedPhp(): array
     {
-        $changed = $this->git(['diff', '--name-only', '--diff-filter=d', 'HEAD', '--']);
+        // --relative: `git diff` prints paths from the repository root and lists
+        // the whole repository, while ls-files below is cwd-relative and scoped.
+        $changed = $this->git(['diff', '--name-only', '--relative', '--diff-filter=d', 'HEAD', '--']);
         $new = $this->git(['ls-files', '--others', '--exclude-standard']);
         $files = preg_split('/\R/', trim($changed['output'] . "\n" . $new['output'])) ?: [];
         $files = array_values(array_unique(array_filter($files, static fn(string $file): bool => str_ends_with($file, '.php'))));
@@ -84,8 +86,38 @@ final class Files
     }
 
     /** @param list<string> $arguments @return array{status:int,output:string} */
-    private function git(array $arguments): array
+    public function git(array $arguments): array
     {
-        return $this->runner->capture(['git', '-c', 'safe.directory=' . (string) getcwd(), ...$arguments]);
+        return $this->runner->capture($this->gitCommand($arguments));
+    }
+
+    /**
+     * The guarded git command line, for a caller that needs another Runner
+     * method than capture(). The guard lives here and nowhere else.
+     *
+     * @param list<string> $arguments
+     * @return non-empty-list<string>
+     */
+    public function gitCommand(array $arguments): array
+    {
+        return ['git', '-c', 'safe.directory=' . $this->worktreeRoot(), ...$arguments];
+    }
+
+    /**
+     * The directory git must be told to trust: the worktree root, not the cwd,
+     * which in an extension subdirectory would leave dubious ownership standing.
+     * Walked rather than asked, because `rev-parse --show-toplevel` is itself
+     * refused under it; the cwd stands in when nothing above is a checkout.
+     */
+    private function worktreeRoot(): string
+    {
+        $directory = (string) getcwd();
+        while ($directory !== '' && $directory !== dirname($directory)) {
+            if (file_exists($directory . '/.git')) {
+                return $directory;
+            }
+            $directory = dirname($directory);
+        }
+        return (string) getcwd();
     }
 }

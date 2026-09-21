@@ -21,6 +21,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `->apply()`: the test listener discards the returned builder, so nothing is
   installed while the suite stays green.
 
+### Fixed
+
+- The git-reading toolbelt libraries work from an extension subdirectory of a
+  multi-extension repository: `cklint`'s changed-file list is scoped to the
+  extension and printed relative to it, and the `safe.directory` guard names the
+  worktree root, which is the directory git refuses under dubious ownership.
+
 ## [1.25.3] - 2026-09-19
 
 ### Fixed

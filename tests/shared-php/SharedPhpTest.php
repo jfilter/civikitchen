@@ -426,6 +426,64 @@ final class SharedPhpTest extends TestCase
         }
     }
 
+    public function testRepositoryFilesScopesChangedFilesToTheCurrentExtensionDirectory(): void
+    {
+        $root = $this->temporary . '/multi';
+        mkdir($root . '/base/CRM', 0700, true);
+        mkdir($root . '/addon/CRM', 0700, true);
+        mkdir($root . '/toolbelt/bin', 0700, true);
+        file_put_contents($root . '/toolbelt/bin/ckconform', "#!/bin/sh\nexit 0\n");
+        chmod($root . '/toolbelt/bin/ckconform', 0700);
+        (new Runner())->capture(['git', 'init', '-q'], null, $root);
+        foreach (['base/CRM/A.php', 'addon/CRM/B.php'] as $file) {
+            file_put_contents($root . '/' . $file, '<?php');
+        }
+        (new Runner())->capture(['git', 'add', '.'], null, $root);
+        (new Runner())->capture(['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-qm', 'fixture'], null, $root);
+        file_put_contents($root . '/base/CRM/A.php', "<?php\n// changed\n");
+        file_put_contents($root . '/addon/CRM/B.php', "<?php\n// changed\n");
+        file_put_contents($root . '/addon/CRM/C.php', '<?php');
+        $files = new Files($root);
+        $before = getcwd();
+        chdir($root . '/addon');
+        try {
+            // Paths relative to the extension, and the neighbour left out.
+            self::assertSame(['CRM/B.php', 'CRM/C.php'], $files->changedPhp());
+        } finally {
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
+    public function testRepositoryFilesTrustsTheWorktreeRootRatherThanTheCurrentDirectory(): void
+    {
+        $root = $this->temporary . '/guard';
+        mkdir($root . '/addon', 0700, true);
+        mkdir($root . '/.git', 0700, true);
+        $recorder = new class () extends Runner {
+            /** @var list<string> */
+            public array $commands = [];
+
+            /** @param non-empty-list<string> $command @return array{status: int, output: string} */
+            public function capture(array $command, ?array $environment = null, ?string $workingDirectory = null): array
+            {
+                $this->commands[] = implode(' ', $command);
+                return ['status' => 1, 'output' => ''];
+            }
+        };
+        $files = new Files($root, $recorder);
+        $before = getcwd();
+        chdir($root . '/addon');
+        try {
+            self::assertFalse($files->isGitCheckout());
+        } finally {
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+        self::assertSame(
+            'git -c safe.directory=' . (string) realpath($root) . ' rev-parse --is-inside-work-tree',
+            $recorder->commands[0],
+        );
+    }
+
     /** @param array<string, mixed> $contents */
     private function profile(string $name, array $contents): string
     {
