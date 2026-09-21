@@ -49,7 +49,7 @@ new_workspace() {
   ws="$work/ws-$1"
   mkdir -p "$ws" "$work/runner"
   rm -f "$work/runner"/*.txt
-  ln -s "$root" "$ws/.civikitchen-ci"
+  ln -sfn "$root" "$ws/.civikitchen-ci"
 }
 
 # --- working_directory normalization -------------------------------------
@@ -106,6 +106,22 @@ CK_EXT_KEY=org.example.addon CK_WD=addon run_step
 [ "$rc" -ne 0 ] || fail "a malformed sibling info.xml was ignored"
 case "$out" in *'other/info.xml carries no key'*) ;; *) fail "malformed sibling: $out" ;; esac
 
+# Nested below the root, the siblings are the directories next to working_directory.
+new_workspace nested
+extension a/b/base org.example.base
+extension a/b/addon org.example.addon org.example.base
+extension a/other org.example.other
+CK_EXT_KEY=org.example.addon CK_WD=a/b/addon run_step
+[ "$rc" -eq 0 ] || fail "closure of a nested addon failed: $out"
+[ "$(cat "$work/runner/release-siblings.txt")" = 'org.example.base a/b/base org.example.base-1.0.0.zip' ] \
+  || fail "closure of a nested addon: $(cat "$work/runner/release-siblings.txt")"
+# Its pins are read from that directory too.
+pin a/b/base org.example.dep dep-1.0.0.zip
+step "$workflow" dist 'Read the staged-release dependency pins'
+run_step a/b/addon
+grep -q '^org.example.dep ' "$work/runner/release-pins.txt" || fail "a nested sibling's pin was not staged: $out"
+step "$workflow" dist 'Find the same-repository extensions this one requires'
+ws="$work/ws-closure"
 # A failing parser aborts the step instead of reading as "no requirements".
 printf '<extension key="org.example.other"/>\n' > "$ws/other/info.xml"
 mkdir -p "$work/failphp"

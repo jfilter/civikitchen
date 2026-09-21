@@ -36,7 +36,9 @@ its neighbour. The value must be a plain relative path inside the repository.
 In `extension-release.yml` it selects the extension to build; there the
 `stage` input splits one release into a `build` job per extension and a single
 `publish` job, artifacts are named `ckrelease-dist-<key>`, and `dry_run` builds
-without a tag and publishes nothing. The layout itself — root
+without a tag and publishes nothing. The same-repository extensions a build
+job's smoke test installs are the directories next to `working_directory`,
+wherever it sits. The layout itself — root
 workflow, same-repository dependencies, versions — is described in
 [Several extensions in one repository](extension-development.md#several-extensions-in-one-repository).
 

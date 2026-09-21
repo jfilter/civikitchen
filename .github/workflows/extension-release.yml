@@ -220,9 +220,11 @@ jobs:
           list="$RUNNER_TEMP/release-siblings.txt"
           : > "$list"
           declare -A dirs=() seen=(["$CK_EXT_KEY"]=1)
-          # The extensions of a repository are its direct subdirectories, as ckinit lays them out.
+          # Siblings are the directories next to this one; in ckinit's layout, the root's subdirectories.
           if [ "$CK_WD" != . ]; then
-            for info in */info.xml; do
+            parent=$(dirname "$CK_WD")
+            if [ "$parent" = . ]; then infos=(*/info.xml); else infos=("$parent"/*/info.xml); fi
+            for info in "${infos[@]}"; do
               [ -f "$info" ] || continue
               key=$(php "$ck" internal extension-key "$info")
               [ -n "$key" ] || { echo "$info carries no key attribute" >&2; exit 1; }
