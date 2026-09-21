@@ -429,22 +429,6 @@ final class Context
     public const SHARED_CI = 'extension-ci.yml';
 
     /**
-     * Does any workflow hand CI off to the shared reusable workflow? The
-     * workflow-scanning checks treat that as running the tools it runs, or every
-     * migrated repo reads as a CI that runs nothing.
-     */
-    public function callsSharedCi(): bool
-    {
-        foreach ($this->workflows() as $workflow) {
-            if (str_contains($this->read($workflow) ?? '', self::SHARED_CI)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * The shared reusable release workflow, by the filename repos name in
      * `uses:` — the release-side counterpart to SHARED_CI.
      */
@@ -919,22 +903,6 @@ final class Context
         }
 
         return $this->workflowScope = $scope;
-    }
-
-    /**
-     * Does the part of CI that judges this extension hand off to one of the
-     * shared reusable workflows? The scoped twin of callsSharedCi(), for the
-     * checks that must not accept a neighbour's job as their own.
-     */
-    public function scopedCallsShared(string $workflowFile): bool
-    {
-        foreach ($this->scopedWorkflows() as $body) {
-            if (str_contains($body, $workflowFile)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

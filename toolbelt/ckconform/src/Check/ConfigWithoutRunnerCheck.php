@@ -102,7 +102,7 @@ final class ConfigWithoutRunnerCheck implements Check
         // playwright or vitest, which stay in the repo's own workflows. Add only
         // the tokens the shared workflow actually invokes, so a playwright config
         // it does not run is still correctly flagged.
-        if ($context->scopedCallsShared(Context::SHARED_CI)) {
+        if ($context->scopedJobsCalling(Context::SHARED_CI) !== []) {
             $text .= ' cklint phpcs phpstan phpunit ckcoverage ';
         }
 

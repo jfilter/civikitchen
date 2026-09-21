@@ -42,7 +42,7 @@ final class CiWorkflowCheck implements Check
 
         // Judged on the jobs that run this extension: a neighbour's lint step
         // says nothing about whether this extension is linted.
-        if ($context->scopedCallsShared(Context::SHARED_CI)) {
+        if ($context->scopedJobsCalling(Context::SHARED_CI) !== []) {
             return;
         }
         foreach ($context->scopedWorkflows() as $body) {

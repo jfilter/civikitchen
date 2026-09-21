@@ -95,4 +95,12 @@ final class CiWorkflowCheckTest extends CheckTestCase
         $this->assertPasses($reporter);
         $this->assertWarns($reporter, 'CI has no lint step (cklint/phpcs)');
     }
+
+    public function testAMentionOfTheSharedCiInACommentIsNoLintStep(): void
+    {
+        $context = $this->repo([
+            '.github/workflows/ci.yml' => "# was: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1\nname: CI\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: phpunit\n",
+        ]);
+        $this->assertWarns($this->run_(new CiWorkflowCheck(), $context), 'no lint step');
+    }
 }

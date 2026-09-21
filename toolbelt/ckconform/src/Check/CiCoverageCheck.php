@@ -34,7 +34,7 @@ final class CiCoverageCheck implements Check
         }
 
         // The shared CI runs ckcoverage; a repo that calls it is measured.
-        $ran = $context->scopedCallsShared(Context::SHARED_CI) ? 'ckcoverage' : '';
+        $ran = $context->scopedJobsCalling(Context::SHARED_CI) !== [] ? 'ckcoverage' : '';
         foreach ($workflows as $contents) {
             if ($ran === 'ckcoverage') {
                 break;
