@@ -14,27 +14,6 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
-### Changed
-
-- **Breaking:** `.github/workflows/release.yml`, the caller of
-  `extension-release.yml`, is a template-managed file with the trigger for
-  plain and pre-release tags. The template drift job reports a repo without it
-  or with an older trigger; run `ckinit --update`. Inputs and secrets go below
-  the `# END CIVIKITCHEN MANAGED caller` marker and survive the update; a caller
-  written before the markers is replaced whole, so move its `with:` back below
-  the marker. A repository of several extensions gets no release caller yet.
-- **Breaking:** `ckconform`'s `release-workflow` fails instead of warning when
-  no workflow calls `extension-release.yml`. Adopt the caller with `ckinit
-  --update`, or declare `policy.release: none` with a reason (and list the
-  caller under `policy.template_custom`). In a repository of several
-  extensions the check reports itself not evaluated.
-- `permission-closure` also reads the plural `'permissions' => [...]` lists
-  (Angular modules, component info) and the action map an APIv4 entity's
-  `permissions()` returns or assigns, so a typo there fails or warns like any
-  other permission. Expect new findings where such lists name unknown
-  permissions.
-- The documented release commit is spelled `Release X.Y.Z`.
-
 ### Added
 
 - **Breaking:** `ckconform` check `version-format`: `info.xml` `<version>`
@@ -42,7 +21,6 @@ except that a break the consumers are adjusted for ships as a minor, marked
   the only shapes the release workflow accepts. `2.2.7.1` or civix's default
   `1.0` fail; move to a SemVer version with the next release. `ckcreate`
   starts a new extension at `0.1.0`.
-
 - `extension-ci.yml` takes a `working_directory` input (default `.`): the
   extension's directory in a repository that holds several extensions. Every
   job runs there, `compose_file`, the cache lockfile, artifact and scan paths
@@ -72,6 +50,27 @@ except that a break the consumers are adjusted for ships as a minor, marked
   whose `ck_headless()` or `\Civi\Test::headless()` chain does not end in
   `->apply()`: the test listener discards the returned builder, so nothing is
   installed while the suite stays green.
+
+### Changed
+
+- **Breaking:** `.github/workflows/release.yml`, the caller of
+  `extension-release.yml`, is a template-managed file with the trigger for
+  plain and pre-release tags. The template drift job reports a repo without it
+  or with an older trigger; run `ckinit --update`. Inputs and secrets go below
+  the `# END CIVIKITCHEN MANAGED caller` marker and survive the update; a caller
+  written before the markers is replaced whole, so move its `with:` back below
+  the marker. A repository of several extensions gets no release caller yet.
+- **Breaking:** `ckconform`'s `release-workflow` fails instead of warning when
+  no workflow calls `extension-release.yml`. Adopt the caller with `ckinit
+  --update`, or declare `policy.release: none` with a reason (and list the
+  caller under `policy.template_custom`). In a repository of several
+  extensions the check reports itself not evaluated.
+- `permission-closure` also reads the plural `'permissions' => [...]` lists
+  (Angular modules, component info) and the action map an APIv4 entity's
+  `permissions()` returns or assigns, so a typo there fails or warns like any
+  other permission. Expect new findings where such lists name unknown
+  permissions.
+- The documented release commit is spelled `Release X.Y.Z`.
 
 ### Fixed
 
