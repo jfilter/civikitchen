@@ -32,6 +32,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   passes is read instead of a second log of our own.
 - `policy.tests` with `mode: optional` also opts a repo out of `ckcoverage`
   when it carries a phpunit config, which every civix scaffold does.
+- `cklint` no longer reports Markdown and YAML: the CiviKitchen ruleset refs
+  Drupal, whose nested `extensions` arg beats every `ruleset.xml`, so
+  `--extensions=php` is passed on the command line even when the repo has its
+  own `phpcs.xml.dist`.
 - The git-reading toolbelt libraries work from an extension subdirectory of a
   multi-extension repository: `cklint`'s changed-file list is scoped to the
   extension and printed relative to it, and the `safe.directory` guard names the

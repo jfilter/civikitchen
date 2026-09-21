@@ -51,10 +51,13 @@ final class LintCommand implements Command
             $ignore[] = "*/{$prefix}/*";
             $ignore[] = "{$prefix}/*";
         }
-        $phpcs = [$fix ? 'phpcbf' : 'phpcs', '-q', '--ignore=' . implode(',', $ignore), '--runtime-set', 'ignore_warnings_on_exit', '1'];
+        // --extensions on the CLI, always: the Drupal ruleset CiviKitchen refs
+        // adds md and yml, and its nested arg beats every ruleset.xml but this.
+        $phpcs = [$fix ? 'phpcbf' : 'phpcs', '-q', '--extensions=php',
+            '--ignore=' . implode(',', $ignore), '--runtime-set', 'ignore_warnings_on_exit', '1'];
         $hasProjectConfig = is_file('phpcs.xml') || is_file('phpcs.xml.dist');
         if (!$hasProjectConfig) {
-            $phpcs = [...$phpcs, '--standard=CiviKitchen', '--extensions=php'];
+            $phpcs[] = '--standard=CiviKitchen';
         }
         if (!$all) {
             foreach ($paths as $path) {
