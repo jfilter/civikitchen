@@ -14,6 +14,34 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- Repositories of several extensions can release: one `vX.Y.Z` tag releases
+  every extension as one GitHub release. `extension-release.yml` takes
+  `working_directory` (default `.`), `stage` (`release`, the default, builds
+  and publishes one extension; `build` builds, verifies and smoke-tests one
+  extension's archive; `publish` builds nothing and publishes every archive
+  of the run) and `dry_run` (build without a tag, publish nothing). A build
+  job's smoke test installs the archives of the same-repository extensions it
+  `<requires>` from the same run. `ckinit` run at the root stamps a managed
+  `.github/workflows/release.yml` with one `stage: build` job per releasing
+  extension and a `publish` job needing all of them; `--check` fails on a
+  missing or stale job. See
+  [Several extensions in one repository](docs/extension-development.md#several-extensions-in-one-repository).
+
+### Changed
+
+- The release archive is uploaded as `ckrelease-dist-<key>` instead of
+  `ckrelease-dist`, and the smoke stack's compose project name carries the
+  extension, so two build jobs of one run neither collide nor tear down each
+  other's stack. The publish job computes the pre-release and Latest flags
+  itself.
+- `ckconform`'s `release-workflow` evaluates each extension of a repository of
+  several extensions instead of warning "not evaluated": it fails when no job
+  calls `extension-release.yml` with the extension's `working_directory`, when
+  that job runs another stage than `build`, or when no `stage: publish` job
+  needs it.
+
 ## [1.26.0] - 2026-09-21
 
 ### Added

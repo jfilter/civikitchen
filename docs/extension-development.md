@@ -105,11 +105,11 @@ no `info.xml`; each extension sits in a direct subdirectory with its own
 nested deeper, and a repository that is an extension at its root and holds
 more below it, are not covered.
 
-Run `ckinit` at the root. There it manages `.gitattributes`, `renovate.json`
-and `.github/workflows/ci.yml`, then runs the usual per-extension pass on every
-direct subdirectory that has an `info.xml`. Run on an extension below the
-root, it skips the files GitHub and Renovate read only at the root
-(`.github/workflows/ci.yml`, `renovate.json`), and its CI compose file gets a
+Run `ckinit` at the root. There it manages `.gitattributes`, `renovate.json`,
+`.github/workflows/ci.yml` and `.github/workflows/release.yml`, then runs the
+usual per-extension pass on every direct subdirectory that has an `info.xml`.
+Run on an extension below the root, it skips the files GitHub and Renovate read
+only at the root (the two workflows, `renovate.json`), and its CI compose file gets a
 second managed mount of the repository root at `/civikitchen-repo`.
 `cklint`, `ckfmt` and `ckconform` need `.git` and run there; everything that
 boots CiviCRM stays at `/var/www/html/ext/<key>`. The dev compose file is
@@ -161,15 +161,50 @@ that path. The order of the volume lines does not matter.
 `<releaseDate>`, so one `vX.Y.Z` tag describes all of them; the check
 `monorepo-version-lockstep` enforces it.
 
-**Releases are not supported yet.** `extension-release.yml` still maps one tag
-to one `info.xml` at the repository root, and `ckinit` stamps no release
-caller, so the `release-workflow` check reports itself not evaluated for every
-extension in this layout. Release support is planned on top of the unified
-release path.
+**One tag releases every extension.** The root release caller has one job per
+extension that builds, verifies and smoke-tests that extension's archive
+(`stage: build`), and one `publish` job that needs all of them and creates the
+single GitHub release for the tag with every archive attached:
+
+```yaml
+jobs:
+  base:
+    permissions:
+      contents: write        # a called workflow can only narrow this
+    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+    with:
+      working_directory: base
+      stage: build
+  addon:
+    needs: [base]
+    permissions:
+      contents: write
+    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+    with:
+      working_directory: addon
+      stage: build
+  publish:
+    needs: [addon, base]
+    permissions:
+      contents: write
+    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+    with:
+      stage: publish
+```
+
+`ckinit` owns every job's id, `uses:`, `working_directory`, `stage` and
+`needs`; inputs and `secrets:` after a job's END marker are the repository's.
+A job needs the jobs of the same-repository extensions its extension
+`<requires>`: the smoke test installs their archives from the same run, since
+no pinned release of them exists yet. If one build job fails, nothing is
+published. An extension that declares `release: none` gets no job; `ckinit`
+refuses a releasing extension that requires one of those. The
+`release-workflow` check fails an extension whose job is missing, runs another
+stage than `build`, or is not needed by a `stage: publish` job.
 
 [`examples/monorepo/`](../examples/monorepo/) is a two-extension tree, one
-requiring the other, that this repository's CI runs `extension-ci.yml`
-against.
+requiring the other, that this repository's CI runs `extension-ci.yml` and a
+dry run of `extension-release.yml` against.
 
 ### What adopting it costs a repository
 

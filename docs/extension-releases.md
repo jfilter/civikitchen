@@ -113,13 +113,16 @@ policy:
 ```
 
 `ckconform`'s `release-workflow` fails a repo that does neither. A repository
-of several extensions gets no release caller yet; there the check reports
-itself not evaluated.
+of several extensions releases them together from one caller at its root; see
+[Several extensions in one repository](extension-development.md#several-extensions-in-one-repository).
 
 ### Inputs
 
 | Input | Default | What it is for |
 |-------|---------|----------------|
+| `working_directory` | `.` | the extension's directory in a repository of several extensions |
+| `stage` | `release` | `release` builds and publishes; `build` builds, verifies, smoke-tests and uploads the archive as `ckrelease-dist-<key>`; `publish` builds nothing and publishes one release with every archive of the run |
+| `dry_run` | `false` | build the version `info.xml` carries without a tag; the publish job lists the archives instead of publishing |
 | `image` | `ghcr.io/jfilter/civikitchen:v1` | image the smoke test installs into |
 | `smoke_test` | `true` | set `false` only for an extension whose install genuinely cannot be reached this way — and say why in the caller |
 | `require_changelog` | `false` | fail when the repo has no `CHANGELOG.md` at all |

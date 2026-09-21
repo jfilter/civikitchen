@@ -1,7 +1,7 @@
 # Plan: several extensions in one repository
 
-Status: phases 1–3 and 5 implemented, not yet released; phase 4 (release)
-open. It depends on the unified release path in
+Status: phases 1–3 and 5 released in 1.26.0; phase 4 (release) implemented,
+not yet released. Phase 4 builds on the unified release path in
 [release-unification.md](release-unification.md).
 
 ## The layout this plan covers
@@ -227,11 +227,29 @@ Each phase ships with the fixture that would have failed before it.
    two-extension example tree, one extension requiring the other.
 4. **Release.** `working_directory` in `extension-release.yml` and `ckrelease`,
    keyed artifact names, the single release job, and a managed release caller
-   in the root pass of `ckinit` — until then `release-workflow` warns "not
-   evaluated" for every extension of such a repository, and `ckinit` stamps
-   `release.yml` neither at the root nor below it.
-   `ReleaseCommand` calls git without the `safe.directory` guard. After the unified release path
-   has landed.
+   in the root pass of `ckinit`; `release-workflow` evaluates the job whose
+   `working_directory` names the extension. `ckrelease` already archives the
+   subtree of its working directory, and its git calls go through the guarded
+   entry point. Implemented as follows:
+   - `extension-release.yml` takes a `stage` input: `release` (default, one
+     extension builds and publishes), `build` (build, verify, smoke-test,
+     upload `ckrelease-dist-<key>`) and `publish` (build nothing, publish one
+     release carrying every archive of the run). One file rather than a
+     separate publish workflow: a reusable workflow cannot call a sibling at
+     its own resolved SHA, so a second file would duplicate the build or pin
+     it to `@v1`. Callers grant `contents: write` to every job calling it,
+     as the single-extension caller already does; the build job narrows to
+     read.
+   - The publish flags (pre-release, Latest) are computed in the publish job,
+     which is the one that knows the tag and the whole release; the build job
+     only validates the tag's shape, before any build work.
+   - A build job whose extension `<requires>` a same-repository extension
+     installs that extension's archive from the same run in its smoke test,
+     so the root caller has it `need` the dependency's job. No pin can name a
+     release that this tag is creating.
+   - `dry_run` builds the version `info.xml` carries without a tag, and the
+     publish job lists what it would attach. The monorepo self-test runs the
+     whole path this way against both example extensions.
 5. **Documentation.** A "Several extensions in one repository" section in
    `docs/extension-development.md` and `docs/reusable-workflows.md`; the
    changelog entry states what is supported from which version on.

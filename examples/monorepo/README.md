@@ -1,6 +1,7 @@
 # Two extensions in one repository
 
-The tree the monorepo self-test workflow runs `extension-ci.yml` against:
+The tree the monorepo self-test workflow runs `extension-ci.yml` and a dry run
+of `extension-release.yml` against:
 `ckmonoaddon` `<requires>` `ckmonobase`, both in this repository, so the
 workflow has to handle a `working_directory` other than `.`, a second
 `/civikitchen-repo` mount for the git-reading tools, and a sibling mounted out

@@ -33,7 +33,10 @@ direct subdirectory of the root — the layout `ckinit` manages a root for.
 Concurrency groups carry the directory and compose project names the extension
 key, so one job per extension in the same caller does not cancel or tear down
 its neighbour. The value must be a plain relative path inside the repository.
-`extension-release.yml` has no such input yet. The layout itself — root
+In `extension-release.yml` it selects the extension to build; there the
+`stage` input splits one release into a `build` job per extension and a single
+`publish` job, artifacts are named `ckrelease-dist-<key>`, and `dry_run` builds
+without a tag and publishes nothing. The layout itself — root
 workflow, same-repository dependencies, versions — is described in
 [Several extensions in one repository](extension-development.md#several-extensions-in-one-repository).
 
