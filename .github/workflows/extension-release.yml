@@ -205,6 +205,52 @@ jobs:
           slug=${file,,}
           echo "COMPOSE_PROJECT_NAME=ck-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-${slug//[^a-z0-9_-]/-}-release" >> "$GITHUB_ENV"
 
+      # A same-repository <requires> is released by this tag, so no pin names it: the
+      # smoke test installs its archive from this run. Writes "key dir archive" lines.
+      - name: Find the same-repository extensions this one requires
+        id: siblings
+        working-directory: .
+        env:
+          CK_EXT_KEY: ${{ steps.key.outputs.key }}
+          CK_WD: ${{ steps.key.outputs.wd }}
+        run: |
+          set -euo pipefail
+          ck="$GITHUB_WORKSPACE/.civikitchen-ci/toolbelt/bin/ck"
+          ckrelease="$GITHUB_WORKSPACE/.civikitchen-ci/toolbelt/bin/ckrelease"
+          list="$RUNNER_TEMP/release-siblings.txt"
+          : > "$list"
+          declare -A dirs=() seen=(["$CK_EXT_KEY"]=1)
+          # The extensions of a repository are its direct subdirectories, as ckinit lays them out.
+          if [ "$CK_WD" != . ]; then
+            for info in */info.xml; do
+              [ -f "$info" ] || continue
+              key=$(php "$ck" internal extension-key "$info")
+              [ -n "$key" ] || { echo "$info carries no key attribute" >&2; exit 1; }
+              dirs[$key]=${info%/info.xml}
+            done
+          fi
+          queue=("$CK_WD")
+          while [ "${#queue[@]}" -gt 0 ]; do
+            requires=$(php "$ck" internal extension-requires "${queue[0]}/info.xml")
+            queue=("${queue[@]:1}")
+            while IFS= read -r required; do
+              if [ -z "$required" ] || [ -z "${dirs[$required]:-}" ] || [ -n "${seen[$required]:-}" ]; then
+                continue
+              fi
+              seen[$required]=1
+              dir=${dirs[$required]}
+              queue+=("$dir")
+              archive=$(cd "$dir" && php "$ckrelease" info dist-name)
+              echo "$required $dir $archive" >> "$list"
+              echo "requires $required from $dir"
+            done <<< "$requires"
+          done
+          if [ -s "$list" ]; then
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Read once, here, so the token gate, the staging step and the smoke
       # stack all agree on whether this release has a dependency that only a
       # credential can reach. ckconform is the one parser for civikitchen.yaml.
@@ -212,8 +258,14 @@ jobs:
         id: pins
         run: |
           set -euo pipefail
-          php "$GITHUB_WORKSPACE"/.civikitchen-ci/toolbelt/bin/ckconform --policy extension_release \
-            > "$RUNNER_TEMP/release-pins.txt"
+          # The same-repository extensions' pins too: the smoke test resolves their requires.
+          ckconform="$GITHUB_WORKSPACE/.civikitchen-ci/toolbelt/bin/ckconform"
+          php "$ckconform" --policy extension_release > "$RUNNER_TEMP/release-pins-all.txt"
+          while read -r _ dir _; do
+            (cd "$GITHUB_WORKSPACE/$dir" && php "$ckconform" --policy extension_release) \
+              >> "$RUNNER_TEMP/release-pins-all.txt"
+          done < "$RUNNER_TEMP/release-siblings.txt"
+          sort -u "$RUNNER_TEMP/release-pins-all.txt" > "$RUNNER_TEMP/release-pins.txt"
           if [ -s "$RUNNER_TEMP/release-pins.txt" ]; then
             echo "any=true" >> "$GITHUB_OUTPUT"
           else
@@ -370,56 +422,35 @@ jobs:
           php "$GITHUB_WORKSPACE"/.civikitchen-ci/toolbelt/bin/ckrelease dist \
             --version "$CK_RELEASE_VERSION" --ref "$CK_RELEASE_REF" --output "$CK_DIST" "${args[@]}"
 
-      # A same-repository <requires> is released by this very tag, so no pin can
-      # name it: the smoke test installs the archive its own build job uploaded.
-      - name: Find the same-repository extensions this one requires
-        id: siblings
-        if: ${{ inputs.smoke_test }}
-        env:
-          CK_WD: ${{ steps.key.outputs.wd }}
-        run: |
-          set -euo pipefail
-          ck="$GITHUB_WORKSPACE/.civikitchen-ci/toolbelt/bin/ck"
-          keys=()
-          if [ "$CK_WD" != . ]; then
-            while IFS= read -r required; do
-              for info in ../*/info.xml; do
-                if [ -f "$info" ] && [ "$(php "$ck" internal extension-key "$info")" = "$required" ]; then
-                  keys+=("$required")
-                fi
-              done
-            done < <(php "$ck" internal extension-requires info.xml)
-          fi
-          echo "keys=${keys[*]}" >> "$GITHUB_OUTPUT"
-
+      # Merged: an artifact is extracted flat or into a subdirectory depending
+      # on how many match, so each sibling is picked by its exact archive name.
       - name: Download this run's archives
-        if: ${{ steps.siblings.outputs.keys != '' }}
+        if: ${{ inputs.smoke_test && steps.siblings.outputs.any == 'true' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: ckrelease-dist-*
+          merge-multiple: true
           path: ${{ runner.temp }}/ckrelease-run
 
       - name: Stage the required same-repository archives
-        if: ${{ steps.siblings.outputs.keys != '' }}
+        if: ${{ inputs.smoke_test && steps.siblings.outputs.any == 'true' }}
+        working-directory: .
         env:
-          CK_SIBLING_KEYS: ${{ steps.siblings.outputs.keys }}
           CK_RUN_ARCHIVES: ${{ runner.temp }}/ckrelease-run
           CK_SIBLINGS: ${{ runner.temp }}/ckrelease-siblings
         run: |
           set -euo pipefail
           mkdir -p "$CK_SIBLINGS"
-          read -ra keys <<< "$CK_SIBLING_KEYS"
-          for key in "${keys[@]}"; do
-            archives="$CK_RUN_ARCHIVES/ckrelease-dist-$key"
-            if ! compgen -G "$archives/*.zip" > /dev/null; then
-              echo "no archive of $key in this run — list the job that builds it under this job's needs:" >&2
+          while read -r key _ archive; do
+            if [ ! -f "$CK_RUN_ARCHIVES/$archive" ] || [ ! -f "$CK_RUN_ARCHIVES/$archive.sha256" ]; then
+              echo "no $archive in this run — list the job that builds $key under this job's needs:" >&2
               exit 1
             fi
-            (cd "$archives" && sha256sum --check --strict --status ./*.sha256) \
+            (cd "$CK_RUN_ARCHIVES" && sha256sum --check --strict --status "$archive.sha256") \
               || { echo "the archive of $key does not match its digest" >&2; exit 1; }
-            cp "$archives"/*.zip "$CK_SIBLINGS/"
+            cp "$CK_RUN_ARCHIVES/$archive" "$CK_SIBLINGS/"
             echo "staged $key from this run"
-          done
+          done < "$RUNNER_TEMP/release-siblings.txt"
 
       # A release archive that has never been installed is a guess. This is the
       # same stack extension-ci.yml runs in, minus the source mount: the site
@@ -442,8 +473,21 @@ jobs:
           # pins from it. Its own directory, not $CK_DIST: that one is uploaded
           # as the release artifact. A directory mount is fine when the file
           # does not exist; a file mount would silently create a directory.
+          # One directory per extension key, the siblings' included: their
+          # <requires> are resolved from their own pins.
           mkdir -p "$CK_POLICY_DIR"
-          if [ -f civikitchen.yaml ]; then cp civikitchen.yaml "$CK_POLICY_DIR/"; fi
+          sibling_keys=()
+          while read -r key dir _; do
+            sibling_keys+=("$key")
+            if [ -f "$GITHUB_WORKSPACE/$dir/civikitchen.yaml" ]; then
+              mkdir -p "$CK_POLICY_DIR/$key"
+              cp "$GITHUB_WORKSPACE/$dir/civikitchen.yaml" "$CK_POLICY_DIR/$key/"
+            fi
+          done < "$RUNNER_TEMP/release-siblings.txt"
+          if [ -f civikitchen.yaml ]; then
+            mkdir -p "$CK_POLICY_DIR/$CK_EXT_KEY"
+            cp civikitchen.yaml "$CK_POLICY_DIR/$CK_EXT_KEY/"
+          fi
           cat > smoke-compose.yml <<'YAML'
           name: ckrelease-smoke
           services:
@@ -490,9 +534,12 @@ jobs:
               if [ -f "$sibling" ]; then unzip -q -o "$sibling" -d "${CK_EXT_DIR:-/var/www/html/ext}"; fi
             done
             unzip -q -o /ck-dist/*.zip -d "${CK_EXT_DIR:-/var/www/html/ext}"
-            if [ -f /ck-policy/civikitchen.yaml ]; then
-              cp /ck-policy/civikitchen.yaml "${CK_EXT_DIR:-/var/www/html/ext}/$CK_EXT_KEY/civikitchen.yaml"
-            fi
+            for policy in /ck-policy/*/civikitchen.yaml; do
+              if [ -f "$policy" ]; then
+                key=${policy%/civikitchen.yaml}
+                cp "$policy" "${CK_EXT_DIR:-/var/www/html/ext}/${key##*/}/civikitchen.yaml"
+              fi
+            done
             chown -R www-data:www-data "${CK_EXT_DIR:-/var/www/html/ext}"'
 
           # Rescan the container so the new directory is known, resolve the
@@ -502,12 +549,18 @@ jobs:
           # upgrader or a PHP file the exclude list swallowed by mistake
           # actually shows up. provision.sh is sourced for its functions only;
           # this exec already runs as the web user, so ck_as_web is a no-op.
+          # The same-repository extensions first: enabling this one installs
+          # them, and by then their own requires are in place.
           docker compose -f smoke-compose.yml exec -T -u www-data \
-            -e "CK_EXT_KEY=$CK_EXT_KEY" -e CK_DEP_ARCHIVE_DIR=/ck-deps app bash -c '
+            -e "CK_EXT_KEY=$CK_EXT_KEY" -e "CK_SIBLING_KEYS=${sibling_keys[*]}" \
+            -e CK_DEP_ARCHIVE_DIR=/ck-deps app bash -c '
             set -eu
             cv ev "CRM_Extension_System::singleton()->getFullContainer()->refresh();"
             ck_as_web() { "$@"; }
             . /usr/local/share/civikitchen/provision.sh
+            for sibling in $CK_SIBLING_KEYS; do
+              ck_resolve_requires "$sibling"
+            done
             ck_resolve_requires "$CK_EXT_KEY"
             cv ext:enable "$CK_EXT_KEY"'
 
