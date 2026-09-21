@@ -420,6 +420,22 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
     directory at all; the alternative is five checks calling an extension that
     nothing builds clean. `floating-tag` and `workflow-permissions` keep judging
     the whole file.
+  - `monorepo-requires-mounted`: a `<requires>` key that is another extension of
+    the same repository must be bind-mounted at `/var/www/html/ext/<key>` into the
+    `app` service of a compose file the repository ships — that is the service the
+    site runs in, so a mount into another service does not count — and under the
+    dependency's **key**, not its
+    `<file>`: that is where the template's `phpstanBootstrap.php` resolves a
+    `<requires>` and where the shared CI mounts a sibling, so a dotted key like
+    `de.civico.ckmonobase` is mounted at `ext/de.civico.ckmonobase` even though
+    its own stack mounts it as `ckmonobase`. A mount whose source compose
+    interpolates (`${VAR}`) is not guessed: the rule warns "not evaluated". That
+    volume line is the one
+    mechanism that works for a local `docker compose up` and in CI alike, and
+    without it the stack boots without the dependency and the enable fails late.
+    Only the mount is checked — the entrypoint enables every directory mounted
+    under the extension directory and resolves each one's `<requires>` first, so
+    the order of the volume lines does not matter.
   - The release checks read the extension's own directory: a commit touching
     only a neighbour is no unreleased change to this extension.
 - Dev stack: `.docker/docker-compose.yml` on a civikitchen image. **Every image

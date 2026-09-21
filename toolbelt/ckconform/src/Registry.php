@@ -34,6 +34,7 @@ final class Registry
         Check\UnreleasedShippedChangesCheck::class,
         Check\ConfigWithoutRunnerCheck::class,
         Check\RequiredExtensionsCheck::class,
+        Check\MonorepoRequiresMountedCheck::class,
         Check\MixinDeclarationCheck::class,
         Check\MixinVersionCheck::class,
         Check\EntitySchemaFormatCheck::class,

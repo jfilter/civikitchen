@@ -310,6 +310,12 @@ abstract class CheckTestCase extends TestCase
         file_put_contents($this->dir . '/.git/shallow', '');
     }
 
+    /** The fixture repository's root, for a test that needs an absolute path in a file it writes. */
+    protected function fixtureRoot(): string
+    {
+        return (string) $this->dir;
+    }
+
     /** Write a file into the fixture after repo() built it. */
     protected function write(string $path, string $contents): void
     {
