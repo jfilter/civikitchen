@@ -12,6 +12,9 @@
 # stacks can run side by side; the defaults apply when it is absent.
 #
 # Re-provision from scratch (re-runs init.d hooks): docker compose down -v && up -d
+#
+# In a repository of several extensions the repository root is mounted at
+# /civikitchen-repo; cklint, ckfmt and ckconform run from there.
 
 # Explicit project name — unnamed .docker/ stacks all become one project
 # called "docker" and share volumes across checkouts.

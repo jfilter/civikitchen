@@ -242,5 +242,189 @@ rewrite_with_sed '/CIVIKITCHEN MANAGED db/d' "$work/blocks/.docker/docker-compos
 out=$("$root/scaffold/ckinit.php" --check "$work/blocks" 2>&1 || true)
 echo "$out" | grep -q 'managed blocks do not match' || { echo "a removed block was not reported: $out" >&2; exit 1; }
 
+# --- several extensions in one repository ------------------------------------
+
+make_keyed_extension() {
+  local target="$1" key="$2" file="$3" requires="${4:-}"
+  local element=''
+  if [ -n "$requires" ]; then
+    element="<requires><ext>$requires</ext></requires>"
+  fi
+  mkdir -p "$target"
+  printf '%s\n' "<extension key=\"$key\" type=\"module\"><file>$file</file>$element</extension>" > "$target/info.xml"
+}
+
+# A single-extension repository: `../..` there is the parent of the repository,
+# so the repo mount must NOT appear — and the root-only files must.
+mkdir -p "$work/single"
+git -C "$work/single" init -q
+make_extension "$work/single"
+"$root/scaffold/ckinit.php" "$work/single" >/dev/null
+test -f "$work/single/renovate.json"
+if grep -q -- '- \.\./\.\.:/civikitchen-repo' "$work/single/.docker/docker-compose.ci.yml"; then
+  echo "single-extension repo got the /civikitchen-repo mount" >&2
+  exit 1
+fi
+
+mono="$work/mono"
+mkdir -p "$mono"
+git -C "$mono" init -q
+make_keyed_extension "$mono/base" org.acme.base base
+make_keyed_extension "$mono/addon" org.acme.addon addon org.acme.base
+"$root/scaffold/ckinit.php" "$mono" >/dev/null
+
+# The root pass owns the root files, one managed job block per extension.
+grep -q 'BEGIN CIVIKITCHEN MANAGED job-base' "$mono/.github/workflows/ci.yml"
+grep -q 'working_directory: addon' "$mono/.github/workflows/ci.yml"
+grep -q '"extends": \["config:recommended"\]' "$mono/renovate.json"
+test -f "$mono/.gitattributes"
+# No root-only file below the root: GitHub and Renovate never read them there.
+for stray in renovate.json .github/workflows/ci.yml; do
+  if [ -e "$mono/base/$stray" ]; then
+    echo "root-only file was written into an extension directory: $stray" >&2
+    exit 1
+  fi
+done
+# The repository root is mounted for the git-reading tools, in both stacks.
+grep -q -- '- \.\./\.\.:/civikitchen-repo' "$mono/base/.docker/docker-compose.ci.yml"
+grep -q -- '- \.\./\.\.:/civikitchen-repo' "$mono/base/.docker/docker-compose.yml"
+"$root/scaffold/ckinit.php" --check "$mono" >/dev/null
+
+# A removed mount is drift in the monorepo case.
+rewrite_with_sed '\|../..:/civikitchen-repo|d' "$mono/addon/.docker/docker-compose.ci.yml"
+if out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1); then
+  echo "a missing /civikitchen-repo mount was not detected" >&2
+  exit 1
+fi
+echo "$out" | grep -q 'drifted   .docker/docker-compose.ci.yml'
+"$root/scaffold/ckinit.php" --update "$mono" >/dev/null
+"$root/scaffold/ckinit.php" --check "$mono" >/dev/null
+
+# `with:` inputs the repository added to a managed job survive --update.
+rewrite_with_sed 's|^  # END CIVIKITCHEN MANAGED job-addon$|  # END CIVIKITCHEN MANAGED job-addon\
+      playwright: true|' "$mono/.github/workflows/ci.yml"
+"$root/scaffold/ckinit.php" --check "$mono" >/dev/null
+rewrite_with_sed 's|extension-ci.yml@v1|extension-ci.yml@v0|' "$mono/.github/workflows/ci.yml"
+if "$root/scaffold/ckinit.php" --check "$mono" >/dev/null 2>&1; then
+  echo "an edit inside a root job block was not detected" >&2
+  exit 1
+fi
+out=$("$root/scaffold/ckinit.php" --update "$mono")
+echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
+grep -q 'extension-ci.yml@v1' "$mono/.github/workflows/ci.yml"
+grep -q 'playwright: true' "$mono/.github/workflows/ci.yml"
+
+# The jobs of the root caller, as YAML: job id => its `with:` inputs.
+assert_root_jobs() {
+  php -r '
+    require $argv[1];
+    $jobs = \Symfony\Component\Yaml\Yaml::parseFile($argv[2])["jobs"] ?? [];
+    $actual = [];
+    foreach ($jobs as $id => $job) {
+      $actual[] = $id . "(" . implode(",", array_map(
+        static fn ($k, $v) => "$k=" . var_export($v, TRUE),
+        array_keys($job["with"] ?? []),
+        $job["with"] ?? [],
+      )) . ")";
+    }
+    $actual = implode(" ", $actual);
+    if ($actual !== $argv[3]) {
+      fwrite(STDERR, "root jobs are \"$actual\", expected \"{$argv[3]}\"\n");
+      exit(1);
+    }
+  ' "$root/packages/civikitchen-scenario-schema/vendor/autoload.php" \
+    "$mono/.github/workflows/ci.yml" "$1"
+}
+
+assert_root_jobs "addon(working_directory='addon',playwright=true) base(working_directory='base')"
+
+# A new extension directory without a job fails --check; --update adds the job
+# and leaves the other jobs' repo-owned inputs where they were.
+make_keyed_extension "$mono/third" org.acme.third third
+out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
+echo "$out" | grep -q 'drifted   .github/workflows/ci.yml' \
+  || { echo "an extension directory without a job was not reported: $out" >&2; exit 1; }
+out=$("$root/scaffold/ckinit.php" --update "$mono")
+echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
+"$root/scaffold/ckinit.php" --check "$mono" >/dev/null
+assert_root_jobs "addon(working_directory='addon',playwright=true) base(working_directory='base') third(working_directory='third')"
+
+# A removed directory whose job carries no repo-owned input: --update drops it.
+/bin/rm -rf "$mono/third"
+out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
+echo "$out" | grep -q 'drifted   .github/workflows/ci.yml' \
+  || { echo "a job for a removed directory was not reported: $out" >&2; exit 1; }
+"$root/scaffold/ckinit.php" --update "$mono" >/dev/null
+if grep -q 'job-third' "$mono/.github/workflows/ci.yml"; then
+  echo "--update kept the job of a removed directory" >&2
+  exit 1
+fi
+"$root/scaffold/ckinit.php" --check "$mono" >/dev/null
+assert_root_jobs "addon(working_directory='addon',playwright=true) base(working_directory='base')"
+
+# A removed directory whose job carries repo-owned inputs: refuse, touch nothing.
+cp -R "$mono" "$work/mono-gone"
+/bin/rm -rf "$work/mono-gone/addon"
+out=$("$root/scaffold/ckinit.php" --check "$work/mono-gone" 2>&1 || true)
+echo "$out" | grep -q 'drifted   .github/workflows/ci.yml' \
+  || { echo "a job for a removed directory was not reported: $out" >&2; exit 1; }
+cp "$work/mono-gone/.github/workflows/ci.yml" "$work/mono-gone-ci.yml"
+if out=$("$root/scaffold/ckinit.php" --update "$work/mono-gone" 2>&1); then
+  echo "--update silently dropped repo-owned inputs of a removed job" >&2
+  exit 1
+fi
+echo "$out" | grep -q 'playwright: true' \
+  || { echo "the refusal did not name the orphaned lines: $out" >&2; exit 1; }
+cmp -s "$work/mono-gone-ci.yml" "$work/mono-gone/.github/workflows/ci.yml" \
+  || { echo "--update rewrote the file it refused" >&2; exit 1; }
+
+# A dot-directory is no extension of the repository: in CI the workspace root
+# also holds the .civikitchen-* helper checkouts.
+make_keyed_extension "$mono/.hidden" org.acme.hidden hidden
+"$root/scaffold/ckinit.php" --check "$mono" >/dev/null
+if grep -q 'hidden' "$mono/.github/workflows/ci.yml"; then
+  echo "a dot-directory was given a job" >&2
+  exit 1
+fi
+assert_root_jobs "addon(working_directory='addon',playwright=true) base(working_directory='base')"
+/bin/rm -rf "$mono/.hidden"
+
+# Two directories that need the same job id: a hard error in every mode, and
+# nothing is written — a duplicate YAML key would lose one extension.
+mkdir -p "$work/collide"
+git -C "$work/collide" init -q
+make_keyed_extension "$work/collide/foo.bar" org.acme.foobar foobar
+make_keyed_extension "$work/collide/foo_bar" org.acme.foo_bar foo_bar
+for mode in seed check update; do
+  # Never an empty array: `set -u` with bash 3.2 rejects expanding one.
+  case "$mode" in
+    check) arguments=(--check "$work/collide") ;;
+    update) arguments=(--update "$work/collide") ;;
+    *) arguments=("$work/collide") ;;
+  esac
+  if out=$("$root/scaffold/ckinit.php" "${arguments[@]}" 2>&1); then
+    echo "colliding job ids were accepted ($mode)" >&2
+    exit 1
+  fi
+  echo "$out" | grep -q "'foo.bar' and 'foo_bar'" \
+    || { echo "the collision did not name both directories: $out" >&2; exit 1; }
+  echo "$out" | grep -q "job id 'foo_bar'" \
+    || { echo "the collision did not name the job id: $out" >&2; exit 1; }
+done
+for stray in .github/workflows/ci.yml renovate.json .gitattributes foo.bar/composer.json; do
+  if [ -e "$work/collide/$stray" ]; then
+    echo "the colliding root was stamped anyway: $stray" >&2
+    exit 1
+  fi
+done
+
+# A repository root that is neither an extension nor a monorepo stays an error.
+mkdir -p "$work/empty-root"
+git -C "$work/empty-root" init -q
+if "$root/scaffold/ckinit.php" --check "$work/empty-root" >/dev/null 2>&1; then
+  echo "a root without extensions was accepted" >&2
+  exit 1
+fi
+
 "$root/scaffold/ckinit.php" --help >/dev/null
 echo "ckinit integration checks passed"

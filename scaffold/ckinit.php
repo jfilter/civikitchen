@@ -67,6 +67,21 @@ const OPTIONAL_FILES = [
   'phpstan-tests.neon.dist',
 ];
 
+/**
+ * Files GitHub and Renovate only read at the repository root. For an extension
+ * below the root they are neither written nor checked; the root pass owns them.
+ */
+const ROOT_ONLY_FILES = [
+  '.github/workflows/ci.yml',
+  'renovate.json',
+];
+
+/** The compose files whose managed app block mounts the extension directory. */
+const COMPOSE_FILES = [
+  '.docker/docker-compose.ci.yml',
+  '.docker/docker-compose.yml',
+];
+
 function usage(int $status = 2): never {
   $stream = $status === 0 ? STDOUT : STDERR;
   fwrite($stream, <<<'TXT'
@@ -77,7 +92,10 @@ Usage:
   scaffold/ckinit.php --update <extension-directory>     refresh managed files
   scaffold/ckinit.php --check <extension-directory>      report drift, exit 1 on any
 
-The target must contain info.xml. Files from scaffold/template/extension are copied
+The target contains info.xml, or is the root of a repository whose direct
+subdirectories are extensions — then ckinit manages the root files
+(renovate.json, .gitattributes, one managed CI job block per extension) and
+runs the same pass for every extension directory. Files from scaffold/template/extension are copied
 recursively; __EXTKEY__ is replaced with info.xml's <file> value,
 __VENDOR__ with the vendor segment of the extension key and __RENOVATE_PRESET__
 with the renovate_preset policy key (default config:recommended).
@@ -146,8 +164,19 @@ if ($target === FALSE || !is_dir($target)) {
   exit(2);
 }
 
+// Same rule as ckconform's Context::repositoryRoot(), realpath on both sides so
+// a /var vs /private/var target does not read as "below the root".
+$repositoryRoot = repositoryRoot($target);
+$belowRoot = $repositoryRoot !== NULL && $repositoryRoot !== $target;
+$depthBelowRoot = $belowRoot
+  ? count(array_filter(explode('/', substr($target, strlen((string) $repositoryRoot)))))
+  : 0;
+
 $infoPath = $target . '/info.xml';
 if (!is_file($infoPath)) {
+  if ($repositoryRoot === $target) {
+    exit(runRootPass($target, $mode, $force, $yamlAutoload));
+  }
   fwrite(STDERR, "ckinit: target is not a CiviCRM extension (missing info.xml): {$target}\n");
   exit(2);
 }
@@ -226,18 +255,7 @@ if (is_string($policyRaw)) {
 // The Renovate preset the managed renovate.json extends. An organisation
 // sets it once in the CK_DEFAULT_CONFIG file rather than per repo, which is
 // why this goes through the layered view; the repo file can still override.
-try {
-  $effective = \CiviKitchen\Ckconform\Policy::effective(is_string($policyRaw) ? $policyRaw : NULL);
-}
-catch (\RuntimeException $e) {
-  fwrite(STDERR, "ckinit: {$e->getMessage()}\n");
-  exit(2);
-}
-$renovatePreset = \CiviKitchen\Ckconform\Policy::stripReason($effective['renovate_preset'][0] ?? 'config:recommended');
-if (preg_match('#^[A-Za-z0-9][A-Za-z0-9_.:/>@-]*$#', $renovatePreset) !== 1) {
-  fwrite(STDERR, "ckinit: renovate_preset '{$renovatePreset}' is not a Renovate preset name (e.g. github>org/renovate)\n");
-  exit(2);
-}
+$renovatePreset = renovatePreset(is_string($policyRaw) ? $policyRaw : NULL);
 
 $iterator = new RecursiveIteratorIterator(
   new RecursiveDirectoryIterator($templateDir, FilesystemIterator::SKIP_DOTS),
@@ -245,6 +263,7 @@ $iterator = new RecursiveIteratorIterator(
 );
 
 $files = [];
+$inventory = [];
 $conflicts = [];
 foreach ($iterator as $item) {
   if ($item->isDir()) {
@@ -257,16 +276,19 @@ foreach ($iterator as $item) {
     fwrite(STDERR, "ckinit: cannot read template file: {$relative}\n");
     exit(1);
   }
-  $files[] = [
-    $destination,
-    $relative,
-    $item->getPerms() & 0777,
-    str_replace(
+  $inventory[] = $relative;
+  if ($belowRoot && in_array($relative, ROOT_ONLY_FILES, TRUE)) {
+    continue;
+  }
+  $rendered = str_replace(
       ['__EXTKEY__', '__EXTENSION_KEY__', '__SCENARIO_NAME__', '__VENDOR__', '__RENOVATE_PRESET__'],
       [$extensionFile, trim((string) $xml['key']), $scenarioName, $vendor, $renovatePreset],
       $content,
-    ),
-  ];
+    );
+  if ($belowRoot && in_array($relative, COMPOSE_FILES, TRUE)) {
+    $rendered = withRepositoryMount($rendered, $relative, $extensionFile, $depthBelowRoot);
+  }
+  $files[] = [$destination, $relative, $item->getPerms() & 0777, $rendered];
   if ($mode === 'seed' && (file_exists($destination) || is_link($destination)) && !$force) {
     $conflicts[] = $relative;
   }
@@ -282,7 +304,6 @@ usort($files, static fn (array $a, array $b): int => strcmp($a[1], $b[1]));
 // The two lists must be an exact, disjoint inventory of the template. Checked
 // on every run so the mismatch surfaces on the developer machine that added
 // the file, not months later in some repo's CI.
-$inventory = array_column($files, 1);
 $unclassified = array_diff($inventory, MANAGED_FILES, SEEDED_FILES);
 $stale = array_diff(array_merge(MANAGED_FILES, SEEDED_FILES), $inventory);
 $overlap = array_intersect(MANAGED_FILES, SEEDED_FILES);
@@ -312,6 +333,248 @@ if ($conflicts !== []) {
   fwrite(STDERR, "Re-run with --force only after reviewing these files,\n");
   fwrite(STDERR, "or --update to refresh just the template-managed files.\n");
   exit(1);
+}
+
+/** The git repository root at or above $directory, NULL when there is none. */
+function repositoryRoot(string $directory): ?string {
+  $directory = rtrim((string) realpath($directory), '/');
+  while ($directory !== '' && $directory !== dirname($directory)) {
+    if (file_exists($directory . '/.git')) {
+      return $directory;
+    }
+    $directory = dirname($directory);
+  }
+  return NULL;
+}
+
+/** The validated Renovate preset for a policy file's contents (NULL: no file). */
+function renovatePreset(?string $policyRaw): string {
+  try {
+    $effective = \CiviKitchen\Ckconform\Policy::effective($policyRaw);
+  }
+  catch (\RuntimeException $e) {
+    fwrite(STDERR, "ckinit: {$e->getMessage()}\n");
+    exit(2);
+  }
+  $preset = \CiviKitchen\Ckconform\Policy::stripReason($effective['renovate_preset'][0] ?? 'config:recommended');
+  if (preg_match('#^[A-Za-z0-9][A-Za-z0-9_.:/>@-]*$#', $preset) !== 1) {
+    fwrite(STDERR, "ckinit: renovate_preset '{$preset}' is not a Renovate preset name (e.g. github>org/renovate)\n");
+    exit(2);
+  }
+  return $preset;
+}
+
+/**
+ * The compose file with the repository root mounted next to the extension
+ * directory: below the root, `..` is the extension, so `.git` stays outside.
+ */
+function withRepositoryMount(string $content, string $relative, string $extensionFile, int $depth): string {
+  $needle = "      - ..:/var/www/html/ext/{$extensionFile}\n";
+  if (substr_count($content, $needle) !== 1) {
+    fwrite(STDERR, "ckinit: {$relative}: cannot place the repository mount — the extension mount line is missing\n");
+    exit(1);
+  }
+  $up = '..' . str_repeat('/..', $depth);
+  return str_replace(
+    $needle,
+    $needle
+      . "      # The repository root: .git for cklint, ckfmt and ckconform.\n"
+      . "      - {$up}:/civikitchen-repo\n",
+    $content,
+  );
+}
+
+/** The workflow job id for an extension directory: job ids are [A-Za-z_][A-Za-z0-9_-]*. */
+function jobId(string $directory): string {
+  $job = (string) preg_replace('/[^A-Za-z0-9_-]/', '_', $directory);
+  return preg_match('/^[A-Za-z_]/', $job) === 1 ? $job : 'ext_' . $job;
+}
+
+/**
+ * The root caller workflow: one managed block per extension directory holding
+ * the job id, the `uses:` line and working_directory. `with:` inputs the
+ * repository adds after a block's END marker are its own.
+ */
+function rootCallerYaml(array $extensions): string {
+  $out = <<<'TXT'
+# Thin caller for a repository of several extensions: one job per extension
+# directory, each calling civikitchen's reusable extension-ci.yml for that
+# directory, so the pipeline is defined once instead of per extension.
+#
+# Managed by ckinit: the job id, the `uses:` line and working_directory. Further
+# `with:` inputs for a job go after its END marker and survive `ckinit
+# --update`; an extension directory without a job, or a job whose directory is
+# gone, is reported by `ckinit --check`.
+#
+# The @v1 pin is the versioned contract: workflow, template, ck* tools and
+# images are released together. See civikitchen's docs/releases.md.
+# BEGIN CIVIKITCHEN MANAGED header
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Manual run: a reusable-workflow rerun reuses the ref it first resolved, so
+  # picking up a moved civikitchen tag needs a fresh event.
+  workflow_dispatch:
+
+# The jobs only read the repo; do not inherit the org default token.
+permissions:
+  contents: read
+
+jobs:
+# END CIVIKITCHEN MANAGED header
+
+TXT;
+  foreach ($extensions as $directory) {
+    $out .= "  # BEGIN CIVIKITCHEN MANAGED job-{$directory}\n"
+      . '  ' . jobId($directory) . ":\n"
+      . "    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1\n"
+      . "    with:\n"
+      . "      working_directory: {$directory}\n"
+      . "  # END CIVIKITCHEN MANAGED job-{$directory}\n";
+  }
+  return $out;
+}
+
+/**
+ * The repository-root pass: stamp the root-only files, then run the ordinary
+ * per-extension pass for every direct subdirectory that is an extension.
+ */
+function runRootPass(string $root, string $mode, bool $force, string $yamlAutoload): int {
+  $extensions = [];
+  $jobIds = [];
+  foreach (scandir($root) ?: [] as $entry) {
+    $path = $root . '/' . $entry;
+    // Dot-directories are never extensions of the repository: in CI the
+    // workspace root also holds the .civikitchen-* helper checkouts.
+    if (str_starts_with($entry, '.') || is_link($path) || !is_dir($path) || !is_file($path . '/info.xml')) {
+      continue;
+    }
+    if (preg_match('/^\S+$/', $entry) !== 1) {
+      fwrite(STDERR, "ckinit: extension directory name cannot carry whitespace: {$entry}\n");
+      return 2;
+    }
+    // Two directories that differ only in characters a job id cannot carry
+    // would collide into one job, and one extension would never be built.
+    $job = jobId($entry);
+    if (isset($jobIds[$job])) {
+      fwrite(STDERR, "ckinit: the extension directories '{$jobIds[$job]}' and '{$entry}' both need "
+        . "the CI job id '{$job}'; rename one of them\n");
+      return 2;
+    }
+    $jobIds[$job] = $entry;
+    $extensions[] = $entry;
+  }
+  sort($extensions);
+  if ($extensions === []) {
+    fwrite(STDERR, "ckinit: {$root} has no info.xml, and no direct subdirectory is an extension\n");
+    return 2;
+  }
+
+  require_once $yamlAutoload;
+  require_once dirname(__DIR__) . '/toolbelt/ckconform/src/Policy.php';
+  $policyFile = $root . '/civikitchen.yaml';
+  $preset = renovatePreset(is_file($policyFile) ? (string) file_get_contents($policyFile) : NULL);
+
+  $templateDir = __DIR__ . '/template/extension';
+  $rootFiles = [
+    '.gitattributes' => (string) file_get_contents($templateDir . '/.gitattributes'),
+    '.github/workflows/ci.yml' => rootCallerYaml($extensions),
+    'renovate.json' => str_replace(
+      '__RENOVATE_PRESET__',
+      $preset,
+      (string) file_get_contents($templateDir . '/renovate.json'),
+    ),
+  ];
+
+  if ($mode === 'seed' && !$force) {
+    $conflicts = array_filter(array_keys($rootFiles), static fn (string $r): bool => file_exists($root . '/' . $r));
+    if ($conflicts !== []) {
+      fwrite(STDERR, "ckinit: refusing to overwrite existing files:\n  " . implode("\n  ", $conflicts) . "\n");
+      fwrite(STDERR, "Re-run with --force, or --update to refresh just the template-managed files.\n");
+      return 1;
+    }
+  }
+
+  $failed = [];
+  foreach ($rootFiles as $relative => $content) {
+    $destination = $root . '/' . $relative;
+    assertRegular($destination, $relative);
+    if (!is_file($destination)) {
+      if ($mode === 'check') {
+        fwrite(STDOUT, "missing   {$relative}\n");
+        $failed[] = $relative;
+      }
+      else {
+        writeRendered($destination, $relative, 0644, $content);
+        fwrite(STDOUT, "created   {$relative}\n");
+      }
+      continue;
+    }
+    $existing = (string) file_get_contents($destination);
+    if ($existing === $content) {
+      continue;
+    }
+    $blocks = managedBlocks($content, $relative);
+    $rendered = $content;
+    $repoBlocks = managedBlocks($existing, $relative);
+    if ($blocks !== [] && $repoBlocks !== []) {
+      // One block per extension directory, so a changed set is an added or
+      // removed extension: --update reconciles it, --check reports it.
+      // By name, not by position: a job appended by --update sits last whatever
+      // the directory sorts as, and job order in the workflow is cosmetic.
+      $repoNames = array_keys($repoBlocks);
+      $wantedNames = array_keys($blocks);
+      sort($repoNames);
+      sort($wantedNames);
+      $changedSet = $repoNames !== $wantedNames;
+      $rendered = reconcileRootJobs($existing, $blocks, $relative, $mode !== 'check');
+      if ($rendered === NULL) {
+        fwrite(STDOUT, "drifted   {$relative} (managed blocks do not match the extension directories: "
+          . implode(', ', array_keys($blocks)) . " — align the markers by hand)\n");
+        $failed[] = $relative;
+        continue;
+      }
+      if ($mode === 'check' && $changedSet) {
+        fwrite(STDOUT, "drifted   {$relative} (one job per extension directory: "
+          . implode(', ', array_keys($blocks)) . ")\n");
+        $failed[] = $relative;
+        continue;
+      }
+      if ($rendered === $existing) {
+        continue;
+      }
+    }
+    if ($mode === 'check') {
+      fwrite(STDOUT, "drifted   {$relative}\n");
+      $failed[] = $relative;
+    }
+    else {
+      writeRendered($destination, $relative, 0644, $rendered);
+      fwrite(STDOUT, "updated   {$relative}\n");
+    }
+  }
+
+  $arguments = $mode === 'seed' ? ($force ? ['--force'] : []) : ['--' . $mode];
+  foreach ($extensions as $directory) {
+    fwrite(STDOUT, "\n== {$directory}\n");
+    $command = array_merge([PHP_BINARY, __FILE__], $arguments, [$root . '/' . $directory]);
+    $status = 0;
+    passthru(implode(' ', array_map('escapeshellarg', $command)), $status);
+    if ($status !== 0) {
+      $failed[] = $directory;
+    }
+  }
+
+  if ($failed !== []) {
+    fwrite(STDERR, "\nckinit: " . count($failed) . " root file(s) / extension(s) need attention: "
+      . implode(', ', $failed) . "\n");
+    return 1;
+  }
+  fwrite(STDOUT, "\nRoot files and " . count($extensions) . " extension(s) are in shape.\n");
+  return 0;
 }
 
 /**
@@ -372,6 +635,89 @@ function spliceBlocks(string $repoContent, array $templateBlocks, string $relati
       return NULL;
     }
     $out = substr($out, 0, $at) . $templateBlocks[$name] . substr($out, $at + strlen($text));
+  }
+  return $out;
+}
+
+/**
+ * The file split into the text before the first managed block and one segment
+ * per block: name, the block including both markers, and the repo-owned lines
+ * that follow it. Call only on content managedBlocks() has accepted.
+ *
+ * @return array{string, list<array{name: string, block: string, trailing: string}>}
+ */
+function managedSegments(string $content): array {
+  $leading = '';
+  $segments = [];
+  $current = NULL;
+  $inBlock = FALSE;
+  foreach (preg_split('/(?<=\n)/', $content) ?: [] as $line) {
+    if (preg_match('/^\s*#\s*BEGIN CIVIKITCHEN MANAGED (\S+)\s*$/', $line, $m) === 1) {
+      if ($current !== NULL) {
+        $segments[] = $current;
+      }
+      $current = ['name' => $m[1], 'block' => $line, 'trailing' => ''];
+      $inBlock = TRUE;
+      continue;
+    }
+    if ($inBlock && preg_match('/^\s*#\s*END CIVIKITCHEN MANAGED \S+\s*$/', $line) === 1) {
+      $current['block'] .= $line;
+      $inBlock = FALSE;
+      continue;
+    }
+    if ($current === NULL) {
+      $leading .= $line;
+    }
+    elseif ($inBlock) {
+      $current['block'] .= $line;
+    }
+    else {
+      $current['trailing'] .= $line;
+    }
+  }
+  if ($current !== NULL) {
+    $segments[] = $current;
+  }
+  return [$leading, $segments];
+}
+
+/**
+ * The root workflow with its job blocks reconciled against the extension
+ * directories: blocks the repo has are refreshed in place and keep the lines
+ * that follow them, a directory without a block gets one appended, a block
+ * without a directory is dropped. NULL when that needs a person.
+ */
+function reconcileRootJobs(string $existing, array $templateBlocks, string $relative, bool $apply): ?string {
+  [$leading, $segments] = managedSegments($existing);
+  $present = array_column($segments, 'name');
+  // Without the header block the file's shape is unknown, and appending the
+  // template's header at the end would produce nonsense.
+  if (!in_array((string) array_key_first($templateBlocks), $present, TRUE)) {
+    return NULL;
+  }
+  $out = $leading;
+  foreach ($segments as $segment) {
+    if (!isset($templateBlocks[$segment['name']])) {
+      if (trim($segment['trailing']) !== '') {
+        if (!$apply) {
+          return NULL;
+        }
+        fwrite(STDERR, "ckinit: {$relative}: '{$segment['name']}' has no extension directory any more, "
+          . "but repository lines follow it:\n");
+        foreach (explode("\n", rtrim($segment['trailing'], "\n")) as $line) {
+          fwrite(STDERR, "  {$line}\n");
+        }
+        fwrite(STDERR, "Delete them, or restore the directory — ckinit does not guess where they belong.\n");
+        exit(1);
+      }
+      continue;
+    }
+    $out .= $templateBlocks[$segment['name']] . $segment['trailing'];
+  }
+  foreach ($templateBlocks as $name => $text) {
+    if (!in_array($name, $present, TRUE)) {
+      $out .= $text;
+    }
   }
   return $out;
 }
