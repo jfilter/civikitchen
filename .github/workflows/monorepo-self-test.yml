@@ -1,6 +1,9 @@
-# extension-ci.yml against a repository that holds two extensions, one
-# requiring the other: the self-test for `working_directory`. One static job
-# per extension, the shape ckinit stamps into a monorepo's root caller.
+# extension-ci.yml and extension-release.yml against a repository that holds
+# two extensions, one requiring the other: the self-test for
+# `working_directory`. One static job per extension, the shape ckinit stamps
+# into a monorepo's root callers. The release jobs are dry runs: both archives
+# are built, verified and smoke-tested, the addon's with the base's archive from
+# this run, and the publish job lists what it would attach.
 #
 # `uses: ./…` resolves against the CALLING repository, which here is this one,
 # so the workflow under test is the one in the branch that triggered the run.
@@ -21,6 +24,7 @@ on:
     paths:
       - 'examples/monorepo/**'
       - '.github/workflows/extension-ci.yml'
+      - '.github/workflows/extension-release.yml'
       - '.github/workflows/monorepo-self-test.yml'
       - '.github/actions/private-deps/**'
   workflow_call:
@@ -42,3 +46,34 @@ jobs:
     with:
       working_directory: examples/monorepo/ckmonoaddon
       image: ghcr.io/jfilter/civikitchen:standalone
+
+  release-base:
+    if: ${{ github.repository == 'jfilter/civikitchen' }}
+    permissions:
+      contents: write  # declared by the called publish job; a dry run writes nothing
+    uses: ./.github/workflows/extension-release.yml
+    with:
+      working_directory: examples/monorepo/ckmonobase
+      stage: build
+      dry_run: true
+      image: ghcr.io/jfilter/civikitchen:standalone
+
+  release-addon:
+    needs: [release-base]
+    permissions:
+      contents: write  # declared by the called publish job; a dry run writes nothing
+    uses: ./.github/workflows/extension-release.yml
+    with:
+      working_directory: examples/monorepo/ckmonoaddon
+      stage: build
+      dry_run: true
+      image: ghcr.io/jfilter/civikitchen:standalone
+
+  release-publish:
+    needs: [release-base, release-addon]
+    permissions:
+      contents: write  # declared by the called publish job; a dry run writes nothing
+    uses: ./.github/workflows/extension-release.yml
+    with:
+      stage: publish
+      dry_run: true

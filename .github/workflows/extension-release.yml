@@ -18,6 +18,13 @@
 # (docs/releases.md). A vX.Y.Z-<pre> tag publishes a pre-release, which never
 # takes Latest; a plain tag takes Latest only as the highest plain version.
 #
+# A repository of several extensions releases them in lockstep: one tag, one
+# GitHub release carrying every archive. Its caller has one `stage: build` job
+# per extension (`working_directory: <dir>`, `needs:` on the jobs of the
+# same-repository extensions it requires, whose archives its smoke test
+# installs) and one `stage: publish` job that `needs:` all of them. ckinit
+# stamps that caller at the repository root.
+#
 # NOT a version bumper: the bump is a commit an author writes and reviews, the
 # tag is the statement that it is ready. Why not release-please, and what the
 # archive contents promise: docs/extension-releases.md, and ckrelease's header.
@@ -26,6 +33,28 @@ name: Extension Release
 on:
   workflow_call:
     inputs:
+      working_directory:
+        description: >-
+          The extension's directory inside the repository, for a repository
+          that holds several extensions. The build, the archive and the smoke
+          test are resolved against it. The default is the repository root.
+        type: string
+        default: '.'
+      stage:
+        description: >-
+          `release` builds this extension and publishes its release. `build`
+          builds, verifies and smoke-tests the archive and uploads it for a
+          later `publish` job; `publish` builds nothing and publishes one
+          release carrying every archive this run's `build` jobs uploaded.
+        type: string
+        default: 'release'
+      dry_run:
+        description: >-
+          Build and verify the version info.xml carries, without a tag, and
+          publish nothing: the publish job only lists the archives it would
+          attach.
+        type: boolean
+        default: false
       image:
         description: >-
           CiviKitchen image the install smoke test runs in. Defaults to the
@@ -88,12 +117,12 @@ permissions:
 
 jobs:
   dist:
+    if: ${{ inputs.stage != 'publish' }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
-    outputs:
-      prerelease: ${{ steps.flags.outputs.prerelease }}
-      latest: ${{ steps.flags.outputs.latest }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     env:
-      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-release
       # Inputs reach the shell through the environment, never through expression
       # interpolation inside `run:` — an interpolated input IS the script text.
       # Read by the smoke stack's ${CIVIKITCHEN_IMAGE} on every compose call,
@@ -106,16 +135,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # The archive is built from the tag, so there has to be one. A branch push
-      # that reached this workflow would otherwise publish a release named after
-      # the branch.
-      - name: Require a tag
-        run: |
-          case "$GITHUB_REF" in
-            refs/tags/*) echo "releasing $GITHUB_REF_NAME" ;;
-            *) echo "extension-release only runs on a tag push (got $GITHUB_REF)" >&2; exit 1 ;;
-          esac
-
       # Pinned to the SHA this workflow was resolved from, so the ckrelease that
       # builds the artifact is the one belonging to the pinned contract — same
       # mechanism the drift job in extension-ci.yml uses.
@@ -126,25 +145,62 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
 
-      # Before any build work, so a tag that is no release version fails here.
-      # The checkout is shallow without tags; the API lists them with the
-      # job's read token. Left to gh, a late release of an older version or a
-      # pre-release takes Latest by date.
-      - name: Decide how the release is published
-        id: flags
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
-            --jq '.[].ref' > "$RUNNER_TEMP/release-tags.txt"
-          .civikitchen-ci/.github/scripts/release-publish-flags.sh "$GITHUB_REF_NAME" \
-            < "$RUNNER_TEMP/release-tags.txt" | tee -a "$GITHUB_OUTPUT"
-
       - name: Install the locked CiviKitchen configuration parser
+        working-directory: .
         run: |
           composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
             --working-dir=.civikitchen-ci/packages/civikitchen-scenario-schema
+
+      # From the checkout root, so a working_directory that does not exist gets
+      # this message rather than a runner error. A tag that is no release
+      # version fails here, before any build work.
+      - name: Validate the inputs and read the extension key
+        id: key
+        working-directory: .
+        env:
+          CK_STAGE: ${{ inputs.stage }}
+          CK_DRY_RUN: ${{ inputs.dry_run }}
+          CK_WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        run: |
+          set -euo pipefail
+          case "$CK_STAGE" in
+            release|build) ;;
+            *) echo "stage must be release, build or publish (got: '$CK_STAGE')" >&2; exit 1 ;;
+          esac
+          wd=${CK_WORKING_DIRECTORY#./}
+          wd=${wd%/}
+          case "$wd" in
+            '') echo "working_directory is empty — '.' is the repository root" >&2; exit 1 ;;
+            /*) echo "working_directory must be relative to the repository root (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
+            ..|../*|*/..|*/../*) echo "working_directory must stay inside the repository (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
+            *//*|*/./*) echo "working_directory must be a plain relative path (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
+          esac
+          [ -f "$wd/info.xml" ] \
+            || { echo "no info.xml in '$CK_WORKING_DIRECTORY' — this is not a CiviCRM extension" >&2; exit 1; }
+          if [ "$CK_DRY_RUN" = true ]; then
+            echo "dry run: building the version info.xml carries, publishing nothing"
+            version=
+          else
+            case "$GITHUB_REF" in
+              refs/tags/*) echo "releasing $GITHUB_REF_NAME" ;;
+              # The archive is built from the tag; a branch push would publish a
+              # release named after the branch.
+              *) echo "extension-release only runs on a tag push (got $GITHUB_REF)" >&2; exit 1 ;;
+            esac
+            .civikitchen-ci/.github/scripts/release-publish-flags.sh "$GITHUB_REF_NAME" < /dev/null > /dev/null
+            version=$GITHUB_REF_NAME
+          fi
+          key=$(cd "$wd" && php "$GITHUB_WORKSPACE/.civikitchen-ci/toolbelt/bin/ckrelease" info key)
+          file=$(cd "$wd" && php "$GITHUB_WORKSPACE/.civikitchen-ci/toolbelt/bin/ckrelease" info file)
+          {
+            echo "key=$key"
+            echo "version=$version"
+            echo "wd=$wd"
+          } >> "$GITHUB_OUTPUT"
+          # Per extension: two build jobs of one run can share a Docker daemon,
+          # and Compose accepts only lower-case letters, digits, '-' and '_'.
+          slug=${file,,}
+          echo "COMPOSE_PROJECT_NAME=ck-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-${slug//[^a-z0-9_-]/-}-release" >> "$GITHUB_ENV"
 
       # Read once, here, so the token gate, the staging step and the smoke
       # stack all agree on whether this release has a dependency that only a
@@ -153,7 +209,7 @@ jobs:
         id: pins
         run: |
           set -euo pipefail
-          php .civikitchen-ci/toolbelt/bin/ckconform --policy extension_release \
+          php "$GITHUB_WORKSPACE"/.civikitchen-ci/toolbelt/bin/ckconform --policy extension_release \
             > "$RUNNER_TEMP/release-pins.txt"
           if [ -s "$RUNNER_TEMP/release-pins.txt" ]; then
             echo "any=true" >> "$GITHUB_OUTPUT"
@@ -168,15 +224,15 @@ jobs:
         run: |
           set -euo pipefail
           # Refuses an unsafe output path, an unpinned Bun or a missing bun.lock up front.
-          php .civikitchen-ci/toolbelt/bin/ckconform --dist-paths > /dev/null
-          tool=$(php .civikitchen-ci/toolbelt/bin/ckconform --policy dist_build_tool)
+          php "$GITHUB_WORKSPACE"/.civikitchen-ci/toolbelt/bin/ckconform --dist-paths > /dev/null
+          tool=$(php "$GITHUB_WORKSPACE"/.civikitchen-ci/toolbelt/bin/ckconform --policy dist_build_tool)
           echo "tool=$tool" >> "$GITHUB_OUTPUT"
 
       - name: Set up Bun for the declared release build
         if: ${{ steps.dist-build.outputs.tool == 'bun' }}
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version-file: package.json
+          bun-version-file: ${{ inputs.working_directory }}/package.json
 
       # `ckrelease dist` stages exactly the declared outputs and fails on a missing one.
       - name: Build the declared release output
@@ -279,7 +335,7 @@ jobs:
                 find vendor -type f -path "*/$relpath" -delete
                 ;;
             esac
-          done < <(php .civikitchen-ci/toolbelt/bin/ckconform --dist-paths)
+          done < <(php "$GITHUB_WORKSPACE"/.civikitchen-ci/toolbelt/bin/ckconform --dist-paths)
 
           # A package composer installed from source carries its own .git;
           # `git add` would record that as a gitlink (an empty entry in the
@@ -293,12 +349,12 @@ jobs:
           echo "CK_RELEASE_REF=$(git write-tree)" >> "$GITHUB_ENV"
 
       - name: Build the distribution archive
-        id: build
         env:
           # Outside the checkout on purpose: an extension repo may well track its
           # own dist/ (a committed frontend build), and the release artifact must
           # not land in the tree the archive is built from.
           CK_DIST: ${{ runner.temp }}/ckrelease
+          CK_RELEASE_VERSION: ${{ steps.key.outputs.version }}
         run: |
           set -euo pipefail
           args=()
@@ -307,12 +363,60 @@ jobs:
           fi
           # dist runs the consistency check itself and refuses to build without
           # it, so there is no way to publish an archive that skipped it.
-          php .civikitchen-ci/toolbelt/bin/ckrelease dist \
-            --version "$GITHUB_REF_NAME" --ref "$CK_RELEASE_REF" --output "$CK_DIST" "${args[@]}"
-          {
-            echo "key=$(php .civikitchen-ci/toolbelt/bin/ckrelease info key)"
-            echo "zip=$CK_DIST/$(php .civikitchen-ci/toolbelt/bin/ckrelease info dist-name)"
-          } >> "$GITHUB_OUTPUT"
+          # An empty version (dry run) builds whatever info.xml carries.
+          php "$GITHUB_WORKSPACE"/.civikitchen-ci/toolbelt/bin/ckrelease dist \
+            --version "$CK_RELEASE_VERSION" --ref "$CK_RELEASE_REF" --output "$CK_DIST" "${args[@]}"
+
+      # A same-repository <requires> is released by this very tag, so no pin can
+      # name it: the smoke test installs the archive its own build job uploaded.
+      - name: Find the same-repository extensions this one requires
+        id: siblings
+        if: ${{ inputs.smoke_test }}
+        env:
+          CK_WD: ${{ steps.key.outputs.wd }}
+        run: |
+          set -euo pipefail
+          ck="$GITHUB_WORKSPACE/.civikitchen-ci/toolbelt/bin/ck"
+          keys=()
+          if [ "$CK_WD" != . ]; then
+            while IFS= read -r required; do
+              for info in ../*/info.xml; do
+                if [ -f "$info" ] && [ "$(php "$ck" internal extension-key "$info")" = "$required" ]; then
+                  keys+=("$required")
+                fi
+              done
+            done < <(php "$ck" internal extension-requires info.xml)
+          fi
+          echo "keys=${keys[*]}" >> "$GITHUB_OUTPUT"
+
+      - name: Download this run's archives
+        if: ${{ steps.siblings.outputs.keys != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: ckrelease-dist-*
+          path: ${{ runner.temp }}/ckrelease-run
+
+      - name: Stage the required same-repository archives
+        if: ${{ steps.siblings.outputs.keys != '' }}
+        env:
+          CK_SIBLING_KEYS: ${{ steps.siblings.outputs.keys }}
+          CK_RUN_ARCHIVES: ${{ runner.temp }}/ckrelease-run
+          CK_SIBLINGS: ${{ runner.temp }}/ckrelease-siblings
+        run: |
+          set -euo pipefail
+          mkdir -p "$CK_SIBLINGS"
+          read -ra keys <<< "$CK_SIBLING_KEYS"
+          for key in "${keys[@]}"; do
+            archives="$CK_RUN_ARCHIVES/ckrelease-dist-$key"
+            if ! compgen -G "$archives/*.zip" > /dev/null; then
+              echo "no archive of $key in this run — list the job that builds it under this job's needs:" >&2
+              exit 1
+            fi
+            (cd "$archives" && sha256sum --check --strict --status ./*.sha256) \
+              || { echo "the archive of $key does not match its digest" >&2; exit 1; }
+            cp "$archives"/*.zip "$CK_SIBLINGS/"
+            echo "staged $key from this run"
+          done
 
       # A release archive that has never been installed is a guess. This is the
       # same stack extension-ci.yml runs in, minus the source mount: the site
@@ -320,15 +424,16 @@ jobs:
       - name: Install smoke test
         if: ${{ inputs.smoke_test }}
         env:
-          CK_EXT_KEY: ${{ steps.build.outputs.key }}
+          CK_EXT_KEY: ${{ steps.key.outputs.key }}
           CK_DIST: ${{ runner.temp }}/ckrelease
           CK_POLICY_DIR: ${{ runner.temp }}/ckrelease-policy
           CK_DEPS: ${{ runner.temp }}/ckrelease-deps
+          CK_SIBLINGS: ${{ runner.temp }}/ckrelease-siblings
         run: |
           set -euo pipefail
-          # Always a directory, even with no pins: compose interpolates the
-          # path on every call, and an unset variable is an invalid mount.
-          mkdir -p "$CK_DEPS"
+          # Always directories, even with nothing staged: compose interpolates
+          # the paths on every call, and an unset variable is an invalid mount.
+          mkdir -p "$CK_DEPS" "$CK_SIBLINGS"
           # The archive carries no civikitchen.yaml (a dev file, excluded by the
           # central list), but the <requires> resolver reads extension_source
           # pins from it. Its own directory, not $CK_DIST: that one is uploaded
@@ -356,6 +461,7 @@ jobs:
                 - ${CK_DIST}:/ck-dist:ro
                 - ${CK_POLICY_DIR}:/ck-policy:ro
                 - ${CK_DEPS}:/ck-deps:ro
+                - ${CK_SIBLINGS}:/ck-siblings:ro
             db:
               image: mariadb:10.11
               environment:
@@ -377,6 +483,9 @@ jobs:
             -e "CK_EXT_KEY=$CK_EXT_KEY" app bash -c '
             set -eu
             mkdir -p "${CK_EXT_DIR:-/var/www/html/ext}"
+            for sibling in /ck-siblings/*.zip; do
+              if [ -f "$sibling" ]; then unzip -q -o "$sibling" -d "${CK_EXT_DIR:-/var/www/html/ext}"; fi
+            done
             unzip -q -o /ck-dist/*.zip -d "${CK_EXT_DIR:-/var/www/html/ext}"
             if [ -f /ck-policy/civikitchen.yaml ]; then
               cp /ck-policy/civikitchen.yaml "${CK_EXT_DIR:-/var/www/html/ext}/$CK_EXT_KEY/civikitchen.yaml"
@@ -423,19 +532,26 @@ jobs:
       - name: Tear down the smoke stack
         if: ${{ always() && inputs.smoke_test }}
         run: |
+          # Unset when the job failed before the key was read, and so before any stack.
+          [ -n "${COMPOSE_PROJECT_NAME:-}" ] || exit 0
           docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker rm -f -v
           docker network ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker network rm
           docker volume ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | xargs -r docker volume rm
 
+      # Named by extension key: every build job of a run uploads one, and the
+      # publish job collects them all by the prefix.
       - name: Upload the archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ckrelease-dist
+          name: ckrelease-dist-${{ steps.key.outputs.key }}
           path: ${{ runner.temp }}/ckrelease/
           if-no-files-found: error
 
+  # One release per tag: after this extension's own build (stage release), or
+  # after every build job of a several-extensions caller (stage publish).
   publish:
     needs: dist
+    if: ${{ !cancelled() && inputs.stage != 'build' && (needs.dist.result == 'success' || (inputs.stage == 'publish' && needs.dist.result == 'skipped')) }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     # The only job that writes anything, and the only one with a token that can.
     permissions:
@@ -445,39 +561,83 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+          repository: jfilter/civikitchen
+          ref: ${{ job.workflow_sha }}
+          path: .civikitchen-ci
+
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: ckrelease-dist
-          path: ckrelease-dist
+          pattern: ckrelease-dist-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/ckrelease-dist
+
+      # A pattern that matches nothing downloads nothing; a release without an
+      # archive, or with one damaged on the way, is not published.
+      - name: Check the archives
+        env:
+          CK_STAGE: ${{ inputs.stage }}
+          CK_DIST: ${{ runner.temp }}/ckrelease-dist
+        run: |
+          set -euo pipefail
+          case "$CK_STAGE" in
+            release|publish) ;;
+            *) echo "stage must be release, build or publish (got: '$CK_STAGE')" >&2; exit 1 ;;
+          esac
+          if ! compgen -G "$CK_DIST/*.zip" > /dev/null; then
+            echo "no release archive in this run — a publish job needs: every build job" >&2
+            exit 1
+          fi
+          (cd "$CK_DIST" && sha256sum --check --strict ./*.sha256)
 
       # --generate-notes is the delegation the issue asked for: GitHub already
       # writes decent notes from merged PRs, and a release that exists is
       # re-runnable (upload --clobber) instead of erroring on the second try.
+      # The checkout is shallow without tags; the API lists them. Left to gh, a
+      # late release of an older version or a pre-release takes Latest by date.
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CK_DRAFT: ${{ inputs.draft }}
-          CK_PRERELEASE: ${{ needs.dist.outputs.prerelease }}
-          CK_LATEST: ${{ needs.dist.outputs.latest }}
+          CK_DRY_RUN: ${{ inputs.dry_run }}
+          CK_DIST: ${{ runner.temp }}/ckrelease-dist
         run: |
           set -euo pipefail
+          if [ "$CK_DRY_RUN" = true ]; then
+            echo "dry run: a release would carry"
+            ls -1 "$CK_DIST"
+            exit 0
+          fi
+          case "$GITHUB_REF" in
+            refs/tags/*) ;;
+            *) echo "extension-release only runs on a tag push (got $GITHUB_REF)" >&2; exit 1 ;;
+          esac
+          gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
+            --jq '.[].ref' > "$RUNNER_TEMP/release-tags.txt"
+          flags=$(.civikitchen-ci/.github/scripts/release-publish-flags.sh "$GITHUB_REF_NAME" \
+            < "$RUNNER_TEMP/release-tags.txt")
+          echo "$flags"
+          prerelease=$(sed -n 's/^prerelease=//p' <<< "$flags")
+          latest=$(sed -n 's/^latest=//p' <<< "$flags")
           # A draft cannot be Latest; publishing it later decides that in the UI.
           args=()
           if [ "$CK_DRAFT" = 'true' ]; then
             args+=(--draft)
           else
-            args+=(--latest="$CK_LATEST")
+            args+=(--latest="$latest")
           fi
-          if [ "$CK_PRERELEASE" = 'true' ]; then
+          if [ "$prerelease" = 'true' ]; then
             args+=(--prerelease)
           fi
           # A re-run only replaces assets: upload leaves Latest and pre-release
           # as the first run set them, even if a higher tag was released since.
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             echo "release $GITHUB_REF_NAME exists — replacing its assets"
-            gh release upload "$GITHUB_REF_NAME" ckrelease-dist/* --clobber
+            gh release upload "$GITHUB_REF_NAME" "$CK_DIST"/* --clobber
           else
             gh release create "$GITHUB_REF_NAME" \
               --verify-tag --title "$GITHUB_REF_NAME" --generate-notes \
-              "${args[@]}" ckrelease-dist/*
+              "${args[@]}" "$CK_DIST"/*
           fi

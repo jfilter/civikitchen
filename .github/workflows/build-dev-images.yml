@@ -966,7 +966,7 @@ jobs:
     # the promote that puts this commit's toolbelt there.
     needs: [promote-standalone]
     permissions:
-      contents: read
+      contents: write  # the release dry run calls a workflow whose publish job declares it
     uses: ./.github/workflows/monorepo-self-test.yml
 
   notify-scheduled-failure:
