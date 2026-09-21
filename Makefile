@@ -107,7 +107,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-parity \
-	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckcoverage test-doctor test-tool-locks \
+	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
 	test-ck-headless test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
 	test-database-matrix test-demo-basic-auth test-release-retag test-release-script \
         lint-actions lint-php lint-schema lint-changelog test-changelog build test-images e2e tools clean
@@ -128,7 +128,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-script test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-script test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -174,6 +174,9 @@ test-ck: ## Unified ck dispatcher and compatibility aliases
 
 test-ckcommon-git: ## ck_git trusts the worktree root, not the cwd
 	bash tests/toolbelt/test-ckcommon-git.sh
+
+test-missing-tool: ## A tool missing from PATH is named, not a proc_open warning
+	bash tests/toolbelt/test-missing-tool.sh
 
 test-composer-deps: ## ckdeps ignore patterns: core-provided classes only
 	php tests/toolbelt/test-composer-deps.php

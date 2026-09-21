@@ -38,6 +38,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   own `phpcs.xml.dist`.
 - `ckfmt --check` gates untracked files, which are exactly the ones nobody has
   formatted yet.
+- A tool that is not on PATH is named in one line (`ck: phpcs was not found on
+  PATH (...)`) instead of a raw `proc_open(): posix_spawn() failed` warning; a
+  login shell that resets PATH is the usual cause.
 - The git-reading toolbelt libraries work from an extension subdirectory of a
   multi-extension repository: `cklint`'s changed-file list is scoped to the
   extension and printed relative to it, and the `safe.directory` guard names the

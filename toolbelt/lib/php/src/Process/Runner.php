@@ -6,10 +6,41 @@ namespace CiviKitchen\Toolbelt\Process;
 
 class Runner
 {
+    /**
+     * The message for a program that cannot be spawned, or null when it can.
+     * Checked before proc_open, whose own failure is a raw PHP warning that
+     * reads like a memory or seccomp problem; a login shell resetting PATH is
+     * the usual cause. No fallback path: a guessed tool is worse than an error.
+     * Searched on this process's PATH: proc_open (posix_spawnp/execvpe) ignores
+     * the PATH of the environment passed to the child.
+     *
+     * @param non-empty-list<string> $command
+     */
+    private function unresolved(array $command): ?string
+    {
+        $program = $command[0];
+        if (str_contains($program, '/')) {
+            return is_file($program) && is_executable($program)
+                ? null : "ck: {$program} is not an executable file\n";
+        }
+        $path = (string) getenv('PATH');
+        foreach (explode(PATH_SEPARATOR, $path) as $directory) {
+            if ($directory !== '' && is_file($directory . '/' . $program) && is_executable($directory . '/' . $program)) {
+                return null;
+            }
+        }
+        return "ck: {$program} was not found on PATH ({$path})\n";
+    }
+
     /** @param non-empty-list<string> $command */
     /** @param array<string, string>|null $environment */
     public function passthrough(array $command, ?array $environment = null, ?string $workingDirectory = null): int
     {
+        $missing = $this->unresolved($command);
+        if ($missing !== null) {
+            fwrite(STDERR, $missing);
+            return 2;
+        }
         $process = proc_open($command, [STDIN, STDOUT, STDERR], $pipes, $workingDirectory, $environment);
         if (!is_resource($process)) {
             fwrite(STDERR, 'ck: could not start ' . $command[0] . "\n");
@@ -22,6 +53,10 @@ class Runner
     /** @param array<string, string>|null $environment */
     public function capture(array $command, ?array $environment = null, ?string $workingDirectory = null): array
     {
+        $missing = $this->unresolved($command);
+        if ($missing !== null) {
+            return ['status' => 2, 'output' => $missing];
+        }
         $process = proc_open($command, [
             0 => ['file', '/dev/null', 'r'],
             1 => ['pipe', 'w'],
@@ -39,6 +74,10 @@ class Runner
     /** @param array<string, string>|null $environment */
     public function captureSeparate(array $command, ?array $environment = null, ?string $workingDirectory = null): array
     {
+        $missing = $this->unresolved($command);
+        if ($missing !== null) {
+            return ['status' => 2, 'stdout' => '', 'stderr' => $missing];
+        }
         $process = proc_open($command, [
             0 => ['file', '/dev/null', 'r'],
             1 => ['pipe', 'w'],
@@ -85,6 +124,11 @@ class Runner
     /** @param non-empty-list<string> $command @param array<string, string>|null $environment */
     public function redirect(array $command, string $outputFile, ?array $environment = null): int
     {
+        $missing = $this->unresolved($command);
+        if ($missing !== null) {
+            fwrite(STDERR, $missing);
+            return 2;
+        }
         $process = proc_open($command, [
             0 => STDIN,
             1 => ['file', $outputFile, 'w'],

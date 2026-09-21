@@ -86,6 +86,21 @@ final class SharedPhpTest extends TestCase
         self::assertSame(0, $runner->passthrough(['true']));
     }
 
+    /** proc_open searches the parent's PATH (posix_spawnp/execvpe), never the one passed to the child. */
+    public function testRunnerResolvesTheProgramAgainstTheParentPath(): void
+    {
+        $bin = $this->temporary . '/bin';
+        mkdir($bin);
+        file_put_contents($bin . '/ck-env-probe', "#!/bin/sh\nprintf probe\n");
+        chmod($bin . '/ck-env-probe', 0755);
+        $runner = new Runner();
+        $onlyInChild = $runner->capture(['ck-env-probe'], ['PATH' => $bin]);
+        self::assertSame(2, $onlyInChild['status']);
+        self::assertSame('ck: ck-env-probe was not found on PATH (' . getenv('PATH') . ")\n", $onlyInChild['output']);
+        self::assertSame(['status' => 0, 'output' => ''], $runner->capture(['true'], ['PATH' => $bin]));
+        self::assertSame(['status' => 0, 'output' => ''], $runner->capture(['true'], ['HOME' => $this->temporary]));
+    }
+
     public function testRunnerDrainsLargeStdoutAndStderrWithoutDeadlock(): void
     {
         $php = PHP_SAPI === 'phpdbg' ? dirname(PHP_BINARY) . '/php' : PHP_BINARY;
@@ -482,6 +497,23 @@ final class SharedPhpTest extends TestCase
             'git -c safe.directory=' . (string) realpath($root) . ' rev-parse --is-inside-work-tree',
             $recorder->commands[0],
         );
+    }
+
+    public function testRunnerNamesAProgramThatIsNotOnPathInsteadOfSpawningIt(): void
+    {
+        $runner = new Runner();
+        $result = $runner->capture(['ck-no-such-tool'], ['PATH' => $this->temporary]);
+        self::assertSame(2, $result['status']);
+        self::assertSame('ck: ck-no-such-tool was not found on PATH (' . getenv('PATH') . ")\n", $result['output']);
+
+        // An absolute path is not looked up, so it gets its own message.
+        $result = $runner->capture([$this->temporary . '/nope']);
+        self::assertSame(2, $result['status']);
+        self::assertSame("ck: {$this->temporary}/nope is not an executable file\n", $result['output']);
+
+        // A program that IS there still runs.
+        $result = $runner->capture(['env'], ['PATH' => '/usr/bin:/bin']);
+        self::assertSame(0, $result['status']);
     }
 
     public function testLintPinsPhpExtensionsEvenWithAProjectPhpcsConfig(): void
