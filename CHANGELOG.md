@@ -50,6 +50,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `--update` deletes it unless it carries lines outside its managed blocks.
   A second workflow calling `extension-release.yml` is drift also when
   `release.yml` exists.
+- **Breaking:** `ckconform`'s `release-workflow` fails an extension that
+  declares `release: none` while one of its jobs still publishes through
+  `extension-release.yml`. A job with `dry_run: true` publishes nothing and
+  counts as a release caller neither there nor in `ckinit`.
 
 ## [1.26.0] - 2026-09-21
 

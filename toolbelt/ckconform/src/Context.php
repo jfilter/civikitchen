@@ -435,13 +435,37 @@ final class Context
     public const SHARED_RELEASE = 'extension-release.yml';
 
     /**
-     * Does any workflow hand releasing off to the shared pipeline? A repo that
-     * calls it produces a tagged, verified archive; one that does not offers a
+     * Does any workflow publish releases through the shared pipeline? A repo
+     * that does produces a tagged, verified archive; one that does not offers a
      * consumer nothing but a branch.
      */
-    public function callsSharedRelease(): bool
+    public function publishesReleases(): bool
     {
-        return $this->jobsCalling(self::SHARED_RELEASE) !== [];
+        return $this->releaseCallers() !== [];
+    }
+
+    /**
+     * The jobs that publish through the shared release workflow, workflow =>
+     * job name => job. A `dry_run: true` job publishes nothing.
+     *
+     * @return array<string, array<string, array<mixed>>>
+     */
+    public function releaseCallers(): array
+    {
+        return array_filter(array_map(
+            static fn (array $jobs): array => array_filter($jobs, [self::class, 'publishesRelease']),
+            $this->jobsCalling(self::SHARED_RELEASE),
+        ));
+    }
+
+    /** @param array<mixed> $job */
+    public static function publishesRelease(array $job): bool
+    {
+        $uses = $job['uses'] ?? null;
+        $dryRun = is_array($job['with'] ?? null) ? ($job['with']['dry_run'] ?? false) : false;
+
+        return is_string($uses) && basename(explode('@', $uses, 2)[0]) === self::SHARED_RELEASE
+            && $dryRun !== true && $dryRun !== 'true';
     }
 
     /**

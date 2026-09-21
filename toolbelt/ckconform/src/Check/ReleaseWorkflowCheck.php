@@ -32,6 +32,15 @@ final class ReleaseWorkflowCheck implements Check
             // optional: an exemption nobody has to justify is how a rule ends
             // up declared away everywhere.
             if (preg_match('/^none\s+--\s+\S/', $declared) === 1) {
+                $publishers = $this->publishingCallers($context);
+                if ($publishers !== []) {
+                    $reporter->fail(
+                        'civikitchen.yaml declares release: none, but ' . implode(', ', $publishers) . ' publishes a '
+                        . 'release on every tag push — delete that caller (ckinit --update does), or drop the declaration'
+                    );
+
+                    return;
+                }
                 $reporter->ok("no releases — declared deliberate in civikitchen.yaml ({$declared})");
 
                 return;
@@ -41,7 +50,7 @@ final class ReleaseWorkflowCheck implements Check
             return;
         }
 
-        $callers = $context->scopedJobsCalling(Context::SHARED_RELEASE);
+        $callers = $this->publishingCallers($context);
         if (count($callers) > 1) {
             $reporter->fail(
                 'more than one job calls ' . Context::SHARED_RELEASE . ' (' . implode(', ', $callers)
@@ -92,7 +101,7 @@ final class ReleaseWorkflowCheck implements Check
             return;
         }
         $jobs = $context->jobsOf($workflow);
-        $callers = $context->jobsCalling(Context::SHARED_RELEASE)[$workflow] ?? [];
+        $callers = $context->releaseCallers()[$workflow] ?? [];
         foreach ($this->requiredSiblings($context) as $key => $directory) {
             $builders = array_keys(array_filter(
                 $callers,
@@ -118,6 +127,19 @@ final class ReleaseWorkflowCheck implements Check
         $reporter->fail(
             "no stage: publish job in {$workflow} needs {$name} — this extension's archive would be missing from the release"
         );
+    }
+
+    /**
+     * Labels of this extension's jobs that publish through the shared release.
+     *
+     * @return list<string>
+     */
+    private function publishingCallers(Context $context): array
+    {
+        return array_values(array_filter(
+            $context->scopedJobsCalling(Context::SHARED_RELEASE),
+            static fn (string $label): bool => Context::publishesRelease($context->scopedJobs()[$label]),
+        ));
     }
 
     /**

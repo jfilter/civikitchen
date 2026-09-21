@@ -188,4 +188,70 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
         ]);
         $this->assertFails($this->run_(new ReleaseWorkflowCheck(), $context), 'more than one job calls extension-release.yml');
     }
+
+    public function testADryRunCallerIsNoSecondPublisher(): void
+    {
+        $caller = "name: Release\njobs:\n  release:\n    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n";
+        $context = $this->repo([
+            '.github/workflows/release.yml' => $caller,
+            '.github/workflows/release-dry-run.yml' => $caller . "    with:\n      dry_run: true\n",
+        ]);
+        $this->assertSilent($this->run_(new ReleaseWorkflowCheck(), $context));
+    }
+
+    public function testADryRunCallerAloneIsNoRelease(): void
+    {
+        $context = $this->repo([
+            '.github/workflows/release-dry-run.yml' => "name: Release\njobs:\n  release:\n"
+                . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n    with:\n      dry_run: true\n",
+        ]);
+        $this->assertFails($this->run_(new ReleaseWorkflowCheck(), $context), 'no release workflow');
+    }
+
+    public function testReleaseNoneFailsWhileACallerStillPublishes(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "release=none -- internal glue, never installed elsewhere\n",
+            '.github/workflows/release.yml' => "name: Release\njobs:\n  release:\n    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n",
+        ]);
+        $this->assertFails(
+            $this->run_(new ReleaseWorkflowCheck(), $context),
+            'declares release: none, but .github/workflows/release.yml:release publishes a release on every tag push',
+        );
+    }
+
+    public function testReleaseNoneIgnoresADryRunCaller(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "release=none -- internal glue, never installed elsewhere\n",
+            '.github/workflows/release.yml' => "name: Release\njobs:\n  release:\n"
+                . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n    with:\n      dry_run: true\n",
+        ]);
+        $this->assertPasses($this->run_(new ReleaseWorkflowCheck(), $context));
+    }
+
+    public function testReleaseNoneInAMultiExtensionRepositoryIgnoresTheOtherExtensionsJobs(): void
+    {
+        $caller = "name: Release\njobs:\n" . self::releaseJob('base', 'build', directory: 'base')
+            . self::releaseJob('publish', 'publish', '[base]');
+        $context = $this->monorepoExtension(
+            ['.github/workflows/release.yml' => $caller],
+            ['civikitchen.yaml' => $this->policyFixture("release=none -- internal glue, never installed elsewhere\n")],
+            ['info.xml' => $this->infoXml(key: 'base')],
+        );
+        $this->assertPasses($this->run_(new ReleaseWorkflowCheck(), $context));
+    }
+
+    public function testReleaseNoneInAMultiExtensionRepositoryFailsOnItsOwnJob(): void
+    {
+        $caller = "name: Release\njobs:\n" . self::releaseJob('base', 'build', directory: 'base')
+            . self::releaseJob('example', 'build', directory: 'example')
+            . self::releaseJob('publish', 'publish', '[base, example]');
+        $context = $this->monorepoExtension(
+            ['.github/workflows/release.yml' => $caller],
+            ['civikitchen.yaml' => $this->policyFixture("release=none -- internal glue, never installed elsewhere\n")],
+            ['info.xml' => $this->infoXml(key: 'base')],
+        );
+        $this->assertFails($this->run_(new ReleaseWorkflowCheck(), $context), 'release.yml:example publishes a release');
+    }
 }

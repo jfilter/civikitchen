@@ -46,7 +46,7 @@ final class ReleaseHistory
         // A repo that has not adopted the release pipeline has no tags for the
         // ordinary reason, and release-workflow already says so. Repeating it
         // per rule would put three findings on one verdict.
-        return $context->callsSharedRelease()
+        return $context->publishesReleases()
             ? new self(null, 'no v* tag in this checkout — either nothing has been released, or it was cloned without tags')
             : new self(null, null);
     }
