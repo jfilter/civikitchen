@@ -265,7 +265,13 @@ jobs:
             (cd "$GITHUB_WORKSPACE/$dir" && php "$ckconform" --policy extension_release) \
               >> "$RUNNER_TEMP/release-pins-all.txt"
           done < "$RUNNER_TEMP/release-siblings.txt"
-          sort -u "$RUNNER_TEMP/release-pins-all.txt" > "$RUNNER_TEMP/release-pins.txt"
+          # One staged archive per key: two extensions pinning it differently cannot both install.
+          sed 's/ -- .*$//' "$RUNNER_TEMP/release-pins-all.txt" | sort -u > "$RUNNER_TEMP/release-pins.txt"
+          conflicts=$(cut -d' ' -f1 "$RUNNER_TEMP/release-pins.txt" | uniq -d)
+          if [ -n "$conflicts" ]; then
+            echo "these dependencies are pinned to different releases by extensions of this repository: ${conflicts//$'\n'/, } — pin one release in every civikitchen.yaml" >&2
+            exit 1
+          fi
           if [ -s "$RUNNER_TEMP/release-pins.txt" ]; then
             echo "any=true" >> "$GITHUB_OUTPUT"
           else

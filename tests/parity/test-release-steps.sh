@@ -41,7 +41,7 @@ pin() {
   printf '%s\n' 'version: 1' 'policy:' '  extension_sources:' \
     "    - key: $2" "      version: '^1'" '      release:' \
     '        repository: example-org/dep' '        tag: v1.0.0' "        asset: $3" \
-    "      sha256: $(printf 'a%.0s' {1..64})" '      reason: private, no registry serves it' \
+    "      sha256: $(printf 'a%.0s' {1..64})" "      reason: private, no registry serves it ($1)" \
     > "$ws/$1/civikitchen.yaml"
 }
 
@@ -130,6 +130,11 @@ pin base org.example.dep2 dep2-1.0.0.zip
 run_step addon
 grep -q '^org.example.dep2 ' "$work/runner/release-pins.txt" || fail "a sibling's own pin was not staged"
 [ "$(output any)" = true ] || fail "pins step did not report any=true"
+# The same key pinned to two releases fails here, naming the key.
+pin base org.example.dep dep-1.1.0.zip
+run_step addon
+[ "$rc" -ne 0 ] || fail "one key pinned to two releases was accepted"
+case "$out" in *'pinned to different releases by extensions of this repository: org.example.dep '*) ;; *) fail "pin conflict: $out" ;; esac
 
 # --- staging by archive name ----------------------------------------------
 step "$workflow" dist 'Stage the required same-repository archives'
