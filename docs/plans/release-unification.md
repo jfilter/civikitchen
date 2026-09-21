@@ -92,12 +92,14 @@ The consequences observed while cutting v1.23.0:
   fixtures, then compare `permission-closure` output across every consumer
   before and after: new warnings are expected and belong in the consumer pass.
 
-## Open decisions
-
-- Which repos genuinely never release (tools, internal-only extensions) and
-  get `release=none`.
-
 ## Decided
+
+- Repos that have never cut a release get `release=none` with the reason
+  `TODO: not released yet; switch to the managed release caller with the first
+  release`, the same text in every repo so the remaining ones are found by
+  searching for it. The target stays one release path for all.
+- A repo whose `info.xml` is below an existing tag releases a version above
+  that tag; tags are not deleted.
 
 - `require_changelog` stays opt-in; the managed caller does not set it.
 - The smoke test stays on by default; a repo whose install cannot be reached
