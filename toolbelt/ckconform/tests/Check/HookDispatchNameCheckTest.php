@@ -43,6 +43,30 @@ final class HookDispatchNameCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
     }
 
+    /**
+     * A dependency inside the same repository publishes its hooks like any
+     * other: its directory is named freely, so the key decides which neighbour
+     * is read.
+     */
+    public function testReadsASameRepositoryDependencyWhoseDirectoryDiffersFromItsKey(): void
+    {
+        $context = $this->monorepoExtension(
+            [],
+            [
+                'info.xml' => $this->infoXml(
+                    extra: "  <requires>\n    <ext>de.civico.ckmonobase</ext>\n  </requires>",
+                ),
+                'fixture.php' => "<?php\nfunction fixture_civicrm_monobaseThing(&\$items) {\n}\n",
+            ],
+            [
+                'info.xml' => $this->infoXml(key: 'de.civico.ckmonobase'),
+                'base.php' => "<?php\nfunction base_dispatch() {\n"
+                    . "    Civi::dispatcher()->dispatch('hook_civicrm_monobaseThing', \$e);\n}\n",
+            ],
+        );
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
+
     public function testFailsOnForeignPrefix(): void
     {
         $context = $this->repo(['fixture.php' => <<<'PHP'

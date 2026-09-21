@@ -203,22 +203,52 @@ final class Context
         return $keys;
     }
 
+    /** The image's extension directory, where every installed extension lives. */
+    public const EXT_DIR = '/var/www/html/ext';
+
+    /**
+     * Where a dependency sits in the image: the extension directory — CK_EXT_DIR
+     * when the environment names another one — over the extension KEY. That is
+     * where the template's phpstan bootstrap resolves a `<requires>` and where
+     * the shared CI mounts a sibling; an extension's own `<file>` names only its
+     * own mount.
+     */
+    public function installPath(string $key): string
+    {
+        return (getenv('CK_EXT_DIR') ?: self::EXT_DIR) . '/' . $key;
+    }
+
     /**
      * Where a required extension's code is, for the checks that read a
      * dependency rather than this repo: under the image's extension directory
      * (CK_EXT_DIR, the entrypoint's convention — every <requires> is there once
-     * the site booted), else as a sibling checkout next to this repo. Only
-     * dependencies actually present are returned; a missing one is not an
-     * error here, the check that needs it says what it could not judge.
+     * the site booted), else another extension of this repository, else as a
+     * sibling checkout next to this repo. Only dependencies actually present
+     * are returned; a missing one is not an error here, the check that needs it
+     * says what it could not judge.
      *
      * @return array<string, string> extension key => directory
      */
     public function requiredExtensionDirs(): array
     {
-        $extDir = getenv('CK_EXT_DIR') ?: '/var/www/html/ext';
+        // A neighbour's directory name is free, so the key it declares is what
+        // identifies it, not the path.
+        $neighbours = [];
+        foreach ($this->isMonorepo() ? $this->repositoryExtensions() : [] as $directory => $info) {
+            $neighbourKey = trim((string) ($info['key'] ?? ''));
+            if ($neighbourKey !== '') {
+                $neighbours[$neighbourKey] = $this->repositoryRoot() . '/' . $directory;
+            }
+        }
+
         $dirs = [];
         foreach ($this->requiredExtensions() as $key) {
-            foreach ([$extDir . '/' . $key, dirname(rtrim($this->root, '/')) . '/' . $key] as $candidate) {
+            $candidates = [
+                $this->installPath($key),
+                $neighbours[$key] ?? null,
+                dirname(rtrim($this->root, '/')) . '/' . $key,
+            ];
+            foreach (array_filter($candidates) as $candidate) {
                 if (is_file($candidate . '/info.xml')) {
                     $dirs[$key] = $candidate;
                     break;
