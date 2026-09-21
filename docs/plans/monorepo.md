@@ -1,6 +1,6 @@
 # Plan: several extensions in one repository
 
-Status: draft. Not started. The CI part (phases 1–3) is independent; the
+Status: phases 1–3 implemented, not yet released; phases 4 and 5 open. The
 release part (phase 4) builds on the unified release path planned for v1.26.0.
 
 ## The layout this plan covers
@@ -62,8 +62,12 @@ What happens today in such a repository:
 `defaults.run.working-directory`; paths handed to actions (`compose_file`,
 cache dependency paths, artifact paths, scan targets) are resolved against it.
 Helper checkouts (`.civikitchen-ci`, `.civikitchen-siblings`) stay at the
-workspace root and are addressed absolutely. Artifact names carry the extension
-key.
+workspace root and are addressed absolutely. Everything two jobs of one run
+could share is per extension: artifact names and compose project names carry
+the extension key, concurrency groups carry the directory — otherwise the jobs
+cancel each other, and one job's `down -v` takes the neighbour's stack with it.
+`git cat-file -e "<rev>:<path>"` reads from the repository root, so the
+compose-file probes of the upgrade jobs spell the path `./<path>`.
 
 The root caller has **one job per extension**, not a matrix:
 
@@ -85,10 +89,13 @@ which the workflow-reading checks cannot evaluate. With static jobs,
 `ci-coverage`, `npm-install`, `playwright-diagnostics`,
 `config-without-runner` and `release-workflow` select the job whose
 `working_directory` equals the extension's directory and judge exactly that
-one. `floating-tag` and `workflow-permissions` keep judging the whole file.
+one. A job with steps of its own is selected by
+`defaults.run.working-directory`, since `npm install` and Playwright runs only
+occur there. An extension no job names fails `ci-workflow`, once. `floating-tag` and `workflow-permissions` keep judging the whole file.
 
 Every push runs every extension's jobs. With seven extensions that is seven
-stacks per push; on self-hosted runners this is accepted rather than solved
+stacks per push (measured: about 50 s to a healthy stack, the gates after it
+5–20 s each, jobs in parallel); on self-hosted runners this is accepted rather than solved
 with path filters, which would let a change in the base extension skip the
 extensions that depend on it.
 
@@ -107,9 +114,24 @@ extensions that depend on it.
   `--check` fails when an extension directory has no job, or a job points at a
   directory that is gone.
 
+`--update` on the root appends the job of a new extension directory and drops
+the job of one that is gone; it refuses when repository-owned inputs follow the
+block it would drop. Repository-owned lines live after a block's END marker —
+inputs below `with:` in the root workflow, a sibling volume in the compose file.
+
 The drift job in `extension-ci.yml` runs `ckinit --check` on
-`working_directory`; the root files are checked once, by the first job, through
-`ckinit --check <root>`.
+`working_directory` and, below the root, `ckinit --check <root>` as well. Every
+extension's job repeats the root check: which job is "first" cannot be seen
+from inside a called workflow, and the check is cheap. The root check runs
+only when `working_directory` is exactly one path segment: a deeper tree, like
+the self-test's `examples/monorepo/<ext>`, is not the layout `ckinit` manages.
+
+`private-deps` takes `working_directory` too, because a composite action's
+`run` steps do not inherit the caller's `defaults.run`. Compose project names
+use the lower-cased key (`key_slug`); Compose rejects upper-case names.
+
+The dev compose file is seeded, not managed, so an existing repository adds its
+`/civikitchen-repo` mount by hand; only the CI compose file is checked for it.
 
 ### 3. Same-repository dependencies stay a compose line, and get a check
 
@@ -117,9 +139,15 @@ No new input. The hand-written volume line outside the managed block is kept:
 it is the one mechanism that works for a local `docker compose up` and in CI
 alike. New `ckconform` check `monorepo-requires-mounted`: for every
 `<requires>` key that belongs to an extension in the same repository, the CI
-compose file must mount that directory under `/var/www/html/ext/<key>` and
-enable it before the extension itself. A missing mount is a failure, because
+compose file must mount that directory under `/var/www/html/ext/<key>`. Provisioning resolves
+`<requires>` before enabling, so the order of the volume lines does not matter.
+A missing mount is a failure, because
 the stack would otherwise boot without the dependency and fail late.
+
+The target is the dependency's **key**, not its `<file>` name: the PHPStan
+bootstrap and `private-deps` look a required extension up under `ext/<key>`.
+Only the extension's own managed mount uses `<file>`. The check reads the `app`
+service alone, since that is the service the workflow provisions and tests.
 
 ### 4. Releases are lockstep: one tag, every extension
 
@@ -142,7 +170,39 @@ and every deploy tool that reads tags — for extensions that are deployed
 together anyway. If a repository ever needs independent versions, that is the
 signal to split it.
 
-### 5. No new policy keys
+### 5. The container sees the repository at a second, neutral path
+
+The managed compose mount `..:/var/www/html/ext/<key>` stays: provisioning
+enables exactly that directory and resolves `<requires>`, and cross-extension
+paths keep the `ext/<key>` convention. But in this layout `..` is the extension
+directory, so `.git` stays outside the container: `cklint` reports "no changed
+PHP files" with exit 0, `ckfmt` exits 2.
+
+For an extension below the repository root, `ckinit` adds one managed mount,
+`../..:/civikitchen-repo`. The git-reading tools (`cklint`, `ckfmt`,
+`ckconform`) run with `/civikitchen-repo/<dir>` as working directory — the same
+host directory as `ext/<key>`, so writes land in the right place. Everything
+that boots CiviCRM (`cv`, PHPUnit, PHPStan, lifecycle probes) stays on
+`ext/<key>`. `extension-ci.yml` derives both paths once and uses them at every
+`cd` site.
+
+Measured on `ghcr.io/jfilter/civikitchen:v1` with a two-extension repository:
+
+- `git ls-files` is relative to the working directory, so file selection is
+  correct in a subdirectory. `git diff --name-only` is relative to the
+  repository root: `Files::changedPhp()` needs `--relative`, otherwise the mago
+  stage lints nothing and sees the neighbour's files.
+- `ck_git` and `Files::git()` pass the working directory as `safe.directory`;
+  git wants the worktree root. `ckconform` already passes the root.
+- Rejected — `.git` bound into the extension directory (or `GIT_DIR` /
+  `GIT_WORK_TREE`): the index holds `<dir>/…` paths, the tools are handed paths
+  that do not exist, and `ckfmt` answers "all files are already formatted" with
+  exit 0.
+- Rejected — the repository root mounted under `ext/`: provisioning enables
+  nothing ("no readable info.xml key"), and siblings sit at `ext/<repo>/<dir>`
+  instead of `ext/<key>`, which the PHPStan cross-extension paths rely on.
+
+### 6. No new policy keys
 
 The layout is detected from the filesystem; nothing is declared in
 `civikitchen.yaml`. `Policy::KEYS` and the JSON Schema stay unchanged.
@@ -151,19 +211,24 @@ The layout is detected from the filesystem; nothing is declared in
 
 Each phase ships with the fixture that would have failed before it.
 
-1. **`ckconform` correctness.** Path-scoped `commitsSince()`; job selection by
+1. **`ckconform` and tool correctness.** Path-scoped `commitsSince()`;
+   `--relative` in `Files::changedPhp()` and the worktree root as
+   `safe.directory`; job selection by
    `working_directory` in the workflow-reading checks; the two new checks.
    Fixtures: `monorepoExtension()` grows tags, a second extension and commits
    touching only the neighbour.
 2. **`ckinit`.** Root detection, the root pass, root-only files skipped below
-   the root. `tests/ckinit/test-ckinit.sh` gets a two-extension tree: stamping,
+   the root, the `/civikitchen-repo` mount below the root. `tests/ckinit/test-ckinit.sh` gets a two-extension tree: stamping,
    `--check` clean, a new directory without a job fails, no root-only file
    appears in a subdirectory.
 3. **`extension-ci.yml`.** `working_directory` through every job. Verified by a
    self-test caller in this repository that runs the workflow against a
    two-extension example tree, one extension requiring the other.
 4. **Release.** `working_directory` in `extension-release.yml` and `ckrelease`,
-   keyed artifact names, the single release job. After the unified release path
+   keyed artifact names, the single release job, and a managed release caller
+   in the root pass of `ckinit` — until then `release-workflow` fails for every
+   extension of such a repository, because nothing stamps the job it looks for.
+   `ReleaseCommand` calls git without the `safe.directory` guard. After the unified release path
    has landed.
 5. **Documentation.** A "Several extensions in one repository" section in
    `docs/extension-development.md` and `docs/reusable-workflows.md`; the
