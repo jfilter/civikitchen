@@ -85,8 +85,14 @@ marker and survive `ckinit --update`:
       require_changelog: true
 ```
 
-A caller written before the markers is replaced whole on `--update`; move its
-`with:` and `secrets:` below the marker again and review the diff.
+A caller written before the markers is rewritten onto the template, with its
+job's `with:` and `secrets:` carried below the marker as written, comments
+included. If it holds anything else of its own — another trigger, `env:`, a
+further job — `--update` writes nothing and lists what it would drop, and
+`--check` reports the same. Move that content, or declare the file under
+`policy.template_custom`. `--update` also refuses to create `release.yml` while
+another workflow already calls `extension-release.yml`: one tag push would
+publish twice.
 
 Then, once:
 

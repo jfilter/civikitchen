@@ -57,9 +57,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `extension-release.yml`, is a template-managed file with the trigger for
   plain and pre-release tags. The template drift job reports a repo without it
   or with an older trigger; run `ckinit --update`. Inputs and secrets go below
-  the `# END CIVIKITCHEN MANAGED caller` marker and survive the update; a caller
-  written before the markers is replaced whole, so move its `with:` back below
-  the marker. A repository of several extensions gets no release caller yet.
+  the `# END CIVIKITCHEN MANAGED caller` marker and survive the update. A
+  caller written before the markers keeps its job's `with:` and `secrets:` as
+  written; anything else of its own (another trigger, `env:`, a further job)
+  makes `--update` refuse without writing and `--check` name it ("would
+  drop: …"). `--update` creates no `release.yml` while another workflow already
+  calls `extension-release.yml`, and `release-workflow` fails when more than
+  one job calls it. A repository of several extensions gets no release caller
+  yet.
 - **Breaking:** `ckconform`'s `release-workflow` fails instead of warning when
   no workflow calls `extension-release.yml`. Adopt the caller with `ckinit
   --update`, or declare `policy.release: none` with a reason (and list the
