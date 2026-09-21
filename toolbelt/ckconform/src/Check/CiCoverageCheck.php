@@ -12,8 +12,8 @@ use CiviKitchen\Ckconform\Reporter;
  * A CI job that runs the suite but never measures it tells you the tests still
  * pass and nothing about whether they still cover anything.
  *
- * Scope is Context::workflows(), like every other workflow check: recursive and
- * including `.yaml`.
+ * Scope is Context::scopedWorkflows(): every workflow file, and in a repository
+ * of several extensions only the caller job that runs this one.
  */
 final class CiCoverageCheck implements Check
 {
@@ -28,18 +28,17 @@ final class CiCoverageCheck implements Check
             return;
         }
 
-        $workflows = $context->workflows();
+        $workflows = $context->scopedWorkflows();
         if ($workflows === []) {
             return;
         }
 
         // The shared CI runs ckcoverage; a repo that calls it is measured.
-        $ran = $context->callsSharedCi() ? 'ckcoverage' : '';
-        foreach ($workflows as $workflow) {
+        $ran = $context->scopedCallsShared(Context::SHARED_CI) ? 'ckcoverage' : '';
+        foreach ($workflows as $contents) {
             if ($ran === 'ckcoverage') {
                 break;
             }
-            $contents = $context->read($workflow) ?? '';
             if (preg_match('/(^|[^\w-])ckcoverage([^\w-]|$)/', $contents) === 1) {
                 $ran = 'ckcoverage';
                 break;

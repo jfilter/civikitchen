@@ -76,15 +76,31 @@ abstract class CheckTestCase extends TestCase
     }
 
     /**
+     * A repository whose root is no extension and whose direct subdirectories
+     * are the one under inspection and, when files are given for it, a
+     * neighbour. $rootFiles are relative to the repository root,
+     * which write(), gitCommit() and gitTag() address as well.
+     *
      * @param array<string, string> $rootFiles
      * @param array<string, string> $extensionFiles
+     * @param array<string, string> $neighbourFiles
      */
-    protected function monorepoExtension(array $rootFiles, array $extensionFiles): Context
-    {
+    protected function monorepoExtension(
+        array $rootFiles,
+        array $extensionFiles,
+        array $neighbourFiles = [],
+        string $directory = 'example',
+        string $neighbourDirectory = 'base',
+    ): Context {
         $this->dir = sys_get_temp_dir() . '/ckconform-' . bin2hex(random_bytes(6));
-        mkdir($this->dir . '/extensions/example', 0777, true);
+        mkdir($this->dir . '/' . $directory, 0777, true);
         $extensionFiles['info.xml'] ??= $this->infoXml();
-        foreach (['' => $rootFiles, 'extensions/example/' => $extensionFiles] as $prefix => $files) {
+        $trees = ['' => $rootFiles, $directory . '/' => $extensionFiles];
+        if ($neighbourFiles !== []) {
+            $neighbourFiles['info.xml'] ??= $this->infoXml(key: 'base');
+            $trees[$neighbourDirectory . '/'] = $neighbourFiles;
+        }
+        foreach ($trees as $prefix => $files) {
             foreach ($files as $path => $contents) {
                 $full = $this->dir . '/' . $prefix . $path;
                 if (!is_dir(dirname($full))) {
@@ -92,6 +108,29 @@ abstract class CheckTestCase extends TestCase
                 }
                 file_put_contents($full, $contents);
             }
+        }
+        $this->gitInit();
+
+        return new Context($this->dir . '/' . $directory, $this->coreDir());
+    }
+
+    /**
+     * An extension one level below the layout the monorepo rules cover
+     * (`extensions/example`), for the tests that pin what happens outside it.
+     *
+     * @param array<string, string> $rootFiles
+     */
+    protected function nestedExtension(array $rootFiles): Context
+    {
+        $this->dir = sys_get_temp_dir() . '/ckconform-' . bin2hex(random_bytes(6));
+        mkdir($this->dir . '/extensions/example', 0777, true);
+        file_put_contents($this->dir . '/extensions/example/info.xml', $this->infoXml());
+        foreach ($rootFiles as $path => $contents) {
+            $full = $this->dir . '/' . $path;
+            if (!is_dir(dirname($full))) {
+                mkdir(dirname($full), 0777, true);
+            }
+            file_put_contents($full, $contents);
         }
         $this->gitInit();
 

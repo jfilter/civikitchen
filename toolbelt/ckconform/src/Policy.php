@@ -266,6 +266,30 @@ final class Policy
         if ($errors !== []) throw new \RuntimeException(implode("\n", $errors));
     }
 
+    /**
+     * Any YAML document, through the one parser this tool carries — a workflow
+     * or a compose file is structured and never read with a regex.
+     *
+     * Null on failure, with $error saying which: a document that does not parse,
+     * or a parser that is not installed. Neither may abort the run or read as a
+     * pass, so both come back as a message for the calling check to report.
+     */
+    public static function parseYaml(string $raw, ?string &$error = null): mixed
+    {
+        $error = null;
+        try {
+            self::loadYaml();
+
+            return Yaml::parse($raw);
+        } catch (ParseException $exception) {
+            $error = 'does not parse as YAML: ' . rtrim($exception->getMessage());
+        } catch (\RuntimeException $exception) {
+            $error = 'could not be read: ' . rtrim($exception->getMessage());
+        }
+
+        return null;
+    }
+
     private static function loadYaml(): void
     {
         if (class_exists(Yaml::class)) {

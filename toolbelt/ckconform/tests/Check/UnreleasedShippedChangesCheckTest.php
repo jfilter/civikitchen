@@ -114,6 +114,20 @@ final class UnreleasedShippedChangesCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new UnreleasedShippedChangesCheck(), $context));
     }
 
+    public function testSilentWhenOnlyANeighbouringExtensionChanged(): void
+    {
+        $context = $this->monorepoExtension(
+            ['.github/workflows/release.yml' => self::RELEASE_CALLER],
+            ['Civi/Thing.php' => '<?php'],
+            ['Civi/Neighbour.php' => '<?php'],
+        );
+        $this->gitCommit('release 1.0.0', '2020-01-01T00:00:00Z');
+        $this->gitTag('v1.0.0');
+        $this->write('base/Civi/Neighbour.php', '<?php // the neighbour moves on');
+        $this->gitCommit('neighbour', '2020-01-02T00:00:00Z');
+        $this->assertSilent($this->run_(new UnreleasedShippedChangesCheck(), $context));
+    }
+
     /** A repo whose HEAD is tagged v1.0.0 and has the release caller. */
     private function tagged(): Context
     {

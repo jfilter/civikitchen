@@ -406,6 +406,22 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   commit what pins it.
 - `info.xml` `<requires>` naming every extension actually used (SearchKit,
   Afform, CiviRules …) — a missing `<ext>` only surfaces on a fresh site.
+- **Several extensions in one repository** — a repository whose root carries no
+  `info.xml` and whose direct subdirectories are extensions. `ckconform` detects
+  that layout from the filesystem; nothing is declared in `civikitchen.yaml`.
+  What changes there, and only there:
+  - The workflow-reading checks (`ci-coverage`, `npm-install`,
+    `playwright-diagnostics`, `config-without-runner`, `release-workflow`, and
+    `ci-workflow`'s lint step) judge
+    the job that runs *this* extension — the caller job whose
+    `with.working_directory`, or the steps job whose
+    `defaults.run.working-directory`, names its directory. A neighbour's job says
+    nothing about this extension, so `ci-workflow` fails when no job names this
+    directory at all; the alternative is five checks calling an extension that
+    nothing builds clean. `floating-tag` and `workflow-permissions` keep judging
+    the whole file.
+  - The release checks read the extension's own directory: a commit touching
+    only a neighbour is no unreleased change to this extension.
 - Dev stack: `.docker/docker-compose.yml` on a civikitchen image. **Every image
   in it is pinned** — a bare `image: mariadb` is `:latest` spelled shorter.
   Floating tags in a workflow make a run unattributable; floating tags in the

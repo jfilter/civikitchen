@@ -91,8 +91,8 @@ final class ConfigWithoutRunnerCheck implements Check
     private function ciReachableText(Context $context): string
     {
         $text = '';
-        foreach ($context->workflows() as $workflow) {
-            $text .= $this->withoutComments($context->read($workflow) ?? '') . "\n";
+        foreach ($context->scopedWorkflows() as $body) {
+            $text .= $this->withoutComments($body) . "\n";
         }
         if ($text === '') {
             return '';
@@ -102,7 +102,7 @@ final class ConfigWithoutRunnerCheck implements Check
         // playwright or vitest, which stay in the repo's own workflows. Add only
         // the tokens the shared workflow actually invokes, so a playwright config
         // it does not run is still correctly flagged.
-        if ($context->callsSharedCi()) {
+        if ($context->scopedCallsShared(Context::SHARED_CI)) {
             $text .= ' cklint phpcs phpstan phpunit ckcoverage ';
         }
 

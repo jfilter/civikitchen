@@ -26,6 +26,18 @@ final class Context
     /** @var list<string>|null */
     private ?array $versionHistory = null;
 
+    /** @var array<string, \SimpleXMLElement>|null */
+    private ?array $repositoryExtensions = null;
+
+    /** @var array<string, array<mixed>|null> */
+    private array $workflowData = [];
+
+    /** @var array<string, string|null> */
+    private array $workflowDataError = [];
+
+    /** @var array{scoped: array<string, string>, unparsed: list<string>, unreadable: list<string>}|null */
+    private ?array $workflowScope = null;
+
     public function __construct(
         public readonly string $root,
         public readonly ?string $coreDir = null,
@@ -295,7 +307,8 @@ final class Context
     }
 
     /**
-     * Git-tracked files, repo-relative. Tracked rather than on-disk on purpose:
+     * Git-tracked files under the extension directory, relative to it. Tracked
+     * rather than on-disk on purpose:
      * an untracked file cannot break anyone else's build.
      *
      * @return list<string>
@@ -527,6 +540,11 @@ final class Context
      * Merge commits carry no file list (`--name-only` shows no diff for them),
      * which is right: the commits they merge are listed in their own right.
      *
+     * Scoped to the extension directory: where a repository holds several
+     * extensions, a commit to a neighbour changes nothing about this one.
+     * `--relative` also reports the paths relative to that directory, which is
+     * what every caller compares against.
+     *
      * @return list<array{hash: string, date: string, files: list<string>}>|null
      */
     public function commitsSince(string $ref): ?array
@@ -535,7 +553,7 @@ final class Context
         // list is lines too, and \x1e occurs in neither.
         $output = $this->git([
             '-c', 'core.quotePath=false',
-            'log', '--format=%x1e%H %cI', '--name-only', $ref . '..HEAD',
+            'log', '--format=%x1e%H %cI', '--name-only', '--relative', $ref . '..HEAD', '--', '.',
         ]);
         if ($output === null) {
             return null;
@@ -721,19 +739,20 @@ final class Context
     }
 
     /**
-     * Workflow files, sorted, repo-relative.
+     * Workflow files, sorted, relative to the extension directory (`../`-prefixed
+     * in a monorepo, where they live at the repository root).
      *
      * @return list<string>
      */
     public function workflows(): array
     {
         $repositoryRoot = $this->repositoryRoot();
-        if ($repositoryRoot !== rtrim($this->root, '/')) {
+        if ($this->extensionDirectory() !== '.') {
             $directory = $repositoryRoot . '/.github/workflows';
             if (!is_dir($directory)) {
                 return [];
             }
-            $prefix = str_repeat('../', count(array_filter(explode('/', substr(rtrim($this->root, '/'), strlen($repositoryRoot))))));
+            $prefix = str_repeat('../', count(explode('/', $this->extensionDirectory())));
             $workflows = [];
             foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
                 if (!$file instanceof \SplFileInfo || !$file->isFile() || !in_array($file->getExtension(), ['yml', 'yaml'], true)) {
@@ -752,7 +771,278 @@ final class Context
         ));
     }
 
-    private function repositoryRoot(): string
+    /**
+     * The extension's directory relative to the repository root, '.' when the
+     * extension is the repository root itself. Both sides are resolved through
+     * realpath: a root reached through a symlink would otherwise measure
+     * against a differently spelled repository root.
+     */
+    public function extensionDirectory(): string
+    {
+        $root = rtrim((string) realpath($this->root), '/');
+        $repositoryRoot = $this->repositoryRoot();
+        if ($root === '' || !str_starts_with($root, $repositoryRoot . '/')) {
+            return '.';
+        }
+
+        return substr($root, strlen($repositoryRoot) + 1);
+    }
+
+    /**
+     * The part of each workflow that judges THIS extension: the whole file
+     * where the extension is the repository root, and in a monorepo the caller
+     * job whose `with.working_directory` names the extension's directory — a
+     * neighbour's job says nothing about this extension. Keyed by a label for
+     * messages: the workflow path, plus the job name where one was selected.
+     *
+     * @return array<string, string>
+     */
+    public function scopedWorkflows(): array
+    {
+        return $this->workflowScope()['scoped'];
+    }
+
+    /**
+     * Why no CI job judges this extension, null when one does. Three causes,
+     * each named: a workflow the parser could not read at all, a job that names
+     * this directory but is written in a form the text-reading checks cannot
+     * split, and the plain case of no job naming the directory. A single
+     * catch-all message would send the operator after the wrong thing.
+     */
+    public function workflowScopeFailure(): ?string
+    {
+        $scope = $this->workflowScope();
+        if (!$this->isMonorepo() || $this->workflows() === [] || $scope['scoped'] !== []) {
+            return null;
+        }
+        if ($scope['unreadable'] !== []) {
+            return 'workflow job ' . implode(', ', $scope['unreadable']) . ' runs working_directory: '
+                . $this->extensionDirectory() . ' but is not written as a block mapping — '
+                . 'the checks read a job as it is written, so write its keys on their own lines';
+        }
+        if ($scope['unparsed'] !== []) {
+            return 'workflow ' . implode(', ', $scope['unparsed'])
+                . ' — so nothing can tell which of this repository\'s extensions its jobs run';
+        }
+
+        return 'no workflow job sets working_directory: ' . $this->extensionDirectory()
+            . ' — this repository holds several extensions and none of its CI jobs runs this one';
+    }
+
+    /**
+     * The scoped workflow texts and, where a workflow yielded none, why.
+     * `unparsed` names files the parser could not read, `unreadable` the jobs
+     * that do name this extension but whose text could not be split out.
+     *
+     * @return array{scoped: array<string, string>, unparsed: list<string>, unreadable: list<string>}
+     */
+    private function workflowScope(): array
+    {
+        if ($this->workflowScope !== null) {
+            return $this->workflowScope;
+        }
+        $scope = ['scoped' => [], 'unparsed' => [], 'unreadable' => []];
+        foreach ($this->workflows() as $workflow) {
+            $body = $this->read($workflow) ?? '';
+            if (!$this->isMonorepo()) {
+                $scope['scoped'][$workflow] = $body;
+                continue;
+            }
+            $error = null;
+            $jobs = $this->workflowData($workflow, $error)['jobs'] ?? null;
+            if (!is_array($jobs)) {
+                $scope['unparsed'][] = $workflow . ': ' . ($error ?? 'declares no jobs');
+                continue;
+            }
+            $texts = $this->workflowJobs($body);
+            foreach ($jobs as $name => $job) {
+                if ($this->jobDirectory(is_array($job) ? $job : []) !== $this->extensionDirectory()) {
+                    continue;
+                }
+                if (!isset($texts[(string) $name])) {
+                    $scope['unreadable'][] = $workflow . ':' . $name;
+                    continue;
+                }
+                $scope['scoped'][$workflow . ':' . $name] = $texts[(string) $name];
+            }
+        }
+
+        return $this->workflowScope = $scope;
+    }
+
+    /**
+     * Does the part of CI that judges this extension hand off to one of the
+     * shared reusable workflows? The scoped twin of callsSharedCi(), for the
+     * checks that must not accept a neighbour's job as their own.
+     */
+    public function scopedCallsShared(string $workflowFile): bool
+    {
+        foreach ($this->scopedWorkflows() as $body) {
+            if (str_contains($body, $workflowFile)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A workflow body split into its jobs, name => raw text.
+     *
+     * Indentation-based, and text rather than the parsed document on purpose:
+     * the checks that judge a job read its steps, their `if:` and their `run:`
+     * as written. GitHub Actions fixes this layout, so a plain reader is enough;
+     * which job to judge is decided on the parsed YAML instead.
+     *
+     * @return array<string, string>
+     */
+    public function workflowJobs(string $body): array
+    {
+        $jobs = [];
+        $inJobs = false;
+        $jobsIndent = null;
+        $jobIndent = null;
+        $current = null;
+        $buffer = [];
+        foreach (explode("\n", $body) as $line) {
+            if (preg_match('/^(\s*)jobs:\s*$/', $line, $match) === 1) {
+                $inJobs = true;
+                $jobsIndent = strlen($match[1]);
+                continue;
+            }
+            if (!$inJobs) {
+                continue;
+            }
+            // A comment-only line carries no structure: ckinit's managed markers
+            // sit at column 0 and between a job's lines, so ending the section or
+            // starting a job on one loses every job of a generated root workflow.
+            if (str_starts_with(ltrim($line), '#')) {
+                if ($current !== null) {
+                    $buffer[] = $line;
+                }
+                continue;
+            }
+            if (preg_match('/^(\s+)(?:([A-Za-z0-9_-]+)|[\'\"]([^\'\"]+)[\'\"]):\s*$/', $line, $match) === 1
+                && strlen($match[1]) > (int) $jobsIndent
+                && ($jobIndent === null || strlen($match[1]) === $jobIndent)
+            ) {
+                if ($current !== null) {
+                    $jobs[$current] = implode("\n", $buffer);
+                }
+                $jobIndent = strlen($match[1]);
+                $current = $match[2] !== '' ? $match[2] : $match[3];
+                $buffer = [];
+                continue;
+            }
+            $lineIndent = strlen($line) - strlen(ltrim($line));
+            if (trim($line) !== '' && $lineIndent <= (int) $jobsIndent) {
+                break;
+            }
+            if ($current !== null) {
+                $buffer[] = $line;
+            }
+        }
+        if ($current !== null) {
+            $jobs[$current] = implode("\n", $buffer);
+        }
+
+        return $jobs;
+    }
+
+    /**
+     * The directory a job works in: `with.working_directory` for a job that
+     * calls a reusable workflow, `defaults.run.working-directory` for one with
+     * steps of its own. The repository root when it declares neither.
+     *
+     * @param array<mixed> $job
+     */
+    private function jobDirectory(array $job): string
+    {
+        foreach ([['with', 'working_directory'], ['defaults', 'run', 'working-directory']] as $path) {
+            $value = $job;
+            foreach ($path as $step) {
+                $value = is_array($value) ? ($value[$step] ?? null) : null;
+            }
+            if (is_string($value)) {
+                return $this->relativeDirectory($value);
+            }
+        }
+
+        return '.';
+    }
+
+    /** A declared directory in the spelling extensionDirectory() uses. */
+    private function relativeDirectory(string $directory): string
+    {
+        $directory = trim(trim($directory), '/');
+        if (str_starts_with($directory, './')) {
+            $directory = substr($directory, 2);
+        }
+
+        return $directory === '' ? '.' : $directory;
+    }
+
+    /**
+     * A workflow's parsed document, null when it is absent or does not parse,
+     * with $error saying which of the two it was.
+     *
+     * @return array<mixed>|null
+     */
+    private function workflowData(string $workflow, ?string &$error = null): ?array
+    {
+        if (!array_key_exists($workflow, $this->workflowData)) {
+            $parsed = Policy::parseYaml($this->read($workflow) ?? '', $failure);
+            $this->workflowData[$workflow] = is_array($parsed) ? $parsed : null;
+            $this->workflowDataError[$workflow] = $failure;
+        }
+        $error = $this->workflowDataError[$workflow];
+
+        return $this->workflowData[$workflow];
+    }
+
+    /**
+     * Every extension of the repository: each direct subdirectory of the
+     * repository root that carries an info.xml, directory name => parsed
+     * info.xml. Unparsable XML is dropped — the check that needs the file is
+     * the one that reports it.
+     *
+     * @return array<string, \SimpleXMLElement>
+     */
+    public function repositoryExtensions(): array
+    {
+        if ($this->repositoryExtensions === null) {
+            $this->repositoryExtensions = [];
+            $repositoryRoot = $this->repositoryRoot();
+            foreach (scandir($repositoryRoot) ?: [] as $entry) {
+                if ($entry === '.' || $entry === '..' || !is_file($repositoryRoot . '/' . $entry . '/info.xml')) {
+                    continue;
+                }
+                $raw = (string) file_get_contents($repositoryRoot . '/' . $entry . '/info.xml');
+                $previous = libxml_use_internal_errors(true);
+                $parsed = simplexml_load_string($raw);
+                libxml_use_internal_errors($previous);
+                if ($parsed !== false) {
+                    $this->repositoryExtensions[$entry] = $parsed;
+                }
+            }
+            ksort($this->repositoryExtensions);
+        }
+
+        return $this->repositoryExtensions;
+    }
+
+    /**
+     * A repository that is no extension itself but holds several: the layout
+     * the monorepo checks apply to. Detected from the filesystem, because
+     * nothing declares it.
+     */
+    public function isMonorepo(): bool
+    {
+        return !is_file($this->repositoryRoot() . '/info.xml') && $this->repositoryExtensions() !== [];
+    }
+
+    /** The git working tree this extension belongs to, absolute. */
+    public function repositoryRoot(): string
     {
         $directory = rtrim((string) realpath($this->root), '/');
         $fallback = $directory;

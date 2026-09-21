@@ -39,4 +39,16 @@ final class NpmInstallCheckTest extends CheckTestCase
         $reporter = $this->run_(new NpmInstallCheck(), $context);
         $this->assertWarns($reporter, "CI runs 'npm install' — use 'npm ci' so the lockfile is binding");
     }
+
+    public function testSilentWhenOnlyANeighboursJobRunsNpmInstall(): void
+    {
+        $context = $this->monorepoExtension([
+            '.github/workflows/ci.yml' => "name: CI\njobs:\n  example:\n"
+                . "    defaults:\n      run:\n        working-directory: example\n"
+                . "    steps:\n      - run: npm ci\n  base:\n"
+                . "    defaults:\n      run:\n        working-directory: base\n"
+                . "    steps:\n      - run: npm install\n",
+        ], [], ['Civi/Neighbour.php' => '<?php']);
+        $this->assertSilent($this->run_(new NpmInstallCheck(), $context));
+    }
 }

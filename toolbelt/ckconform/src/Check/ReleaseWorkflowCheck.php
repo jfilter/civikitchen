@@ -41,7 +41,7 @@ final class ReleaseWorkflowCheck implements Check
             return;
         }
 
-        if ($context->callsSharedRelease()) {
+        if ($context->scopedCallsShared(Context::SHARED_RELEASE)) {
             return;
         }
 

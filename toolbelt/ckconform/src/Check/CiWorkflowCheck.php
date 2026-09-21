@@ -28,12 +28,25 @@ final class CiWorkflowCheck implements Check
             return;
         }
 
+        // Reported here and nowhere else: one defect, one finding. Every
+        // workflow-reading check judges the caller job that names this
+        // extension's directory, and with no such job they would all be silent.
+        $scopeFailure = $context->workflowScopeFailure();
+        if ($scopeFailure !== null) {
+            $reporter->fail($scopeFailure);
+
+            return;
+        }
+
         $reporter->ok('CI workflow present');
 
-        foreach ($workflows as $workflow) {
-            $contents = $context->read($workflow) ?? '';
-            if ($context->callsSharedCi()
-                || str_contains($contents, 'cklint') || str_contains($contents, 'phpcs')) {
+        // Judged on the jobs that run this extension: a neighbour's lint step
+        // says nothing about whether this extension is linted.
+        if ($context->scopedCallsShared(Context::SHARED_CI)) {
+            return;
+        }
+        foreach ($context->scopedWorkflows() as $body) {
+            if (str_contains($body, 'cklint') || str_contains($body, 'phpcs')) {
                 return;
             }
         }

@@ -95,20 +95,25 @@ final class PlaywrightDiagnosticsCheck implements Check
     private function ciProblems(Context $context): array
     {
         $jobs = [];
-        foreach ($context->workflows() as $workflow) {
-            $body = $this->stripComments($context->read($workflow) ?? '');
-            foreach ($this->jobs($body) as $name => $text) {
-                $jobs[$workflow . ':' . $name] = $text;
+        foreach ($context->scopedWorkflows() as $label => $body) {
+            $body = $this->stripComments($body);
+            // In a monorepo the scoped text is the one caller job that runs this
+            // extension, so there is nothing left to split.
+            if ($context->isMonorepo()) {
+                $jobs[$label] = $body;
+                continue;
+            }
+            foreach ($context->workflowJobs($body) as $name => $text) {
+                $jobs[$label . ':' . $name] = $text;
             }
         }
 
         // If a workflow actually invokes Playwright but its jobs cannot be
         // split, fail closed: an estate-wide upload may be on another runner.
         if ($jobs === []) {
-            foreach ($context->workflows() as $workflow) {
-                $body = $this->stripComments($context->read($workflow) ?? '');
-                if ($this->runsPlaywright($body, $context)) {
-                    return [$workflow . ': runs playwright but its jobs could not be parsed'];
+            foreach ($context->scopedWorkflows() as $label => $body) {
+                if ($this->runsPlaywright($this->stripComments($body), $context)) {
+                    return [$label . ': runs playwright but its jobs could not be parsed'];
                 }
             }
             return [];
@@ -256,60 +261,6 @@ final class PlaywrightDiagnosticsCheck implements Check
         }
 
         return false;
-    }
-
-    /**
-     * Split a workflow body into its jobs, name => body text.
-     *
-     * Indentation-based: jobs are the two-space keys under `jobs:`, each running
-     * until the next two-space key or a dedent to column zero. GitHub Actions
-     * fixes this layout, so a plain reader is enough and avoids a YAML dependency
-     * the image does not carry.
-     *
-     * @return array<string, string>
-     */
-    private function jobs(string $body): array
-    {
-        $jobs = [];
-        $inJobs = false;
-        $jobsIndent = null;
-        $jobIndent = null;
-        $current = null;
-        $buffer = [];
-        foreach (explode("\n", $body) as $line) {
-            if (preg_match('/^(\s*)jobs:\s*$/', $line, $match) === 1) {
-                $inJobs = true;
-                $jobsIndent = strlen($match[1]);
-                continue;
-            }
-            if (!$inJobs) {
-                continue;
-            }
-            if (preg_match('/^(\s+)(?:([A-Za-z0-9_-]+)|[\'\"]([^\'\"]+)[\'\"]):\s*$/', $line, $match) === 1
-                && strlen($match[1]) > (int) $jobsIndent
-                && ($jobIndent === null || strlen($match[1]) === $jobIndent)
-            ) {
-                if ($current !== null) {
-                    $jobs[$current] = implode("\n", $buffer);
-                }
-                $jobIndent = strlen($match[1]);
-                $current = $match[2] !== '' ? $match[2] : $match[3];
-                $buffer = [];
-                continue;
-            }
-            $lineIndent = strlen($line) - strlen(ltrim($line));
-            if (trim($line) !== '' && $lineIndent <= (int) $jobsIndent) {
-                break;
-            }
-            if ($current !== null) {
-                $buffer[] = $line;
-            }
-        }
-        if ($current !== null) {
-            $jobs[$current] = implode("\n", $buffer);
-        }
-
-        return $jobs;
     }
 
     /**
