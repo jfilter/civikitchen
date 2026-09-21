@@ -480,4 +480,61 @@ final class PermissionClosureCheckTest extends CheckTestCase
             </menu>
             XML;
     }
+
+    public function testFailsForATypoInAnApi4EntityPermissionsMap(): void
+    {
+        $context = $this->repo([
+            'myext.php' => self::HOOK,
+            'Civi/Api4/Thing.php' => <<<'PHP'
+                <?php
+                class Thing {
+                  public static function permissions(): array {
+                    return [
+                      'meta' => ['access CiviCRM'],
+                      'default' => [['administer MyExt', 'administer CiviCRM']],
+                      'get' => ['acces MyExt reports'],
+                    ];
+                  }
+                }
+                PHP,
+        ], git: true);
+        $reporter = $this->run_(new PermissionClosureCheck(), $context);
+        $this->assertFails($reporter, "'acces MyExt reports' is never defined");
+        self::assertCount(1, $reporter->messages('FAIL'));
+    }
+
+    public function testFailsForATypoAssignedInAnApi4PermissionsMethod(): void
+    {
+        $context = $this->repo([
+            'myext.php' => self::HOOK,
+            'Civi/Api4/Thing.php' => <<<'PHP'
+                <?php
+                class Thing {
+                  public static function permissions() {
+                    $permissions = \CRM_Core_Permission::getEntityActionPermissions()['default'];
+                    $permissions['export'] = ['administer MyExtt'];
+                    return $permissions;
+                  }
+                }
+                PHP,
+        ], git: true);
+        $this->assertFails($this->run_(new PermissionClosureCheck(), $context), "'administer MyExtt' is never defined");
+    }
+
+    public function testFailsForATypoInAPluralPermissionsList(): void
+    {
+        $context = $this->repo([
+            'myext.php' => self::HOOK,
+            'ang/myext.ang.php' => "<?php\nreturn ['js' => ['ang/myext.js'], 'permissions' => ['administer MyExt', 'access MyExt report']];\n",
+        ], git: true);
+        $this->assertFails($this->run_(new PermissionClosureCheck(), $context), "'access MyExt report' is never defined");
+    }
+
+    public function testAFieldNamedPermissionsIsNotAPermissionSpec(): void
+    {
+        $context = $this->repo([
+            'schema/Role.entityType.php' => "<?php\nreturn ['getFields' => fn() => ['permissions' => ['title' => 'Permissions', 'sql_type' => 'text']]];\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
 }

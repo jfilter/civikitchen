@@ -19,7 +19,8 @@ use CiviKitchen\Ckconform\Reporter;
  * they cannot see a screen that was supposed to be theirs.
  *
  * The check closes the loop over the strings the repo *uses* (menu XML,
- * ::check() literals, mgd/API 'permission' specs, aff.json) against the ones it
+ * ::check() literals, 'permission'/'permissions' specs, APIv4 permissions(),
+ * aff.json) against the ones it
  * *defines* (hook_civicrm_permission) plus an embedded list of core
  * permissions. A near-miss on an own permission is a provable typo and fails; a
  * completely unknown string may legitimately come from a dependency and only
@@ -400,8 +401,8 @@ final class PermissionClosureCheck implements Check
     }
 
     /**
-     * `'permission' => 'x'` and `'permission' => ['x', ['y', 'z']]`: a string or
-     * a list of strings nested to any depth. An array with a key anywhere
+     * `'permission' => 'x'`, `'permissions' => ['x', ['y', 'z']]` and the action
+     * map of an APIv4 permissions(): a string or a list nested to any depth. An array with a key anywhere
      * inside is a field or config definition named `permission`, not a spec.
      *
      * @param  list<\PhpToken> $tokens
@@ -412,8 +413,23 @@ final class PermissionClosureCheck implements Check
         $count = count($tokens);
         $found = [];
         for ($i = 0; $i + 2 < $count; $i++) {
-            if ($tokens[$i]->is(["'permission'", '"permission"']) && $tokens[$i + 1]->is(T_DOUBLE_ARROW)) {
+            if ($tokens[$i]->is(["'permission'", '"permission"', "'permissions'", '"permissions"'])
+                && $tokens[$i + 1]->is(T_DOUBLE_ARROW)
+            ) {
                 array_push($found, ...$this->valueLiterals($tokens, $i + 2));
+            }
+        }
+
+        // An APIv4 entity's permissions(): action name => permission list,
+        // returned as a literal or assigned as $permissions['action'] = [...].
+        $body = $this->functionBodies($tokens, '/^permissions$/i');
+        foreach (array_keys($body) as $i) {
+            if (self::tokenIs($body, $i, T_CONSTANT_ENCAPSED_STRING) && self::tokenIs($body, $i + 1, T_DOUBLE_ARROW)) {
+                array_push($found, ...$this->valueLiterals($body, $i + 2));
+            } elseif (self::tokenIs($body, $i, '[') && self::tokenIs($body, $i + 1, T_CONSTANT_ENCAPSED_STRING)
+                && self::tokenIs($body, $i + 2, ']') && self::tokenIs($body, $i + 3, '=')
+            ) {
+                array_push($found, ...$this->valueLiterals($body, $i + 4));
             }
         }
 
