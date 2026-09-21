@@ -1,7 +1,7 @@
 # Plan: one release path for every extension repo
 
-Status: steps 1–3 and "Also in this round" implemented, not yet released;
-steps 4–5 open. Targeted at v1.26.0.
+Status: steps 1–4 and "Also in this round" done; the consumer changes are
+committed in each repo but not pushed. Step 5 (release v1.26.0) open.
 
 ## Where things stand
 
@@ -100,7 +100,6 @@ The consequences observed while cutting v1.23.0:
   searching for it. The target stays one release path for all.
 - A repo whose `info.xml` is below an existing tag releases a version above
   that tag; tags are not deleted.
-
 - `require_changelog` stays opt-in; the managed caller does not set it.
 - The smoke test stays on by default; a repo whose install cannot be reached
   headless sets `smoke_test: false` with a reason comment. Both inputs live
