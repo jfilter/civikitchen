@@ -28,7 +28,6 @@ parameters:
 	# only tests themselves are analysed for findings.
 	scanDirectories:
 		- Civi
-		- CRM
 	# PHPUnit's own classes come from core's dev dependencies. A packaged
 	# install may not have them; point phpstan at wherever they are, e.g.:
 	#	scanDirectories:

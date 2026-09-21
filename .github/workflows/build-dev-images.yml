@@ -961,6 +961,14 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: .github/scripts/trivy-report-summary.sh
 
+  monorepo-self-test:
+    # The self-test runs the ck* tools baked into :standalone, so it waits for
+    # the promote that puts this commit's toolbelt there.
+    needs: [promote-standalone]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/monorepo-self-test.yml
+
   notify-scheduled-failure:
     # The daily cron rebuild fails SILENTLY otherwise: test-then-promote
     # keeps serving the last good stable tags, so nothing user-visible breaks
@@ -972,7 +980,7 @@ jobs:
     # scan-images is in the list even though it gates nothing: the daily cron
     # is the run that finds a base-image CVE nobody pushed a commit for, and
     # without this edge that finding would sit in a job summary nobody opens.
-    needs: [promote-standalone, promote-buildkit, promote-demo, scan-images]
+    needs: [promote-standalone, promote-buildkit, promote-demo, scan-images, monorepo-self-test]
     if: github.event_name == 'schedule' && failure()
     runs-on: ubuntu-24.04
     permissions:

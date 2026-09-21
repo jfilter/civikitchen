@@ -5,9 +5,10 @@
 # `uses: ./…` resolves against the CALLING repository, which here is this one,
 # so the workflow under test is the one in the branch that triggered the run.
 #
-# Not on every push: each job boots its own CiviCRM stack. The paths below are
-# what the run executes — the example tree, the workflow, the shared action, and
-# the scaffold and toolbelt code the jobs call.
+# Not on every push: each job boots its own CiviCRM stack. The ck* tools come
+# from the image, so Build Dev Images calls this after promoting :standalone;
+# the push paths are what the image lacks.
+# A newer promote landing first means the run tests newer tools, never older.
 #
 # The ROOT pass of the template drift check is not exercised here: the example
 # tree sits below examples/, while ckinit manages a root whose direct
@@ -22,8 +23,7 @@ on:
       - '.github/workflows/extension-ci.yml'
       - '.github/workflows/monorepo-self-test.yml'
       - '.github/actions/private-deps/**'
-      - 'scaffold/**'
-      - 'toolbelt/**'
+  workflow_call:
 
 permissions:
   contents: read
@@ -34,9 +34,11 @@ jobs:
     uses: ./.github/workflows/extension-ci.yml
     with:
       working_directory: examples/monorepo/ckmonobase
+      image: ghcr.io/jfilter/civikitchen:standalone
 
   addon:
     if: ${{ github.repository == 'jfilter/civikitchen' }}
     uses: ./.github/workflows/extension-ci.yml
     with:
       working_directory: examples/monorepo/ckmonoaddon
+      image: ghcr.io/jfilter/civikitchen:standalone
