@@ -261,11 +261,14 @@ jobs:
         id: key
         run: |
           set -euo pipefail
-          wd=${CK_WORKING_DIRECTORY#./}
-          wd=${wd%/}
-          case "$wd" in
+          case "$CK_WORKING_DIRECTORY" in
             '') echo "working_directory is empty — '.' is the repository root" >&2; exit 1 ;;
             /*) echo "working_directory must be relative to the repository root (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
+          esac
+          wd=${CK_WORKING_DIRECTORY#./}
+          wd=${wd%/}
+          wd=${wd:-.}
+          case "$wd" in
             ..|../*|*/..|*/../*) echo "working_directory must stay inside the repository (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
             *//*|*/./*) echo "working_directory must be a plain relative path (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
           esac
@@ -411,7 +414,7 @@ jobs:
           # one to single out.
           wd=${CK_WORKING_DIRECTORY#./}
           wd=${wd%/}
-          case "$wd" in
+          case "${wd:-.}" in
             .|*/*) ;;
             *) php "$GITHUB_WORKSPACE/.civikitchen-ci/scaffold/ckinit.php" --check "$GITHUB_WORKSPACE" ;;
           esac

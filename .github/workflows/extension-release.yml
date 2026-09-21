@@ -167,11 +167,14 @@ jobs:
             release|build) ;;
             *) echo "stage must be release, build or publish (got: '$CK_STAGE')" >&2; exit 1 ;;
           esac
-          wd=${CK_WORKING_DIRECTORY#./}
-          wd=${wd%/}
-          case "$wd" in
+          case "$CK_WORKING_DIRECTORY" in
             '') echo "working_directory is empty — '.' is the repository root" >&2; exit 1 ;;
             /*) echo "working_directory must be relative to the repository root (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
+          esac
+          wd=${CK_WORKING_DIRECTORY#./}
+          wd=${wd%/}
+          wd=${wd:-.}
+          case "$wd" in
             ..|../*|*/..|*/../*) echo "working_directory must stay inside the repository (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
             *//*|*/./*) echo "working_directory must be a plain relative path (got: '$CK_WORKING_DIRECTORY')" >&2; exit 1 ;;
           esac
