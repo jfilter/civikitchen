@@ -32,6 +32,7 @@ final class Registry
         Check\ReleaseWorkflowCheck::class,
         Check\ReleaseTagCoherenceCheck::class,
         Check\ReleaseTagsCheck::class,
+        Check\VersionFormatCheck::class,
         Check\UnreleasedShippedChangesCheck::class,
         Check\MonorepoVersionLockstepCheck::class,
         Check\ConfigWithoutRunnerCheck::class,
