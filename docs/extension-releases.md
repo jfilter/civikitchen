@@ -102,17 +102,14 @@ Then, once:
 - add `.ckrelease/` to `.gitignore` (where `ckrelease dist` writes locally),
 - run `ckrelease check` and fix whatever it says before the first tag.
 
-A repo that never releases declares that instead, with the reason, and lists
-the caller as its own deviation so `ckinit` does not keep recreating it:
+A repo that never releases declares that instead, with the reason. `ckinit`
+then neither writes the caller nor reports it missing; delete an existing one:
 
 ```yaml
 policy:
   release:
     mode: none
     reason: internal tooling, never installed on a site
-  template_custom:
-    paths: [.github/workflows/release.yml]
-    reason: the repo cuts no releases
 ```
 
 `ckconform`'s `release-workflow` fails a repo that does neither. A repository

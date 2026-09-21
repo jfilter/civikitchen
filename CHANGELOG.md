@@ -70,8 +70,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
   makes `--update` refuse without writing and `--check` name it ("would
   drop: …"). `--update` creates no `release.yml` while another workflow already
   calls `extension-release.yml`, and `release-workflow` fails when more than
-  one job calls it. A repository of several extensions gets no release caller
-  yet.
+  one job calls it. A repo declaring `release: none` and a repository of
+  several extensions get no release caller.
 - **Breaking:** `ckconform`'s `release-workflow` fails instead of warning when
   no workflow calls `extension-release.yml`. Adopt the caller with `ckinit
   --update`, or declare `policy.release: none` with a reason (and list the

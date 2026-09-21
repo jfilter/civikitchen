@@ -234,7 +234,10 @@ if (is_file($legacyPolicy)) {
   exit(2);
 }
 $policyRaw = is_file($target . '/civikitchen.yaml') ? file_get_contents($target . '/civikitchen.yaml') : FALSE;
+$releasesNothing = FALSE;
 if (is_string($policyRaw)) {
+  // A repo that declares release: none has no caller to keep in line.
+  $releasesNothing = str_starts_with(\CiviKitchen\Ckconform\Policy::parse($policyRaw)['release'][0] ?? '', 'none');
   $declared = \CiviKitchen\Ckconform\Policy::parse($policyRaw)['template_custom'] ?? [];
   // First occurrence wins; ckconform's policy-key check reports a second line
   // that would silently do nothing.
@@ -284,7 +287,7 @@ foreach ($iterator as $item) {
     exit(1);
   }
   $inventory[] = $relative;
-  if ($belowRoot && in_array($relative, ROOT_ONLY_FILES, TRUE)) {
+  if (($belowRoot && in_array($relative, ROOT_ONLY_FILES, TRUE)) || ($releasesNothing && $relative === RELEASE_CALLER)) {
     continue;
   }
   $rendered = str_replace(

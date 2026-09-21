@@ -247,6 +247,17 @@ out=$("$root/scaffold/ckinit.php" --check "$work/legacy" 2>&1 || true)
 echo "$out" | grep -q 'missing   .github/workflows/release.yml' || { echo "a missing release caller was not reported: $out" >&2; exit 1; }
 "$root/scaffold/ckinit.php" --update "$work/legacy" >/dev/null
 test -f "$rel"
+# A repo that declares release: none gets no caller and is not told one is missing.
+cp -R "$work/legacy" "$work/norelease"
+/bin/rm "$work/norelease/.github/workflows/release.yml"
+printf '%s\n' 'version: 1' 'policy:' '  release:' '    mode: none' "    reason: 'no archives yet'" > "$work/norelease/civikitchen.yaml"
+out=$("$root/scaffold/ckinit.php" --check "$work/norelease" 2>&1 || true)
+if echo "$out" | grep -q 'release.yml'; then
+  echo "release: none still asks for a release caller: $out" >&2
+  exit 1
+fi
+"$root/scaffold/ckinit.php" --update "$work/norelease" >/dev/null
+test ! -e "$work/norelease/.github/workflows/release.yml"
 # Inputs below the marker are the repo's and survive --update; an old trigger
 # inside the block is drift and gets refreshed.
 rewrite_with_sed 's|^# END CIVIKITCHEN MANAGED caller$|# END CIVIKITCHEN MANAGED caller\
