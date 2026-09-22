@@ -217,6 +217,17 @@ ck_mysql_root() {
     return "${rc}"
 }
 
+# With binary logging on (mysql:8.0 default) a user without SUPER may not
+# create triggers or functions, and `cv core:install` creates both. Trusting
+# non-SUPER creators is a server setting, so it is set as root. Best effort:
+# MariaDB and binlog-less servers need nothing, and root may be unreachable.
+ck_trust_function_creators() {
+    if ! echo "SET GLOBAL log_bin_trust_function_creators = 1;" | ck_mysql_root; then
+        echo "[civikitchen] WARNING: could not set log_bin_trust_function_creators as database root; on a binlog-enabled server the install and the headless test DB need it (CIVICRM_DB_ROOT_PASSWORD)." >&2
+        return 1
+    fi
+}
+
 # Create, grant and seed the <db>_test scratch DB as the database root user:
 # the app user holds rights on its own database only, so it can neither create
 # the scratch DB nor copy triggers and routines into it.
@@ -234,10 +245,7 @@ ck_provision_test_db() {
         sql+="GRANT SUPER ON *.* TO '${CIVICRM_DB_USER}'@'%';"
         sql+="FLUSH PRIVILEGES;"
     fi
-    # With binary logging on (mysql:8.0 default) the app user may not create
-    # the harness's triggers and functions unless the server trusts non-SUPER
-    # creators. A server setting, not a privilege.
-    sql+="SET GLOBAL log_bin_trust_function_creators = 1;"
+    ck_trust_function_creators || return 1
     if ! printf '%s\n' "${sql}" | ck_mysql_root; then
         echo "[civikitchen] ERROR: could not create ${test_db_name} as database root. Headless tests need it; set CIVICRM_DB_ROOT_PASSWORD to the db service's root password, or CIVIKITCHEN_TEST_DB=0 to manage TEST_DB_DSN yourself." >&2
         return 1

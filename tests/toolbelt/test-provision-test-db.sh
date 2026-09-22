@@ -47,6 +47,19 @@ ck_as_web() { "$@"; }
 grep -q 'ck_provision_test_db "${test_db_name}" || return 1' "$root/docker/runtime/provision.sh" \
   || fail "ck_setup_test_db must abort when ck_provision_test_db fails"
 
+# The install itself creates triggers and functions, so the server-level
+# trust is set as root before `cv core:install`, not only for the test DB.
+grep -B1 -- '-- cv core:install' "$root/docker/standalone/entrypoint.sh" | grep -q 'ck_trust_function_creators' \
+  || fail "the standalone entrypoint must call ck_trust_function_creators before cv core:install"
+: > "$MYSQL_LOG"
+ck_trust_function_creators >/dev/null 2>"$work/err.log" || fail "ck_trust_function_creators failed on the happy path"
+grep -q -- '-u root' "$MYSQL_LOG" || fail "log_bin_trust_function_creators must be set as root"
+: > "$MYSQL_LOG"
+if MYSQL_FAIL=1 ck_trust_function_creators >/dev/null 2>"$work/err.log"; then
+  fail "a refused root connection must fail ck_trust_function_creators"
+fi
+grep -q 'WARNING' "$work/err.log" || fail "a refused root connection must warn: $(cat "$work/err.log")"
+
 # Happy path: root creates the scratch DB, grants the app user on it, and the
 # seed copy runs as root (triggers and routines carry a DEFINER).
 : > "$MYSQL_LOG"

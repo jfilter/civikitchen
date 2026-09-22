@@ -51,7 +51,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `<db>_test` plus `SUPER` — the harness's `SET global
   innodb_flush_log_at_trx_commit` has no narrower privilege on MariaDB 10.11 —
   instead of the old `GRANT ALL PRIVILEGES ON *.* WITH GRANT OPTION`, and sets
-  the server's `log_bin_trust_function_creators` for binlog-enabled servers;
+  the server's `log_bin_trust_function_creators` as root before
+  `cv core:install` and again before seeding the test database, so a
+  binlog-enabled server (`mysql:8.0` default) installs without the app user
+  holding `SUPER`;
   the example and template db services pass
   `--log-bin-trust-function-creators=1` so the setting survives a database
   restart. **Breaking:** the `db-init/01-grants.sql` grant

@@ -132,6 +132,7 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
     # next boot would then skip the install (settings exist) and every later
     # step would fail against the half-installed DB with nothing self-healing.
     # Remove the settings file on failure so the next start retries cleanly.
+    ck_trust_function_creators || true
     if ! runuser -u www-data -- cv core:install -n -K --url="${CIVIKITCHEN_SITE_URL}" --db="${DB_URL}" "${INSTALL_OPTS[@]}"; then
         echo "[civikitchen] ERROR: cv core:install failed — removing the partial settings file so the next start retries" >&2
         rm -f "${SETTINGS_FILE}"
