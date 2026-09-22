@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.27.0] - 2026-09-22
+
 ### Added
 
 - The shared profile driver resolves the Composer dependencies of git-sourced
@@ -57,8 +59,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `.docker/db-init/01-grants.sql` is no longer a managed file — `ckinit
   --update` rewrites the managed CI compose file without the
   `docker-entrypoint-initdb.d` mount; delete the leftover `.docker/db-init/`
-  directory in your repo. Stacks whose db service uses a non-default root
-  password must pass `CIVICRM_DB_ROOT_PASSWORD` to the app service.
+  directory in your repo; a leftover grant script keeps working, it only
+  grants what the boot now grants anyway. Stacks whose db service uses a
+  non-default root password must pass `CIVICRM_DB_ROOT_PASSWORD` to the app
+  service.
 - The release archive is uploaded as `ckrelease-dist-<key>` instead of
   `ckrelease-dist`, and the smoke stack's compose project name carries the
   extension, so two build jobs of one run neither collide nor tear down each
@@ -908,7 +912,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.26.0...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.27.0...HEAD
+[1.27.0]: https://github.com/jfilter/civikitchen/compare/v1.26.0...v1.27.0
 [1.26.0]: https://github.com/jfilter/civikitchen/compare/v1.25.3...v1.26.0
 [1.25.3]: https://github.com/jfilter/civikitchen/compare/v1.25.2...v1.25.3
 [1.25.2]: https://github.com/jfilter/civikitchen/compare/v1.25.1...v1.25.2
