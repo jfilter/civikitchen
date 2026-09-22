@@ -16,6 +16,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Added
 
+- The shared profile driver resolves the Composer dependencies of git-sourced
+  profile dependencies before `cv ext:enable`: a checkout with a `composer.json`
+  and no `vendor/` gets `composer update --no-dev` (`install` when it ships a
+  `composer.lock`), and a failed resolution aborts the profile with composer's
+  output. Profiles using extensions with runtime Composer requirements (e.g.
+  `org.project60.banking`, `org.project60.sepa`) no longer need their own
+  `apply.sh` to pre-resolve them.
+
 - Repositories of several extensions can release: one `vX.Y.Z` tag releases
   every extension as one GitHub release. `extension-release.yml` takes
   `working_directory` (default `.`), `stage` (`release`, the default, builds

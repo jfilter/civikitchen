@@ -87,6 +87,12 @@ When profiles are selected, the generator creates the Standalone `admin` demo
 user needed by the shared profile driver. If `site_url` is omitted it is derived
 from `http_port`; ports outside `1..65535` are rejected before Compose render.
 
+A git-sourced dependency (`repo`) ships no `vendor/` directory, so the driver
+resolves its Composer requirements before enabling it: for every checkout with a
+`composer.json` and no `vendor/` it runs `composer update --no-dev` (`install`
+when the repository ships a `composer.lock`), and aborts the profile with
+composer's output if that fails.
+
 The `checks` list is an enum of CiviKitchen operations. It cannot contain shell
 source; `ck scenario commands` emits only fixed `ck` invocations. The generated
 disposable stack uses the database admin account so CiviKitchen can create its

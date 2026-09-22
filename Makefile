@@ -187,6 +187,7 @@ test-profiles: ## Profile schema, external resolution, credentials modes and fil
 	php -d zend.assertions=1 -d assert.exception=1 tests/profiles/test-profile-data.php
 	bash tests/profiles/test-external-profiles.sh
 	bash tests/profiles/test-profile-clone.sh
+	bash tests/profiles/test-profile-composer.sh
 
 test-scenario: $(SCENARIO_YAML_STAMP) ## Declarative scenario schema, plan, Compose render and fixed checks
 	bash tests/scenario/test-scenario.sh

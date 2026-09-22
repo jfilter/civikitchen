@@ -100,6 +100,29 @@ if "${CK_PROFILE_CLI}" internal profile-api-users-present "${JSON}"; then
 fi
 "${CK_PROFILE_CLI}" internal profile-skipped "${JSON}" "${UF}"
 
+# Git checkouts ship no vendor/ directory, so a dependency whose composer.json
+# declares runtime requirements would fatal on enable. Resolve before enabling.
+declare -a GIT_SOURCED_TARGETS=()
+COMPOSER_HOME="${COMPOSER_HOME:-/tmp/composer}"
+export COMPOSER_HOME
+ck_resolve_composer() {
+    local ext="$1" mode=install name output
+    name="$(basename "${ext}")"
+    [ -f "${ext}/composer.json" ] || return 0
+    [ ! -d "${ext}/vendor" ] || { echo "  ${name} composer dependencies already present"; return 0; }
+    # No lock file means `install` has nothing to install; the repositories'
+    # pre-update-cmd hook is also what strips civicrm/civicrm-core from require.
+    [ -f "${ext}/composer.lock" ] || mode=update
+    command -v composer >/dev/null 2>&1 \
+      || { echo "  ERROR: composer is required to resolve ${name} but is not on PATH" >&2; exit 1; }
+    echo "  composer ${mode} for ${name}"
+    if ! output="$(composer "${mode}" --no-dev --no-interaction --no-progress --working-dir="${ext}" 2>&1)"; then
+        printf '%s\n' "${output}" >&2
+        echo "  ERROR: composer ${mode} failed for ${name}" >&2
+        exit 1
+    fi
+}
+
 echo "==> [${PROFILE_NAME}] cloning extensions into ${EXT_DIR}"
 # Tab-separated so URLs/names never collide with the field separator. A failed
 # clone/checkout aborts the apply (loud) — a missing extension must not ship.
@@ -112,6 +135,7 @@ while IFS=$'\t' read -r repo name version; do
         discovered="$(awk -F '\t' -v key="${name}" '$1 == key {sub(/^[^\t]*\t/, ""); print; exit}' <<<"${LOCAL_EXTENSIONS}")"
         [ -z "${discovered}" ] || target="${discovered}"
     fi
+    GIT_SOURCED_TARGETS+=("${target}")
     if [ -d "${target}" ]; then
         if [ ! -d "${target}/.git" ]; then
             # civibuild may bake a release archive directly into the primary
@@ -195,6 +219,13 @@ while IFS=$'\t' read -r repo name version; do
     fi
     mv "${temporary}" "${target}"
 done < <("${CK_PROFILE_CLI}" internal profile-dependencies "${JSON}" "${UF}" repo)
+
+if [ "${#GIT_SOURCED_TARGETS[@]}" -gt 0 ]; then
+    echo "==> [${PROFILE_NAME}] resolving composer dependencies of git-sourced extensions"
+    for git_target in "${GIT_SOURCED_TARGETS[@]}"; do
+        ck_resolve_composer "${git_target}"
+    done
+fi
 
 echo "==> [${PROFILE_NAME}] downloading registry extensions"
 "${CK_PROFILE_CLI}" internal profile-dependencies "${JSON}" "${UF}" registry \
