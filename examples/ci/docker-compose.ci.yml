@@ -44,7 +44,6 @@ services:
       MYSQL_DATABASE: civicrm
       MYSQL_USER: civicrm
       MYSQL_PASSWORD: civicrm
-    volumes:
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s

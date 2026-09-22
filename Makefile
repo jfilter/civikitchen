@@ -109,7 +109,7 @@ endef
 .PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-parity \
 	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
 	test-ck-headless test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
-	test-database-matrix test-demo-basic-auth test-release-retag test-release-steps test-release-script \
+	test-database-matrix test-compose-config test-demo-basic-auth test-release-retag test-release-steps test-release-script \
         lint-actions lint-php lint-schema lint-changelog test-changelog build test-images e2e tools clean
 
 help: ## Show this help
@@ -251,6 +251,9 @@ test-sibling-checkout: ## Sibling clones land in one directory per extension key
 
 test-database-matrix: ## Supported database images gate standalone promotion
 	bash tests/parity/test-database-matrix.sh
+
+test-compose-config: ## Every shipped compose file passes `docker compose config`
+	bash tests/parity/test-compose-config.sh
 
 test-demo-basic-auth: ## Demo smoke test delegates long Basic Auth credentials to curl
 	bash tests/parity/test-demo-basic-auth.sh
