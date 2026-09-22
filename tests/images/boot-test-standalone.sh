@@ -9,6 +9,8 @@
 #     initialises — ts() renders German, which is the whole point of the knob;
 #   * an external profile is schema-validated and applied, with generated API
 #     credentials written mode 0600 and never disclosed in default logs.
+# The db service gets a plain MYSQL_USER and no grant script: the app user
+# holds rights on its own database only, exactly as a hand-written stack.
 #
 # Usage:
 #   bash tests/images/boot-test-standalone.sh <image>
@@ -36,7 +38,6 @@ rmdir "${FIXTURE}/headless"
 sed "s/__EXTKEY__/ckbootfixture/g" "${SRC}/scaffold/template/extension/phpunit.xml.dist" \
    > "${FIXTURE}/phpunit.xml.dist"
 PROFILE_FIXTURE="$(cd "$(dirname "$0")/fixtures/external-profile" && pwd)"
-DB_INIT="$(cd "$(dirname "$0")/../../examples/standalone/db-init" && pwd)/01-grants.sql"
 
 RAW="$(echo "${IMAGE}-${DATABASE_IMAGE}" | tr -c 'a-z0-9' '-')"
 SLUG="satest-$(echo "${RAW}" | cut -c1-32)$(echo "${RAW}" | cksum | cut -d' ' -f1)"
@@ -63,7 +64,6 @@ docker network create "${NET}" >/dev/null
 docker run -d --name "${DB}" --network "${NET}" \
     -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=civicrm \
     -e MYSQL_USER=civicrm -e MYSQL_PASSWORD=civicrm \
-    -v "${DB_INIT}:/docker-entrypoint-initdb.d/01-grants.sql:ro" \
     "${DATABASE_IMAGE}" >/dev/null
 docker run -d --name "${APP}" --network "${NET}" \
     -e CIVICRM_AUTO_INSTALL=1 \

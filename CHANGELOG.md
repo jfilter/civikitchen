@@ -39,6 +39,26 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Changed
 
+- First boot creates, grants and seeds the `<db>_test` headless-test database
+  as the database root user (`CIVICRM_DB_ROOT_PASSWORD`, default `root`),
+  instead of attempting it as the app user and warning when that was denied.
+  A plain `db` service with `MYSQL_USER`/`MYSQL_DATABASE` now yields working
+  headless tests with no grant script, and a refused root connection fails
+  the boot with the server's error text instead of leaving an unusable
+  scratch database behind. Provisioning grants the app user `ALL` on
+  `<db>_test` plus `SUPER` — the harness's `SET global
+  innodb_flush_log_at_trx_commit` has no narrower privilege on MariaDB 10.11 —
+  instead of the old `GRANT ALL PRIVILEGES ON *.* WITH GRANT OPTION`, and sets
+  the server's `log_bin_trust_function_creators` for binlog-enabled servers;
+  the example and template db services pass
+  `--log-bin-trust-function-creators=1` so the setting survives a database
+  restart. **Breaking:** the `db-init/01-grants.sql` grant
+  script is gone from the examples and the extension template, and
+  `.docker/db-init/01-grants.sql` is no longer a managed file — `ckinit
+  --update` rewrites the managed CI compose file without the
+  `docker-entrypoint-initdb.d` mount; delete the leftover `.docker/db-init/`
+  directory in your repo. Stacks whose db service uses a non-default root
+  password must pass `CIVICRM_DB_ROOT_PASSWORD` to the app service.
 - The release archive is uploaded as `ckrelease-dist-<key>` instead of
   `ckrelease-dist`, and the smoke stack's compose project name carries the
   extension, so two build jobs of one run neither collide nor tear down each

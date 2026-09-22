@@ -1,13 +1,12 @@
 # CI for your extension
 
 Run your extension's phpunit suite against a real CiviCRM in GitHub Actions,
-using the `:standalone` image. Three files to copy into your extension repo:
+using the `:standalone` image. Two files to copy into your extension repo:
 
 | File | Copy to | Purpose |
 |------|---------|---------|
 | [`github-actions.yml`](github-actions.yml) | `.github/workflows/civicrm-tests.yml` | The workflow: boot → enable → phpunit |
 | [`docker-compose.ci.yml`](docker-compose.ci.yml) | repo root | Minimal app + db stack, mounts the repo as the extension |
-| [`db-init/01-grants.sql`](db-init/01-grants.sql) | `db-init/` | Grants for the isolated `<db>_test` headless-test database |
 
 Then replace `myextension` with your extension key (in the workflow and the
 compose file) and push.

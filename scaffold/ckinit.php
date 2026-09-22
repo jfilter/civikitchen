@@ -25,7 +25,6 @@ const MANAGED_FILES = [
   '.github/workflows/ci.yml',
   '.github/workflows/release.yml',
   '.docker/docker-compose.ci.yml',
-  '.docker/db-init/01-grants.sql',
   '.docker/init.d/README.md',
   'renovate.json',
   'phpstanBootstrap.php',

@@ -206,6 +206,62 @@ ck_demo_user() {
         cv scr /usr/local/share/civikitchen/demo-user.php
 }
 
+# Run one SQL batch (stdin) as the database root user and echo its error text.
+# mysql's password notice is not an error and would mask the real one.
+ck_mysql_root() {
+    local err rc=0
+    err=$(mktemp)
+    mysql -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u root -p"${CIVICRM_DB_ROOT_PASSWORD:-root}" "$@" 2>"${err}" || rc=$?
+    grep -v "Using a password" "${err}" >&2 || true
+    rm -f "${err}"
+    return "${rc}"
+}
+
+# Create, grant and seed the <db>_test scratch DB as the database root user:
+# the app user holds rights on its own database only, so it can neither create
+# the scratch DB nor copy triggers and routines into it.
+ck_provision_test_db() {
+    local test_db_name="$1" sql
+    # `_` is a GRANT wildcard even inside backticks — escape it so the grant
+    # covers <db>_test and nothing else.
+    local grant_db="${test_db_name//_/\\_}"
+    sql="CREATE DATABASE IF NOT EXISTS \`${test_db_name}\`;"
+    if [[ "${CIVICRM_DB_USER}" != "root" ]]; then
+        sql+="GRANT ALL PRIVILEGES ON \`${grant_db}\`.* TO '${CIVICRM_DB_USER}'@'%';"
+        # Civi\Test\Schema::setStrict runs `SET global
+        # innodb_flush_log_at_trx_commit`; on MariaDB 10.11 no privilege
+        # narrower than SUPER permits it (verified against 10.11.19).
+        sql+="GRANT SUPER ON *.* TO '${CIVICRM_DB_USER}'@'%';"
+        sql+="FLUSH PRIVILEGES;"
+    fi
+    # With binary logging on (mysql:8.0 default) the app user may not create
+    # the harness's triggers and functions unless the server trusts non-SUPER
+    # creators. A server setting, not a privilege.
+    sql+="SET GLOBAL log_bin_trust_function_creators = 1;"
+    if ! printf '%s\n' "${sql}" | ck_mysql_root; then
+        echo "[civikitchen] ERROR: could not create ${test_db_name} as database root. Headless tests need it; set CIVICRM_DB_ROOT_PASSWORD to the db service's root password, or CIVIKITCHEN_TEST_DB=0 to manage TEST_DB_DSN yourself." >&2
+        return 1
+    fi
+    # An EMPTY test DB is unusable: the headless harness boots CiviCRM against
+    # TEST_DB_DSN before \Civi\Test can (re)build any schema, and that boot dies
+    # on a schema-less database. civibuild does the same main→test copy.
+    echo "[civikitchen] Seeding ${test_db_name} from ${CIVICRM_DB_NAME}..."
+    # pipefail in a subshell: without it a failing mysqldump feeds mysql empty
+    # input, the pipeline exits 0, and the marker gets written over a
+    # schema-less test DB.
+    local dump_err
+    dump_err=$(mktemp)
+    if ! (set -o pipefail; mysqldump -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u root -p"${CIVICRM_DB_ROOT_PASSWORD:-root}" \
+            --single-transaction --routines --triggers "${CIVICRM_DB_NAME}" 2>>"${dump_err}" \
+        | ck_mysql_root "${test_db_name}"); then
+        grep -v "Using a password" "${dump_err}" >&2 || true
+        rm -f "${dump_err}"
+        echo "[civikitchen] ERROR: could not seed ${test_db_name} from ${CIVICRM_DB_NAME}; headless tests would run against an empty schema." >&2
+        return 1
+    fi
+    rm -f "${dump_err}"
+}
+
 # Isolated headless-test database. CIVICRM_UF=UnitTests boots the test
 # framework against TEST_DB_DSN; when unset CiviCRM falls back to the MAIN
 # database and a headless phpunit run wipes the dev site. Point it at a
@@ -216,29 +272,8 @@ ck_setup_test_db() {
     local test_db_name="${CIVICRM_DB_NAME}_test"
     local test_db_dsn="mysql://${CIVICRM_DB_USER}:${CIVICRM_DB_PASSWORD}@${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}/${test_db_name}?new_link=true"
     echo "[civikitchen] Configuring isolated test DB → ${test_db_name} (TEST_DB_DSN)..."
-    if mysql -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" \
-        -e "CREATE DATABASE IF NOT EXISTS \`${test_db_name}\`" 2>/dev/null; then
-        # Seed the test DB from the freshly installed main DB. An EMPTY test
-        # DB is unusable: the headless harness boots CiviCRM against
-        # TEST_DB_DSN before \Civi\Test can (re)build any schema, and that
-        # boot dies on a schema-less database. civibuild does the same
-        # main→test copy for its sites.
-        echo "[civikitchen] Seeding ${test_db_name} from ${CIVICRM_DB_NAME}..."
-        # pipefail in a subshell: without it a failing mysqldump (missing
-        # grants, dropped connection) feeds mysql empty input, the pipeline
-        # exits 0, and the marker gets written over a schema-less test DB.
-        local seed_err
-        seed_err=$(mktemp)
-        if ! (set -o pipefail; mysqldump -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" \
-                --single-transaction --routines --triggers "${CIVICRM_DB_NAME}" 2>>"${seed_err}" \
-            | mysql -h "${CIVICRM_DB_HOST}" -P "${CIVICRM_DB_PORT}" -u "${CIVICRM_DB_USER}" -p"${CIVICRM_DB_PASSWORD}" "${test_db_name}" 2>>"${seed_err}"); then
-            grep -v "Using a password" "${seed_err}" >&2 || true
-            echo "[civikitchen] WARN: could not seed ${test_db_name}; grant the DB user rights on it (GRANT ALL ON \`${test_db_name//_/\\_}\`.* ...) and re-provision" >&2
-        fi
-        rm -f "${seed_err}"
-    else
-        echo "[civikitchen] WARN: could not pre-create ${test_db_name}; grant the DB user rights on it (GRANT ALL ON \`${test_db_name//_/\\_}\`.* ...) — headless tests need a seeded test DB" >&2
-    fi
+    ck_provision_test_db "${test_db_name}" || return 1
+
     # cv merges ~/.cv.json into $GLOBALS['_CV'], keyed by the site bootstrap
     # path; civicrm.settings.php reads _CV['TEST_DB_DSN'] under
     # CIVICRM_UF=UnitTests. Write it for root (docker exec default) and the web

@@ -5,8 +5,7 @@
 #
 # The workflow's matrix supplies IMAGE and CK_EXT_BASE (the flavor's CiviCRM
 # extensionsDir — it differs per CMS, see the volumes note). civibuild
-# provisions its own DB user and an isolated sitetest_* test database, so no
-# db-init grants are needed here.
+# provisions its own DB user and an isolated sitetest_* test database.
 services:
   app:
     image: ${IMAGE:-ghcr.io/jfilter/civikitchen:drupal10}

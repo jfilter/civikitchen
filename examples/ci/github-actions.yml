@@ -1,7 +1,7 @@
 # GitHub Actions workflow for a CiviCRM extension repo, using civikitchen.
 #
 # Copy into your extension repo as .github/workflows/civicrm-tests.yml,
-# together with docker-compose.ci.yml and db-init/ from this directory.
+# together with docker-compose.ci.yml from this directory.
 # Replace `myextension` with your extension key (workflow + compose file).
 name: CiviCRM tests
 

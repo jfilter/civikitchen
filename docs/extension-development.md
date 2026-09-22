@@ -509,20 +509,24 @@ PhpStorm: enable "Listen for PHP Debug Connections", set the port to 9003, and a
 
 ## Database grants for headless tests
 
-The headless test harness needs more than rights on the dev database: it works
-in the separate `<db>_test` schema (created at first install, see above) and
-runs a `SET GLOBAL` performance tweak during schema init, which requires the
-`SUPER` privilege. The `examples/standalone/` setup ships
-[`db-init/01-grants.sql`](../examples/standalone/db-init/01-grants.sql), which
-mariadb applies on first boot:
+The headless test harness works in the separate `<db>_test` schema and runs
+`SET global innodb_flush_log_at_trx_commit` during schema init
+(`Civi\Test\Schema::setStrict`). On MariaDB 10.11 no privilege narrower than
+`SUPER` permits that statement, so without it every run dies with error 1227.
 
-```sql
-GRANT ALL PRIVILEGES ON *.* TO 'civicrm'@'%' WITH GRANT OPTION;
-```
+First-boot provisioning does the privileged part as the database root user: it
+creates `<db>_test`, grants the app user `ALL` on that database plus `SUPER`,
+sets `log_bin_trust_function_creators` (a binlog-enabled server otherwise
+refuses the harness's triggers and functions), and copies the installed schema
+over. No grant script in your compose file. The example and template stacks
+pass `--log-bin-trust-function-creators=1` to the db service so that setting
+survives a database restart.
 
-If you roll your own compose file, replicate this — otherwise headless tests
-fail with "you need (at least one of) the SUPER privilege(s)" or with access
-denied on `<db>_test`.
+Root is reached with `CIVICRM_DB_ROOT_PASSWORD` (default `root`, matching
+`MYSQL_ROOT_PASSWORD` in the example stacks). If the db service uses a
+different root password, pass it to the app service; otherwise first boot
+fails with the server's error and the site stays unhealthy. Set
+`CIVIKITCHEN_TEST_DB=0` to manage `TEST_DB_DSN` yourself.
 
 ## Idempotency
 
