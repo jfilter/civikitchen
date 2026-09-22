@@ -14,6 +14,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- The extension template's `.docker/docker-compose.ci.yml` left an empty
+  `volumes:` key on the `db` service after the `db-init` mount was dropped;
+  docker compose rejected the file ("services.db.volumes must be a array").
+  `ckinit --update` refreshes the block.
+
 ## [1.27.0] - 2026-09-22
 
 ### Added

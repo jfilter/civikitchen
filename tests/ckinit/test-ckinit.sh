@@ -770,5 +770,13 @@ if "$root/scaffold/ckinit.php" --check "$work/empty-root" >/dev/null 2>&1; then
   exit 1
 fi
 
+# The seeded CI compose file must be valid: a `volumes:` key with no entries
+# is rejected by docker compose ("must be a array").
+if awk '/^ *volumes: *$/ { v=1; next } v && !/^ *(- |#)/ { bad=1 } { v=0 } END { exit bad }' \
+    "$work/clean/.docker/docker-compose.ci.yml"; then :; else
+  echo "ckinit: seeded docker-compose.ci.yml has an empty volumes: key" >&2
+  exit 1
+fi
+
 "$root/scaffold/ckinit.php" --help >/dev/null
 echo "ckinit integration checks passed"
