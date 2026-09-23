@@ -347,7 +347,8 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   so a repo opts in with one `includes:` line when it is ready.
 - CI per `scaffold/template/extension/.github/workflows/ci.yml` — a thin caller of the
   reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
-  ckconform → ckfmt --check → phpunit under ckcoverage → phpstan → phpstan over
+  ckconform + ckcivix --check → ckfmt --check → phpunit under ckcoverage → the
+  extra PHPUnit suite when configured → phpstan → phpstan over
   the tests when the repo opted in → ckcompat →
   ckdeps → cktaint → cksmarty → ckeslint → template-drift check →
   lockfile vulnerability scan → repository secret scan, plus the opt-in
@@ -834,8 +835,8 @@ the classes where a true positive is an outright vulnerability — `TaintedSql`,
 `TaintedShell`, `TaintedInclude`, `TaintedUnserialize`, `TaintedSSRF`. The
 noisier classes (file paths, headers, cookies, callables, eval, LDAP, secrets)
 are `errorLevel="info"` in the bundled config: printed in the report, never
-part of the exit code. On an image from before cktaint existed, the CI step
-skips with a log line instead of failing on "command not found".
+part of the exit code. CI runs it as one of the `ck ci` gates; on an image
+from before `ck ci` existed, the gate step fails with a message naming that.
 
 ```
 cktaint                 # whole extension

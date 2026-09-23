@@ -95,8 +95,8 @@ minimal compose stack + DB grants) lives at [`examples/ci/`](../examples/ci/).
 
 `ck ci` runs every gate the shared workflow's `ci` job runs inside the
 container, in the same order and with the same arguments, and ends with a
-summary table. The workflow calls the same command, so a stack that is green
-under `ck ci` is green in that job:
+summary table. The workflow calls the same command, so the two runs cannot
+drift apart:
 
 ```bash
 docker compose exec -u www-data -w /var/www/html/ext/myextension app ck ci
@@ -115,6 +115,11 @@ The gates that read git run in `CK_TOOL_PATH`, everything that boots CiviCRM
 in `CK_EXT_PATH`. Both default to the current directory. For an extension
 below the repository root, pass `-e CK_TOOL_PATH=/civikitchen-repo/<directory>`
 (see the next section).
+
+CI also passes the organisation defaults file of the `policy_defaults` input
+as `CK_DEFAULT_CONFIG` ([organisation-wide defaults](../toolbelt/ckconform/README.md#organisation-wide-defaults)).
+To check against it locally, mount that `civikitchen.yaml` into the container
+and add `-e CK_DEFAULT_CONFIG=<its path in the container>`.
 
 The host-side steps of the job stay in the workflow: the template drift
 check, the lockfile and secret scans, the JS unit tests, and the stack start

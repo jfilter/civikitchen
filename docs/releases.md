@@ -208,7 +208,9 @@ policy:
 ```
 
 The canary exists so that a change is exercised by a real repo before it is
-released, not after. Pick one whose CI someone actually reads, and keep it at
+released, not after. A workflow change that calls something new in the image
+turns the canary red from the merge until *Build Dev Images* has promoted
+`:standalone`; that red run is expected, not a finding. Pick one whose CI someone actually reads, and keep it at
 exactly one: a second repo on `@main` doubles the noise without adding a
 signal. The `image` input keeps the image pin in the caller, so the canary
 needs no second exception for its compose file.

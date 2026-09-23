@@ -22,20 +22,25 @@ except that a break the consumers are adjusted for ships as a minor, marked
   ckeslint — in the job's order, runs each even after an earlier one failed,
   and ends with a summary table. `--only` and `--skip` take gate names and
   refuse unknown ones. Run it in the dev stack with
-  `docker compose exec -u www-data -w /var/www/html/ext/<key> app ck ci`; the
-  template's compose files carry that line. See
+  `docker compose exec -u www-data -w /var/www/html/ext/<key> app ck ci`.
+  `ckinit` writes that line into the compose files of a newly stamped
+  extension; existing repos keep their headers, which lie outside the managed
+  blocks. See
   [Running the CI gates locally](docs/extension-development.md#running-the-ci-gates-locally).
 
 ### Changed
 
 - The `ci` job of `extension-ci.yml` runs its in-container gates through
-  `ck ci` in one step, so a repo green under `ck ci` locally is green there.
+  `ck ci` in one step, so a local run and CI run the same gates; CI adds only
+  the organisation defaults file (`policy_defaults`) as `CK_DEFAULT_CONFIG`.
   The gate table and the taint verdict go to the job summary. Each gate now
   also runs when an earlier one in the same group failed: ckconform and
   ckcivix after a red cklint. **Breaking:** a stack whose image predates
-  `ck ci` (an explicit old image tag in the compose file or the `image`
-  input) fails the step with a message naming that; move it to a current
-  image.
+  `ck ci` fails the step with a message naming that: an explicit old image
+  tag in the CI compose file or the `image` input, including a
+  `:standalone-<minor>` that is no longer rebuilt. Move it to a current image.
+  The canary (`@main` with `:standalone`) fails the same way from the merge
+  until Build Dev Images has promoted the new `:standalone`.
 
 ## [1.27.0] - 2026-09-22
 
