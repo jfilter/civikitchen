@@ -14,6 +14,18 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- Headless boots on every image cache in the test database
+  (`CIVICRM_DB_CACHE_CLASS=ArrayCache`) even when `civicrm.settings.php`
+  selects `FileCache`, Redis or Memcache, which the dev site shares and a
+  `Civi\Test` schema rebuild outlives.
+- The standalone image writes `TEST_DB_DSN` to `~/.cv.json` and patches the boot
+  stub on every boot, not only on first boot. A container recreated on a new
+  image over a kept `private/` volume stopped headless boots with
+  `$GLOBALS[_CV][TEST_DB_DSN] is not set`. A stub patched by an older image
+  gets the current block.
+
 ## [1.28.0] - 2026-09-23
 
 ### Added
