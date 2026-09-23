@@ -4,8 +4,8 @@
 # the E2E suites, which run locally against the full dev stack).
 #
 #   docker compose -f .docker/docker-compose.ci.yml up -d --wait
-#   docker compose -f .docker/docker-compose.ci.yml exec -T -u www-data app bash -c \
-#     'cd /var/www/html/ext/ckmonoaddon && CIVICRM_UF=UnitTests phpunit --coverage-text tests/phpunit && phpstan analyse'
+#   docker compose -f .docker/docker-compose.ci.yml exec -T -u www-data -w /var/www/html/ext/ckmonoaddon \
+#     -e CK_TOOL_PATH=/civikitchen-repo/examples/monorepo/ckmonoaddon app ck ci
 #
 # Keep image tag and db version in sync with docker-compose.yml.
 #

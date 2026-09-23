@@ -1142,7 +1142,7 @@ if ($mode === 'seed') {
     fwrite(STDOUT, "created {$relative}\n");
   }
   fwrite(STDOUT, "\nCiviKitchen tooling installed for {$extensionFile}.\n");
-  fwrite(STDOUT, "Next: review composer.json and .docker/, then run cklint --all && ckconform.\n");
+  fwrite(STDOUT, "Next: review composer.json and .docker/, then start the stack and run ck ci in it (.docker/docker-compose.yml says how).\n");
   exit(0);
 }
 

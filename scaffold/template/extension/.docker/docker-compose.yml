@@ -13,8 +13,12 @@
 #
 # Re-provision from scratch (re-runs init.d hooks): docker compose down -v && up -d
 #
+# Every gate the shared CI runs in the container, with a summary table:
+#   docker compose exec -u www-data -w /var/www/html/ext/__EXTKEY__ app ck ci
+#
 # In a repository of several extensions the repository root is mounted at
-# /civikitchen-repo; cklint, ckfmt and ckconform run from there.
+# /civikitchen-repo; the git-reading gates run from there, so pass
+# -e CK_TOOL_PATH=/civikitchen-repo/<directory> to the exec.
 
 # Explicit project name — unnamed .docker/ stacks all become one project
 # called "docker" and share volumes across checkouts.

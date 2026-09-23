@@ -29,6 +29,11 @@ make_extension "$work/clean"
 "$root/scaffold/ckinit.php" "$work/clean" >/dev/null
 grep -q 'acme/example_ext' "$work/clean/composer.json"
 grep -q '"extends": \["config:recommended"\]' "$work/clean/renovate.json"
+# The local gate recipe is `ck ci`, the one gate list the shared CI runs too.
+for compose in docker-compose.yml docker-compose.ci.yml; do
+  grep -q -- '-w /var/www/html/ext/example_ext app ck ci$' "$work/clean/.docker/$compose" \
+    || { echo "$compose does not point at ck ci" >&2; exit 1; }
+done
 if grep -R -q '__EXTKEY__\|__EXTENSION_KEY__\|__SCENARIO_NAME__\|__VENDOR__\|__RENOVATE_PRESET__' "$work/clean"; then
   echo "placeholder remained after rendering" >&2
   exit 1

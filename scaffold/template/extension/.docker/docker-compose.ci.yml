@@ -3,11 +3,13 @@
 # are covered by the E2E suites, which run locally against the full dev stack).
 #
 #   docker compose -f .docker/docker-compose.ci.yml up -d --wait
-#   docker compose -f .docker/docker-compose.ci.yml exec -T -u www-data app bash -c \
-#     'cd /var/www/html/ext/__EXTKEY__ && CIVICRM_UF=UnitTests phpunit --coverage-text tests/phpunit && phpstan analyse'
+#   docker compose -f .docker/docker-compose.ci.yml exec -T -u www-data \
+#     -w /var/www/html/ext/__EXTKEY__ app ck ci
 #
+# `ck ci` runs every in-container gate of the shared CI workflow, in its order.
 # In a repository of several extensions the repository root is mounted at
-# /civikitchen-repo; cklint, ckfmt and ckconform run from there.
+# /civikitchen-repo; the git-reading gates run from there, so pass
+# -e CK_TOOL_PATH=/civikitchen-repo/<directory> to the exec.
 #
 # Keep image tag and db version in sync with docker-compose.yml.
 #
