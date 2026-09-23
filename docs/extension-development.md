@@ -71,6 +71,12 @@ the cached containers/loaders):
 docker compose exec app cktestreset
 ```
 
+It is also the fix when a suite does not see a change to what `install()` seeds.
+`Civi\Test` rebuilds `<db>_test` only when its step signature changes, the list
+of steps and extension keys it stores in `civitest_revs`. New seed data or a
+bumped `info.xml` version leaves the signature as it was, and the tests run
+against the previous install.
+
 The durable fix belongs in the extension: build the environment with the
 managed bootstrap's `ck_headless()` instead of `\Civi\Test::headless()`. It
 queues one install step per `info.xml` `<requires>` entry, then this

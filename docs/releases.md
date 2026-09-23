@@ -164,7 +164,11 @@ The tag push runs `release.yml`, which
 4. creates the GitHub release from that version's changelog section.
 
 Nothing else is needed: callers on `@v1` and `:v1` pick the release up on their
-next run.
+next run. A re-run of an earlier run is not a next run: GitHub resolves the
+reusable workflow at the first attempt and keeps that commit for every re-run
+(`gh api repos/<owner>/<repo>/actions/runs/<id> --jq .referenced_workflows`
+shows it). To test a release, push a commit, or run the tools locally against
+`ghcr.io/jfilter/civikitchen:v1`.
 
 ### Versioning rules
 

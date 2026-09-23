@@ -319,8 +319,8 @@ lint-actions: $(CACHE)/actionlint ## actionlint + zizmor over the workflows
 lint-changelog: ## CHANGELOG.md follows the Keep a Changelog grammar
 	.github/scripts/changelog-check.sh --lint
 
-# Informational, not part of `lint`: reports token-level clones so duplication
-# gets noticed, without hard-failing on the existing backlog.
+# Advisory token-level clone report, not part of `lint`. Duplicated on purpose:
+# check run() skeletons, parallel test fixtures, clones across composer packages.
 dupcheck: ## Copy-paste clone report (jscpd), advisory
 	bunx jscpd@$(CK_JSCPD_VERSION) --config .jscpd.json
 

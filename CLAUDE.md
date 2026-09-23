@@ -27,6 +27,14 @@ the rest; `make test-images` is the ~1 h Docker round.
 
 ## Rules
 
+- **This repository is public.** Code, docs, fixtures and commit messages never
+  name a client, a private extension or internal infrastructure, not even as an
+  example. Use neutral names: `org.example.myext`, Acme, Widget, Greeter,
+  Ledger. `extensions/` and `sites/` are gitignored local checkouts.
+- **A check needs a real finding first.** A rule without a bug it would have
+  caught only produces false alarms. A local, token-provable PHP pattern is a
+  phpcs sniff; repository structure, XML/JSON/YAML and cross-file rules are
+  `ckconform` checks. Search the existing sniffs and checks before adding one.
 - **One parser per format.** `civikitchen.yaml` → `ckconform --policy-env` /
   `--policy <key>`; XML and JSON → `ck_xml_field` / `ck_json_field` in
   `toolbelt/lib/ckcommon.sh`. Never `sed`/`grep -o` a structured file. A new

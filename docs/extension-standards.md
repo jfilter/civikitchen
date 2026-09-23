@@ -252,7 +252,9 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   `DeprecatedScopeResolver` (`toolbelt/phpstan/`) that treats
   such a scope as deprecated, so nothing inside it is reported. Exact tag; put
   it as narrow as possible, and delete it together with the shim or test it
-  annotates. It is a scope marker, not a blanket suppression — production code
+  annotates. Code that is removed together with the deprecated path, private
+  helpers included, gets `@deprecated` itself; that is the case the
+  exemption is for. It is a scope marker, not a blanket suppression — production code
   calling a deprecated API still has to migrate.
 - No positional padding: arguments that only repeat a parameter default are
   dropped and what follows them is named — `ckmodernize` rewrites
@@ -322,7 +324,15 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   half is the part with no other coverage anywhere: those bodies are Smarty
   strings in the database, and the first thing that compiles them is the
   workflow firing on a live site. No `.tpl` in the repo is a pass with a log
-  line.
+  line. A managed MessageTemplate that the extension renders itself, without
+  Smarty, is declared by its managed name with a reason, and `cksmarty` skips it:
+
+  ```yaml
+  policy:
+    smarty_skip_templates:
+      - template: example_receipt
+        reason: Rendered by strtr() over {placeholder} tokens, not by Smarty
+  ```
 - `ckeslint` lints JS/TS with a toolchain pinned in the image — see
   [Frontend](#frontend-js-dependencies-js-tests-and-browser-tests). Also an
   unconditional step in `ci`, and also a pass-with-a-log-line for the many
@@ -336,7 +346,9 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   and civix/DAO-generated PHP are excluded — civix regenerates those files
   verbatim, and formatting them would put every `civix upgrade` at war with
   the gate. A committed `mago.toml` or `.oxfmtrc.*` wins over the baseline for
-  its half.
+  its half. `ckfmt` and `ckeslint` take their file list from the git index: a
+  new file is invisible to both until it is `git add`ed. `cklint` also reads
+  untracked files.
 - **Rule packs come from the image, not from each repo's `composer.json`.**
   phpcs standards (civicrm/coder, PHPCompatibility, Slevomat) and phpstan
   extensions (deprecation rules, disallowed-calls, strict-rules) are installed
@@ -530,6 +542,10 @@ that forced it:
 Indentation therefore has exactly one owner: `ckfmt` rewrites a wrong indent on
 the same file set the standard covers, so nothing goes unchecked.
 
+To tell a new stand-off from an ordinary finding, run `ckfmt`, then `phpcbf`,
+then `ckfmt` again. What the second `ckfmt` changes back is a stand-off; what
+stays fixed was a finding.
+
 Every one of these is asserted in `tests/images/test-dev-tools.sh`: the fixture
 is written unformatted, `ckfmt` formats it, and `phpcs` must accept the result.
 A new stand-off ships with its fixture, or the next release re-opens it.
@@ -538,7 +554,8 @@ Suppression placement matters for the mago engine. A class-level
 `@mago-expect` goes either **above the docblock**, separated from it by a blank
 line, or **inside** it as a ` * @mago-expect lint:<rule>` line — never as a
 `//` line between the docblock and the declaration, where the formatter and the
-pragma scanner disagree about what the comment is attached to.
+pragma scanner disagree about what the comment is attached to. On a method, that
+`//` line between docblock and declaration is the form in use across the fleet.
 
 Two more habits around the mago engine:
 
