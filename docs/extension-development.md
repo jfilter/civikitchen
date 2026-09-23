@@ -91,6 +91,35 @@ The same loop runs unattended in CI: boot the stack, enable the extension,
 run phpunit headless. A copy-pasteable GitHub Actions setup (workflow +
 minimal compose stack + DB grants) lives at [`examples/ci/`](../examples/ci/).
 
+### Running the CI gates locally
+
+`ck ci` runs every gate the shared workflow's `ci` job runs inside the
+container, in the same order and with the same arguments, and ends with a
+summary table. The workflow calls the same command, so a stack that is green
+under `ck ci` is green in that job:
+
+```bash
+docker compose exec -u www-data -w /var/www/html/ext/myextension app ck ci
+docker compose exec -u www-data -w /var/www/html/ext/myextension app ck ci --only cklint,ckfmt
+docker compose exec -u www-data -w /var/www/html/ext/myextension app ck ci --skip ckcoverage
+```
+
+Every gate runs even when an earlier one failed; the exit code is 1 when any
+gate failed and 2 for a usage error, such as an unknown gate name in `--only`
+or `--skip`. `ck ci --help` lists the gates. Two of them are opt-in, as in the
+workflow: `phpstan-tests` runs when `phpstan-tests.neon(.dist)` exists, and
+`phpunit-extra` runs `phpunit -c FILE` for `--extra-phpunit-config FILE` (the
+workflow's `extra_phpunit_config` input).
+
+The gates that read git run in `CK_TOOL_PATH`, everything that boots CiviCRM
+in `CK_EXT_PATH`. Both default to the current directory. For an extension
+below the repository root, pass `-e CK_TOOL_PATH=/civikitchen-repo/<directory>`
+(see the next section).
+
+The host-side steps of the job stay in the workflow: the template drift
+check, the lockfile and secret scans, the JS unit tests, and the stack start
+itself.
+
 Boots that need something the runner has to fetch first — an uncommitted
 `vendor/` behind a private composer package, or private sibling extensions
 mounted beside this one, the CI equivalent of the sibling mounts in the dev

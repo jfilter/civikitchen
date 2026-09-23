@@ -352,7 +352,9 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   ckdeps → cktaint → cksmarty → ckeslint → template-drift check →
   lockfile vulnerability scan → repository secret scan, plus the opt-in
   schema-parity job), so
-  the pipeline is defined once instead of copy-pasted per repo. The caller pins
+  the pipeline is defined once instead of copy-pasted per repo. The in-container
+  gates of that list are `ck ci`, which a developer runs unchanged in the local
+  stack ([Running the CI gates locally](extension-development.md#running-the-ci-gates-locally)). The caller pins
   the released major (`@v1`) and the CI stack the matching `:v1` image —
   workflow, template, tools and images are one versioned contract, so they move
   together and deliberately ([releases.md](releases.md)). One canary repo

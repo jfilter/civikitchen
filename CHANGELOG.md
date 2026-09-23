@@ -14,6 +14,29 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- `ck ci` runs every in-container gate of `extension-ci.yml`'s `ci` job —
+  cklint, ckconform, ckcivix, ckfmt, ckcoverage, the extra PHPUnit suite,
+  PHPStan and its opt-in test pass, ckcompat, ckdeps, cktaint, cksmarty and
+  ckeslint — in the job's order, runs each even after an earlier one failed,
+  and ends with a summary table. `--only` and `--skip` take gate names and
+  refuse unknown ones. Run it in the dev stack with
+  `docker compose exec -u www-data -w /var/www/html/ext/<key> app ck ci`; the
+  template's compose files carry that line. See
+  [Running the CI gates locally](docs/extension-development.md#running-the-ci-gates-locally).
+
+### Changed
+
+- The `ci` job of `extension-ci.yml` runs its in-container gates through
+  `ck ci` in one step, so a repo green under `ck ci` locally is green there.
+  The gate table and the taint verdict go to the job summary. Each gate now
+  also runs when an earlier one in the same group failed: ckconform and
+  ckcivix after a red cklint. **Breaking:** a stack whose image predates
+  `ck ci` (an explicit old image tag in the compose file or the `image`
+  input) fails the step with a message naming that; move it to a current
+  image.
+
 ## [1.27.0] - 2026-09-22
 
 ### Added
