@@ -30,6 +30,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Changed
 
+- `:standalone-6.17` is rebuilt again: 6.17 joins 6.16 in
+  `CK_STANDALONE_EXTRA_MINORS`, so repos pinned to that line get `ck ci`.
 - The `ci` job of `extension-ci.yml` runs its in-container gates through
   `ck ci` in one step, so a local run and CI run the same gates; CI adds only
   the organisation defaults file (`policy_defaults`) as `CK_DEFAULT_CONFIG`.
