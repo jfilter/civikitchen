@@ -193,6 +193,9 @@ RUN { \
 # is what makes cv/civibuild/phpunit able to boot CiviCRM on Joomla at all —
 # during the build-time bake (builder stage) and at runtime (demo + final).
 COPY docker/buildkit/joomla-cli-bootstrap.php /etc/civicrm.settings.d/post.d/000-joomla-cli-bootstrap.php
+# Headless (CIVICRM_UF=UnitTests) boots cache in the test DB whatever cache
+# class the site settings pick (see the file header). pre.d loads before them.
+COPY docker/buildkit/test-db-cache.php /etc/civicrm.settings.d/pre.d/000-civikitchen-test-db-cache.php
 
 # Joomla "finish install" helpers, shipped in the shared dir so the SAME script
 # runs both at build time (bake.sh, builder stage) and at runtime (entrypoint.sh,

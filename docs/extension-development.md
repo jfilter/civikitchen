@@ -55,6 +55,17 @@ CiviCRM falls back to the main database and a headless `phpunit` run wipes your
 dev data** — so this is configured automatically. Opt out with
 `CIVIKITCHEN_TEST_DB=0` if you manage `TEST_DB_DSN` yourself.
 
+Headless boots also get `CIVICRM_DB_CACHE_CLASS=ArrayCache` — from the
+patched boot stub on `:standalone`, from
+`/etc/civicrm.settings.d/pre.d/000-civikitchen-test-db-cache.php` on the
+buildkit images — so they cache in the test database even when
+`civicrm.settings.php` selects `FileCache`, `Redis` or `Memcache` (the
+settings template guards that define with `if (!defined(...))`). CiviCRM keys
+those caches by CiviCRM version only: the test DB would read the dev site's
+entries and keep its own across a `Civi\Test` schema rebuild, and a boot then
+queries tables the rebuilt schema does not have
+(`Table 'civicrm_test.civicrm_search_display' doesn't exist`).
+
 **Resetting the scratch DB — `cktestreset`.** A suite can leave `<db>_test`
 inconsistent: `Civi\Test`'s `installMe()` does *not* resolve `<requires>`
 (the image entrypoint does, for the dev site — the test framework is its own

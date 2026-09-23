@@ -12,6 +12,11 @@
  * against the dev database. The only reliable interception point is the boot
  * stub, which runs in-process before bootSettings().
  *
+ * The same block pins the cache to the test database. Core keys its
+ * version-scoped caches by cache name and CiviCRM version only, so a cache
+ * outside the DB (FileCache, Redis, Memcache) is shared with the dev site and
+ * outlives Civi\Test's schema rebuild.
+ *
  * Usage:  php patch-test-db-boot.php [/path/to/civicrm.standalone.php]
  * Idempotent: skips when the [civikitchen-test-db] marker is present.
  * Never fatal: missing stub or anchor exits 0 (non-standalone layouts).
@@ -58,6 +63,11 @@ if (getenv('CIVICRM_UF') === 'UnitTests' && !defined('CIVICRM_DSN')) {
   elseif (getenv('CIVICRM_DB_NAME') && substr((string) getenv('CIVICRM_DB_NAME'), -5) !== '_test') {
     putenv('CIVICRM_DB_NAME=' . getenv('CIVICRM_DB_NAME') . '_test');
   }
+  // ArrayCache falls back to SqlGroup: civicrm_cache in the test DB, which
+  // the schema rebuild drops. A file or Redis cache would serve stale state.
+  if (!defined('CIVICRM_DB_CACHE_CLASS')) {
+    define('CIVICRM_DB_CACHE_CLASS', 'ArrayCache');
+  }
   unset($ckTestDsn, $ckParts);
 }
 
@@ -71,5 +81,8 @@ if ($pos === FALSE) {
 }
 
 $src = substr($src, 0, $pos) . $inject . substr($src, $pos);
-file_put_contents($stub, $src);
+if (file_put_contents($stub, $src) === FALSE) {
+  fwrite(STDERR, "[civikitchen] ERROR: cannot write {$stub} — UnitTests boots would use the dev DB\n");
+  exit(1);
+}
 echo "[civikitchen] Patched $stub: UnitTests boots now use the test DB.\n";
