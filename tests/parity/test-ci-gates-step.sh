@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The `ci` job's gate step of extension-ci.yml, run as written over a fake
 # `docker`: what reaches `ck ci` in the container, its exit code, and the
-# summary it wrote there landing in the job summary.
+# summary it wrote there landing in the job summary. Plus the local-fix notice.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -77,5 +77,17 @@ run_step "${step_env[@]}" FAKE_OLD_IMAGE=1
 [ "$rc" = 1 ] || fail "an image without ck ci must fail the step (rc=$rc)"
 grep -qF "predates \`ck ci\`" <<<"$out" || fail "old image not named: $out"
 if grep -q ' ck ci$' "$work/log"; then fail "ck ci run on an image without it"; fi
+
+# The notice names a command that works in the dev stack, and only follows a
+# gate run that failed, not a stack that never booted.
+notice='How to fix findings locally'
+[ "$(step "$notice" if)" = "\${{ failure() && steps.gates.outcome == 'failure' }}" ] \
+  || fail "notice condition: $(step "$notice" if)"
+step "$notice" > "$work/step.sh"
+run_step
+grep -qF 'exec -u www-data -w /var/www/html/ext/demo -e CK_TOOL_PATH=/civikitchen-repo/demo app ck ci ' <<<"$out" \
+  || fail "notice for an extension below the root: $out"
+tool_path=/var/www/html/ext/demo run_step
+grep -qF 'exec -u www-data -w /var/www/html/ext/demo app ck ci ' <<<"$out" || fail "notice at the root: $out"
 
 echo "ci gates step tests passed"

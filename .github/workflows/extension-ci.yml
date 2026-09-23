@@ -825,8 +825,13 @@ jobs:
           exit "$rc"
       # Every gate above is one local command away, and most findings one more.
       - name: How to fix findings locally
-        if: failure()
-        run: echo "::notice::docker compose -f .docker/docker-compose.yml exec -u www-data app ck ci runs these same gates in the dev stack; cklint --fix and ckfmt auto-fix most phpcs and formatting findings; ckcivix --update brings the civix scaffold forward."
+        if: ${{ failure() && steps.gates.outcome == 'failure' }}
+        run: |
+          tool=""
+          if [ "$CK_TOOL_PATH" != "$CK_EXT_PATH" ]; then
+            tool=" -e CK_TOOL_PATH=$CK_TOOL_PATH"
+          fi
+          echo "::notice::docker compose -f .docker/docker-compose.yml exec -u www-data -w $CK_EXT_PATH$tool app ck ci runs these same gates in the dev stack; cklint --fix and ckfmt auto-fix most phpcs and formatting findings; ckcivix --update brings the civix scaffold forward."
 
       # Same lifecycle block as the compat job below — deliberately duplicated
       # rather than factored out: a reusable workflow cannot share steps
