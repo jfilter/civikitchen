@@ -24,6 +24,7 @@
 : "${CK_WEB_USER:=www-data}"
 : "${CK_WEB_GROUP:=www-data}"
 : "${CK_WEB_USER_HOME:=/var/www}"
+: "${CK_ROOT_HOME:=/root}"
 : "${CK_EXT_DIR:=/var/www/html/ext}"
 : "${CK_DATA_DIRS:=/var/www/html/private /var/www/html/public}"
 : "${CK_PROVISIONED_MARKER:=/var/www/html/private/.civikitchen-provisioned}"
@@ -35,7 +36,7 @@
 # ~/.cv.json site key under which TEST_DB_DSN is stored. Standalone keys by its
 # bootstrap file; other CMSes key the site differently (resolved per image).
 : "${CK_TEST_DB_CV_KEY:=/var/www/html/civicrm.standalone.php}"
-# Boot stub patched by ck_patch_boot_stub so CIVICRM_UF=UnitTests boots define
+# Boot stub patched by ck_wire_test_db_boot so CIVICRM_UF=UnitTests boots define
 # the test DSN before core's env-based DSN composition (see
 # patch-test-db-boot.php). Empty or missing file = skip (buildkit flavors
 # boot through their CMS, not a stub).
@@ -271,18 +272,20 @@ ck_provision_test_db() {
     rm -f "${dump_err}"
 }
 
-# Isolated headless-test database. CIVICRM_UF=UnitTests boots the test
-# framework against TEST_DB_DSN; when unset CiviCRM falls back to the MAIN
-# database and a headless phpunit run wipes the dev site. Point it at a
-# separate <db>_test scratch DB. Opt out with CIVIKITCHEN_TEST_DB=0; a project
-# needing a different DSN can overwrite ~/.cv.json from a /civikitchen-init.d hook.
+# Isolated headless-test database: create, grant and seed the <db>_test scratch
+# DB that ck_wire_test_db_boot points UnitTests boots at. Opt out: CIVIKITCHEN_TEST_DB=0.
 ck_setup_test_db() {
     [[ "${CIVIKITCHEN_TEST_DB:-1}" == "1" ]] || return 0
     local test_db_name="${CIVICRM_DB_NAME}_test"
-    local test_db_dsn="mysql://${CIVICRM_DB_USER}:${CIVICRM_DB_PASSWORD}@${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}/${test_db_name}?new_link=true"
-    echo "[civikitchen] Configuring isolated test DB → ${test_db_name} (TEST_DB_DSN)..."
+    echo "[civikitchen] Creating isolated test DB → ${test_db_name}..."
     ck_provision_test_db "${test_db_name}" || return 1
+}
 
+# Route CIVICRM_UF=UnitTests boots at <db>_test: TEST_DB_DSN in ~/.cv.json plus
+# the patched boot stub. Both live outside private/, so this runs on every boot.
+ck_wire_test_db_boot() {
+    [[ "${CIVIKITCHEN_TEST_DB:-1}" == "1" ]] || return 0
+    local test_db_dsn="mysql://${CIVICRM_DB_USER}:${CIVICRM_DB_PASSWORD}@${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}/${CIVICRM_DB_NAME}_test?new_link=true"
     # cv merges ~/.cv.json into $GLOBALS['_CV'], keyed by the site bootstrap
     # path; civicrm.settings.php reads _CV['TEST_DB_DSN'] under
     # CIVICRM_UF=UnitTests. Write it for root (docker exec default) and the web
@@ -294,23 +297,20 @@ ck_setup_test_db() {
     dsn_json="${dsn_json//\"/\\\"}"
     local cv_json
     cv_json=$(printf '{\n  "sites": {\n    "%s": {\n      "TEST_DB_DSN": "%s"\n    }\n  }\n}' "${CK_TEST_DB_CV_KEY}" "${dsn_json}")
-    if [[ ! -f /root/.cv.json ]]; then
-        printf '%s\n' "${cv_json}" > /root/.cv.json
-        chmod 600 /root/.cv.json
+    if [[ ! -f "${CK_ROOT_HOME}/.cv.json" ]]; then
+        printf '%s\n' "${cv_json}" > "${CK_ROOT_HOME}/.cv.json"
+        chmod 600 "${CK_ROOT_HOME}/.cv.json"
     fi
     if [[ ! -f "${CK_WEB_USER_HOME}/.cv.json" ]]; then
         printf '%s\n' "${cv_json}" > "${CK_WEB_USER_HOME}/.cv.json"
         chown "${CK_WEB_USER}:${CK_WEB_GROUP}" "${CK_WEB_USER_HOME}/.cv.json"
         chmod 600 "${CK_WEB_USER_HOME}/.cv.json"
     fi
-}
-
-# Core composes CIVICRM_DSN from the CIVICRM_DB_* env vars before the settings
-# file's TEST_DB_DSN branch can fire, so the boot stub routes UnitTests boots
-# at the test DB (see patch-test-db-boot.php). Idempotent; runs on every boot.
-ck_patch_boot_stub() {
-    [[ "${CIVIKITCHEN_TEST_DB:-1}" == "1" && -n "${CK_BOOT_STUB}" ]] || return 0
-    php /usr/local/share/civikitchen/patch-test-db-boot.php "${CK_BOOT_STUB}"
+    # Core composes CIVICRM_DSN from the CIVICRM_DB_* env vars before the settings
+    # file's TEST_DB_DSN branch can fire; the patched stub routes around that.
+    if [[ -n "${CK_BOOT_STUB}" ]]; then
+        php /usr/local/share/civikitchen/patch-test-db-boot.php "${CK_BOOT_STUB}"
+    fi
 }
 
 # Download one registry extension: a bare key (de.systopia.xcm) or key@URL
@@ -945,11 +945,8 @@ ck_heal_perms() {
 # settings file already exists.
 #
 # ck_setup_test_db is ordered BEFORE the auth/demo-user steps deliberately: those
-# can hard-fail (return 1 under the entrypoint's set -e), and test-DB isolation
-# must be established regardless. If TEST_DB_DSN were left unwritten, a later
-# headless phpunit run would fall back to — and WIPE — the dev DB. Putting it
-# first means a demo-user failure can never strand test-DB isolation, even if it
-# fails on every boot.
+# can hard-fail (return 1 under the entrypoint's set -e), and the test DB must be
+# created and seeded regardless, even if a demo-user step fails on every boot.
 #
 # Standalone-only — buildkit gets its demo user + isolated test DB from civibuild
 # and calls ck_smtp directly, so it must NOT call this bundle (its entrypoint

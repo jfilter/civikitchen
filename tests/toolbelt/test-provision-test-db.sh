@@ -43,7 +43,7 @@ ck_as_web() { "$@"; }
 . "$root/docker/runtime/provision.sh"
 
 # ck_setup_test_db aborts the whole step when the DB work fails, so the boot
-# never reaches the TEST_DB_DSN it could not back.
+# fails instead of marking an unusable test DB as configured.
 grep -q 'ck_provision_test_db "${test_db_name}" || return 1' "$root/docker/runtime/provision.sh" \
   || fail "ck_setup_test_db must abort when ck_provision_test_db fails"
 

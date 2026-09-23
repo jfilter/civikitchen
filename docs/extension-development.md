@@ -49,8 +49,8 @@ docker compose exec -e CIVICRM_UF=UnitTests app \
 
 This runs the test framework against a **separate** scratch database
 (`<db>_test`, e.g. `civicrm_test`), not your dev site. On first install the
-image creates that database and writes `TEST_DB_DSN` to `~/.cv.json` (for both
-`root` and `www-data`) so the framework finds it. **Without `TEST_DB_DSN` set,
+image creates that database; on every boot it writes `TEST_DB_DSN` to
+`~/.cv.json` (for both `root` and `www-data`) so the framework finds it. **Without `TEST_DB_DSN` set,
 CiviCRM falls back to the main database and a headless `phpunit` run wipes your
 dev data** — so this is configured automatically. Opt out with
 `CIVIKITCHEN_TEST_DB=0` if you manage `TEST_DB_DSN` yourself.

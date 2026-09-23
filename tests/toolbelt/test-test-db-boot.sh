@@ -86,25 +86,46 @@ out="$(env CIVICRM_DB_NAME=civicrm CIVICRM_UF=UnitTests php -r 'require $argv[1]
   echo CIVICRM_DB_CACHE_CLASS, " ", getenv("CIVICRM_DB_NAME"), "\n";' "$work/old/civicrm.standalone.php")"
 [[ "$out" == "ArrayCache civicrm_test" ]] || fail "an upgraded stub must boot with a DB-backed cache: '$out'"
 
-# The patch runs on every standalone boot, outside the marker-gated config
-# bundle, so a new image over a kept private/ still gets a patched stub.
+# ~/.cv.json and the stub live in the container, the config marker in private/:
+# a recreated container must get both back on every boot, outside that bundle.
 entrypoint="$root/docker/standalone/entrypoint.sh"
-grep -qx 'ck_patch_boot_stub' "$entrypoint" \
-  || fail "the entrypoint must call ck_patch_boot_stub unconditionally at top level"
+grep -qx 'ck_wire_test_db_boot' "$entrypoint" \
+  || fail "the entrypoint must call ck_wire_test_db_boot unconditionally at top level"
 # shellcheck source=docker/runtime/provision.sh
 . "$root/docker/runtime/provision.sh"
-if declare -f ck_post_install_config | grep -qE "ck_patch_boot_stub|patch-test-db-boot"; then
-  fail "the boot-stub patch must not sit behind the configured marker"
+if declare -f ck_post_install_config ck_setup_test_db | grep -qE "ck_wire_test_db_boot|patch-test-db-boot|cv\.json"; then
+  fail "the .cv.json write and the stub patch must not sit behind the configured marker"
 fi
-php() { printf '%s\n' "$*" > "$work/php-call"; }
-: > "$work/php-call"
-CK_BOOT_STUB="$work/stub-arg" ck_patch_boot_stub
+# Runs ck_wire_test_db_boot with php and chown stubbed; homes and stub in $work.
+wire() {
+  env CK_ROOT_HOME="$work/root" CK_WEB_USER_HOME="$work/www" CK_BOOT_STUB="$work/stub-arg" \
+    CIVICRM_DB_USER=u CIVICRM_DB_PASSWORD='p"w' CIVICRM_DB_HOST=db CIVICRM_DB_PORT=3306 \
+    CIVICRM_DB_NAME=civicrm PHP_CALL="$work/php-call" "$@" bash -c '
+      . "$0"
+      php() { printf "%s\n" "$*" > "$PHP_CALL"; }
+      chown() { :; }
+      ck_wire_test_db_boot' "$root/docker/runtime/provision.sh"
+}
+dsn_in() {
+  php -r 'echo json_decode(file_get_contents($argv[1]), TRUE)["sites"]["/var/www/html/civicrm.standalone.php"]["TEST_DB_DSN"];' "$1"
+}
+mkdir "$work/root" "$work/www"
+wire
 grep -qx "/usr/local/share/civikitchen/patch-test-db-boot.php $work/stub-arg" "$work/php-call" \
-  || fail "ck_patch_boot_stub must patch CK_BOOT_STUB by default"
-: > "$work/php-call"
-CIVIKITCHEN_TEST_DB=0 ck_patch_boot_stub
-[[ ! -s "$work/php-call" ]] || fail "CIVIKITCHEN_TEST_DB=0 must skip the boot-stub patch"
-unset -f php
+  || fail "ck_wire_test_db_boot must patch CK_BOOT_STUB by default"
+for f in "$work/root/.cv.json" "$work/www/.cv.json"; do
+  [[ "$(dsn_in "$f")" == 'mysql://u:p"w@db:3306/civicrm_test?new_link=true' ]] \
+    || fail "$f must carry the test DSN"
+done
+
+echo '{"sites":{}}' > "$work/root/.cv.json"
+wire
+[[ "$(cat "$work/root/.cv.json")" == '{"sites":{}}' ]] || fail "an existing ~/.cv.json must not be clobbered"
+
+/bin/rm -f "$work/php-call" "$work/root/.cv.json" "$work/www/.cv.json"
+wire CIVIKITCHEN_TEST_DB=0
+[[ ! -e "$work/php-call" && ! -e "$work/root/.cv.json" && ! -e "$work/www/.cv.json" ]] \
+  || fail "CIVIKITCHEN_TEST_DB=0 must skip the .cv.json write and the stub patch"
 
 # An unwritable stub must fail, not report a patch it did not apply. Root writes anyway.
 if [[ "$(id -u)" -ne 0 ]]; then

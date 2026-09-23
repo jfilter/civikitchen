@@ -142,9 +142,9 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# The boot stub ships in the image while the config marker persists in private/,
-# so patch it on every boot rather than in the marker-gated bundle below.
-ck_patch_boot_stub
+# ~/.cv.json and the boot stub live in the container while the config marker
+# persists in private/, so wire them on every boot, not in the bundle below.
+ck_wire_test_db_boot
 
 # ---------------------------------------------------------------------------
 # Post-install configuration + provisioning. Both bundles are marker-gated (each
@@ -156,9 +156,8 @@ ck_patch_boot_stub
 # which runs once and never again. That is what makes config retry-safe: a step
 # that hard-fails under set -e (the standaloneusers enable or the demo-user
 # creation in ck_post_install_config) re-runs next boot instead of being
-# stranded. In particular ck_post_install_config establishes test-DB isolation
-# (TEST_DB_DSN) BEFORE its auth/demo-user steps, so a demo-user failure can never
-# leave a headless phpunit run falling back to — and wiping — the dev DB.
+# stranded. In particular ck_post_install_config creates and seeds the test DB
+# BEFORE its auth/demo-user steps, so a demo-user failure cannot leave it missing.
 #   ck_post_install_config:    dev settings, SMTP, test DB, auth, demo user
 #                              (standalone-only — see docker/runtime/provision.sh).
 #   ck_post_install_provision: profile, extra/mounted extensions, init.d hooks.
