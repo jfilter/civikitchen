@@ -152,7 +152,7 @@ rm "${ci}/ext/phpstan-tests.neon.dist"
 : > "${ci}/log"
 run_ci ck ci --only=ckeslint,cklint > /dev/null
 [ "$(cut -d'|' -f1 "${ci}/log" | paste -sd' ' -)" = 'cklint ckeslint' ] || fail "--only ran the wrong gates"
-for args in '--only nosuch' '--skip cklint,nosuch' '--only' '--only cklint --skip cklint' '--frobnicate'; do
+for args in '--only nosuch' '--skip cklint,nosuch' '--only ,cklint' '--only' '--only cklint --skip cklint' '--frobnicate'; do
   rc=0
   # shellcheck disable=SC2086  # the word-split argument list is the point.
   err=$(run_ci ck ci $args 2>&1 >/dev/null) || rc=$?
@@ -160,6 +160,7 @@ for args in '--only nosuch' '--skip cklint,nosuch' '--only' '--only cklint --ski
   [ -n "$err" ] || fail "'ck ci $args' gave no message"
 done
 grep -q 'unknown gate: nosuch' <<<"$(run_ci ck ci --only nosuch 2>&1)" || fail "unknown gate not named"
+grep -q 'empty gate name' <<<"$(run_ci ck ci --only ,cklint 2>&1)" || fail "empty gate name not named"
 
 # An early failure does not stop the later gates, and it alone sets the exit code.
 : > "${ci}/log"
@@ -186,6 +187,10 @@ grep -q '^### Taint analysis: blocking findings or analysis failure$' "${ci}/sum
   || fail "failed cktaint not reported as blocking"
 run_ci env GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="${ci}/pass.md" ck ci --only cktaint > /dev/null
 grep -q '^### Taint analysis: no blocking findings$' "${ci}/pass.md" || fail "passing cktaint not reported"
+rc=0
+err=$(run_ci env GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="${ci}/missing/summary.md" ck ci --only cklint 2>&1 >/dev/null) || rc=$?
+[ "$rc" = 2 ] || fail "an unwritable step summary must fail the run (rc=$rc)"
+grep -q 'cannot append the summary' <<<"$err" || fail "unwritable step summary not reported: $err"
 run_ci env GITHUB_STEP_SUMMARY="${ci}/local.md" ck ci --only cklint > "${ci}/out"
 [ ! -e "${ci}/local.md" ] || fail "step summary written outside GitHub Actions"
 if grep -q '::group::' "${ci}/out"; then fail "log groups printed outside GitHub Actions"; fi

@@ -792,9 +792,8 @@ jobs:
           docker compose "${compose[@]}" down -v --remove-orphans
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
-      # Every in-container gate, through the one gate list a developer runs
-      # locally; each gate runs even after an earlier one failed, so none masks
-      # another. ck ci writes its summary in the container; it is appended here.
+      # Every in-container gate via ck ci, the gate list developers run locally.
+      # It writes its summary table in the container; the step appends it here.
       - name: Extension gates (ck ci)
         id: gates
         env:

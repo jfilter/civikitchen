@@ -60,6 +60,10 @@ final class CiCommand implements Command
                 continue;
             }
             $names = array_map('trim', explode(',', $value));
+            if (in_array('', $names, true)) {
+                fwrite(STDERR, "ck ci: {$option} {$value} holds an empty gate name\n");
+                return 2;
+            }
             $unknown = array_diff($names, array_keys(self::GATES));
             if ($unknown !== []) {
                 fwrite(STDERR, 'ck ci: unknown gate: ' . implode(', ', $unknown)
@@ -94,12 +98,13 @@ final class CiCommand implements Command
                 continue;
             }
             $directory = $where === 'ext' ? $extPath : $toolPath;
-            $skipped = $this->optIn($gate, $directory, $extra, $command);
-            if (is_string($skipped)) {
+            $skipped = $this->skipReason($gate, $directory, $extra);
+            if ($skipped !== null) {
                 echo "==> {$gate}: skipped ({$skipped})\n";
                 $results[$gate] = ['skipped', null, $skipped];
                 continue;
             }
+            $command = $this->completed($gate, $command, $directory, $extra);
             echo $github ? '::group::' : "\n==> ", $gate, ' (', implode(' ', $command), " in {$directory})\n";
             $started = hrtime(true);
             $status = $this->runner->passthrough($command, $environment, $directory);
@@ -118,32 +123,46 @@ final class CiCommand implements Command
             printf("  %-14s %-8s %7s  %s\n", $gate, $result, $this->duration($seconds), $note);
         }
         $summaryFile = (string) getenv('GITHUB_STEP_SUMMARY');
-        if ($github && $summaryFile !== '') {
-            file_put_contents($summaryFile, $this->markdown($results), FILE_APPEND);
+        if ($github && $summaryFile !== '' && @file_put_contents($summaryFile, $this->markdown($results), FILE_APPEND) === false) {
+            fwrite(STDERR, "ck ci: cannot append the summary to GITHUB_STEP_SUMMARY {$summaryFile}\n");
+            return 2;
         }
         return in_array('fail', array_column($results, 0), true) ? 1 : 0;
     }
 
+    /** Why an opt-in gate does not run, or null when its switch is on. */
+    private function skipReason(string $gate, string $directory, string $extra): ?string
+    {
+        if ($gate === 'phpunit-extra' && $extra === '') {
+            return 'no --extra-phpunit-config / CK_EXTRA_PHPUNIT_CONFIG';
+        }
+        if ($gate === 'phpstan-tests' && $this->phpstanTestsConfig($directory) === null) {
+            return 'no phpstan-tests.neon.dist - test analysis not enabled';
+        }
+        return null;
+    }
+
     /**
-     * The skip reason of an opt-in gate whose switch is off, or null after completing its command.
+     * The gate's command with the arguments an opt-in gate takes from its switch.
      *
      * @param list<string> $command
+     * @return list<string>
      */
-    private function optIn(string $gate, string $directory, string $extra, array &$command): ?string
+    private function completed(string $gate, array $command, string $directory, string $extra): array
     {
-        if ($gate === 'phpunit-extra') {
-            if ($extra === '') {
-                return 'no --extra-phpunit-config / CK_EXTRA_PHPUNIT_CONFIG';
+        return match ($gate) {
+            'phpunit-extra' => [...$command, $extra],
+            'phpstan-tests' => [...$command, (string) $this->phpstanTestsConfig($directory), '--no-progress'],
+            default => $command,
+        };
+    }
+
+    private function phpstanTestsConfig(string $directory): ?string
+    {
+        foreach (['phpstan-tests.neon', 'phpstan-tests.neon.dist'] as $file) {
+            if (is_file($directory . '/' . $file)) {
+                return $file;
             }
-            $command[] = $extra;
-        }
-        if ($gate === 'phpstan-tests') {
-            $config = array_values(array_filter(['phpstan-tests.neon', 'phpstan-tests.neon.dist'],
-                static fn(string $file): bool => is_file($directory . '/' . $file)))[0] ?? null;
-            if ($config === null) {
-                return 'no phpstan-tests.neon.dist - test analysis not enabled';
-            }
-            array_push($command, $config, '--no-progress');
         }
         return null;
     }
