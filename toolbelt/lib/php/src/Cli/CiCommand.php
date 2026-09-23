@@ -86,6 +86,8 @@ final class CiCommand implements Command
         }
 
         $github = (string) getenv('GITHUB_ACTIONS') !== '';
+        // The gates keep their local output: GITHUB_ACTIONS switches Psalm, oxlint and phpstan to terse annotations.
+        $environment = array_diff_key(getenv(), ['GITHUB_ACTIONS' => true, 'GITHUB_STEP_SUMMARY' => true]);
         $results = [];
         foreach (self::GATES as $gate => [$where, $command]) {
             if (!in_array($gate, $selected, true)) {
@@ -100,7 +102,7 @@ final class CiCommand implements Command
             }
             echo $github ? '::group::' : "\n==> ", $gate, ' (', implode(' ', $command), " in {$directory})\n";
             $started = hrtime(true);
-            $status = $this->runner->passthrough($command, null, $directory);
+            $status = $this->runner->passthrough($command, $environment, $directory);
             $seconds = (hrtime(true) - $started) / 1e9;
             if ($github) {
                 echo "::endgroup::\n";

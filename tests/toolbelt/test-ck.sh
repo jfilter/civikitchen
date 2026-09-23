@@ -89,6 +89,7 @@ for gate in cklint ckconform ckcivix ckfmt ckcoverage phpunit phpstan ckcompat c
 #!/bin/bash
 name=$(basename "$0")
 printf '%s|%s|%s\n' "$name" "$(pwd -P)" "$*" >> "$CK_FAKE_LOG"
+if [ -n "${GITHUB_ACTIONS:-}${GITHUB_STEP_SUMMARY:-}" ]; then echo "$name" >> "$CK_FAKE_LOG.github"; fi
 case ",${CK_FAKE_FAIL:-}," in (*",${name},"*) exit 1 ;; esac
 SH
   chmod +x "${ci}/bin/${gate}"
@@ -175,6 +176,7 @@ out=$(run_ci env GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="${ci}/summary.md" CK_F
   ck ci --only cklint,ckdeps,cktaint 2>&1) || rc=$?
 [ "$rc" = 1 ] || fail "GitHub run exited $rc"
 [ "$(grep -c '^::group::' <<<"$out")" = 3 ] || fail "expected one ::group:: per gate"$'\n'"$out"
+[ ! -e "${ci}/log.github" ] || fail "gates saw the GitHub Actions environment: $(cat "${ci}/log.github")"
 [ "$(grep -c '^::endgroup::' <<<"$out")" = 3 ] || fail "expected one ::endgroup:: per gate"
 grep -q '^::error title=ck ci::ckdeps failed (exit 255)$' <<<"$out" || fail "no error annotation for ckdeps"
 grep -q '^# earlier step$' "${ci}/summary.md" || fail "step summary overwritten instead of appended"
