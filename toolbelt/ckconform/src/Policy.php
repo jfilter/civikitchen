@@ -88,9 +88,10 @@ final class Policy
 
     /**
      * The keys a defaults file may set: those read by ckconform and ckinit
-     * only. In CI the variable reaches exactly those two runs; a key another
-     * gate reads (min_coverage, mutation_*, lifecycle_log_ignore, ...) would
-     * apply in one place and silently not in the other, so it stays per repo.
+     * only. In CI the variable reaches the template check and the `ci` job's
+     * gates, not the mutation, lifecycle or compat runs; a key another gate reads
+     * (min_coverage, mutation_*, lifecycle_log_ignore, ...) would apply in one
+     * job and silently not in another, so it stays per repo.
      *
      * @var list<string>
      */
