@@ -254,7 +254,7 @@ jobs:
       CK_EXT_KEY_INPUT: ${{ inputs.key }}
       CK_WORKING_DIRECTORY: ${{ inputs.working_directory }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Validate working_directory and read the extension key from info.xml
@@ -340,7 +340,7 @@ jobs:
       run:
         working-directory: ${{ inputs.working_directory }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # Pinned to the SHA this very workflow was resolved from, so the template
@@ -348,7 +348,7 @@ jobs:
       # an unpinned second checkout could race a push to main in between.
       # job.workflow_sha (not github.workflow_sha, which is the CALLER's file)
       # is the official way for a reusable workflow to reach its own repo.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
@@ -387,7 +387,7 @@ jobs:
           permission-contents: read
       - name: Check out the organisation policy defaults
         if: ${{ (inputs.policy_defaults || vars.CK_POLICY_DEFAULTS) != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
@@ -450,7 +450,7 @@ jobs:
       run:
         working-directory: ${{ inputs.working_directory }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -545,7 +545,7 @@ jobs:
       run:
         working-directory: ${{ inputs.working_directory }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -553,7 +553,7 @@ jobs:
       # floating main checkout. The helper checkout itself is excluded from the
       # scan below: callers are responsible for their tree, CiviKitchen scans
       # its own source in its own pipeline.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
@@ -623,7 +623,7 @@ jobs:
       run:
         working-directory: ${{ inputs.working_directory }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           # ckconform's release checks compare HEAD with the newest reachable
@@ -751,7 +751,7 @@ jobs:
       # the extension scanner skips and cklint ignores.
       - name: Check out civikitchen for the shared private-dependency steps
         if: ${{ inputs.composer_install || inputs.sibling_repo != '' || (inputs.policy_defaults || vars.CK_POLICY_DEFAULTS) != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
@@ -908,7 +908,7 @@ jobs:
         working-directory: ${{ inputs.working_directory }}
     steps:
       # Full history: the previous release tag has to be checkoutable.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -921,7 +921,7 @@ jobs:
       # Private dependencies — see the note on the same pair of steps in `ci`.
       - name: Check out civikitchen for the shared private-dependency steps
         if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
@@ -1091,7 +1091,7 @@ jobs:
         working-directory: ${{ inputs.working_directory }}
     steps:
       # Full history: the previous release tag has to be checkoutable.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1104,7 +1104,7 @@ jobs:
       # Private dependencies — see the note on the same pair of steps in `ci`.
       - name: Check out civikitchen for the shared private-dependency steps
         if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
@@ -1327,7 +1327,7 @@ jobs:
     steps:
       # Full history: without mutation_paths ckmutate mutates the lines changed
       # against CK_MUTATE_BASE, and a shallow clone has no base to diff.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1340,7 +1340,7 @@ jobs:
       # Private dependencies — see the note on the same pair of steps in `ci`.
       - name: Check out civikitchen for the shared private-dependency steps
         if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
@@ -1448,7 +1448,7 @@ jobs:
       run:
         working-directory: ${{ inputs.working_directory }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -1465,7 +1465,7 @@ jobs:
       # Private dependencies — see the note on the same pair of steps in `ci`.
       - name: Check out civikitchen for the shared private-dependency steps
         if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
@@ -1767,14 +1767,14 @@ jobs:
       run:
         working-directory: ${{ inputs.working_directory }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       # Private dependencies — see the note on the same pair of steps in `ci`.
       - name: Check out civikitchen for the shared private-dependency steps
         if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
@@ -1891,7 +1891,7 @@ jobs:
       run:
         working-directory: ${{ inputs.working_directory }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -1903,7 +1903,7 @@ jobs:
       # Private dependencies — see the note on the same pair of steps in `ci`.
       - name: Check out civikitchen for the shared private-dependency steps
         if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: jfilter/civikitchen
