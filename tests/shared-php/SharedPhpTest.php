@@ -44,7 +44,7 @@ final class SharedPhpTest extends TestCase
     public function testApplicationRoutesHelpForEveryCommandThatOffersIt(): void
     {
         $application = new Application(dirname(__DIR__, 2) . '/toolbelt/bin', dirname(__DIR__, 2));
-        foreach (['civix', 'compatibility', 'dependencies', 'format', 'javascript', 'lifecycle', 'lint',
+        foreach (['ci', 'civix', 'compatibility', 'dependencies', 'format', 'javascript', 'lifecycle', 'lint',
             'profile', 'release', 'schema', 'smarty'] as $command) {
             ob_start();
             $status = $application->run([$command, '--help'], 'ck');
@@ -219,6 +219,50 @@ final class SharedPhpTest extends TestCase
         } finally {
             chdir($before === false ? dirname(__DIR__, 2) : $before);
         }
+    }
+
+    public function testCiRunsEveryGateInItsDirectoryAndAggregatesFailures(): void
+    {
+        mkdir($this->temporary . '/ext');
+        mkdir($this->temporary . '/repo');
+        file_put_contents($this->temporary . '/ext/info.xml', '<extension key="demo"><file>demo</file></extension>');
+        touch($this->temporary . '/ext/phpstan-tests.neon');
+        putenv('CK_EXT_PATH=' . $this->temporary . '/ext');
+        putenv('CK_TOOL_PATH=' . $this->temporary . '/repo');
+        putenv('GITHUB_ACTIONS=true');
+        putenv('GITHUB_STEP_SUMMARY=' . $this->temporary . '/summary.md');
+        $runner = new class () extends Runner {
+            /** @var list<string> */
+            public array $calls = [];
+
+            public function passthrough(array $command, ?array $environment = null, ?string $workingDirectory = null): int
+            {
+                $this->calls[] = basename((string) $workingDirectory) . ': ' . implode(' ', $command);
+                return $command[0] === 'ckdeps' ? 1 : 0;
+            }
+        };
+        try {
+            ob_start();
+            $status = (new Application('/nonexistent', dirname(__DIR__, 2), $runner))
+                ->run(['ci', '--skip', 'cksmarty', '--extra-phpunit-config=unit.xml'], 'ck');
+            $output = (string) ob_get_clean();
+            self::assertSame(2, (new Application('/nonexistent', dirname(__DIR__, 2), $runner))->run(['ci', '--only', 'lint'], 'ck'));
+        } finally {
+            foreach (['CK_EXT_PATH', 'CK_TOOL_PATH', 'GITHUB_ACTIONS', 'GITHUB_STEP_SUMMARY'] as $name) {
+                putenv($name);
+            }
+        }
+        self::assertSame(1, $status);
+        self::assertSame([
+            'repo: cklint --all', 'repo: ckconform', 'repo: ckcivix --check', 'repo: ckfmt --check',
+            'ext: ckcoverage tests/phpunit', 'ext: phpunit -c unit.xml', 'ext: phpstan analyse --no-progress',
+            'ext: phpstan analyse -c phpstan-tests.neon --no-progress', 'repo: ckcompat', 'ext: ckdeps',
+            'repo: cktaint', 'repo: ckeslint',
+        ], $runner->calls);
+        self::assertStringContainsString("::error title=ck ci::ckdeps failed (exit 1)\n", $output);
+        $summary = (string) file_get_contents($this->temporary . '/summary.md');
+        self::assertStringContainsString('| `ckdeps` | fail (exit 1) |', $summary);
+        self::assertStringContainsString('### Taint analysis: no blocking findings', $summary);
     }
 
     public function testCoverageTreatsOptionalTestsPolicyWithItsMandatoryReasonAsOptional(): void

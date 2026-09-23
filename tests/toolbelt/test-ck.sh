@@ -76,4 +76,116 @@ expected="org.example.dep example-org/dep v1.2.3 dep-1.2.3.zip ${digest} -- priv
 version=$(cd "${pins}" && "${root}/toolbelt/bin/ckconform" --policy extension_version)
 [ "${version}" = 'org.example.dep@^1.2' ] || { echo "unexpected extension_version: ${version}" >&2; exit 1; }
 
+# `ck ci` is the one gate list extension-ci.yml's `ci` job runs. Fakes stand in
+# for every gate but ckdeps, which is the real command over a fake analyser.
+ci=$(cd "$(mktemp -d)" && pwd -P)
+trap 'rm -rf "$work" "$pins" "$ci"' EXIT
+mkdir -p "${ci}/bin" "${ci}/ext" "${ci}/repo/ext"
+cp "${work}/info.xml" "${ci}/ext/info.xml"
+cp "${work}/info.xml" "${ci}/repo/ext/info.xml"
+printf '%s\n' '{"name": "example/demo", "require": {"php": ">=8.1"}}' > "${ci}/ext/composer.json"
+for gate in cklint ckconform ckcivix ckfmt ckcoverage phpunit phpstan ckcompat cktaint cksmarty ckeslint; do
+  cat > "${ci}/bin/${gate}" <<'SH'
+#!/bin/bash
+name=$(basename "$0")
+printf '%s|%s|%s\n' "$name" "$(pwd -P)" "$*" >> "$CK_FAKE_LOG"
+case ",${CK_FAKE_FAIL:-}," in (*",${name},"*) exit 1 ;; esac
+SH
+  chmod +x "${ci}/bin/${gate}"
+done
+ln -s "${root}/toolbelt/bin/ck" "${ci}/bin/ck"
+ln -s "${root}/toolbelt/bin/ck" "${ci}/bin/ckdeps"
+# The shadow-dependency finding a real analyser reports for a package the code
+# uses but composer.json does not declare.
+cat > "${ci}/bin/composer-dependency-analyser" <<'SH'
+#!/bin/bash
+printf '%s|%s|%s\n' ckdeps "$(pwd -P)" "$*" >> "$CK_FAKE_LOG"
+echo 'Found shadow dependencies! (those are used, but not listed as dependency in composer.json)'
+echo '  • guzzlehttp/guzzle'
+exit 255
+SH
+chmod +x "${ci}/bin/composer-dependency-analyser"
+run_ci() {
+  (cd "${ci}/ext" && env -u GITHUB_ACTIONS -u GITHUB_STEP_SUMMARY -u CK_EXT_PATH -u CK_TOOL_PATH \
+    -u CK_EXTRA_PHPUNIT_CONFIG PATH="${ci}/bin:${PATH}" CK_FAKE_LOG="${ci}/log" "$@")
+}
+fail() { echo "ck ci: $*" >&2; exit 1; }
+
+: > "${ci}/log"
+rc=0
+out=$(run_ci ck ci 2>&1) || rc=$?
+[ "$rc" = 1 ] || fail "a shadow dependency must fail the run (rc=$rc)"$'\n'"$out"
+grep -q 'Found shadow dependencies' <<<"$out" || fail "ckdeps output missing"
+grep -qE '^  ckdeps +fail +[0-9.]+s +exit 255$' <<<"$out" || fail "summary does not mark ckdeps failed"$'\n'"$out"
+grep -qE '^  cklint +pass ' <<<"$out" || fail "summary does not mark cklint passed"
+grep -qE '^  phpunit-extra +skipped +- ' <<<"$out" || fail "phpunit-extra must be skipped without a config"
+grep -qE '^  phpstan-tests +skipped ' <<<"$out" || fail "phpstan-tests must be skipped without its config"
+order=$(cut -d'|' -f1 "${ci}/log" | paste -sd' ' -)
+[ "$order" = 'cklint ckconform ckcivix ckfmt ckcoverage phpstan ckcompat ckdeps cktaint cksmarty ckeslint' ] \
+  || fail "gates ran out of order or not after a failure: $order"
+grep -qx "cklint|${ci}/ext|--all" "${ci}/log" || fail "cklint --all not run in the extension"
+grep -qx "ckcoverage|${ci}/ext|tests/phpunit" "${ci}/log" || fail "ckcoverage tests/phpunit not run"
+grep -qx "phpstan|${ci}/ext|analyse --no-progress" "${ci}/log" || fail "phpstan arguments differ"
+
+# Git-reading gates run in CK_TOOL_PATH, CiviCRM-booting ones in CK_EXT_PATH;
+# the opt-ins switch on by their config file and by the environment.
+: > "${ci}/log"
+touch "${ci}/ext/phpstan-tests.neon.dist"
+rc=0
+run_ci env CK_EXT_PATH="${ci}/ext" CK_TOOL_PATH="${ci}/repo/ext" CK_EXTRA_PHPUNIT_CONFIG=phpunit-unit.xml.dist \
+  ck ci --skip ckdeps > "${ci}/out" 2>&1 || rc=$?
+[ "$rc" = 0 ] || fail "all-green run exited $rc"
+for tool in cklint ckconform ckcivix ckfmt ckcompat cktaint ckeslint; do
+  grep -q "^${tool}|${ci}/repo/ext|" "${ci}/log" || fail "${tool} did not run in CK_TOOL_PATH"
+done
+for ext in ckcoverage phpstan cksmarty; do
+  grep -q "^${ext}|${ci}/ext|" "${ci}/log" || fail "${ext} did not run in CK_EXT_PATH"
+done
+grep -qx "phpunit|${ci}/ext|-c phpunit-unit.xml.dist" "${ci}/log" || fail "extra PHPUnit suite not run"
+grep -qx "phpstan|${ci}/ext|analyse -c phpstan-tests.neon.dist --no-progress" "${ci}/log" \
+  || fail "phpstan-tests not run with its config"
+if grep -q '^ckdeps' "${ci}/log"; then fail "--skip ckdeps still ran ckdeps"; fi
+rm "${ci}/ext/phpstan-tests.neon.dist"
+
+# Selection: canonical order whatever the flag order, unknown names refused.
+: > "${ci}/log"
+run_ci ck ci --only=ckeslint,cklint > /dev/null
+[ "$(cut -d'|' -f1 "${ci}/log" | paste -sd' ' -)" = 'cklint ckeslint' ] || fail "--only ran the wrong gates"
+for args in '--only nosuch' '--skip cklint,nosuch' '--only' '--only cklint --skip cklint' '--frobnicate'; do
+  rc=0
+  # shellcheck disable=SC2086  # the word-split argument list is the point.
+  err=$(run_ci ck ci $args 2>&1 >/dev/null) || rc=$?
+  [ "$rc" = 2 ] || fail "'ck ci $args' exited $rc, expected a usage error"
+  [ -n "$err" ] || fail "'ck ci $args' gave no message"
+done
+grep -q 'unknown gate: nosuch' <<<"$(run_ci ck ci --only nosuch 2>&1)" || fail "unknown gate not named"
+
+# An early failure does not stop the later gates, and it alone sets the exit code.
+: > "${ci}/log"
+rc=0
+run_ci env CK_FAKE_FAIL=cklint ck ci --skip ckdeps > /dev/null 2>&1 || rc=$?
+[ "$rc" = 1 ] || fail "a failing cklint must fail the run (rc=$rc)"
+grep -q '^ckeslint|' "${ci}/log" || fail "gates after a failure did not run"
+
+# GitHub Actions: one log group per gate, an error annotation per failure, and
+# the table plus the taint verdict appended to the step summary.
+printf '%s\n' '# earlier step' > "${ci}/summary.md"
+rc=0
+out=$(run_ci env GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="${ci}/summary.md" CK_FAKE_FAIL=cktaint \
+  ck ci --only cklint,ckdeps,cktaint 2>&1) || rc=$?
+[ "$rc" = 1 ] || fail "GitHub run exited $rc"
+[ "$(grep -c '^::group::' <<<"$out")" = 3 ] || fail "expected one ::group:: per gate"$'\n'"$out"
+[ "$(grep -c '^::endgroup::' <<<"$out")" = 3 ] || fail "expected one ::endgroup:: per gate"
+grep -q '^::error title=ck ci::ckdeps failed (exit 255)$' <<<"$out" || fail "no error annotation for ckdeps"
+grep -q '^# earlier step$' "${ci}/summary.md" || fail "step summary overwritten instead of appended"
+grep -qF '| `ckdeps` | fail (exit 255) |' "${ci}/summary.md" || fail "step summary lacks the ckdeps row"
+grep -qF '| `cklint` | pass |' "${ci}/summary.md" || fail "step summary lacks the cklint row"
+grep -q '^### Taint analysis: blocking findings or analysis failure$' "${ci}/summary.md" \
+  || fail "failed cktaint not reported as blocking"
+run_ci env GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="${ci}/pass.md" ck ci --only cktaint > /dev/null
+grep -q '^### Taint analysis: no blocking findings$' "${ci}/pass.md" || fail "passing cktaint not reported"
+run_ci env GITHUB_STEP_SUMMARY="${ci}/local.md" ck ci --only cklint > "${ci}/out"
+[ ! -e "${ci}/local.md" ] || fail "step summary written outside GitHub Actions"
+if grep -q '::group::' "${ci}/out"; then fail "log groups printed outside GitHub Actions"; fi
+
 echo "ck dispatcher tests passed"

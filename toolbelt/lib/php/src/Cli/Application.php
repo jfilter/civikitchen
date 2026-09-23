@@ -109,6 +109,9 @@ final class Application
         if (in_array($command, ['test', 'phpunit'], true)) {
             return (new PhpUnitCommand($this->checkoutRoot, $this->runner))->run($arguments);
         }
+        if ($command === 'ci') {
+            return (new CiCommand($this->runner))->run($arguments);
+        }
         if ($command === 'mutate') {
             return (new MutationCommand($this->checkoutRoot, $this->runner))->run($arguments);
         }
@@ -126,6 +129,7 @@ final class Application
         return <<<'TXT'
 ck — CiviKitchen extension-development toolbelt
 
+  ck ci [args]            every in-container gate of the shared CI, with a summary
   ck conform [args]       repository conformance
   ck lint [args]          PHP lint and bug patterns
   ck format [args]        PHP/JS formatting
