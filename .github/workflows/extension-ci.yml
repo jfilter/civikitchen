@@ -792,179 +792,38 @@ jobs:
           docker compose "${compose[@]}" down -v --remove-orphans
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
-      # The three gates below report INDEPENDENTLY (each runs as long as the
-      # stack booted, red predecessors or not). Chained gates mask each other:
-      # one fleet repo accumulated 53 phpstan errors across 48 commits because
-      # phpstan sat behind a red lint gate and never executed — every gate you
-      # skip on failure is a gate someone meets all at once later.
-      - name: Lint (cklint + ckconform + ckcivix)
-        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+      # Every in-container gate, through the one gate list a developer runs
+      # locally; each gate runs even after an earlier one failed, so none masks
+      # another. ck ci writes its summary in the container; it is appended here.
+      - name: Extension gates (ck ci)
         env:
           CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
+          CK_EXTRA_PHPUNIT_CONFIG: ${{ inputs.extra_phpunit_config }}
         run: |
+          compose=(docker compose -f "$CK_COMPOSE_FILE" exec -T)
+          if ! "${compose[@]}" -u www-data app ck ci --help >/dev/null; then
+            echo "::error::The stack's image predates \`ck ci\` — move it to a current civikitchen image."
+            exit 1
+          fi
           # The defaults file is read from inside the container, where the
           # checkout above sits below the extension's mount. Empty = no layer.
           defaults=""
           if [ -n "$CK_POLICY_DEFAULTS" ]; then
             defaults="$CK_REPO_PATH/.civikitchen-siblings/policy/civikitchen.yaml"
           fi
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data -e "CK_DEFAULT_CONFIG=$defaults" app bash -c \
-            "cd \"$CK_TOOL_PATH\" && cklint --all && ckconform && ckcivix --check"
-      # Most phpcs and formatter findings are one local command away.
-      - name: How to fix lint findings locally
+          summary=/tmp/ck-ci-summary.md
+          rc=0
+          "${compose[@]}" -u www-data \
+            -e GITHUB_ACTIONS=true -e "GITHUB_STEP_SUMMARY=$summary" \
+            -e "CK_EXT_PATH=$CK_EXT_PATH" -e "CK_TOOL_PATH=$CK_TOOL_PATH" \
+            -e "CK_EXTRA_PHPUNIT_CONFIG=$CK_EXTRA_PHPUNIT_CONFIG" -e "CK_DEFAULT_CONFIG=$defaults" \
+            app ck ci || rc=$?
+          "${compose[@]}" app cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+      # Every gate above is one local command away, and most findings one more.
+      - name: How to fix findings locally
         if: failure()
-        run: echo "::notice::cklint --fix and ckfmt (inside the civikitchen image) auto-fix most phpcs and formatting findings; ckcivix --update brings the civix scaffold forward."
-
-      # Formatting gate (mago for PHP, oxfmt for JS/TS). Hard by design: the
-      # bundled mago baseline is tuned so its output is clean under the phpcs
-      # standard cklint enforces, so the two gates agree by construction — a
-      # red here means "run ckfmt and commit", never a style debate.
-      - name: Format check (ckfmt)
-        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
-        run: |
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd \"$CK_TOOL_PATH\" && ckfmt --check"
-
-      - name: PHPUnit + coverage floor
-        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
-        run: |
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd \"$CK_EXT_PATH\" && ckcoverage tests/phpunit"
-
-      - name: Additional PHPUnit suite
-        if: ${{ !cancelled() && steps.stack.outcome == 'success' && inputs.extra_phpunit_config != '' }}
-        env:
-          CK_EXTRA_PHPUNIT_CONFIG: ${{ inputs.extra_phpunit_config }}
-        run: |
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data \
-            -e "CK_EXT_PATH=$CK_EXT_PATH" \
-            -e "CK_EXTRA_PHPUNIT_CONFIG=$CK_EXTRA_PHPUNIT_CONFIG" app bash -c \
-            'cd "$CK_EXT_PATH" && phpunit -c "$CK_EXTRA_PHPUNIT_CONFIG"'
-
-      - name: PHPStan
-        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
-        run: |
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd \"$CK_EXT_PATH\" && phpstan analyse --no-progress"
-
-      # Second, separate pass over tests/phpunit. The FILE is the switch —
-      # there is no input to set: a repo whose test code is level-10 clean
-      # ships phpstan-tests.neon.dist; tests are held to level 10 separately
-      # from production code so neither configuration dilutes the other.
-      # Until then the test-only rules (ck.test.*ddl*/InTransaction) see no
-      # file at all, which is why the opt-in is worth having.
-      - name: PHPStan (tests, opt-in)
-        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
-        run: |
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd \"$CK_EXT_PATH\" && \
-             if [ -f phpstan-tests.neon ]; then phpstan analyse -c phpstan-tests.neon --no-progress; \
-             elif [ -f phpstan-tests.neon.dist ]; then phpstan analyse -c phpstan-tests.neon.dist --no-progress; \
-             else echo 'no phpstan-tests.neon.dist — test analysis not enabled'; fi"
-
-      # Runs on ONE PHP (the image's), which is exactly why this step exists: it
-      # is the only gate that asks whether the code also runs on the LOWER bound
-      # the extension promises in composer.json — a matrix of real interpreters
-      # would cost a full stack per version to answer the same question.
-      - name: PHP floor compatibility (ckcompat)
-        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
-        run: |
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd \"$CK_TOOL_PATH\" && ckcompat"
-
-      # Passes silently for the many extensions that depend on core alone.
-      - name: Dependency manifest (ckdeps)
-        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
-        run: |
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd \"$CK_EXT_PATH\" && ckdeps"
-
-      # Taint analysis (psalm, CiviCRM stubs) — BLOCKING for the classes where
-      # a true positive is an outright vulnerability (TaintedSql/Shell/Include/
-      # Unserialize/SSRF); the noisier classes are errorLevel="info" in the
-      # bundled config: printed, never part of the exit code. Switched from
-      # advisory after a clean fleet-wide run. Psalm still cannot see CiviCRM
-      # core, so a blocking finding can be a false positive — the escape hatch
-      # is `cktaint --baseline` or `@psalm-suppress` with a reason, see
-      # docs/extension-standards.md.
-      # Old-image guard: a repo may pin an image from before cktaint existed.
-      # That is a stale pin, not a taint finding, so the step skips with a log
-      # line instead of failing on "command not found" — no lockstep image
-      # bump needed.
-      - name: Taint analysis (cktaint)
-        id: cktaint
-        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
-        run: |
-          if ! docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-              'command -v cktaint' >/dev/null 2>&1; then
-            echo "guard=no-cktaint" >> "$GITHUB_OUTPUT"
-            echo "cktaint is not in this image (pinned from before the taint gate) — skipping."
-            exit 0
-          fi
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd \"$CK_TOOL_PATH\" && cktaint"
-
-      - name: Taint analysis summary
-        if: ${{ !cancelled() && steps.cktaint.outcome != 'skipped' }}
-        env:
-          CKTAINT_GUARD: ${{ steps.cktaint.outputs.guard }}
-        run: |
-          if [ "$CKTAINT_GUARD" = no-cktaint ]; then
-            echo "### Taint analysis: inactive (image predates cktaint)" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ steps.cktaint.outcome }}" = success ]; then
-            echo "### Taint analysis: no blocking findings" >> "$GITHUB_STEP_SUMMARY"
-          else
-            {
-              # A non-zero exit is not necessarily a finding: a broken config
-              # or an analyzer crash lands here too, so the summary must not
-              # claim taint flows were found.
-              echo "### Taint analysis: blocking findings or analysis failure"
-              echo
-              echo "\`cktaint\` exited non-zero — see the **Taint analysis (cktaint)** step log for"
-              echo "whether it reported tainted data flows or failed to run at all."
-              echo "SQL/shell/include/unserialize/SSRF taint fails the build; INFO-level findings do not."
-              echo "For a real finding, fix the flow; for a false positive, record a justified exception"
-              echo "(\`cktaint --baseline\` / \`@psalm-suppress\` with a reason)."
-              echo "See docs/extension-standards.md, section \"Taint analysis\"."
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      # The runtime half of the Smarty story. ckconform's template checks are
-      # static: they know a Page has no .tpl and that a `{ts}` is unscoped, and
-      # they say so in their own headers that they cannot tell whether a
-      # template COMPILES. That depends on the Smarty major this image ships,
-      # on the prefilters CRM_Core_Smarty installs, and on which `{crm*}`
-      # plugins are registered — including the ones the extension registers
-      # itself. All three exist only in a booted site, which is what this job
-      # already has.
-      #
-      # It also compiles the installed managed MessageTemplate BODIES, the one
-      # artifact nothing else in this pipeline can see at all: a Smarty string
-      # in the database, first compiled when the workflow fires, i.e. on a
-      # production site at the moment someone donates.
-      #
-      # A step here rather than a job of its own precisely because the boot is
-      # the expensive part and this job has already paid for it.
-      - name: Smarty compile smoke (cksmarty)
-        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
-        run: |
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd \"$CK_EXT_PATH\" && cksmarty"
-
-      # JS/TS linting with the image's pinned oxlint toolchain and the bundled
-      # baseline config — the same arrangement as cklint and the bundled phpcs
-      # standard, and for the same reason: eleven repos should not each carry
-      # a linter devDependency block to drift.
-      #
-      # In the container, not on the runner, so it needs no Node setup step and
-      # no npm install: the toolchain is already installed in the image. Passes
-      # with a log line for the many extensions whose frontend is a couple of
-      # Angular files or nothing at all.
-      - name: JS/TS lint (ckeslint)
-        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
-        run: |
-          docker compose -f "$CK_COMPOSE_FILE" exec -T -u www-data app bash -c \
-            "cd \"$CK_TOOL_PATH\" && ckeslint"
+        run: echo "::notice::docker compose -f .docker/docker-compose.yml exec -u www-data app ck ci runs these same gates in the dev stack; cklint --fix and ckfmt auto-fix most phpcs and formatting findings; ckcivix --update brings the civix scaffold forward."
 
       # Same lifecycle block as the compat job below — deliberately duplicated
       # rather than factored out: a reusable workflow cannot share steps
