@@ -5,9 +5,10 @@
 # `cv core:install`; buildkit: `civibuild create site`). It holds the
 # CMS-agnostic first-boot provisioning so the standalone and buildkit images
 # behave the same: auto-composer for bind-mounted extensions, dev settings,
-# SMTP backend, an isolated test DB, core language files, registry + mounted
-# extension enabling (with the mounted extensions' <requires> resolved),
-# named profiles (CIVIKITCHEN_PROFILE), and /civikitchen-init.d hooks.
+# SMTP backend, an isolated test DB, no calls to civicrm.org, core language
+# files, registry + mounted extension enabling (with the mounted extensions'
+# <requires> resolved), named profiles (CIVIKITCHEN_PROFILE), and
+# /civikitchen-init.d hooks.
 #
 # Caller contract — define this BEFORE calling any ck_* function:
 #
@@ -967,16 +968,26 @@ ck_post_install_config() {
     touch "${CK_CONFIGURED_MARKER}"
 }
 
-# Marker-gated post-install provisioning bundle: core locales, profile,
-# registry + mounted extensions, and init.d hooks, run once. The marker is written only on success
-# so a failed step re-runs on the next start instead of being silently skipped.
-# The profile goes first: it sets up the base stack that the user's extension
-# knobs and init hooks layer on top of.
+# Keep core's status check from calling civicrm.org (version pingback,
+# extension feed): without egress it stalls the first admin page by 60 s.
+# Only a boolean FALSE disables the feed; `cv ext:download` sets its own.
+ck_no_phone_home() {
+    ck_as_web cv api4 Job.update +w api_action=version_check +v is_active=0 >/dev/null
+    echo '{"ext_repo_url":false}' | ck_as_web cv setting:set --in=json >/dev/null
+    echo "[civikitchen] civicrm.org calls off (version_check job inactive, ext_repo_url=false)."
+}
+
+# Marker-gated post-install provisioning bundle: civicrm.org calls off, core
+# locales, profile, registry + mounted extensions, and init.d hooks, run once.
+# The marker is written only on success so a failed step re-runs on the next
+# start instead of being silently skipped. The profile goes before the user's
+# extension knobs and init hooks, which layer on top of it.
 ck_post_install_provision() {
     if [[ -f "${CK_PROVISIONED_MARKER}" ]]; then
         echo "[civikitchen] Already provisioned (${CK_PROVISIONED_MARKER}) — CIVIKITCHEN_PROFILE / *_EXTENSIONS / init.d changes are not re-applied; remove the marker to re-run."
         return 0
     fi
+    ck_no_phone_home
     ck_locales
     ck_apply_profile
     ck_extra_extensions

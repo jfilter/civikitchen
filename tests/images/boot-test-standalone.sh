@@ -8,7 +8,9 @@
 #   * CIVIKITCHEN_LOCALES installs the core catalogue and gettext really
 #     initialises — ts() renders German, which is the whole point of the knob;
 #   * an external profile is schema-validated and applied, with generated API
-#     credentials written mode 0600 and never disclosed in default logs.
+#     credentials written mode 0600 and never disclosed in default logs;
+#   * the admin status check makes no calls to civicrm.org (version_check job
+#     inactive, ext_repo_url false).
 # The db service gets a plain MYSQL_USER and no grant script: the app user
 # holds rights on its own database only, exactly as a hand-written stack.
 #
@@ -145,7 +147,13 @@ cred_line=$(docker exec "${APP}" sed -n '1p' /var/www/api-credentials.txt 2>/dev
 check "external profile generated random password + API key" "echo '${cred_line}' | grep -Eq '^smokeapi:[0-9a-f]{48}:[0-9a-f]{32}$'"
 check "password is not derived from username" "! echo '${cred_line}' | grep -q '^smokeapi:smokeapi:'"
 
-# 7) The managed headless bootstrap, twice against the SAME scratch database.
+# 7) No calls to civicrm.org from the admin status check.
+vc=$(cv api4 Job.get +w api_action=version_check +s is_active --out=json-strict | tr -d '[:space:]' || true)
+check "version_check job inactive (got ${vc:-absent})" "echo '${vc}' | grep -q '\"is_active\":false'"
+repo=$(cv vget ext_repo_url --out=json-strict | tr -d '[:space:]' || true)
+check "ext_repo_url is boolean false (got ${repo:-absent})" "echo '${repo}' | grep -q '\"value\":false'"
+
+# 8) The managed headless bootstrap, twice against the SAME scratch database.
 # Signing the environment drops the core foreign keys, and a warm apply()
 # returns before re-adding them — only the second run shows it.
 docker exec -u www-data "${APP}" bash -c 'cktestreset' >/dev/null 2>&1 || true

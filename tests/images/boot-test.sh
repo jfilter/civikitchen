@@ -82,6 +82,13 @@ ver=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${APP}"
     | tr -d '[:space:]' || true)
 check "CiviCRM responds via cv (Domain version: ${ver:-none})" "echo '${ver}' | grep -q 'version'"
 
+# 2b) No calls to civicrm.org from the admin status check.
+offline=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${APP}" \
+    bash -lc 'export PATH=/home/buildkit/buildkit/bin:$PATH; cv api4 Job.get +w api_action=version_check +s is_active --out=json-strict 2>/dev/null; cv vget ext_repo_url --out=json-strict 2>/dev/null' \
+    | tr -d '[:space:]' || true)
+check "version_check job inactive, ext_repo_url false (got ${offline:-none})" \
+    "echo '${offline}' | grep -q '\"is_active\":false' && echo '${offline}' | grep -q '\"value\":false'"
+
 # 3) Joomla only: the option=com_civicrm route must be registered. cv (check 2)
 # boots via the settings.d shim regardless of Joomla's component registration,
 # so it CANNOT catch a half-finished install — but that registration is exactly
