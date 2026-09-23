@@ -35,7 +35,7 @@
 # ~/.cv.json site key under which TEST_DB_DSN is stored. Standalone keys by its
 # bootstrap file; other CMSes key the site differently (resolved per image).
 : "${CK_TEST_DB_CV_KEY:=/var/www/html/civicrm.standalone.php}"
-# Boot stub patched by ck_setup_test_db so CIVICRM_UF=UnitTests boots define
+# Boot stub patched by ck_patch_boot_stub so CIVICRM_UF=UnitTests boots define
 # the test DSN before core's env-based DSN composition (see
 # patch-test-db-boot.php). Empty or missing file = skip (buildkit flavors
 # boot through their CMS, not a stub).
@@ -303,15 +303,14 @@ ck_setup_test_db() {
         chown "${CK_WEB_USER}:${CK_WEB_GROUP}" "${CK_WEB_USER_HOME}/.cv.json"
         chmod 600 "${CK_WEB_USER_HOME}/.cv.json"
     fi
+}
 
-    # TEST_DB_DSN in ~/.cv.json alone is NOT enough: core's SettingsManager
-    # composes CIVICRM_DSN from the CIVICRM_DB_* env vars before the settings
-    # file loads, so its UnitTests/TEST_DB_DSN branch never fires in an
-    # env-configured container and headless phpunit would silently hit the
-    # dev DB. Patch the boot stub to define the test DSN first (idempotent).
-    if [[ -n "${CK_BOOT_STUB}" ]]; then
-        php /usr/local/share/civikitchen/patch-test-db-boot.php "${CK_BOOT_STUB}"
-    fi
+# Core composes CIVICRM_DSN from the CIVICRM_DB_* env vars before the settings
+# file's TEST_DB_DSN branch can fire, so the boot stub routes UnitTests boots
+# at the test DB (see patch-test-db-boot.php). Idempotent; runs on every boot.
+ck_patch_boot_stub() {
+    [[ "${CIVIKITCHEN_TEST_DB:-1}" == "1" && -n "${CK_BOOT_STUB}" ]] || return 0
+    php /usr/local/share/civikitchen/patch-test-db-boot.php "${CK_BOOT_STUB}"
 }
 
 # Download one registry extension: a bare key (de.systopia.xcm) or key@URL

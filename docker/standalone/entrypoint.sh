@@ -142,6 +142,11 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# The boot stub ships in the image while the config marker persists in private/,
+# so patch it on every boot rather than in the marker-gated bundle below.
+ck_patch_boot_stub
+
+# ---------------------------------------------------------------------------
 # Post-install configuration + provisioning. Both bundles are marker-gated (each
 # writes its marker only on success) so a failed step exits the boot loudly AND
 # retries on the next start, instead of being silently skipped because the

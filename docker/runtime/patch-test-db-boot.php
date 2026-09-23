@@ -18,7 +18,8 @@
  * outlives Civi\Test's schema rebuild.
  *
  * Usage:  php patch-test-db-boot.php [/path/to/civicrm.standalone.php]
- * Idempotent: skips when the [civikitchen-test-db] marker is present.
+ * Idempotent: a block that differs from the current one (an older image's) is
+ * replaced; a current one leaves the file untouched.
  * Never fatal: missing stub or anchor exits 0 (non-standalone layouts).
  */
 
@@ -33,11 +34,6 @@ $src = file_get_contents($stub);
 if ($src === FALSE) {
   fwrite(STDERR, "[civikitchen] WARN: cannot read {$stub} — test-DB boot patch skipped\n");
   exit(1);
-}
-
-if (strpos($src, 'civikitchen-test-db') !== FALSE) {
-  // Already patched.
-  exit(0);
 }
 
 $inject = <<<'PHP'
@@ -74,13 +70,21 @@ if (getenv('CIVICRM_UF') === 'UnitTests' && !defined('CIVICRM_DSN')) {
 PHP;
 
 $anchor = '\Civi\Core\SettingsManager::bootSettings';
-$pos = strpos($src, $anchor);
+// The block always sits directly before the anchor, so marker..anchor is the block.
+$start = strpos($src, '// [civikitchen-test-db]');
+$pos = strpos($src, $anchor, $start === FALSE ? 0 : $start);
 if ($pos === FALSE) {
   fwrite(STDERR, "[civikitchen] WARN: bootSettings anchor not found in $stub; test-db boot patch skipped\n");
   exit(0);
 }
+if ($start === FALSE) {
+  $start = $pos;
+}
+elseif (substr($src, $start, $pos - $start) === $inject) {
+  exit(0);
+}
 
-$src = substr($src, 0, $pos) . $inject . substr($src, $pos);
+$src = substr($src, 0, $start) . $inject . substr($src, $pos);
 if (file_put_contents($stub, $src) === FALSE) {
   fwrite(STDERR, "[civikitchen] ERROR: cannot write {$stub} — UnitTests boots would use the dev DB\n");
   exit(1);
