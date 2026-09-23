@@ -29,6 +29,22 @@ make_extension "$work/clean"
 "$root/scaffold/ckinit.php" "$work/clean" >/dev/null
 grep -q 'acme/example_ext' "$work/clean/composer.json"
 grep -q '"extends": \["config:recommended"\]' "$work/clean/renovate.json"
+# The monorepo example's dev compose file, and the CI one's header above its
+# managed blocks, are what ckinit stamps at that depth.
+header() { sed '/BEGIN CIVIKITCHEN MANAGED/q' "$1"; }
+for key in ckmonobase ckmonoaddon; do
+  stamp="$work/stamp-$key/examples/monorepo/$key"
+  example="$root/examples/monorepo/$key/.docker"
+  mkdir -p "$stamp"
+  git init -q "$work/stamp-$key"
+  cp "$root/examples/monorepo/$key/info.xml" "$stamp/"
+  "$root/scaffold/ckinit.php" "$stamp" >/dev/null
+  diff -u "$stamp/.docker/docker-compose.yml" "$example/docker-compose.yml" \
+    || { echo "examples/monorepo/$key dev compose file differs from a fresh stamp" >&2; exit 1; }
+  diff -u <(header "$stamp/.docker/docker-compose.ci.yml") <(header "$example/docker-compose.ci.yml") \
+    || { echo "examples/monorepo/$key CI compose header differs from a fresh stamp" >&2; exit 1; }
+done
+
 # The local gate recipe is `ck ci`, the one gate list the shared CI runs too.
 for compose in docker-compose.yml docker-compose.ci.yml; do
   grep -q -- '-w /var/www/html/ext/example_ext app ck ci$' "$work/clean/.docker/$compose" \

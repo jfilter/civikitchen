@@ -12,6 +12,13 @@
 # stacks can run side by side; the defaults apply when it is absent.
 #
 # Re-provision from scratch (re-runs init.d hooks): docker compose down -v && up -d
+#
+# Every gate the shared CI runs in the container, with a summary table:
+#   docker compose exec -u www-data -w /var/www/html/ext/ckmonobase app ck ci
+#
+# In a repository of several extensions the repository root is mounted at
+# /civikitchen-repo; the git-reading gates run from there, so pass
+# -e CK_TOOL_PATH=/civikitchen-repo/<directory> to the exec.
 
 # Explicit project name — unnamed .docker/ stacks all become one project
 # called "docker" and share volumes across checkouts.
@@ -46,6 +53,8 @@ services:
       # info.xml <requires> resolved. Mount siblings the same way; use
       # CIVIKITCHEN_ENABLE_EXTENSIONS only to order them or add non-mounts.
       - ..:/var/www/html/ext/ckmonobase
+      # The repository root: .git for cklint, ckfmt and ckconform.
+      - ../../../..:/civikitchen-repo
       # - ../../othersibling:/var/www/html/ext/othersibling
       # First-boot provisioning hooks (seed data, API users, settings) — run
       # after install + ext:enable, in lexical order. See init.d/README.md.
