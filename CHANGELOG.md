@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.28.0] - 2026-09-23
+
 ### Added
 
 - `ck ci` runs every in-container gate of `extension-ci.yml`'s `ci` job —
@@ -952,7 +954,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.27.0...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.28.0...HEAD
+[1.28.0]: https://github.com/jfilter/civikitchen/compare/v1.27.0...v1.28.0
 [1.27.0]: https://github.com/jfilter/civikitchen/compare/v1.26.0...v1.27.0
 [1.26.0]: https://github.com/jfilter/civikitchen/compare/v1.25.3...v1.26.0
 [1.25.3]: https://github.com/jfilter/civikitchen/compare/v1.25.2...v1.25.3
