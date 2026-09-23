@@ -796,6 +796,7 @@ jobs:
       # locally; each gate runs even after an earlier one failed, so none masks
       # another. ck ci writes its summary in the container; it is appended here.
       - name: Extension gates (ck ci)
+        id: gates
         env:
           CK_POLICY_DEFAULTS: ${{ inputs.policy_defaults || vars.CK_POLICY_DEFAULTS }}
           CK_EXTRA_PHPUNIT_CONFIG: ${{ inputs.extra_phpunit_config }}
@@ -818,7 +819,9 @@ jobs:
             -e "CK_EXT_PATH=$CK_EXT_PATH" -e "CK_TOOL_PATH=$CK_TOOL_PATH" \
             -e "CK_EXTRA_PHPUNIT_CONFIG=$CK_EXTRA_PHPUNIT_CONFIG" -e "CK_DEFAULT_CONFIG=$defaults" \
             app ck ci || rc=$?
-          "${compose[@]}" app cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+          # ck ci stopped before its table (usage error, crash) leaves no file.
+          "${compose[@]}" app cat "$summary" >> "$GITHUB_STEP_SUMMARY" \
+            || echo "::warning::ck ci wrote no summary table"
           exit "$rc"
       # Every gate above is one local command away, and most findings one more.
       - name: How to fix findings locally
