@@ -274,6 +274,30 @@ services:
       - ./init.d:/civikitchen-init.d:ro
 ```
 
+## No calls to civicrm.org
+
+CiviCRM's admin status check contacts civicrm.org: the version check posts
+to latest.civicrm.org, and the extension check fetches the civicrm.org/extdir
+feed. It runs on the first admin page of a fresh site and after every
+`cv flush`. On a runner without outbound network the first call waits
+PHP's full socket timeout (60 s) and the second at least 10 s, long enough to
+time out a Playwright test.
+
+First-boot provisioning therefore turns both off, on every flavor, before
+profiles and init hooks run:
+
+- the `version_check` scheduled job is set inactive;
+- `ext_repo_url` is set to boolean `false`, the value core reads as "do not
+  check extensions". An empty string does not do this.
+
+The status page then shows two notices, *Update Check Disabled* and
+*Extensions check disabled*. `cv ext:download` passes its own feed URL and
+still works. An init hook can switch either back on, for example
+`cv api4 Job.update +w api_action=version_check +v is_active=1`.
+Both settings are applied once, with the rest of first-boot provisioning; a
+stack provisioned without them gets them when recreated with
+`docker compose down -v`.
+
 ## UI tests with Playwright
 
 For browser-level tests of your extension's UI (forms, Angular/React widgets, JS behaviour) there's a copy-pasteable starter at [`examples/extension-with-playwright/`](../examples/extension-with-playwright/). It boots the same standalone stack, runs Playwright on the host against `localhost:8080`, and handles login once via a shared session.

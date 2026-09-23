@@ -30,6 +30,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Changed
 
+- First-boot provisioning turns off CiviCRM's calls to civicrm.org on every
+  flavor: the `version_check` scheduled job is inactive and `ext_repo_url` is
+  `false`. Without outbound network, the admin status check stalled the first
+  admin page for over 60 s, and each first page after `cv flush` for about
+  10 s, which timed out Playwright tests. The status page shows two notices
+  instead; an init hook can switch either back on
+  ([No calls to civicrm.org](docs/extension-development.md#no-calls-to-civicrmorg)).
 - `:standalone-6.17` is rebuilt again: 6.17 joins 6.16 in
   `CK_STANDALONE_EXTRA_MINORS`, so repos pinned to that line get `ck ci`.
 - The `ci` job of `extension-ci.yml` runs its in-container gates through
