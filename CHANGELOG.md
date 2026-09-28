@@ -23,6 +23,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   runs `update`).
 - `civicrm_api4()` with a params array checks the field names in `groupBy`,
   as the fluent `addGroupBy()` already did.
+- `ck` commands redirected to a file (`ck … > log`) no longer lose what they
+  printed before starting a tool: the tool's output overwrote it from the
+  start of the file.
+
 - Headless boots on every image cache in the test database
   (`CIVICRM_DB_CACHE_CLASS=ArrayCache`) even when `civicrm.settings.php`
   selects `FileCache`, Redis or Memcache, which the dev site shares and a

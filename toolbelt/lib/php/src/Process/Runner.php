@@ -41,6 +41,10 @@ class Runner
             fwrite(STDERR, $missing);
             return 2;
         }
+        // Handing STDOUT to proc_open seeks a redirected file to the stream's
+        // cached position, which never saw `echo`; sync it or the child overwrites.
+        @fseek(STDOUT, 0, SEEK_END);
+        @fseek(STDERR, 0, SEEK_END);
         $process = proc_open($command, [STDIN, STDOUT, STDERR], $pipes, $workingDirectory, $environment);
         if (!is_resource($process)) {
             fwrite(STDERR, 'ck: could not start ' . $command[0] . "\n");

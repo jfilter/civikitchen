@@ -101,6 +101,19 @@ final class SharedPhpTest extends TestCase
         self::assertSame(['status' => 0, 'output' => ''], $runner->capture(['true'], ['HOME' => $this->temporary]));
     }
 
+    /** `ck … > file`: what a command echoes before a passthrough child must survive it. */
+    public function testRunnerPassthroughKeepsEarlierOutputInARedirectedFile(): void
+    {
+        $php = PHP_SAPI === 'phpdbg' ? dirname(PHP_BINARY) . '/php' : PHP_BINARY;
+        $output = $this->temporary . '/passthrough';
+        $script = sprintf(
+            'require %s; echo "before\n"; (new CiviKitchen\Toolbelt\Process\Runner())->passthrough(["printf", "child\n"]);',
+            var_export(dirname(__DIR__, 2) . '/toolbelt/lib/php/bootstrap.php', true),
+        );
+        self::assertSame(0, (new Runner())->redirect([$php, '-r', $script], $output));
+        self::assertSame("before\nchild\n", file_get_contents($output));
+    }
+
     public function testRunnerDrainsLargeStdoutAndStderrWithoutDeadlock(): void
     {
         $php = PHP_SAPI === 'phpdbg' ? dirname(PHP_BINARY) . '/php' : PHP_BINARY;
