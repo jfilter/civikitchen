@@ -695,6 +695,39 @@ ck_enable_extensions() {
 # English with no error. CIVIKITCHEN_DEFAULT_LOCALE=<locale> additionally
 # sets lcMessages; it has to be one of the installed locales.
 ck_locales() {
+    local out version l10n_dir
+    local -a members=()
+    out="$(ck_locale_members)" || return 1
+    [[ -n "${out}" ]] || return 0
+    mapfile -t members <<< "${out}"
+    version="$(ck_as_web cv ev 'echo CRM_Utils_System::version();')"
+    l10n_dir="$(ck_as_web cv path -d '[civicrm.l10n]')"
+    ck_fetch_locales "${version}" "${l10n_dir}" "${members[@]}" || return 1
+    if [[ -n "${CIVIKITCHEN_DEFAULT_LOCALE:-}" ]]; then
+        ck_as_web cv setting:set "lcMessages=${CIVIKITCHEN_DEFAULT_LOCALE}" >/dev/null
+        echo "[civikitchen] Default locale set to ${CIVIKITCHEN_DEFAULT_LOCALE} (lcMessages)."
+    fi
+}
+
+# The same files before any site exists, for `cv core:install --lang`: the
+# installer renders its seed labels through ts(). $1 = core source dir.
+ck_locales_before_install() {
+    local src="$1" l10n_dir="$2" out version
+    local -a members=()
+    out="$(ck_locale_members)" || return 1
+    [[ -n "${out}" ]] || return 0
+    mapfile -t members <<< "${out}"
+    version="$(ck internal xml-field "${src}/xml/version.xml" version_no)" || return 1
+    if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "[civikitchen] ERROR: no CiviCRM version in ${src}/xml/version.xml" >&2
+        return 1
+    fi
+    ck_fetch_locales "${version}" "${l10n_dir}" "${members[@]}"
+}
+
+# Validate CIVIKITCHEN_LOCALES / CIVIKITCHEN_DEFAULT_LOCALE and print the
+# l10n tarball member of each requested locale, one per line.
+ck_locale_members() {
     if [[ -z "${CIVIKITCHEN_LOCALES:-}" ]]; then
         if [[ -n "${CIVIKITCHEN_DEFAULT_LOCALE:-}" ]]; then
             echo "[civikitchen] ERROR: CIVIKITCHEN_DEFAULT_LOCALE=${CIVIKITCHEN_DEFAULT_LOCALE} needs its language files — list it in CIVIKITCHEN_LOCALES" >&2
@@ -702,7 +735,7 @@ ck_locales() {
         fi
         return 0
     fi
-    local locale version l10n_dir tarball unpack
+    local locale
     local -a locales=() members=()
     IFS=',' read -ra locales <<< "${CIVIKITCHEN_LOCALES}"
     for locale in "${locales[@]}"; do
@@ -719,27 +752,37 @@ ck_locales() {
         echo "[civikitchen] ERROR: CIVIKITCHEN_DEFAULT_LOCALE=${CIVIKITCHEN_DEFAULT_LOCALE} is not in CIVIKITCHEN_LOCALES=${CIVIKITCHEN_LOCALES}" >&2
         return 1
     fi
-    version="$(ck_as_web cv ev 'echo CRM_Utils_System::version();')"
-    l10n_dir="$(ck_as_web cv path -d '[civicrm.l10n]')"
+    printf '%s\n' "${members[@]}"
+}
+
+# $1 = CiviCRM version, $2 = l10n dir, then tarball members. A locale whose
+# core catalogue is already in the dir is not fetched again.
+ck_fetch_locales() {
+    local version="$1" l10n_dir="$2" member tarball unpack
+    shift 2
+    local -a members=()
+    for member in "$@"; do
+        [[ -s "${l10n_dir}/${member#civicrm/l10n/}/LC_MESSAGES/civicrm.mo" ]] || members+=("${member}")
+    done
+    if [[ ${#members[@]} -eq 0 ]]; then
+        echo "[civikitchen] Core language files ${CIVIKITCHEN_LOCALES} already in ${l10n_dir}."
+        return 0
+    fi
     tarball="${CK_L10N_BASE_URL}/civicrm-${version}-l10n.tar.gz"
-    echo "[civikitchen] Installing core language files ${CIVIKITCHEN_LOCALES} from ${tarball} into ${l10n_dir}..."
+    echo "[civikitchen] Installing core language files ${members[*]#civicrm/l10n/} from ${tarball} into ${l10n_dir}..."
     unpack="$(mktemp -d)"
     # Streamed, not saved: the tarball is ~100 MB and only a few MB of it are
     # wanted. tar exits non-zero for a member that is not in the archive, so an
     # unknown locale fails here instead of silently leaving English behind.
     if ! (set -o pipefail; curl -fsSL "${tarball}" | tar -xz -C "${unpack}" "${members[@]}"); then
         rm -rf "${unpack}"
-        echo "[civikitchen] ERROR: could not fetch ${CIVIKITCHEN_LOCALES} from ${tarball}" >&2
+        echo "[civikitchen] ERROR: could not fetch ${members[*]#civicrm/l10n/} from ${tarball}" >&2
         return 1
     fi
     mkdir -p "${l10n_dir}"
     cp -R "${unpack}/civicrm/l10n/." "${l10n_dir}/"
     rm -rf "${unpack}"
     chown -R "${CK_WEB_USER}:${CK_WEB_GROUP}" "${l10n_dir}"
-    if [[ -n "${CIVIKITCHEN_DEFAULT_LOCALE:-}" ]]; then
-        ck_as_web cv setting:set "lcMessages=${CIVIKITCHEN_DEFAULT_LOCALE}" >/dev/null
-        echo "[civikitchen] Default locale set to ${CIVIKITCHEN_DEFAULT_LOCALE} (lcMessages)."
-    fi
 }
 
 # Resolve one profile name across explicit external roots plus the bundled root.

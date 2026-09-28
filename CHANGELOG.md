@@ -32,6 +32,18 @@ except that a break the consumers are adjusted for ships as a minor, marked
   core's first-party `.js`), oxlint's correctness category and the APIv4
   contract rule. An analysis tool for upstream bug reports, not a gate.
 
+### Changed
+
+- On the standalone image, `CIVIKITCHEN_DEFAULT_LOCALE` installs the site in
+  that language: the requested `CIVIKITCHEN_LOCALES` files are fetched before
+  `cv core:install`, which runs with `--lang`. The seed data labels are
+  translated — financial types, membership statuses, location types, payment
+  instruments — while machine names stay English, and the installer applies
+  core's locale defaults (for `de_DE`: EUR, Germany, ISO dates,
+  Europe/Berlin). Before, only the UI switched language and every seed label
+  stayed English. Existing sites are not reinstalled. The buildkit flavors
+  still only set `lcMessages` on their civibuild-created site.
+
 ### Fixed
 
 - The phpstan APIv4 rules no longer report the columns of `getFields`,

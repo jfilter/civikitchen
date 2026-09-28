@@ -35,7 +35,7 @@ FAKE
 # chown to the web user is not possible on the host; a no-op stands in.
 printf '#!/usr/bin/env bash\nexit 0\n' > "$work/bin/chown"
 chmod +x "$work/bin/curl" "$work/bin/cv" "$work/bin/chown"
-export PATH="$work/bin:$PATH"
+export PATH="$work/bin:$root/toolbelt/bin:$PATH"
 export CURL_LOG="$work/curl.log" CURL_DIR="$work" CV_LOG="$work/cv.log" CV_L10N_DIR="$work/site/l10n"
 
 ck_as_web() { "$@"; }
@@ -61,6 +61,26 @@ grep -q 'setting:set lcMessages=de_DE' "$CV_LOG" || fail "lcMessages not set"
 CIVIKITCHEN_LOCALES="de_DE, fr_FR" ck_locales >/dev/null
 [[ -f "$work/site/l10n/fr_FR/LC_MESSAGES/civicrm.mo" && -f "$work/site/l10n/de_DE/LC_MESSAGES/civicrm.mo" ]] || fail "both locales expected"
 ! grep -q 'setting:set' "$CV_LOG" || fail "no default locale, lcMessages must stay"
+
+# Before install: the version comes from the core tree (no site, so no cv),
+# and the post-install pass finds the files and fetches nothing twice.
+mkdir -p "$work/core/xml"
+printf '<?xml version="1.0"?>\n<version>\n  <version_no>6.17.2</version_no>\n</version>\n' > "$work/core/xml/version.xml"
+: > "$CV_LOG"; : > "$CURL_LOG"; /bin/rm -rf "$work/site"
+CIVIKITCHEN_LOCALES="de_DE" CIVIKITCHEN_DEFAULT_LOCALE="de_DE" ck_locales_before_install "$work/core" "$work/site/l10n" >/dev/null
+[[ "$(cat "$work/site/l10n/de_DE/LC_MESSAGES/civicrm.mo")" == de ]] || fail "de_DE .mo not installed before install"
+grep -qx 'https://l10n.example.org/civicrm-6.17.2-l10n.tar.gz' "$CURL_LOG" || fail "pre-install fetch expected the 6.17.2 tarball, got: $(cat "$CURL_LOG")"
+[[ ! -s "$CV_LOG" ]] || fail "pre-install must not call cv: $(cat "$CV_LOG")"
+: > "$CURL_LOG"
+CIVIKITCHEN_LOCALES="de_DE" CIVIKITCHEN_DEFAULT_LOCALE="de_DE" ck_locales >/dev/null
+[[ ! -s "$CURL_LOG" ]] || fail "files already present, nothing should be fetched again"
+grep -q 'setting:set lcMessages=de_DE' "$CV_LOG" || fail "lcMessages not set after a pre-install fetch"
+# With one locale present, only the missing one is fetched.
+CIVIKITCHEN_LOCALES="de_DE,fr_FR" ck_locales >/dev/null
+[[ "$(wc -l < "$CURL_LOG")" -eq 1 && -f "$work/site/l10n/fr_FR/LC_MESSAGES/civicrm.mo" ]] || fail "fr_FR expected next to the present de_DE"
+if CIVIKITCHEN_LOCALES="de_DE" CIVIKITCHEN_DEFAULT_LOCALE="fr_FR" ck_locales_before_install "$work/core" "$work/other/l10n" >/dev/null 2>&1; then fail "pre-install: default outside the list must fail"; fi
+if CIVIKITCHEN_LOCALES="de_DE" ck_locales_before_install "$work/missing" "$work/other/l10n" >/dev/null 2>&1; then fail "pre-install without a core version must fail"; fi
+[[ ! -e "$work/other" ]] || fail "a failed pre-install check must not fetch anything"
 
 # A locale the tarball does not carry fails instead of leaving English behind.
 if CIVIKITCHEN_LOCALES="xx_XX" ck_locales >/dev/null 2>&1; then fail "unknown locale must fail"; fi

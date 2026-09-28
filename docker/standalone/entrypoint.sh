@@ -116,8 +116,14 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
     if [[ -n "${CIVIKITCHEN_COMPONENTS}" ]]; then
         INSTALL_OPTS+=(--comp="${CIVIKITCHEN_COMPONENTS}")
     fi
+    # A default locale installs the site in that language: seed labels are
+    # translated, machine names stay English. [civicrm.l10n] is private/l10n.
+    if [[ -n "${CIVIKITCHEN_DEFAULT_LOCALE:-}" ]]; then
+        ck_locales_before_install /var/www/html/core /var/www/html/private/l10n
+        INSTALL_OPTS+=(--lang="${CIVIKITCHEN_DEFAULT_LOCALE}")
+    fi
 
-    echo "[civikitchen] Running cv core:install (cmsBaseUrl=${CIVIKITCHEN_SITE_URL}${CIVIKITCHEN_COMPONENTS:+, components=${CIVIKITCHEN_COMPONENTS}})..."
+    echo "[civikitchen] Running cv core:install (cmsBaseUrl=${CIVIKITCHEN_SITE_URL}${CIVIKITCHEN_COMPONENTS:+, components=${CIVIKITCHEN_COMPONENTS}}${CIVIKITCHEN_DEFAULT_LOCALE:+, lang=${CIVIKITCHEN_DEFAULT_LOCALE}})..."
     # cv --url is the documented flag for setting cmsBaseUrl during install.
     # It populates the model BEFORE init plugins run, so every
     # $civicrm_paths[*]['url'] is derived from CIVIKITCHEN_SITE_URL (cms.root,

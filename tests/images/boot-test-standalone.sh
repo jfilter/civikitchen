@@ -7,6 +7,8 @@
 #     named in CIVIKITCHEN_ENABLE_EXTENSIONS, its <requires> in place;
 #   * CIVIKITCHEN_LOCALES installs the core catalogue and gettext really
 #     initialises — ts() renders German, which is the whole point of the knob;
+#   * CIVIKITCHEN_DEFAULT_LOCALE installs the site in that language, so the
+#     seed data labels are German while their machine names stay English;
 #   * an external profile is schema-validated and applied, with generated API
 #     credentials written mode 0600 and never disclosed in default logs;
 #   * the admin status check makes no calls to civicrm.org (version_check job
@@ -126,6 +128,10 @@ check "lcMessages is de_DE" "echo '${lc}' | grep -q '\"value\":\"de_DE\"'"
 # 4) gettext really initialised: without the core .mo this prints "Contacts".
 word=$(cv ev 'echo ts("Contacts");' | tr -d '[:space:]"' || true)
 check "ts(\"Contacts\") renders German (got '${word}')" "[ '${word}' = 'Kontakte' ]"
+
+# 4b) Installed in the default locale: an English install leaves "Donation".
+donation=$(cv api4 FinancialType.get +w name=Donation +s label --out=json-strict | tr -d '[:space:]' || true)
+check "financial type Donation is labelled Spende (got ${donation:-absent})" "echo '${donation}' | grep -q '\"label\":\"Spende\"'"
 
 # 5) The compatibility leg includes the scratch DB contract, not only install.
 # A green site with an empty civicrm_test DB would still wipe developer data on
