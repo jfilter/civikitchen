@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<extension key="org.example.widget" type="module">
+  <file>widget</file>
+  <name>Widget</name>
+</extension>
