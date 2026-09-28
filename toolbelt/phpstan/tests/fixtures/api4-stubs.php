@@ -18,6 +18,11 @@ class Contact
     {
         return new Action\Contact\Get();
     }
+
+    public static function getFields(bool $checkPermissions = true): Generic\DummyAction
+    {
+        return new Generic\DummyAction();
+    }
 }
 
 class CustomField

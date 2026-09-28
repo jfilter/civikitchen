@@ -78,7 +78,11 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   `ck.api4.unknownEntity` (only when the name is a near-miss of a real
   entity — another extension's entities are not in the catalog and must not
   be flagged), `ck.api4.unknownAction`, `ck.api4.unknownField` in `select`,
-  `where`, `orderBy`, `groupBy` and `values`. Actions arrive through class
+  `where`, `orderBy`, `groupBy` and `values`. Field names are judged only for
+  the record actions (`get`, `create`, `update`, `save`, `delete`,
+  `replace`): `getFields`, `getActions` and custom actions filter rows of
+  another shape. Action names compare case-insensitively, as APIv4 resolves
+  them through php method names. Actions arrive through class
   inheritance *and* through traits (`Generic\Traits\ManagedEntity` gives
   some twenty entities `export()`/`revert()`), and the catalog follows both.
   Everything the source tree cannot settle is skipped in silence: non-literal

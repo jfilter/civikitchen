@@ -16,6 +16,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- The phpstan APIv4 rules no longer report the columns of `getFields`,
+  `getActions` or custom actions as unknown entity fields: fields are judged
+  for `get`, `create`, `update`, `save`, `delete` and `replace` only. Action
+  names compare case-insensitively, as APIv4 resolves them (`User::Update`
+  runs `update`).
+- `civicrm_api4()` with a params array checks the field names in `groupBy`,
+  as the fluent `addGroupBy()` already did.
 - Headless boots on every image cache in the test database
   (`CIVICRM_DB_CACHE_CLASS=ArrayCache`) even when `civicrm.settings.php`
   selects `FileCache`, Redis or Memcache, which the dev site shares and a

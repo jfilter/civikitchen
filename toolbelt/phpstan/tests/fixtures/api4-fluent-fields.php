@@ -83,4 +83,13 @@ final class AddressExport
         $query->addSelect('street_address');
         $query->execute();
     }
+
+    /** getFields filters field definitions, whose columns are not Contact's. */
+    public function metadata(): void
+    {
+        Contact::getFields(false)
+            ->addSelect('name', 'label', 'input_type')
+            ->addWhere('fk_entity', '=', 'Address')
+            ->execute();
+    }
 }

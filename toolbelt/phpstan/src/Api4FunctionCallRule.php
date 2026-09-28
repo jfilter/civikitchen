@@ -48,14 +48,12 @@ final class Api4FunctionCallRule implements Rule
             return $errors;
         }
 
-        if (isset($args[1])) {
-            $action = $this->contract->literalString($args[1]->value, $scope);
-            if ($action !== null) {
-                $errors = array_merge($errors, $this->contract->checkAction($entity, $action, 'civicrm_api4()'));
-            }
+        $action = isset($args[1]) ? $this->contract->literalString($args[1]->value, $scope) : null;
+        if ($action !== null) {
+            $errors = array_merge($errors, $this->contract->checkAction($entity, $action, 'civicrm_api4()'));
         }
 
-        if (isset($args[2])) {
+        if ($action !== null && Api4Contract::readsEntityFields($action) && isset($args[2])) {
             foreach ($this->contract->fieldsFromParams($scope->getType($args[2]->value), $scope) as [$field, $clause]) {
                 $errors = array_merge($errors, $this->contract->checkField($entity, $field, $clause));
             }
