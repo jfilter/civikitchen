@@ -61,13 +61,8 @@ final class JavaScriptLintCommand implements Command
         if ($catalog === null) {
             return $this->error('no Api4Catalog at /opt/civikitchen-phpstan-ext - is this a civikitchen image?');
         }
-        $command = [$oxlint];
-        if ($fix) {
-            $command[] = '--fix';
-        }
-        if ($format !== '') {
-            $command[] = "--format={$format}";
-        }
+        $report = $format !== '' ? [$oxlint, "--format={$format}"] : [$oxlint];
+        $command = $fix ? [...$report, '--fix'] : $report;
         if ($core) {
             if ($fix || count($paths) > 1) {
                 return $this->error('--core takes at most one argument, the core directory, and no --fix.');
@@ -87,11 +82,24 @@ final class JavaScriptLintCommand implements Command
             echo 'ckeslint: ', count($sourceFiles), " JS/TS file(s) to lint.\n";
             $paths[] = '.';
         }
+        $typeCheck = $this->policyFlag('javascript_type_check');
+        if ($typeCheck === null) {
+            return 2;
+        }
+        $copy = false;
         if (is_file('.oxlintrc.json')) {
+            if ($typeCheck) {
+                return $this->error("policy.javascript.type_check applies to the CiviKitchen baseline; with its own .oxlintrc.json this repo sets \"options\": {\"typeCheck\": true} there.");
+            }
             echo "ckeslint: using this repo's own .oxlintrc.json (the CiviKitchen baseline does not apply; any jsPlugins it names must be installed in this repo's node_modules).\n";
         } elseif (glob('eslint.config.*')) {
             return $this->error('this repo ships an eslint.config.* but the image gate is oxlint now - add an .oxlintrc.json or remove the custom config.');
         } else {
+            if ($typeCheck && is_file('tsconfig.json')) {
+                echo "ckeslint: type check (policy.javascript.type_check) through this repo's tsconfig.json.\n";
+                $command = [...$command, '--type-aware', '--type-check'];
+            }
+            $copy = $typeCheck && !is_file('tsconfig.json');
             $command = [...$command, '-c', $toolchain . (is_file('tsconfig.json') ? '/.oxlintrc.json' : '/.oxlintrc-no-type-aware.json')];
             foreach (self::IGNORED_PATTERNS as $pattern) {
                 $command = [...$command, '--ignore-pattern', $pattern];
@@ -114,7 +122,8 @@ final class JavaScriptLintCommand implements Command
             }
         }
         try {
-            return $this->runner->passthrough([...$command, ...$paths], $environment);
+            $status = $this->runner->passthrough([...$command, ...$paths], $environment);
+            return $copy ? max($status, $this->runTypeCheckCopy($toolchain, $report, $sourceFiles, $paths, $environment)) : $status;
         } finally {
             @unlink($catalogJson);
             if ($overlay !== '') {
@@ -145,16 +154,8 @@ final class JavaScriptLintCommand implements Command
         $work = sys_get_temp_dir() . '/ckeslint-core-' . bin2hex(random_bytes(6));
         $catalogJson = $this->writeCatalog($catalog, []);
         try {
-            foreach ($files as $file) {
-                $target = $work . '/' . $file;
-                if ((!is_dir(dirname($target)) && !mkdir(dirname($target), 0700, true)) || !copy($coreDir . '/' . $file, $target)) {
-                    return $this->error("could not copy {$file} to {$work}");
-                }
-            }
-            foreach (['tsconfig.json', 'civicrm-core.d.ts'] as $name) {
-                if (!copy($toolchain . '/core/' . $name, $work . '/' . $name)) {
-                    return $this->error("could not copy {$toolchain}/core/{$name}");
-                }
+            if (!$this->stage($toolchain, $coreDir, $files, $work)) {
+                return 2;
             }
             $api = json_decode((string) file_get_contents($catalogJson), true);
             echo 'ckeslint --core: ', count($files), " JS file(s) from {$coreDir}, APIv4 catalog of CiviCRM ", $api['version'], ".\n";
@@ -167,6 +168,88 @@ final class JavaScriptLintCommand implements Command
             @unlink($catalogJson);
             $this->removeTree($work);
         }
+    }
+
+    /**
+     * The type check for a repo without a tsconfig.json, as a second pass that
+     * reports TypeScript's diagnostics only: tsgolint checks just the files
+     * under a tsconfig in their own tree, so it runs over a copy of the
+     * tracked source beside the CiviKitchen tsconfig.
+     *
+     * @param non-empty-list<string> $report
+     * @param list<string> $sourceFiles
+     * @param list<string> $paths
+     * @param array<string, string> $environment
+     */
+    private function runTypeCheckCopy(string $toolchain, array $report, array $sourceFiles, array $paths, array $environment): int
+    {
+        $root = (string) realpath('.');
+        $checked = [];
+        $skipped = [];
+        foreach ($paths as $path) {
+            $real = realpath($path);
+            $relative = $real === $root ? '.' : ($real !== false && str_starts_with($real, $root . '/') ? substr($real, strlen($root) + 1) : null);
+            $inCopy = $relative !== null && ($relative === '.' || array_filter($sourceFiles, static fn(string $file): bool => $file === $relative || str_starts_with($file, $relative . '/')) !== []);
+            if ($inCopy) {
+                $checked[] = $relative;
+            } else {
+                $skipped[] = $path;
+            }
+        }
+        if ($skipped !== []) {
+            echo 'ckeslint: not type-checked, no tracked JS/TS of this repo: ', implode(', ', $skipped), "\n";
+        }
+        if ($checked === []) {
+            return 0;
+        }
+        echo "ckeslint: type check (policy.javascript.type_check) over a copy of the tracked JS/TS beside a CiviKitchen tsconfig.\n";
+        $work = sys_get_temp_dir() . '/ckeslint-typecheck-' . bin2hex(random_bytes(6));
+        try {
+            if (!$this->stage($toolchain, '.', $sourceFiles, $work)) {
+                return 2;
+            }
+            if (is_dir('node_modules') && !symlink((string) realpath('node_modules'), $work . '/node_modules')) {
+                return $this->error("could not link this repo's node_modules into {$work}");
+            }
+            return $this->runner->passthrough([...$report, '--type-aware', '--type-check', '-A', 'all', ...$checked], $environment, $work);
+        } finally {
+            $this->removeTree($work);
+        }
+    }
+
+    /** @param list<string> $files relative to $from */
+    private function stage(string $toolchain, string $from, array $files, string $work): bool
+    {
+        foreach ($files as $file) {
+            $target = $work . '/' . $file;
+            if ((!is_dir(dirname($target)) && !mkdir(dirname($target), 0700, true)) || !copy($from . '/' . $file, $target)) {
+                $this->error("could not copy {$file} to {$work}");
+                return false;
+            }
+        }
+        if (!is_dir($work) && !mkdir($work, 0700, true)) {
+            $this->error("could not create {$work}");
+            return false;
+        }
+        foreach (['tsconfig.json', 'civicrm-globals.d.ts'] as $name) {
+            if (!copy($toolchain . '/typecheck/' . $name, $work . '/' . $name)) {
+                $this->error("could not copy {$toolchain}/typecheck/{$name}");
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** A boolean policy key; null after reporting an unreadable civikitchen.yaml. */
+    private function policyFlag(string $key): ?bool
+    {
+        $local = $this->checkoutRoot . '/toolbelt/bin/ckconform';
+        $result = $this->runner->capture([is_executable($local) ? $local : 'ckconform', '--policy', $key]);
+        if ($result['status'] !== 0) {
+            $this->error('cannot read civikitchen.yaml: ' . trim($result['output']));
+            return null;
+        }
+        return trim($result['output']) === 'true';
     }
 
     /** @return list<string> core-relative paths of core's first-party .js */
@@ -220,8 +303,9 @@ final class JavaScriptLintCommand implements Command
             new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST,
         );
+        // A linked node_modules is unlinked, never descended into.
         foreach ($iterator as $entry) {
-            $entry->isDir() ? rmdir($entry->getPathname()) : unlink($entry->getPathname());
+            $entry->isDir() && !$entry->isLink() ? rmdir($entry->getPathname()) : unlink($entry->getPathname());
         }
         rmdir($directory);
     }

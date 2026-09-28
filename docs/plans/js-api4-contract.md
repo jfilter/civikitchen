@@ -1,7 +1,6 @@
 # Plan: the APIv4 contract and type checking for JavaScript
 
-Status: steps 1–3 and the tests done on branch `js-api4-types`; "Not in
-this round" open.
+Status: steps 1–4 and the tests done; typed `CRM.vars` open.
 
 ## Where things stand
 
@@ -55,12 +54,23 @@ without a `tsconfig.json`.
    JavaScript. Copies core's first-party `.js` (under `js/`, `ang/`, `ext/`;
    no vendored trees, no minified bundles, no tests) into a temporary
    directory beside a `tsconfig.json` (`allowJs`, `checkJs`, not strict) and
-   `civicrm-core.d.ts` (the globals core's pages load by script tag), runs
+   `civicrm-globals.d.ts` (the globals core's pages load by script tag), runs
    oxlint with `--type-aware --type-check`, the correctness category and
    `api4-contract`, and reports paths relative to core. Default directory is
    `$CIVICRM_CORE_DIR`, then `/var/www/html/core`. This is an analysis tool
    for finding upstream bugs, not a gate; findings go upstream as individual
    bug-fix PRs.
+
+4. **`policy.javascript.type_check`** — the same type check for an
+   extension, opt-in so the `@v1` contract does not change for anyone else.
+   Through the repo's own `tsconfig.json` when it has one; otherwise as a
+   second pass with every lint rule off (`-A all`), over a copy of the tracked
+   JS/TS beside the `--core` tsconfig and globals, with the repo's
+   `node_modules` linked in, so the normal lint run stays exactly as it was.
+   The copy is needed because tsgolint checks
+   only files under a tsconfig in their own tree: `--tsconfig` pointing
+   elsewhere exits 0 with no output. On the extensions tried, most findings
+   were JSDoc the code had outgrown.
 
 ## Tests
 
@@ -78,8 +88,5 @@ without a `tsconfig.json`.
 
 ## Not in this round
 
-- **`--type-check` for extensions.** Turning TypeScript diagnostics on in the
-  extension gate would change the `@v1` contract for every repo with JS. It
-  is a separate decision once `--core` has shown the noise level on real code.
 - **Typed `CRM.vars` / Angular settings.** Needs a booted site to compare the
   declared shape with what PHP injects; a later Playwright scenario.

@@ -23,6 +23,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   knows the repo's own entities and action classes and those of checked-out
   siblings. It runs in both baseline configs; a repo with its own
   `.oxlintrc.json` does not get it.
+- `policy.javascript.type_check: true` makes `ckeslint` report TypeScript's
+  compiler diagnostics for the repo's JavaScript: through the repo's
+  `tsconfig.json`, or without one in a second pass over a copy of the tracked
+  source beside a CiviKitchen tsconfig (`allowJs`, `checkJs`, not strict).
 - `ckeslint --core [dir]` type-checks CiviCRM core's own JavaScript with
   TypeScript's compiler diagnostics (`allowJs`/`checkJs` over a copy of
   core's first-party `.js`), oxlint's correctness category and the APIv4

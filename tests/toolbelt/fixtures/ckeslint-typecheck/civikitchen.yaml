@@ -1,0 +1,4 @@
+version: 1
+policy:
+  javascript:
+    type_check: true

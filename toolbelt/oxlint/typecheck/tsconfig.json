@@ -2,6 +2,7 @@
   "compilerOptions": {
     "allowJs": true,
     "checkJs": true,
+    "jsx": "preserve",
     "noEmit": true,
     "strict": false,
     "target": "es2023",
@@ -9,5 +10,5 @@
     "types": [],
     "skipLibCheck": true
   },
-  "include": ["**/*.js", "civicrm-core.d.ts"]
+  "include": ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.ts", "**/*.tsx", "civicrm-globals.d.ts"]
 }

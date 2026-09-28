@@ -1034,6 +1034,31 @@ say so:
 A repo that installs its own `@types/node` keeps it; the link is only created
 when nothing is there.
 
+**TypeScript's compiler diagnostics are opt-in:**
+
+```yaml
+policy:
+  javascript:
+    type_check: true
+```
+
+`ckeslint` then also reports what `tsc --checkJs` would: a property that does
+not exist on the type, a call with the wrong number of arguments, JSDoc that
+contradicts the code. A repo with a `tsconfig.json` gets them through that
+file, so what it includes and how strict it is stay the repo's choice. A repo
+without one keeps its normal lint run unchanged and gets a second pass that
+reports TypeScript's diagnostics only, over a copy of its tracked JS/TS beside
+a tsconfig with `allowJs` + `checkJs`, `strict` off and CiviCRM's globals
+declared as `any`; the repo's `node_modules` is linked in so imports resolve.
+A path given on the command line that holds no tracked JS/TS is named as not
+type-checked. Plain scripts share one global scope, as scripts on one page do,
+so two scripts that never load together but declare the same top-level `const`
+are reported as a redeclaration; an IIFE or a module keeps them apart. On older code expect findings in bulk, most of them JSDoc the
+code has outgrown — `{object}` where `{Object}` was meant, a `@returns` that
+lists half the fields. A repo with its own `.oxlintrc.json` sets
+`"options": {"typeCheck": true}` there; the policy key would not reach that
+config, so `ckeslint` stops with an error instead of ignoring it.
+
 Ship your own `.oxlintrc.json` and it wins outright — the baseline is not
 merged into it, not layered under it, just not used. The cost of owning it is
 owning its `jsPlugins` too: oxlint resolves those against *your* `node_modules`,
