@@ -19,6 +19,8 @@ use PHP_CodeSniffer\Util\Tokens;
  *
  * `ignoreCalls` exempts callees whose bool is idiomatic (in_array's strict
  * flag) — extend it via ruleset <property> rather than editing the sniff.
+ * A setter's sole argument is exempt too: `setUseTrash(FALSE)` names it, and
+ * APIv4's magic setters (__call) cannot take a named argument.
  */
 final class NameBooleanArgumentsSniff implements Sniff {
 
@@ -70,6 +72,9 @@ final class NameBooleanArgumentsSniff implements Sniff {
     if (in_array($tokens[$callee]['content'], $this->ignoreCalls, TRUE)) {
       return;
     }
+    if ($this->isSoleSetterArgument($phpcsFile, $stackPtr, $opener, $tokens[$callee]['content'])) {
+      return;
+    }
 
     $phpcsFile->addWarning(
       'Positional %s says nothing at the call site — name the argument (%s(… , flag: %s))',
@@ -99,6 +104,17 @@ final class NameBooleanArgumentsSniff implements Sniff {
     }
 
     return $tokens[$next]['code'] === T_COMMA || $tokens[$next]['code'] === T_CLOSE_PARENTHESIS;
+  }
+
+  private function isSoleSetterArgument(File $phpcsFile, int $stackPtr, int $opener, string $callee): bool {
+    if (preg_match('/^set[A-Z]/', $callee) !== 1) {
+      return FALSE;
+    }
+    $tokens = $phpcsFile->getTokens();
+    $prev = $phpcsFile->findPrevious(Tokens::$emptyTokens, $stackPtr - 1, NULL, TRUE);
+    $next = $phpcsFile->findNext(Tokens::$emptyTokens, $stackPtr + 1, NULL, TRUE);
+
+    return $prev === $opener && $next !== FALSE && $tokens[$next]['code'] === T_CLOSE_PARENTHESIS;
   }
 
   private function isDeclaration(File $phpcsFile, int $callee): bool {

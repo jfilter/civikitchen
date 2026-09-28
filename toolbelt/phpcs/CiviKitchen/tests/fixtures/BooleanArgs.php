@@ -14,9 +14,16 @@ function civikitchen_fixture_bools($arr, $obj, $flag) {
   $f = civikitchen_save($obj, $flag === TRUE);
   $g = TRUE;
   $h = [TRUE, FALSE];
-  return [$a, $b, $c, $d, $e, $f, $g, $h];
+  $i = $obj->setUseTrash(FALSE);
+  $j = $obj->setFlags('x', TRUE);
+  $k = civikitchen_settle(TRUE);
+  return [$a, $b, $c, $d, $e, $f, $g, $h, $i, $j, $k];
 }
 
 function civikitchen_save($obj, bool $checkPermissions = TRUE, ?string $label = NULL) {
   return [$obj, $checkPermissions, $label];
+}
+
+function civikitchen_settle(bool $now) {
+  return $now;
 }

@@ -166,13 +166,16 @@ final class SniffsTest extends TestCase {
   public function testNameBooleanArgumentsFlagsOnlyBarePositionalLiterals(): void {
     $findings = $this->phpcs('BooleanArgs.php', NULL, self::PHP8_SNIFFS);
 
-    // Flagged: the two positional literals. Not flagged: in_array's strict
-    // flag (ignoreCalls), an already-named argument, a variable, a comparison
-    // that merely contains TRUE, an assignment, an array element, and the
-    // parameter default in the declaration.
+    // Flagged: the positional literals, a setter's non-sole argument and a
+    // set-prefixed non-setter. Not flagged: in_array's strict flag
+    // (ignoreCalls), an already-named argument, a variable, a comparison that
+    // merely contains TRUE, an assignment, an array element, a setter's sole
+    // argument, and the parameter default in the declaration.
     $expected = [
       9 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
       10 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
+      18 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
+      19 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
     ];
     self::assertSame($expected, $findings);
   }

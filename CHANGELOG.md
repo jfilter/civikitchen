@@ -53,6 +53,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
   image over a kept `private/` volume stopped headless boots with
   `$GLOBALS[_CV][TEST_DB_DSN] is not set`. A stub patched by an older image
   gets the current block.
+- The phpcs standard no longer flags a boolean literal that is a setter's
+  only argument (`setUseTrash(FALSE)`): the method name already names it, and
+  APIv4's magic setters cannot take a named argument. A setter with more
+  arguments, or a function merely starting with `set`, is still flagged.
+- The extension template's `tests/phpunit/ckHeadless.php` passes the standard:
+  it names the `reset:` argument of `getStatus()`. Run `ckinit --update` to
+  pick it up.
 
 ## [1.28.0] - 2026-09-23
 
