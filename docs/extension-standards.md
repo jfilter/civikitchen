@@ -78,7 +78,11 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   `ck.api4.unknownEntity` (only when the name is a near-miss of a real
   entity — another extension's entities are not in the catalog and must not
   be flagged), `ck.api4.unknownAction`, `ck.api4.unknownField` in `select`,
-  `where`, `orderBy`, `groupBy` and `values`. Actions arrive through class
+  `where`, `orderBy`, `groupBy` and `values`. Field names are judged only for
+  the record actions (`get`, `create`, `update`, `save`, `delete`,
+  `replace`): `getFields`, `getActions` and custom actions filter rows of
+  another shape. Action names compare case-insensitively, as APIv4 resolves
+  them through php method names. Actions arrive through class
   inheritance *and* through traits (`Generic\Traits\ManagedEntity` gives
   some twenty entities `export()`/`revert()`), and the catalog follows both.
   Everything the source tree cannot settle is skipped in silence: non-literal
@@ -90,6 +94,15 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   (`$q = Contact::get(); $q->addSelect(…)`) is judged through its type, which
   names the entity exactly; only `orderBy`/`groupBy` are skipped there,
   because an alias defined by an earlier link is out of sight.
+- **`ckeslint` applies the same contract to JavaScript.** The
+  `civikitchen/api4-contract` rule reads the literal forms
+  `CRM.api4(entity, action, params)`, `crmApi4(entity, action, params)` and
+  their batch forms (an array or object of `[entity, action, params]`
+  tuples) with the same judgement as the phpstan rules, fed from the same
+  `Api4Catalog` plus the repo's own `Civi/Api4/*.php` entities and
+  `Civi/Api4/Action/<Entity>/*.php` action classes, and those of checked-out
+  siblings in `.civikitchen-siblings/`. It runs in the baseline config only; a
+  repo with its own `.oxlintrc.json` does not get it.
 - **The right-hand side of an implicit join is checked too.** The catalog
   carries a join map (`Api4Catalog::JOINS`): every field with an
   `entity_reference` becomes a joinable of the same name
@@ -1000,8 +1013,9 @@ fashion), Mozilla's `eslint-plugin-no-unsanitized` (`innerHTML` and its family
 when the repo has a `tsconfig.json`*, the type-aware TypeScript rules, which is
 where `no-floating-promises` and `no-misused-promises` come from. The type-aware
 rules apply to `.ts`/`.tsx` only — plain `.js` is checked by the syntactic rules
-and `no-unsanitized`. CiviCRM's globals (`CRM`, `cj`, `ts`, `_`, `angular`) are
-declared for you; `dist/`, `vendor/`, `node_modules/`, the vendored-asset
+and `no-unsanitized`. The APIv4 contract rule (`civikitchen/api4-contract`,
+see [Code](#code)) runs on both. CiviCRM's globals (`CRM`, `cj`, `ts`, `_`,
+`angular`) are declared for you; `dist/`, `vendor/`, `node_modules/`, the vendored-asset
 directories and `*.min.js` are ignored.
 
 **Node globals in an e2e suite come from the image.** The type-aware rules are

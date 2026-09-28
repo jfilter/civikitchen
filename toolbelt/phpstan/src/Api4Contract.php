@@ -30,6 +30,12 @@ final class Api4Contract
 {
     private const CLAUSE_OPERATORS = ['AND', 'OR', 'NOT'];
 
+    /**
+     * Actions whose select/where/orderBy/values name the entity's own fields.
+     * getFields, getActions and custom actions filter rows of another shape.
+     */
+    private const RECORD_ACTIONS = ['get', 'create', 'update', 'save', 'delete', 'replace'];
+
     private string $extensionDir;
 
     private ReflectionProvider $reflectionProvider;
@@ -98,7 +104,9 @@ final class Api4Contract
         if (!Api4Catalog::knowsEntity($entity)) {
             return [];
         }
-        if (in_array($action, Api4Catalog::actions($entity), true)) {
+        // Request::create() resolves the action through is_callable(), and php
+        // method names are case-insensitive: `User::Update` runs `update`.
+        if (in_array(strtolower($action), array_map(strtolower(...), Api4Catalog::actions($entity)), true)) {
             return [];
         }
         // Extensions add actions to core entities by dropping a class into
@@ -219,6 +227,12 @@ final class Api4Contract
         return $bestDistance <= $tolerance ? $best : null;
     }
 
+    /** Whether the action's clauses name fields of the entity itself. */
+    public static function readsEntityFields(string $action): bool
+    {
+        return in_array(strtolower($action), self::RECORD_ACTIONS, true);
+    }
+
     /** Clauses that write, and therefore reach the BAO. */
     private static function isWriteClause(string $clause): bool
     {
@@ -314,7 +328,7 @@ final class Api4Contract
             return [];
         }
         $entries = self::entries($arrays[0]);
-        // `SUM(qty) AS total` makes `total` a legal name in orderBy.
+        // `SUM(qty) AS total` makes `total` a legal name in orderBy and groupBy.
         $aliases = [];
         if (isset($entries['select'])) {
             foreach ($this->listOfStrings($entries['select']) as $select) {
@@ -328,8 +342,9 @@ final class Api4Contract
         foreach ($entries as $key => $value) {
             switch ($key) {
                 case 'select':
+                case 'groupBy':
                     foreach ($this->listOfStrings($value) as $field) {
-                        $found[] = [$field, 'select'];
+                        $found[] = [$field, $key];
                     }
                     break;
 

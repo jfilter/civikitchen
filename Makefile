@@ -33,6 +33,7 @@ PHPUNIT := $(CACHE)/phpunit-$(CK_PHPUNIT_VERSION).phar
 SHARED_PHP_COVERAGE := $(CACHE)/shared-php-coverage.xml
 SHARED_PHP_COVERAGE_MIN := 36
 SCENARIO_YAML_STAMP := packages/civikitchen-scenario-schema/vendor/.civikitchen-installed
+OXLINT_STAMP := toolbelt/oxlint/node_modules/.civikitchen-installed
 
 # The pinned release IN the path: a catalog bump must invalidate the cached
 # tree, or the drift gates keep testing the old core until a `make clean`.
@@ -107,7 +108,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-parity \
-	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
+	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckeslint test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
 	test-ck-headless test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
 	test-database-matrix test-compose-config test-demo-basic-auth test-release-retag test-release-steps test-ci-gates-step test-release-script \
         lint-actions lint-php lint-schema lint-changelog test-changelog build test-images e2e tools clean
@@ -128,7 +129,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -221,6 +222,11 @@ test-parity: ## Toolbelt components vs. Dockerfile COPY parity
 # reformats third-party source that must stay byte-identical.
 test-vendored-paths: ## civikitchen.yaml vendored_paths file-list exclusion
 	bash tests/toolbelt/test-vendored-paths.sh
+
+# The APIv4 contract rule reaches oxlint through its alpha jsPlugins bridge;
+# only a run through the pinned toolchain proves the rule still fires.
+test-ckeslint: $(OXLINT_STAMP) ## ckeslint: APIv4 contract rule and --core over fixtures
+	bash tests/toolbelt/test-ckeslint.sh
 
 test-ckcoverage: $(SCENARIO_YAML_STAMP) ## ckcoverage temporary logs, coverage floor, tests opt-out
 	bash tests/toolbelt/test-ckcoverage.sh
@@ -362,11 +368,15 @@ e2e: ## Playwright smoke tests against a running compose stack
 
 # --- fetched inputs ----------------------------------------------------------
 
+$(OXLINT_STAMP): toolbelt/oxlint/package.json toolbelt/oxlint/package-lock.json
+	npm ci --prefix toolbelt/oxlint --no-audit --no-fund --loglevel=error
+	@touch $(OXLINT_STAMP)
+
 $(SCENARIO_YAML_STAMP): packages/civikitchen-scenario-schema/composer.json packages/civikitchen-scenario-schema/composer.lock
 	composer install --no-interaction --no-progress --working-dir=packages/civikitchen-scenario-schema
 	@touch $(SCENARIO_YAML_STAMP)
 
-tools: $(PHPUNIT) $(CACHE)/actionlint $(SHELLCHECK) $(SCENARIO_YAML_STAMP) ## Pre-fetch the pinned tools and YAML parser
+tools: $(PHPUNIT) $(CACHE)/actionlint $(SHELLCHECK) $(SCENARIO_YAML_STAMP) $(OXLINT_STAMP) ## Pre-fetch the pinned tools and YAML parser
 
 $(SHELLCHECK):
 	@mkdir -p $(CACHE)

@@ -129,14 +129,18 @@ final class Api4Fluent
         return null;
     }
 
-    /** The entity of the chain a method call hangs off, if it is a chain. */
+    /**
+     * The entity of the chain a method call hangs off, if it is a chain
+     * started by an action whose clauses name that entity's fields.
+     */
     public static function entityOfChain(MethodCall $node, Scope $scope): ?string
     {
         $expr = $node->var;
         while ($expr instanceof MethodCall) {
             $expr = $expr->var;
         }
-        if (!$expr instanceof StaticCall) {
+        if (!$expr instanceof StaticCall || !$expr->name instanceof Identifier
+            || !Api4Contract::readsEntityFields($expr->name->toString())) {
             return null;
         }
 
@@ -150,7 +154,7 @@ final class Api4Fluent
      * many for the AST walk, but the type is exact: core generates one action
      * class per entity and action, `Civi\Api4\Action\Contact\Get`. Anything
      * that resolves to a generic action base names no entity and is passed
-     * over.
+     * over, and so is an action whose clauses do not name entity fields.
      *
      * The aliases an earlier link defined are invisible from here, so callers
      * must only use this where an alias would not be a legal name.
@@ -162,7 +166,8 @@ final class Api4Fluent
             return null;
         }
         $parts = explode('\\', $classes[0]);
-        if (count($parts) !== 5 || $parts[0] !== 'Civi' || $parts[1] !== 'Api4' || $parts[2] !== 'Action') {
+        if (count($parts) !== 5 || $parts[0] !== 'Civi' || $parts[1] !== 'Api4' || $parts[2] !== 'Action'
+            || !Api4Contract::readsEntityFields($parts[4])) {
             return null;
         }
         $entity = Api4Catalog::CLASS_ALIASES[$parts[3]] ?? $parts[3];

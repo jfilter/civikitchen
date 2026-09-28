@@ -559,13 +559,14 @@ fi
 
 # ---------------------------------------------------------------------------
 # 3e. ckeslint: the pinned oxlint toolchain is installed and every layer of the
-#     baseline fires. Four findings on purpose, one per layer, because each can
+#     baseline fires. One finding per layer on purpose, because each can
 #     go missing on its own without anything else looking wrong:
 #       - oxlint's own `correctness` category (the native rules)
 #       - no-unsanitized on .js AND on .ts — that plugin runs through oxlint's
 #         alpha jsPlugins bridge, and if the bridge stops loading it, oxlint
 #         still exits 0 over the same file
 #       - a type-aware rule, which needs the tsgolint binary to be found
+#       - civikitchen/api4-contract, a local jsPlugin fed the phpstan catalog
 #     A silently empty gate is the failure mode this block exists to catch.
 echo "== ckeslint =="
 ESDIR="${WORKDIR}/eslintext"
@@ -593,6 +594,7 @@ function render(el, userInput) {
   var unused = 1;
   el.innerHTML = userInput;
 }
+CRM.api4('Contact', 'get', { select: ['display_nam'] });
 JS
 cat > "${ESDIR}/js/widget.ts" <<'TS'
 export function render(el: HTMLElement, userInput: string): void {
@@ -636,6 +638,11 @@ if echo "${ESLINT_OUT}" | grep -q "^js/widget.ts:.*no-unsanitized(property)"; th
     ok "ckeslint flags an unsafe innerHTML assignment in .ts"
 else
     fail "ckeslint didn't flag innerHTML in .ts (output: ${ESLINT_OUT:0:400})"
+fi
+if echo "${ESLINT_OUT}" | grep -q "^js/widget.js:.*Contact.display_nam.*civikitchen(api4-contract)"; then
+    ok "ckeslint checks APIv4 field names against the image's catalog"
+else
+    fail "ckeslint didn't flag the misspelt APIv4 field (output: ${ESLINT_OUT:0:400})"
 fi
 if echo "${ESLINT_OUT}" | grep -q "no-unused-vars"; then
     ok "ckeslint applies oxlint's correctness rules"

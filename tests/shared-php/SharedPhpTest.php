@@ -8,6 +8,7 @@ use CiviKitchen\Toolbelt\Cli\CoverageCommand;
 use CiviKitchen\Toolbelt\Cli\FormatCommand;
 use CiviKitchen\Toolbelt\Cli\InternalRuntimeCommand;
 use CiviKitchen\Toolbelt\Cli\ReleaseCommand;
+use CiviKitchen\Toolbelt\JavaScript\Api4CatalogExport;
 use CiviKitchen\Toolbelt\Process\Runner;
 use CiviKitchen\Toolbelt\Repository\Files;
 use CiviKitchen\Toolbelt\Runtime\ExtensionInspector;
@@ -99,6 +100,42 @@ final class SharedPhpTest extends TestCase
         self::assertSame('ck: ck-env-probe was not found on PATH (' . getenv('PATH') . ")\n", $onlyInChild['output']);
         self::assertSame(['status' => 0, 'output' => ''], $runner->capture(['true'], ['PATH' => $bin]));
         self::assertSame(['status' => 0, 'output' => ''], $runner->capture(['true'], ['HOME' => $this->temporary]));
+    }
+
+    public function testApi4CatalogExportAddsTheExtensionsEntitiesAndActionClasses(): void
+    {
+        $checkout = dirname(__DIR__, 2);
+        $catalog = Api4CatalogExport::locate($checkout);
+        self::assertNotNull($catalog);
+        foreach (['own' => ['Widget.php', 'Action/Contact/Greet.php'], 'sibling' => ['Action/Activity/Archive.php', 'Widget.php']] as $dir => $files) {
+            foreach ($files as $file) {
+                $parent = dirname($this->temporary . "/{$dir}/Civi/Api4/{$file}");
+                is_dir($parent) || mkdir($parent, 0777, true);
+                touch($this->temporary . "/{$dir}/Civi/Api4/{$file}");
+            }
+        }
+
+        $export = Api4CatalogExport::build($catalog, [$this->temporary . '/own', $this->temporary . '/sibling']);
+
+        self::assertSame(\CiviKitchen\PHPStan\Api4Catalog::CORE_VERSION, $export['version']);
+        self::assertSame('Case', $export['aliases']['CiviCase']);
+        self::assertTrue($export['entities']['Contact']['c']);
+        self::assertSame(['Widget'], $export['extensionEntities']);
+        self::assertSame(['Activity\\Archive', 'Contact\\Greet'], $export['extensionActions']);
+        self::assertSame([], Api4CatalogExport::build($catalog, [])['extensionEntities']);
+    }
+
+    /** `ck … > file`: what a command echoes before a passthrough child must survive it. */
+    public function testRunnerPassthroughKeepsEarlierOutputInARedirectedFile(): void
+    {
+        $php = PHP_SAPI === 'phpdbg' ? dirname(PHP_BINARY) . '/php' : PHP_BINARY;
+        $output = $this->temporary . '/passthrough';
+        $script = sprintf(
+            'require %s; echo "before\n"; (new CiviKitchen\Toolbelt\Process\Runner())->passthrough(["printf", "child\n"]);',
+            var_export(dirname(__DIR__, 2) . '/toolbelt/lib/php/bootstrap.php', true),
+        );
+        self::assertSame(0, (new Runner())->redirect([$php, '-r', $script], $output));
+        self::assertSame("before\nchild\n", file_get_contents($output));
     }
 
     public function testRunnerDrainsLargeStdoutAndStderrWithoutDeadlock(): void

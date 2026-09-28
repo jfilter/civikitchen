@@ -1,0 +1,26 @@
+{
+  "jsPlugins": [
+    "./plugins/civikitchen.mjs"
+  ],
+  "plugins": [
+    "eslint",
+    "typescript"
+  ],
+  "categories": {
+    "correctness": "error"
+  },
+  "options": {
+    "typeAware": true
+  },
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "rules": {
+    "civikitchen/api4-contract": "error",
+    "no-unused-vars": "off",
+    "no-useless-escape": "off",
+    "no-shadow-restricted-names": "off",
+    "typescript/no-useless-default-assignment": "off"
+  }
+}

@@ -14,8 +14,32 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- `ckeslint` checks APIv4 calls in JavaScript. The rule
+  `civikitchen/api4-contract` reads entity, action and field names in
+  `CRM.api4()` / `crmApi4()` literals, including the batch forms, against the
+  same `Api4Catalog` and with the same judgement as the phpstan rules, and
+  knows the repo's own entities and action classes and those of checked-out
+  siblings. It runs in both baseline configs; a repo with its own
+  `.oxlintrc.json` does not get it.
+- `ckeslint --core [dir]` type-checks CiviCRM core's own JavaScript with
+  TypeScript's compiler diagnostics (`allowJs`/`checkJs` over a copy of
+  core's first-party `.js`), oxlint's correctness category and the APIv4
+  contract rule. An analysis tool for upstream bug reports, not a gate.
+
 ### Fixed
 
+- The phpstan APIv4 rules no longer report the columns of `getFields`,
+  `getActions` or custom actions as unknown entity fields: fields are judged
+  for `get`, `create`, `update`, `save`, `delete` and `replace` only. Action
+  names compare case-insensitively, as APIv4 resolves them (`User::Update`
+  runs `update`).
+- `civicrm_api4()` with a params array checks the field names in `groupBy`,
+  as the fluent `addGroupBy()` already did.
+- `ck` commands redirected to a file (`ck … > log`) no longer lose what they
+  printed before starting a tool: the tool's output overwrote it from the
+  start of the file.
 - Headless boots on every image cache in the test database
   (`CIVICRM_DB_CACHE_CLASS=ArrayCache`) even when `civicrm.settings.php`
   selects `FileCache`, Redis or Memcache, which the dev site shares and a

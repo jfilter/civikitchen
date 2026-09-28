@@ -1,6 +1,7 @@
 {
   "jsPlugins": [
-    "eslint-plugin-no-unsanitized"
+    "eslint-plugin-no-unsanitized",
+    "./plugins/civikitchen.mjs"
   ],
   "plugins": [
     "eslint",
@@ -27,6 +28,7 @@
     "angular": "readonly"
   },
   "rules": {
+    "civikitchen/api4-contract": "error",
     "no-undef": "error",
     "no-unsanitized/property": "error",
     "no-unsanitized/method": "error",
