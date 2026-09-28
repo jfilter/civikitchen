@@ -14,4 +14,4 @@ declare var monaco: any;
 declare var require: any;
 declare var marked: any;
 declare var jsyaml: any;
-declare function prettyPrintOne(source: string, language?: string, lineNumbers?: boolean): string;
+declare function prettyPrintOne(source: string, language?: string, lineNumbers?: number | boolean): string;
