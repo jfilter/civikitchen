@@ -1,23 +1,12 @@
 # civikitchen
 
 CiviCRM dev images, the `ck*` tool belt baked into them, and the shared CI /
-release workflows eleven extension repos call. User-facing: `README.md`, `docs/`.
+release workflows the extension repos call. User-facing: `README.md`, `docs/`.
 
 ## Layout
 
-- `docker/` — image definitions, entrypoints, first-boot runtime, demo profiles
-- `toolbelt/` — everything baked INTO an image (the image boundary): `bin/`
-  (the ck* CLIs), `lib/` (shared shell + PHP payloads), ckconform, phpcs,
-  phpstan, psalm, rector, mago, oxlint, oxfmt
-- `scaffold/` — host-side extension scaffolding, never in an image:
-  `ckinit.php` and the `template/extension/` tree it stamps into consuming
-  repos
-- `scripts/` — host-side helpers for working on THIS repo, never in an image
-  (`doctor.sh`, the host-prerequisite report `make doctor` runs)
-- `tests/` — this repo's own suites (ckinit, toolbelt/Dockerfile parity,
-  image boot tests, e2e)
-
-Build context is the repo root, so a Dockerfile can COPY from both trees.
+`toolbelt/` is everything baked into an image; `scaffold/` and `scripts/` run
+on the host only. The build context is the repo root.
 
 ## Verify
 
@@ -31,23 +20,17 @@ the rest; `make test-images` is the ~1 h Docker round.
   name a client, a private extension or internal infrastructure, not even as an
   example. Use neutral names: `org.example.myext`, Acme, Widget, Greeter,
   Ledger. `extensions/` and `sites/` are gitignored local checkouts.
-- **A check needs a real finding first.** A rule without a bug it would have
-  caught only produces false alarms. A local, token-provable PHP pattern is a
-  phpcs sniff; repository structure, XML/JSON/YAML and cross-file rules are
-  `ckconform` checks. Search the existing sniffs and checks before adding one.
 - **One parser per format.** `civikitchen.yaml` → `ckconform --policy-env` /
   `--policy <key>`; XML and JSON → `ck_xml_field` / `ck_json_field` in
   `toolbelt/lib/ckcommon.sh`. Never `sed`/`grep -o` a structured file. A new
-  Public YAML keys belong in the JSON Schema; every normalized key exposed to
-  a consumer also belongs in `Policy::KEYS`.
+  public YAML key goes into the JSON Schema, and into `Policy::KEYS` if a
+  consumer reads its normalized value.
 - **Select files by what they are, not where they live.** A directory list
   fails open: the run says "clean" about files it never saw.
 - **A fix ships with the fixture that would have failed.** Most checks here are
   silent on success.
 - **Container paths are the interface** (`/usr/local/bin/ck*`,
   `/opt/civikitchen-*`). Repo paths move freely; those do not.
-- **Comments record facts; the arguing goes in the commit message.** No counts,
-  they go stale.
 - **One versioned contract**: workflows, template, tools and images release
   together and consumers pin `@v1` (`docs/releases.md`).
 
