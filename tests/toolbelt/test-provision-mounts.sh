@@ -106,6 +106,6 @@ printf '%s\n' \
   '      reason: not in the feed' > "$work/ext/alpha/civikitchen.yaml"
 : > "$CV_LOG"
 CIVIKITCHEN_EXTRA_EXTENSIONS="de.example.opt,de.example.bare,de.example.opt@https://example.org/own.zip" ck_extra_extensions >/dev/null
-expect_log 'ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:enable de.example.opt;ext:download -n --no-install de.example.bare;ext:enable de.example.bare;ext:download -n --no-install de.example.opt@https://example.org/own.zip;ext:enable de.example.opt;' 'extra extension pins'
+expect_log 'ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:enable de.example.opt;ext:download -n --no-install de.example.bare;ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:enable de.example.bare;ext:download -n --no-install de.example.opt@https://example.org/own.zip;ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:enable de.example.opt;' 'extra extension pins'
 
 echo "provision mounts: ok"

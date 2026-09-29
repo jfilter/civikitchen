@@ -161,7 +161,7 @@ cp "$work/good-digest.yaml" "$work/ext/fixture/civikitchen.yaml"
 /bin/rm "$work/ext/fixture/civikitchen.yaml"
 reset_site '[]'
 ck_enable_extensions
-expect_log 'ext:download -n --no-install org.example.dep;ext:enable org.example.dep;ext:enable fixture;' 'registry dependency'
+expect_log 'ext:download -n --no-install org.example.dep;ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:enable org.example.dep;ext:enable fixture;' 'registry dependency'
 
 # A download that keeps failing aborts provisioning before the extension is enabled.
 reset_site '[]'
@@ -219,7 +219,7 @@ printf '%s\n' '<extension key="org.example.dep" type="module"><file>dep</file><v
 write_release_pin 'dep-nested.zip' "$(sha256sum < "$work/staged/dep-nested.zip" | cut -d' ' -f1)"
 reset_site '[{"key":"fixture","status":"uninstalled"}]'
 ck_enable_extensions
-expect_log 'ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:download -n --no-install org.example.sub;ext:enable org.example.sub;ext:enable org.example.dep;ext:enable fixture;' 'nested dependency'
+expect_log 'ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:download -n --no-install org.example.sub;ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:enable org.example.sub;ext:enable org.example.dep;ext:enable fixture;' 'nested dependency'
 /bin/rm -rf "$work/ext/org.example.dep"
 
 # The staged bytes are still checked against the pin: the runner's verification

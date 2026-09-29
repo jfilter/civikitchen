@@ -14,6 +14,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- A registry download is visible to the next `cv` call again. After an earlier
+  `cv ext:enable`, a dependency downloaded later stayed out of the cached
+  extension map, so its own `<requires>` could not be resolved.
+
 ## [1.30.1] - 2026-09-29
 
 ### Fixed

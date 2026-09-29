@@ -329,8 +329,7 @@ ck_install_verified_archive() {
         return 1
     fi
     # A prior Extension.get may have cached the directory map before this key
-    # existed. cv's downloader refreshes it implicitly; a verified direct
-    # extraction must do so explicitly before ext:enable can see the key.
+    # existed; the refresh above is what lets ext:enable and cv path see it.
     return 0
 }
 
@@ -407,6 +406,9 @@ ck_download_extension() {
     fi
     for attempt in 1 2 3; do
         if ck_as_web cv ext:download -n --no-install "${ext_spec}"; then
+            # After an earlier ext:enable, the next cv process reads a cached
+            # extension map without this key until the container is refreshed.
+            ck_as_web cv ev 'CRM_Extension_System::singleton()->getFullContainer()->refresh();' || return 1
             return 0
         fi
         if [[ "${attempt}" == "3" ]]; then
