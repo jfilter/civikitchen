@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.30.0] - 2026-09-29
+
 ### Added
 
 - The standalone image applies core patches from
@@ -1042,7 +1044,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.29.0...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.30.0...HEAD
+[1.30.0]: https://github.com/jfilter/civikitchen/compare/v1.29.0...v1.30.0
 [1.29.0]: https://github.com/jfilter/civikitchen/compare/v1.28.0...v1.29.0
 [1.28.0]: https://github.com/jfilter/civikitchen/compare/v1.27.0...v1.28.0
 [1.27.0]: https://github.com/jfilter/civikitchen/compare/v1.26.0...v1.27.0
