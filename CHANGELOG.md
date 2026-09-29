@@ -14,6 +14,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- A dependency the entrypoint or the release smoke test installs gets its own
+  `<requires>` resolved the same way before it is enabled, pinned by the
+  mounted extension's `civikitchen.yaml`. A private release requiring a
+  registry extension failed with "Unknown extension", since `cv ext:enable`
+  downloads nothing.
+
 ## [1.30.0] - 2026-09-29
 
 ### Added

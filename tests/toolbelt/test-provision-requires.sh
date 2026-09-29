@@ -27,6 +27,7 @@ case "$1" in
     [[ -n "${CV_DOWNLOAD_FAILS:-}" ]] && exit 1
     php -r '$l = json_decode(file_get_contents($argv[1]), TRUE); $l[] = ["key" => $argv[2], "status" => "uninstalled"]; file_put_contents($argv[1], json_encode($l));' "$CV_LIST" "$key"
     ;;
+  path) printf '%s\n' "$CK_EXT_DIR/$3" ;;
   ext:enable) ;;
 esac
 FAKE
@@ -75,7 +76,7 @@ reset_site() {
 expect_log() {
   local expected="$1"
   local actual
-  actual="$(grep -v '^api4 Extension.get' "$CV_LOG" | tr '\n' ';' | sed -E 's#@[A-Za-z0-9_./-]*civikitchen-extension\.[A-Za-z0-9]+\.zip#@<archive>#g')"
+  actual="$(grep -v -e '^api4 Extension.get' -e '^path -x' "$CV_LOG" | tr '\n' ';' | sed -E 's#@[A-Za-z0-9_./-]*civikitchen-extension\.[A-Za-z0-9]+\.zip#@<archive>#g')"
   [[ "$actual" == "$expected" ]] || fail "$2 — expected '$expected', got '$actual'"
 }
 
@@ -207,6 +208,18 @@ ck_enable_extensions
 expect_log 'ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:enable org.example.dep;ext:enable fixture;' 'staged release dependency'
 [ -f "$work/ext/org.example.dep/info.xml" ] || fail "staged dependency archive was not installed"
 [ ! -s "$CURL_LOG" ] || fail "a staged dependency must not be fetched from inside the container"
+/bin/rm -rf "$work/ext/org.example.dep"
+
+# A staged dependency's own <requires> resolve before it is enabled, pinned by
+# the mounted extension: its registry dependency is downloaded first, and the
+# requirement back on the mounted extension ends the recursion as present.
+mkdir -p "$work/nested/org.example.dep"
+printf '%s\n' '<extension key="org.example.dep" type="module"><file>dep</file><version>1.2.3</version><requires><ext>org.example.sub</ext><ext>fixture</ext></requires></extension>' > "$work/nested/org.example.dep/info.xml"
+(cd "$work/nested" && zip -qr "$work/staged/dep-nested.zip" org.example.dep)
+write_release_pin 'dep-nested.zip' "$(sha256sum < "$work/staged/dep-nested.zip" | cut -d' ' -f1)"
+reset_site '[{"key":"fixture","status":"uninstalled"}]'
+ck_enable_extensions
+expect_log 'ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:download -n --no-install org.example.sub;ext:enable org.example.sub;ext:enable org.example.dep;ext:enable fixture;' 'nested dependency'
 /bin/rm -rf "$work/ext/org.example.dep"
 
 # The staged bytes are still checked against the pin: the runner's verification

@@ -92,8 +92,8 @@ The durable fix belongs in the extension: build the environment with the
 managed bootstrap's `ck_headless()` instead of `\Civi\Test::headless()`. It
 queues one install step per `info.xml` `<requires>` entry, then this
 extension — so `setUpHeadless()` is `return ck_headless()->apply();` and the
-dependency list lives in `info.xml` only. One level deep, like the image
-entrypoint; and read from the file rather than asked of
+dependency list lives in `info.xml` only. One level deep, and read from the
+file rather than asked of
 `CRM_Extension_Manager`, because touching the extension system before
 `Civi\Test` rebuilds the headless schema leaves caches the rebuilt site no
 longer matches. A dependency the site does not have fails the install loudly;

@@ -608,17 +608,17 @@ ck_assert_extension_version() {
 # Dependencies of a mounted extension, from its info.xml <requires>: what the
 # site does not have yet is downloaded — pinned via extension_source, else
 # from the registry — and enabled before the extension itself, so its
-# `cv ext:enable` finds them. One level deep: a dependency's own <requires>
-# are core or registry extensions cv resolves on enable.
+# `cv ext:enable` finds them. A downloaded dependency's own <requires> resolve
+# the same way, pinned by the mounted extension's civikitchen.yaml (pin_dir).
 ck_resolve_requires() {
     local ext_key="$1" ext_dir="${2:-${CK_EXT_DIR}/$1}" required spec release version_constraint
-    local rel_repo rel_tag rel_asset rel_digest rc
+    local pin_dir="${3:-${2:-${CK_EXT_DIR}/$1}}" dep_dir rel_repo rel_tag rel_asset rel_digest rc
     [[ -f "${ext_dir}/info.xml" ]] || return 0
     while IFS= read -r required; do
         [[ -z "${required}" ]] && continue
-        if ! spec="$(ck_extension_source "${ext_dir}" "${required}")" \
-            || ! release="$(ck_extension_release "${ext_dir}" "${required}")" \
-            || ! version_constraint="$(ck_extension_version "${ext_dir}" "${required}")"; then
+        if ! spec="$(ck_extension_source "${pin_dir}" "${required}")" \
+            || ! release="$(ck_extension_release "${pin_dir}" "${required}")" \
+            || ! version_constraint="$(ck_extension_version "${pin_dir}" "${required}")"; then
             return 1
         fi
         # `&& rc=0 || rc=$?`: 1 means absent, and a plain call under a
@@ -645,6 +645,9 @@ ck_resolve_requires() {
             fi
             ck_download_extension "${spec:-${required}}" "${version_constraint}" || return 1
         fi
+        # Installed before the recursion, so a cycle finds it present and stops.
+        dep_dir="$(ck_as_web cv path -x "${required}")" || return 1
+        ck_resolve_requires "${required}" "${dep_dir}" "${pin_dir}" || return 1
         ck_as_web cv ext:enable "${required}"
     done < <(ck_extension_requires "${ext_dir}")
 }
