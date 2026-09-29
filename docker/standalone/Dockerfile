@@ -286,9 +286,10 @@ RUN chmod +x /usr/local/bin/civikitchen-entrypoint
 # hands off to Apache. The marker alone is written before Apache listens, so
 # the check also asks Apache for a non-error HTTP answer. Lets dependent services wait via
 # `depends_on: { condition: service_healthy }` instead of racing a half-installed
-# site. start-period covers a cold install; without CIVICRM_AUTO_INSTALL the
-# marker is never written and the container just reports unhealthy (harmless).
-HEALTHCHECK --interval=10s --timeout=5s --start-period=180s --retries=12 \
+# site. start-period covers a cold install plus enabling extensions that seed demo data
+# (minutes); without CIVICRM_AUTO_INSTALL the marker is never written and the container
+# just reports unhealthy (harmless).
+HEALTHCHECK --interval=10s --timeout=5s --start-period=600s --retries=18 \
     CMD test -f /var/www/html/private/.civikitchen-provisioned \
         && curl -fsS -o /dev/null http://localhost/ || exit 1
 
