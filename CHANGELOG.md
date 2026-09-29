@@ -37,6 +37,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   files", and with `--all` or paths it skipped the mago stage, so the `cklint`
   gate of `ck ci` passed on a directory it had only half checked.
 
+- A profile's registry extensions download under a 120 s `http_timeout`.
+  Core bounds the whole archive transfer by that setting, 5 s by default, so a
+  multi-MB release from a slow mirror failed the profile.
+
 ## [1.29.0] - 2026-09-29
 
 ### Added

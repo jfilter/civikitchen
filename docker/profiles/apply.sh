@@ -233,7 +233,11 @@ echo "==> [${PROFILE_NAME}] downloading registry extensions"
     [ -n "${name}" ] || continue
     if ext_present "${name}"; then echo "  ${name} already present"; continue; fi
     echo "  downloading ${name}"
+    # Core bounds the whole archive transfer by http_timeout (5 s default),
+    # which a multi-MB release from a slow mirror overruns.
+    cv vset http_timeout=120 >/dev/null
     cv ext:download -n --no-install "${name}"
+    cv vdel http_timeout >/dev/null
 done
 
 echo "==> [${PROFILE_NAME}] enabling extensions"

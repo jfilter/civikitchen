@@ -31,6 +31,7 @@ case " $* " in
     ;;
   *' ext:enable '*) [ "${CK_FAKE_FAIL_ENABLE:-0}" != 1 ] ;;
   *' ext:download '*) printf '%s\n' "$*" >> "${CK_FAKE_CV_LOG:?}" ;;
+  *' vset '*|*' vdel '*) printf '%s\n' "$*" >> "${CK_FAKE_CV_LOG:-/dev/null}" ;;
   *'--user=admin'*) printf 'ok' ;;
   *) : ;;
 esac
@@ -121,8 +122,10 @@ printf '%s\n' '{"description":"registry fetch only","dependencies":[{"name":"org
 : > "$work/cv.log"
 PATH="$work/bin:$PATH" CK_FAKE_EXT_DIR="$work/ext" CK_FAKE_CV_LOG="$work/cv.log" \
   bash "$root/docker/profiles/apply.sh" "$work/profile" >/dev/null
-grep -qx 'ext:download -n --no-install org.example.registry' "$work/cv.log" \
-  || { echo "registry dependency was not fetched with --no-install" >&2; exit 1; }
+[ "$(cat "$work/cv.log")" = "vset http_timeout=120
+ext:download -n --no-install org.example.registry
+vdel http_timeout" ] \
+  || { echo "registry dependency was not fetched with --no-install under a raised http_timeout" >&2; exit 1; }
 
 write_profile "$commit"
 php -r '
