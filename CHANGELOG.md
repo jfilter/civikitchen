@@ -14,6 +14,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- `cklint` outside a git checkout exits 2 with "not a git checkout", as `ckfmt`
+  does. It used to exit 0 there: with no arguments it reported "no changed PHP
+  files", and with `--all` or paths it skipped the mago stage, so the `cklint`
+  gate of `ck ci` passed on a directory it had only half checked.
+
 ## [1.29.0] - 2026-09-29
 
 ### Added

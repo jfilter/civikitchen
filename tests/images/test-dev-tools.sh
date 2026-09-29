@@ -204,7 +204,11 @@ fi
 
 # Explicit-path mode without a project phpcs.xml(.dist) in cwd: cklint must
 # syntax-check (php -l) and then apply the CiviKitchen fallback standard.
-CKLINT_OUT="$( (cd "${WORKDIR}" && cklint Legacy.php) 2>&1 || true)"
+LEGACYDIR="${WORKDIR}/legacyext"
+mkdir -p "${LEGACYDIR}"
+cp "${WORKDIR}/Legacy.php" "${LEGACYDIR}/"
+(cd "${LEGACYDIR}" && git init -q . && git add -A) >/dev/null 2>&1
+CKLINT_OUT="$( (cd "${LEGACYDIR}" && cklint Legacy.php) 2>&1 || true)"
 if echo "${CKLINT_OUT}" | grep -qi "translation domain"; then
     ok "cklint lints with the CiviKitchen fallback standard"
 else
@@ -301,8 +305,8 @@ fi
 
 # Warning tier: a phpcs warning is reported but must not fail the gate, while
 # an error still does. Scoped to a two-sniff project ruleset so the assertion
-# is about cklint's exit code, not about the rest of the standard. No git init
-# here, so the mago stage skips itself and only the phpcs stage is under test.
+# is about cklint's exit code, not about the rest of the standard. Both files
+# are clean under the mago baseline, so only the phpcs stage decides.
 WARNDIR="${WORKDIR}/warnext"
 mkdir -p "${WARNDIR}"
 cat > "${WARNDIR}/phpcs.xml.dist" <<'XML'
@@ -331,6 +335,7 @@ function acme_label(): string {
   return ts('hello');
 }
 PHP
+(cd "${WARNDIR}" && git init -q . && git add -A) >/dev/null 2>&1
 if WARN_OUT="$( (cd "${WARNDIR}" && cklint Warn.php) 2>&1 )"; then
     if echo "${WARN_OUT}" | grep -qi "warning"; then
         ok "cklint reports a phpcs warning and still exits 0"

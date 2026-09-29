@@ -7,6 +7,7 @@ use CiviKitchen\Toolbelt\Cli\CompatibilityCommand;
 use CiviKitchen\Toolbelt\Cli\CoverageCommand;
 use CiviKitchen\Toolbelt\Cli\FormatCommand;
 use CiviKitchen\Toolbelt\Cli\InternalRuntimeCommand;
+use CiviKitchen\Toolbelt\Cli\LintCommand;
 use CiviKitchen\Toolbelt\Cli\ReleaseCommand;
 use CiviKitchen\Toolbelt\JavaScript\Api4CatalogExport;
 use CiviKitchen\Toolbelt\Process\Runner;
@@ -730,6 +731,41 @@ final class SharedPhpTest extends TestCase
             ob_end_clean();
             chdir($before === false ? dirname(__DIR__, 2) : $before);
         }
+    }
+
+    public function testLintRefusesOutsideAGitCheckoutInsteadOfPassingUnchecked(): void
+    {
+        file_put_contents($this->temporary . '/Probe.php', "<?php\nreturn @unlink('/tmp/nope');\n");
+        // Real git, faked toolchain: every mode must stop before a linter runs.
+        $runner = new class () extends Runner {
+            /** @var list<list<string>> */
+            public array $commands = [];
+
+            public function capture(array $command, ?array $environment = null, ?string $workingDirectory = null): array
+            {
+                $this->commands[] = $command;
+                if ($command[0] === 'git') {
+                    return parent::capture($command, $environment, $workingDirectory);
+                }
+                return ['status' => 0, 'output' => $command[0] === 'sh' ? '/fake/mago' : ''];
+            }
+
+            public function passthrough(array $command, ?array $environment = null, ?string $workingDirectory = null): int
+            {
+                $this->commands[] = $command;
+                return 0;
+            }
+        };
+        $before = getcwd();
+        chdir($this->temporary);
+        try {
+            foreach ([[], ['--all'], ['Probe.php']] as $arguments) {
+                self::assertSame(2, (new LintCommand(dirname(__DIR__, 2), $runner))->run($arguments), implode(' ', $arguments));
+            }
+        } finally {
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+        self::assertSame([], array_values(array_filter($runner->commands, static fn(array $command): bool => $command[0] !== 'git')));
     }
 
     public function testFormatChecksUntrackedFilesToo(): void

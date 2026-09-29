@@ -39,6 +39,9 @@ final class LintCommand implements Command
             }
         }
         $repository = new Files($this->checkoutRoot, $this->runner);
+        if (!$repository->isGitCheckout()) {
+            return $this->error('not a git checkout - the file list comes from git ls-files.');
+        }
         if ($paths === [] && !$all) {
             $paths = $repository->changedPhp();
             if ($paths === []) {
@@ -77,10 +80,6 @@ final class LintCommand implements Command
         $mago = $this->findExecutable('mago');
         if ($mago === null) {
             return $this->error('no mago on PATH - is this a civikitchen image?');
-        }
-        if (!$repository->isGitCheckout()) {
-            fwrite(STDERR, "cklint: not a git checkout - skipping the mago lint stage (its file list comes from git).\n");
-            return $failed ? 1 : 0;
         }
         $scope = $all ? [] : $paths;
         $files = $repository->source(['php'], $scope, true, true);
