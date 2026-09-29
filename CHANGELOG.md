@@ -43,6 +43,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   Core bounds the whole archive transfer by that setting, 5 s by default, so a
   multi-MB release from a slow mirror failed the profile.
 
+- The standalone image's first boot gets the healthcheck budget the buildkit
+  images have (`start-period=600s`, 18 retries). A cold install plus enabling
+  extensions that seed demo data takes minutes and was reported unhealthy
+  after about five.
+
 ## [1.29.0] - 2026-09-29
 
 ### Added
