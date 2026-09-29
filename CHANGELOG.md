@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.30.2] - 2026-09-29
+
 ### Fixed
 
 - A registry download is visible to the next `cv` call again. After an earlier
@@ -1065,7 +1067,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.30.1...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.30.2...HEAD
+[1.30.2]: https://github.com/jfilter/civikitchen/compare/v1.30.1...v1.30.2
 [1.30.1]: https://github.com/jfilter/civikitchen/compare/v1.30.0...v1.30.1
 [1.30.0]: https://github.com/jfilter/civikitchen/compare/v1.29.0...v1.30.0
 [1.29.0]: https://github.com/jfilter/civikitchen/compare/v1.28.0...v1.29.0
