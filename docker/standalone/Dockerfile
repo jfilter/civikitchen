@@ -42,6 +42,14 @@ RUN curl -fsSL "${CIVICRM_DOWNLOAD_URL}" -o /tmp/civicrm-standalone.tar.gz \
            "https://raw.githubusercontent.com/civicrm/civicrm-core/${CIVICRM_VERSION}/sql/${fixture}" \
            -o "/tmp/civicrm/civicrm-standalone/core/sql/${fixture}"; \
        done
+# Core bugs a dev stack must not reproduce, each with its upstream link, until
+# the release carries the fix. The log lands in the image as core-patches.log.
+COPY docker/standalone/core-patches /tmp/core-patches
+COPY docker/standalone/apply-core-patches.sh /tmp/apply-core-patches.sh
+RUN apt-get update && apt-get install -y --no-install-recommends patch \
+    && bash /tmp/apply-core-patches.sh /tmp/civicrm/civicrm-standalone/core /tmp/core-patches \
+       > /tmp/core-patches.log \
+    && cat /tmp/core-patches.log
 
 FROM php:${PHP_VERSION}-apache-bookworm
 
@@ -233,6 +241,7 @@ RUN CODER_REF="${CODER_REF}" \
 # (/var/www/html/{ext,private,public}, civicrm.standalone.php).
 ARG CIVICRM_VERSION
 COPY --from=download --chown=www-data:www-data /tmp/civicrm/civicrm-standalone /var/www/html
+COPY --from=download /tmp/core-patches.log /usr/local/share/civikitchen/core-patches.log
 RUN chown www-data:www-data /var/www
 LABEL org.opencontainers.image.version="${CIVICRM_VERSION}"
 

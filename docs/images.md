@@ -31,6 +31,14 @@ without depending on its Docker Hub publishing), with dev tools added:
 - **cktestreset** — drops + reseeds the isolated `<db>_test` scratch DB and clears stale cached containers (standalone only; civibuild manages the buildkit test DBs)
 - **ckcoretest** — runs CiviCRM *core* phpunit suites against the installed core (standalone only). The composer dist export-ignores `**/tests/**`, `phpunit.xml.dist` and the `sql/test_data*.mysql` seed files; on first use this fetches exactly those for the installed version (sparse blob-filtered checkout of the matching tag, cached in the container) — including the per-extension suites under `ext/*/tests` — then execs `CIVICRM_UF=UnitTests phpunit <args>` from the core dir (`--ext <name>` runs from a core extension's dir instead). Refuses to run without a provisioned `TEST_DB_DSN`. Covers the headless PHP suites (`api`, `CRM`, `Civi`, ext); E2E, Upgrade and the karma/qunit JS tests need a buildkit/civibuild environment — an accepted gap, since civicrm.org's Jenkins runs the full matrix on every core PR anyway. This is for the local loop: run the suites your patch touches, let Jenkins do the rest. Useful for verifying core patches/backports in a kitchen: patch the file under `/var/www/html/core`, then `ckcoretest tests/phpunit/api/v4/Query`.
 
+**Core patches.** The image carries fixes for core bugs a dev stack must not
+reproduce, until a release contains them: one file per bug in
+[`docker/standalone/core-patches/`](../docker/standalone/core-patches/), each
+naming its upstream issue on an `Upstream:` line. The build applies them in name
+order, skips a patch the release already contains, and fails on any other
+mismatch. `/usr/local/share/civikitchen/core-patches.log` lists what the image
+applied. A site running the unpatched release still shows the bug.
+
 CiviCRM is auto-installed on first container start when `CIVICRM_AUTO_INSTALL=1`. See [Extension development](extension-development.md) for the full setup.
 
 ```yaml

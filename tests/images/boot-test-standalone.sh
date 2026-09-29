@@ -12,7 +12,9 @@
 #   * an external profile is schema-validated and applied, with generated API
 #     credentials written mode 0600 and never disclosed in default logs;
 #   * the admin status check makes no calls to civicrm.org (version_check job
-#     inactive, ext_repo_url false).
+#     inactive, ext_repo_url false);
+#   * word replacements reach ts(), which the standalone boot order breaks
+#     without the core patch.
 # The db service gets a plain MYSQL_USER and no grant script: the app user
 # holds rights on its own database only, exactly as a hand-written stack.
 #
@@ -173,5 +175,14 @@ for round in 1 2; do
         fail=1
     fi
 done
+
+# 9) Word replacements reach ts() (core patch i18n-boot-replacements). The boot
+# caches the en_US list before the DSN is known, so only an en_US site shows it.
+cv api4 Setting.set +v lcMessages=en_US >/dev/null || true
+cv api4 WordReplacement.create +v find_word="CiviKitchen probe" +v replace_word="probe replaced" +v match_type=exactMatch >/dev/null || true
+replaced=$(cv ev 'echo ts("CiviKitchen probe");' | tr -d '"' || true)
+check "word replacement applies on an en_US site (got '${replaced}')" "[ '${replaced}' = 'probe replaced' ]"
+check "core patch log lists the patch" \
+    "docker exec '${APP}' grep -Eq '^(applied|contained) i18n-boot-replacements.patch$' /usr/local/share/civikitchen/core-patches.log"
 
 if [ "${fail}" = 0 ]; then echo "==> PASS: ${IMAGE} on ${DATABASE_IMAGE}"; else echo "==> FAIL: ${IMAGE} on ${DATABASE_IMAGE}"; exit 1; fi

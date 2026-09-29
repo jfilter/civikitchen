@@ -14,7 +14,23 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- The standalone image applies core patches from
+  `docker/standalone/core-patches/` at build time and lists them in
+  `/usr/local/share/civikitchen/core-patches.log`. A patch the release already
+  contains is skipped; one that neither applies nor is contained fails the
+  build.
+
 ### Fixed
+
+- Word replacements and translation replacements apply on the standalone
+  image. Core's standalone boot translates settings metadata before the
+  database is known and cached an empty replacement list for the whole request
+  ([dev/core#5862](https://lab.civicrm.org/dev/core/-/work_items/5862)); the
+  image carries the fix from
+  [civicrm-core#37148](https://github.com/civicrm/civicrm-core/pull/37148) as a
+  core patch.
 
 - `cklint` outside a git checkout exits 2 with "not a git checkout", as `ckfmt`
   does. It used to exit 0 there: with no arguments it reported "no changed PHP

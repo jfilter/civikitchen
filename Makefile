@@ -129,7 +129,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -203,6 +203,9 @@ test-provision: ## provision.sh: <requires>, mounted extensions, core locales, t
 	bash tests/toolbelt/test-provision-test-db.sh
 	bash tests/toolbelt/test-provision-phone-home.sh
 	bash tests/toolbelt/test-test-db-boot.sh
+
+test-core-patches: ## Standalone core patches: applied once, contained ones skipped, stale or unlinked ones fail
+	bash tests/toolbelt/test-core-patches.sh
 
 # Two managed template files derive the <requires> chain from info.xml — the
 # test bootstrap for Civi\Test, the phpstan bootstrap for class resolution.
