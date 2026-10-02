@@ -139,7 +139,9 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}:standalone-${{ matrix.version }}-${{ github.sha }}-${{ matrix.arch }}
           cache-from: type=gha,scope=standalone-${{ matrix.version }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=standalone-${{ matrix.version }}-${{ matrix.arch }}
+          # The image is pushed before the cache export, so a failed export
+          # (`error writing layer blob: not_found`) must not fail the job.
+          cache-to: type=gha,mode=max,scope=standalone-${{ matrix.version }}-${{ matrix.arch }},ignore-error=true
           # The daily cron rebuilds from scratch: a cached apt layer would keep
           # serving the base image's outdated packages past their security fix.
           no-cache: ${{ github.event_name == 'schedule' }}
@@ -454,7 +456,7 @@ jobs:
             CIVICRM_VERSION=${{ needs.resolve-civicrm.outputs.stable }}
             CIVICRM_BUILD_VERSION=${{ needs.resolve-civicrm.outputs.minor }}
           cache-from: type=gha,scope=buildkit-${{ matrix.php }}-${{ matrix.suffix }}
-          cache-to: type=gha,mode=max,scope=buildkit-${{ matrix.php }}-${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=buildkit-${{ matrix.php }}-${{ matrix.suffix }},ignore-error=true
           no-cache: ${{ github.event_name == 'schedule' }}
 
   merge-buildkit:
@@ -730,7 +732,7 @@ jobs:
             CIVICRM_VERSION=${{ needs.resolve-civicrm.outputs.stable }}
             CIVICRM_BUILD_VERSION=${{ needs.resolve-civicrm.outputs.minor }}
           cache-from: type=gha,scope=demo-${{ matrix.variant.name }}-${{ matrix.suffix }}
-          cache-to: type=gha,mode=max,scope=demo-${{ matrix.variant.name }}-${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=demo-${{ matrix.variant.name }}-${{ matrix.suffix }},ignore-error=true
           no-cache: ${{ github.event_name == 'schedule' }}
 
   merge-demo:
