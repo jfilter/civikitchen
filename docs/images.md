@@ -319,6 +319,9 @@ matters:**
   `civicrm-<version>-standalone.tar.gz` release tarball, so it reaches any
   release download.civicrm.org has one for — Standalone itself exists from
   ~5.69. The version must be EXACT (`6.15.1`, not `6.15`): it names a tarball.
+  With `--build-arg CIVICRM_SOURCE=git`, `CIVICRM_VERSION` is a civicrm-core
+  branch or tag instead (`master`, `6.19`), built from git into the same
+  layout — see [Standalone on an unreleased branch](#standalone-on-an-unreleased-branch).
 - **Buildkit** (`:drupal10` / `:drupal11` / `:wordpress` / `:joomla`,
   `docker/buildkit/`) bakes the site
   with `civibuild create --civi-ver <version>`, which fetches **any** civicrm
@@ -342,3 +345,35 @@ Or let compose build it on demand (no prebuilt image needed) — ready-to-run:
 [`examples/custom-version/`](../examples/custom-version/), parameterized by
 `CIVICRM_VERSION` / `PHP_VERSION`. For CiviCRM older than ~5.47 (pre-Drupal-10),
 switch `DEFAULT_SITE_TYPE` to a Drupal 9 / 7 civibuild site type.
+
+## Standalone on an unreleased branch
+
+To test against core `master` (or a release branch before its tarball exists),
+build Standalone from git:
+
+```bash
+make build CIVICRM_SOURCE=git CIVICRM_VERSION=master   # tags civikitchen:standalone-master
+```
+
+The build does what core's release script does for the tarball: civicrm-core
+and civicrm-packages at the same branch, `composer install --no-dev` with the
+bower assets, then core's standalone scaffold. Every build fetches the
+branch's current commit; `/usr/local/share/civikitchen/civicrm-source.log` names
+the commits the image holds. Unlike the tarball, core keeps its `tests/`
+directories and seed SQL, so `ckcoretest` runs without fetching them.
+
+To test a core change, mount the directory it touches from your civicrm-core
+checkout over the image's copy, and toggle the change there (`git stash`,
+`git stash pop`) for a failing and a passing run:
+
+```yaml
+services:
+  app:
+    image: civikitchen:standalone-master
+    volumes:
+      - ../civicrm-core/ext/afform:/var/www/html/core/ext/afform
+```
+
+Run `cv flush` after toggling; the Angular and asset caches otherwise keep the
+old files. A change to composer dependencies or outside the mounted directory
+needs a rebuilt image.

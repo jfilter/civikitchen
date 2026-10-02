@@ -360,8 +360,11 @@ lint-schema: ## Validate the profile/scenario schemas and every repository-owned
 
 # --- the slow loop (needs Docker) --------------------------------------------
 
-build: ## Build the standalone image locally as civikitchen:standalone
-	docker build -f docker/standalone/Dockerfile -t civikitchen:standalone .
+build: ## Build the standalone image locally; CIVICRM_VERSION=<release>, or CIVICRM_SOURCE=git CIVICRM_VERSION=master
+	docker build -f docker/standalone/Dockerfile \
+	    $(if $(CIVICRM_VERSION),--build-arg CIVICRM_VERSION=$(CIVICRM_VERSION)) \
+	    $(if $(CIVICRM_SOURCE),--build-arg CIVICRM_SOURCE=$(CIVICRM_SOURCE)) \
+	    -t civikitchen:standalone$(if $(CIVICRM_VERSION),-$(CIVICRM_VERSION)) .
 
 test-images: ## Boot tests + dev-tool tests against the published images (~1 h)
 	bash tests/images/run-local.sh

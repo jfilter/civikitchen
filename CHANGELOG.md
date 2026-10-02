@@ -14,6 +14,15 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- The standalone image builds from a civicrm-core branch:
+  `make build CIVICRM_SOURCE=git CIVICRM_VERSION=master` lays out core,
+  civicrm-packages and their dependencies as the release tarball does, for
+  testing against `master` before a release exists.
+  `/usr/local/share/civikitchen/civicrm-source.log` names the source of every
+  standalone image.
+
 ## [1.30.2] - 2026-09-29
 
 ### Fixed

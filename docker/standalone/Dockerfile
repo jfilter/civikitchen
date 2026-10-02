@@ -1,6 +1,7 @@
 # CiviCRM Standalone Development Image
-# CiviCRM Standalone from the release tarball plus the dev tools (coverage,
-# debug, testing, static analysis, linting).
+# CiviCRM Standalone from the release tarball (or a civicrm-core branch, see
+# docs/images.md) plus the dev tools (coverage, debug, testing, static
+# analysis, linting).
 #
 # Self-built base, not FROM civicrm/civicrm: the Docker Hub image lags the
 # release, while the tarball this installs is published with the release
@@ -23,10 +24,12 @@
 ARG PHP_VERSION=8.4
 # Exact release, never a minor: this names a tarball. CI passes the resolved
 # stable; the default here only serves a bare local `docker build` and rots.
+# With CIVICRM_SOURCE=git it is a civicrm-core branch or tag instead (master).
 ARG CIVICRM_VERSION=6.17.0
+ARG CIVICRM_SOURCE=tarball
 
 # --- fetch stage: the CiviCRM Standalone release tarball ---------------------
-FROM php:${PHP_VERSION}-apache-bookworm AS download
+FROM php:${PHP_VERSION}-apache-bookworm AS download-tarball
 ARG CIVICRM_VERSION
 ARG CIVICRM_DOWNLOAD_URL="https://download.civicrm.org/civicrm-${CIVICRM_VERSION}-standalone.tar.gz"
 # The release archive export-ignores core's headless-test seed SQL even though
@@ -41,7 +44,35 @@ RUN curl -fsSL "${CIVICRM_DOWNLOAD_URL}" -o /tmp/civicrm-standalone.tar.gz \
          curl -fsSL \
            "https://raw.githubusercontent.com/civicrm/civicrm-core/${CIVICRM_VERSION}/sql/${fixture}" \
            -o "/tmp/civicrm/civicrm-standalone/core/sql/${fixture}"; \
-       done
+       done \
+    && echo "tarball ${CIVICRM_DOWNLOAD_URL}" > /tmp/civicrm-source.log
+
+# --- fetch stage: the same layout built from a civicrm-core branch -----------
+# What core's distmaker does for the tarball: core plus civicrm-packages of the
+# same name, composer deps and bower assets, then the standalone scaffold. The
+# git checkout keeps tests/ and the seed SQL. ADD resolves the branch on every
+# build, so the layer cache never serves an old commit.
+# PHP extensions are checked in the runtime stage, which installs them.
+FROM php:${PHP_VERSION}-apache-bookworm AS download-git
+ARG CIVICRM_VERSION
+RUN apt-get update && apt-get install -y --no-install-recommends git unzip \
+    && curl -sS https://getcomposer.org/installer \
+       | php -- --install-dir=/usr/local/bin --filename=composer
+ADD --keep-git-dir=true "https://github.com/civicrm/civicrm-core.git#${CIVICRM_VERSION}" /tmp/civicrm/civicrm-standalone/core
+ADD --keep-git-dir=true "https://github.com/civicrm/civicrm-packages.git#${CIVICRM_VERSION}" /tmp/civicrm/civicrm-standalone/core/packages
+WORKDIR /tmp/civicrm/civicrm-standalone/core
+RUN for repo in . packages; do \
+         echo "git ${repo} $(git -C "${repo}" rev-parse HEAD)" >> /tmp/civicrm-source.log \
+         && rm -rf "${repo}/.git"; \
+       done \
+    && COMPOSER_ALLOW_SUPERUSER=1 COMPOSER_COMPILE=1 \
+       composer install --no-dev --no-interaction --no-progress --ignore-platform-req='ext-*' \
+    && composer clear-cache \
+    && php tools/standalone/bin/scaffold /tmp/civicrm/civicrm-standalone \
+    && test -f /tmp/civicrm/civicrm-standalone/civicrm.standalone.php
+
+# --- the selected source, with core patches ----------------------------------
+FROM download-${CIVICRM_SOURCE} AS download
 # Core bugs a dev stack must not reproduce, each with its upstream link, until
 # the release carries the fix. The log lands in the image as core-patches.log.
 COPY docker/standalone/core-patches /tmp/core-patches
@@ -241,7 +272,7 @@ RUN CODER_REF="${CODER_REF}" \
 # (/var/www/html/{ext,private,public}, civicrm.standalone.php).
 ARG CIVICRM_VERSION
 COPY --from=download --chown=www-data:www-data /tmp/civicrm/civicrm-standalone /var/www/html
-COPY --from=download /tmp/core-patches.log /usr/local/share/civikitchen/core-patches.log
+COPY --from=download /tmp/core-patches.log /tmp/civicrm-source.log /usr/local/share/civikitchen/
 RUN chown www-data:www-data /var/www
 LABEL org.opencontainers.image.version="${CIVICRM_VERSION}"
 
