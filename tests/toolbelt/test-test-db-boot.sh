@@ -118,6 +118,18 @@ for f in "$work/root/.cv.json" "$work/www/.cv.json"; do
     || fail "$f must carry the test DSN"
 done
 
+site_key_in() {
+  php -r '$s = json_decode(file_get_contents($argv[1]), TRUE)["sites"]["/var/www/html/civicrm.standalone.php"]; echo $s[$argv[2]] ?? "<unset>";' "$1" "$2"
+}
+[[ "$(site_key_in "$work/www/.cv.json" ADMIN_USER)" == '<unset>' ]] \
+  || fail "without a demo user ~/.cv.json must not name an ADMIN_USER"
+/bin/rm -f "$work/root/.cv.json" "$work/www/.cv.json"
+wire CIVIKITCHEN_DEMO_USER=admin CIVIKITCHEN_DEMO_PASS='s\e"cret'
+[[ "$(site_key_in "$work/www/.cv.json" ADMIN_USER)" == 'admin' \
+  && "$(site_key_in "$work/www/.cv.json" ADMIN_PASS)" == 's\e"cret' \
+  && "$(dsn_in "$work/www/.cv.json")" == 'mysql://u:p"w@db:3306/civicrm_test?new_link=true' ]] \
+  || fail "the demo user must reach ~/.cv.json as ADMIN_USER/ADMIN_PASS for browser tests"
+
 echo '{"sites":{}}' > "$work/root/.cv.json"
 wire
 [[ "$(cat "$work/root/.cv.json")" == '{"sites":{}}' ]] || fail "an existing ~/.cv.json must not be clobbered"

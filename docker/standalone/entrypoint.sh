@@ -148,9 +148,10 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# ~/.cv.json and the boot stub live in the container while the config marker
-# persists in private/, so wire them on every boot, not in the bundle below.
+# ~/.cv.json, the boot stub and the Apache port live in the container while the
+# config marker persists in private/, so wire them on every boot, not in the bundle below.
 ck_wire_test_db_boot
+ck_listen_on_site_port
 
 # ---------------------------------------------------------------------------
 # Post-install configuration + provisioning. Both bundles are marker-gated (each

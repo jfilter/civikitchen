@@ -22,6 +22,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
   testing against `master` before a release exists.
   `/usr/local/share/civikitchen/civicrm-source.log` names the source of every
   standalone image.
+- Core and extension browser tests (`Civi\Test\MinkBase`) run on standalone.
+  The extension template and the standalone example carry an opt-in `browser`
+  service (`docker compose --profile browser up -d`), a headless Chrome in the
+  app's network; Apache also serves a `http://localhost:<port>` site URL on that
+  port, so the browser opens the URLs CiviCRM generates. A new container's
+  `~/.cv.json` names the demo user as `ADMIN_USER`/`ADMIN_PASS`, and
+  `ckcoretest --e2e` runs `@group e2e` tests against the dev site.
 
 ## [1.30.2] - 2026-09-29
 

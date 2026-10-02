@@ -51,6 +51,8 @@
 : "${CK_MOUNTINFO:=/proc/self/mountinfo}"
 # Where the version-matching core language tarball is fetched from.
 : "${CK_L10N_BASE_URL:=https://download.civicrm.org}"
+# Where ck_listen_on_site_port writes its Apache config (rewritten on every boot).
+: "${CK_APACHE_CONF:=/etc/apache2/conf-enabled/civikitchen-site-port.conf}"
 
 # --- functions -------------------------------------------------------------
 
@@ -281,6 +283,23 @@ ck_setup_test_db() {
     ck_provision_test_db "${test_db_name}" || return 1
 }
 
+# "key": "value" with the value JSON-escaped (a DB password may contain \ or ").
+ck_json_member() {
+    local value="${2//\\/\\\\}"
+    printf '"%s": "%s"' "$1" "${value//\"/\\\"}"
+}
+
+# Serve the site on the port of a localhost site URL as well, so a browser in this
+# container's network (the compose browser service) opens the URL CiviCRM generates.
+ck_listen_on_site_port() {
+    rm -f "${CK_APACHE_CONF}"
+    [[ "${CIVIKITCHEN_SITE_URL:-}" =~ ^http://(localhost|127\.0\.0\.1):([0-9]+)(/|$) ]] || return 0
+    local port="${BASH_REMATCH[2]}"
+    [[ "${port}" != "80" ]] || return 0
+    printf 'Listen %s\n<VirtualHost *:%s>\n    DocumentRoot /var/www/html\n</VirtualHost>\n' \
+        "${port}" "${port}" > "${CK_APACHE_CONF}"
+}
+
 # Route CIVICRM_UF=UnitTests boots at <db>_test: TEST_DB_DSN in ~/.cv.json plus
 # the patched boot stub. Both live outside private/, so this runs on every boot.
 ck_wire_test_db_boot() {
@@ -293,10 +312,16 @@ ck_wire_test_db_boot() {
     # JSON-escape the DSN (the DB password may contain \ or ") and write both
     # files as root — interpolating the payload into a `bash -c` string would
     # let a password containing quotes execute as shell.
-    local dsn_json="${test_db_dsn//\\/\\\\}"
-    dsn_json="${dsn_json//\"/\\\"}"
+    local site_json
+    site_json="$(ck_json_member TEST_DB_DSN "${test_db_dsn}")"
+    # Civi\Test\EndToEndInterface: browser tests log in as ADMIN_USER (MinkBase::login)
+    if [[ -n "${CIVIKITCHEN_DEMO_USER:-}" ]]; then
+        site_json+=",
+      $(ck_json_member ADMIN_USER "${CIVIKITCHEN_DEMO_USER}"),
+      $(ck_json_member ADMIN_PASS "${CIVIKITCHEN_DEMO_PASS:-admin}")"
+    fi
     local cv_json
-    cv_json=$(printf '{\n  "sites": {\n    "%s": {\n      "TEST_DB_DSN": "%s"\n    }\n  }\n}' "${CK_TEST_DB_CV_KEY}" "${dsn_json}")
+    cv_json=$(printf '{\n  "sites": {\n    "%s": {\n      %s\n    }\n  }\n}' "${CK_TEST_DB_CV_KEY}" "${site_json}")
     if [[ ! -f "${CK_ROOT_HOME}/.cv.json" ]]; then
         printf '%s\n' "${cv_json}" > "${CK_ROOT_HOME}/.cv.json"
         chmod 600 "${CK_ROOT_HOME}/.cv.json"

@@ -23,6 +23,11 @@
 #   ckcoretest --filter testDuplicateSelectAlias tests/phpunit/api/v4/Query/Api4SelectQueryTest.php
 #   ckcoretest --ext search_kit [phpunit args...]   # a core extension's suite
 #   ckcoretest --fetch-only            # just materialize tests/, run nothing
+#   ckcoretest --e2e --ext afform/mock tests/phpunit/E2E   # browser/e2e tests, see below
+#
+# --e2e runs @group e2e tests against the dev site instead (CIVICRM_UF from the
+# image, no test DB): they install extensions into it and log in as ADMIN_USER.
+# Browser tests (Civi\Test\MinkBase) also need the compose browser service.
 set -euo pipefail
 
 # Shared plumbing: tool name, ck_die, ck_git, the extension-root check and the
@@ -84,12 +89,20 @@ if [ "${1:-}" = "--fetch-only" ]; then
   exit 0
 fi
 
+e2e=0
+if [ "${1:-}" = "--e2e" ]; then
+  e2e=1
+  shift
+fi
+
 # Hard gate, not a fallback: headless boots without TEST_DB_DSN hit the dev DB.
-www_home=$(getent passwd www-data | cut -d: -f6)
-if ! grep -qs TEST_DB_DSN "${www_home}/.cv.json" /root/.cv.json; then
-  echo "[ckcoretest] No TEST_DB_DSN found in ~/.cv.json — refusing to run headless" >&2
-  echo "[ckcoretest] tests against the dev DB. Provision with CIVIKITCHEN_TEST_DB=1." >&2
-  exit 1
+if [ "${e2e}" = 0 ]; then
+  www_home=$(getent passwd www-data | cut -d: -f6)
+  if ! grep -qs TEST_DB_DSN "${www_home}/.cv.json" /root/.cv.json; then
+    echo "[ckcoretest] No TEST_DB_DSN found in ~/.cv.json — refusing to run headless" >&2
+    echo "[ckcoretest] tests against the dev DB. Provision with CIVIKITCHEN_TEST_DB=1." >&2
+    exit 1
+  fi
 fi
 
 run_dir="${CK_CORE_DIR}"
@@ -101,4 +114,7 @@ if [ "${1:-}" = "--ext" ]; then
 fi
 
 cd "${run_dir}"
+if [ "${e2e}" = 1 ]; then
+  exec phpunit --group e2e "$@"
+fi
 exec env CIVICRM_UF=UnitTests phpunit "$@"

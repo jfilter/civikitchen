@@ -91,5 +91,17 @@ services:
     environment:
       PMA_HOST: db
 
+  # Headless Chrome for browser tests (Civi\Test\MinkBase), opt-in:
+  #   docker compose --profile browser up -d
+  # It shares the app's network, so it opens the site URL as your browser does
+  # and MinkBase reaches it at its default localhost:9222.
+  browser:
+    profiles: [browser]
+    image: chromedp/headless-shell:151.0.7922.109
+    network_mode: service:app
+    # Docker's default 64 MB /dev/shm makes Chrome drop script loads on
+    # asset-heavy pages (net::ERR_INSUFFICIENT_RESOURCES); the image README advises 2G.
+    shm_size: 2gb
+
 volumes:
   db-data:
