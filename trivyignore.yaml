@@ -41,67 +41,45 @@
 
 vulnerabilities:
   # -------------------------------------------------------------------------
-  # npm's own bundled brace-expansion
+  # npm's own bundled dependencies
   #
-  # /usr/lib/node_modules/npm/node_modules/brace-expansion. The one finding in
-  # npm's tree that installing a newer npm does not move: npm 11.19.0 and npm
-  # 12.0.2 both bundle brace-expansion 5.0.7, verified by reading the version
-  # out of both. 12.0.2 is the current npm, so there is no release carrying the
-  # 5.0.8 fix to install over it.
+  # /usr/lib/node_modules/npm/node_modules. A newer npm moves this tree
+  # (NPM_VERSION), but npm 12.2.0, the current npm, still bundles
+  # brace-expansion 5.0.9 and undici 6.28.0 — read out of its registry tarball
+  # on 2026-10-02 — so no release carries these fixes yet.
   # -------------------------------------------------------------------------
-  - id: CVE-2026-14257
+  - id: CVE-2026-102276
     paths:
       - "usr/lib/node_modules/npm/**"
-      - "home/buildkit/buildkit/**"
     statement: >-
-      Memory exhaustion in brace-expansion's expand(); in this tree only npm's
-      own CLI and buildkit's hand-run JS tooling call it, on the glob and
-      workspace patterns of whatever project the developer runs them in.
-      Nothing the images serve reaches it, and no npm release bundles the fix
-      yet. Scoped to those two trees on purpose: toolbelt/oxlint resolves
-      brace-expansion 5.0.9, and a regression there must NOT be hidden.
-      On expiry re-read the bundled version
+      Stack exhaustion in brace-expansion's expand() on crafted brace patterns.
+      In this tree only npm's own CLI calls it, on the glob and workspace
+      patterns of the project the developer runs it in; nothing the images
+      serve reaches it. Scoped to npm's tree on purpose: toolbelt/oxlint
+      resolves 5.0.12, and a regression there must NOT be hidden. On expiry
+      re-read the bundled version
       (node -p 'require("/usr/lib/node_modules/npm/node_modules/brace-expansion/package.json").version')
-      and delete this entry as soon as an npm release ships >= 5.0.8.
+      and delete this entry and CVE-2026-102278 once an npm release ships >= 5.0.11.
     expired_at: 2026-11-01
 
-  # -------------------------------------------------------------------------
-  # npm's own bundled tar
-  #
-  # /usr/lib/node_modules/npm/node_modules/tar 7.5.19. Same shape as the
-  # brace-expansion entries: npm 11.19.0 and npm 12.0.2 (the current npm) both
-  # bundle 7.5.19, verified by reading node_modules/tar/package.json out of
-  # both registry tarballs on 2026-08-26, so there is no npm to install over it.
-  # -------------------------------------------------------------------------
-  - id: CVE-2026-73566
+  - id: CVE-2026-102278
     paths:
       - "usr/lib/node_modules/npm/**"
     statement: >-
-      Denial of service in node-tar on a crafted long-path archive. In this
-      tree only npm's own CLI extracts with it, and only the packages the
-      lockfiles the images install name — a malicious archive would have to
-      come from a dependency the repos pinned. Nothing the images serve
-      reaches it. Scoped to npm's tree on purpose: a tar in a tree this repo
-      controls must NOT be hidden. On expiry re-read the bundled version
-      (node -p 'require("/usr/lib/node_modules/npm/node_modules/tar/package.json").version')
-      and delete this entry as soon as an npm release ships >= 7.5.21.
+      Uncontrolled recursion on nested brace patterns in the same bundled
+      brace-expansion 5.0.9; same reachability and expiry check as
+      CVE-2026-102276.
     expired_at: 2026-11-01
 
-  - id: CVE-2026-69152
+  - id: CVE-2026-19534
     paths:
       - "usr/lib/node_modules/npm/**"
-      - "home/buildkit/buildkit/**"
     statement: >-
-      The follow-up to CVE-2026-14257 — unbounded intermediate arrays that
-      bypass the mitigation shipped for it, so npm's bundled 5.0.7 is affected
-      again. Same reachability as above: only npm's own CLI calls expand(), on
-      the developer's glob and workspace patterns. Still nothing to install
-      over it — brace-expansion 5.0.9 is released, but npm 12.0.2 is the
-      current npm and it bundles 5.0.7 (both checked 2026-08-03). The buildkit
-      path covers brace-expansion 1.1.11 in the jshint@2.13.4 ->
-      minimatch@3.0.8 tree, the same chain excused under CVE-2026-13149.
-      On expiry: as for CVE-2026-14257, re-read the bundled version and drop
-      both entries once an npm release ships >= 5.0.9.
+      Denial of service in undici's WebSocket client via a subprotocol the
+      server did not offer. In npm's tree only node-gyp loads undici, for the
+      fetch() of Node headers in lib/download.js; nothing opens a WebSocket.
+      On expiry re-read node_modules/undici/package.json the same way and
+      delete this entry once an npm release ships >= 6.28.1.
     expired_at: 2026-11-01
 
   # -------------------------------------------------------------------------
@@ -285,17 +263,6 @@ vulnerabilities:
       as soon as upstream's lockfile moves.
     expired_at: 2026-11-01
 
-  - id: CVE-2026-13149
-    paths:
-      - "home/buildkit/buildkit/**"
-    statement: >-
-      brace-expansion 1.1.11 via jshint@2.13.4 -> minimatch@3.0.8. Exponential
-      expand() on a crafted pattern, and the patterns are the file globs a
-      developer hands jshint. Scoped to buildkit's clone: the same ID in a tree
-      this repo controls (toolbelt/oxlint, toolbelt/oxfmt) is a real
-      finding. Recheck after a buildkit rebuild.
-    expired_at: 2026-11-01
-
   - id: CVE-2026-26996
     paths:
       - "home/buildkit/buildkit/**"
@@ -350,16 +317,6 @@ vulnerabilities:
       in install-dev-tools.sh) and a regression there must NOT be hidden — the
       standalone flavors, which carry only that copy, scan clean for this ID.
       Recheck after a buildkit rebuild; upstream re-locking >= 3.13.6 drops it.
-    expired_at: 2026-11-01
-
-  - id: CVE-2026-69192
-    statement: >-
-      ip-address 10.2.0. Measured in the published images it is npm's own
-      bundled copy (usr/lib/node_modules/npm/node_modules/ip-address), not
-      buildkit's tree — left image-wide for that reason. The octet-decoding
-      mismatch matters when untrusted input reaches an IP allow/deny decision;
-      the only consumers here are hand-run dev tooling that never takes network
-      input. On expiry recheck whether a newer npm bundles a fixed release.
     expired_at: 2026-11-01
 
   - id: CVE-2026-69185

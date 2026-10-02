@@ -72,7 +72,7 @@ MAGO_VERSION="${MAGO_VERSION:-1.45.0}"
 # it, so npm gets installed over the distro package's own — and pinned, like
 # every other tool here, because an unpinned `npm@latest` would drift the
 # resolver under two committed lockfiles on every monthly rebuild.
-NPM_VERSION="${NPM_VERSION:-12.0.2}"
+NPM_VERSION="${NPM_VERSION:-12.2.0}"
 
 # ---------------------------------------------------------------------------
 # Phars: civix, phpunit. (phpstan is NOT a phar: it is composer-installed
