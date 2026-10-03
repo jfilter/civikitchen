@@ -14,11 +14,10 @@
 # Re-provision from scratch (re-runs init.d hooks): docker compose down -v && up -d
 #
 # Every gate the shared CI runs in the container, with a summary table:
-#   docker compose exec -u www-data -w /var/www/html/ext/ckmonoaddon app ck ci
-#
-# In a repository of several extensions the repository root is mounted at
-# /civikitchen-repo; the git-reading gates run from there, so pass
-# -e CK_TOOL_PATH=/civikitchen-repo/<directory> to the exec.
+#   /path/to/civikitchen/scaffold/ckx ck ci
+# ckx execs into app as www-data in the extension directory. In a repository of
+# several extensions the repository root is mounted at /civikitchen-repo, and
+# ckx points the git-reading gates there (CK_TOOL_PATH).
 
 # Explicit project name — unnamed .docker/ stacks all become one project
 # called "docker" and share volumes across checkouts.

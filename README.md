@@ -70,7 +70,9 @@ cd myext
 `ckcreate` runs `civix generate:module` in a throwaway stack, then adds the
 template: dev and CI compose files under `.docker/`, the CI and release
 workflows, phpcs/phpstan/phpunit config and the test bootstrap. `ckup` writes
-free host ports to `.docker/.env` and runs `docker compose up -d`. For an
+free host ports to `.docker/.env` and runs `docker compose up -d`;
+`scaffold/ckx <command>` runs a command in that stack as `www-data`, in the
+extension's directory. For an
 existing civix extension, `scaffold/ckinit.php <extension-dir>` adds the same
 files. It refuses to overwrite files that already exist.
 
@@ -104,8 +106,8 @@ one version. See [Releases](docs/releases.md).
 To run the in-container part of CI locally:
 
 ```bash
-docker compose exec -u www-data -w /var/www/html/ext/myext app ck ci
-docker compose exec -u www-data -w /var/www/html/ext/myext app ck ci --only cklint,ckfmt
+/path/to/civikitchen/scaffold/ckx ck ci
+/path/to/civikitchen/scaffold/ckx ck ci --only cklint,ckfmt
 ```
 
 Releases work the same way: the template's `release.yml` calls
@@ -235,7 +237,7 @@ CIVICRM_VERSION=5.78.2 docker compose up -d --build
 ## Requirements
 
 - Using the images: Docker with the compose plugin.
-- Scaffolding (`ckcreate`, `ckinit.php`, `ckup`): bash, PHP 8.1+, composer, Docker.
+- Scaffolding (`ckcreate`, `ckinit.php`, `ckup`, `ckx`): bash, PHP 8.1+, composer, Docker.
 - Working on civikitchen: GNU Make 3.82+, bash, git, curl, php, composer, pipx.
   `make doctor` reports what is missing. `make lint` and `make test` need no
   Docker; `make build` and `make test-images` do.

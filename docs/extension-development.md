@@ -28,6 +28,16 @@ ports on its first run and then runs `docker compose up -d` (any further
 arguments are passed through). Without it the defaults 8080/1080/1025/8081
 apply.
 
+In a repository with the template's `.docker/`, `/path/to/civikitchen/scaffold/ckx`
+runs a command in that stack as `www-data`, in the extension's directory (the
+subdirectory you are in maps to the same one in the container). It adds `-T`
+when there is no terminal and, for an extension below the git root, the
+`CK_TOOL_PATH` described under [Running the CI gates locally](#running-the-ci-gates-locally).
+Without a command it opens a shell. `CKX_USER=root` switches the user, for a
+command that has to write where the bind mount does not let `www-data` write.
+The examples below use it; outside the template layout, spell out
+`docker compose exec -u www-data -w /var/www/html/ext/<file> app …`.
+
 **3. Install vendor deps (if your extension uses composer):**
 
 ```bash
@@ -117,9 +127,9 @@ summary table. The workflow calls the same command, so the two runs cannot
 drift apart:
 
 ```bash
-docker compose exec -u www-data -w /var/www/html/ext/myextension app ck ci
-docker compose exec -u www-data -w /var/www/html/ext/myextension app ck ci --only cklint,ckfmt
-docker compose exec -u www-data -w /var/www/html/ext/myextension app ck ci --skip ckcoverage
+ckx ck ci
+ckx ck ci --only cklint,ckfmt
+ckx ck ci --skip ckcoverage
 ```
 
 Every gate runs even when an earlier one failed; the exit code is 1 when any
@@ -131,7 +141,7 @@ workflow's `extra_phpunit_config` input).
 
 The gates that read git run in `CK_TOOL_PATH`, everything that boots CiviCRM
 in `CK_EXT_PATH`. Both default to the current directory. For an extension
-below the repository root, pass `-e CK_TOOL_PATH=/civikitchen-repo/<directory>`
+below the repository root, `ckx` sets `CK_TOOL_PATH=/civikitchen-repo/<directory>`
 (see the next section).
 
 CI also passes the organisation defaults file of the `policy_defaults` input
@@ -339,12 +349,12 @@ See the [example's README](../examples/extension-with-playwright/README.md) for 
 The image ships [`civix`](https://github.com/totten/civix) for scaffolding. Common commands:
 
 ```bash
-docker compose exec app civix generate:entity MyEntity            # APIv4-exposed entity + schema
-docker compose exec app civix generate:test --template headless \
-    \\Civi\\Myext\\Test\\MyHeadlessTest                            # boilerplate for a headless test
-docker compose exec app civix upgrade                             # re-run periodically; bumps mixins,
-                                                                  # backports polyfills, refreshes
-                                                                  # generated stubs to current civix
+ckx civix generate:entity MyEntity       # APIv4-exposed entity + schema
+ckx civix generate:test --template headless \
+    \\Civi\\Myext\\Test\\MyHeadlessTest       # boilerplate for a headless test
+ckx civix upgrade                        # re-run periodically; bumps mixins,
+                                         # backports polyfills, refreshes
+                                         # generated stubs to current civix
 ```
 
 Use `generate:entity` rather than writing `schema/*.entityType.php` by hand: the
@@ -479,8 +489,7 @@ extension found beside the repo (`../<key>`, `.civikitchen-siblings/<key>` or
 one that is not found is reported, with the message naming it. Run:
 
 ```bash
-docker compose exec app bash -c \
-    "cd /var/www/html/ext/myextension && phpstan analyse"
+ckx phpstan analyse
 ```
 
 ## Linting
@@ -488,8 +497,8 @@ docker compose exec app bash -c \
 `phpcs` is preinstalled with the [civicrm/coder](https://github.com/civicrm/coder) fork of `drupal/coder` on the `8.x-2.x-civi` branch. The ruleset registers itself as the standard `Drupal` and `DrupalPractice` standards (the civi fork relaxes a handful of rules but keeps the names).
 
 ```bash
-docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpcs --standard=Drupal ."
-docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpcbf --standard=Drupal ."  # auto-fix
+ckx phpcs --standard=Drupal .
+ckx phpcbf --standard=Drupal .   # auto-fix
 ```
 
 For the stricter CiviKitchen extension checks, use `cklint` instead. It wraps
@@ -498,8 +507,8 @@ For the stricter CiviKitchen extension checks, use `cklint` instead. It wraps
 `phpcs.xml(.dist)`:
 
 ```bash
-docker compose exec app bash -c "cd /var/www/html/ext/myextension && cklint"
-docker compose exec app bash -c "cd /var/www/html/ext/myextension && cklint --all"
+ckx cklint
+ckx cklint --all
 ```
 
 Most extensions ship a `phpcs.xml.dist` that scopes the run to the right files and excludes generated DAOs — see [`scaffold/template/extension/phpcs.xml.dist`](../scaffold/template/extension/phpcs.xml.dist) for a working reference.
@@ -512,7 +521,7 @@ root; see [extension-standards.md](extension-standards.md) for the checklist
 it enforces.
 
 ```bash
-docker compose exec app bash -c "cd /var/www/html/ext/myextension && ckconform"
+ckx ckconform
 ```
 
 ## Modernizing
@@ -527,8 +536,8 @@ the extension ships its own `rector.php`, that config wins. Scope with
 calls to APIv4 — preview and review those.
 
 ```bash
-docker compose exec app bash -c "cd /var/www/html/ext/myextension && ckmodernize"
-docker compose exec app bash -c "cd /var/www/html/ext/myextension && ckmodernize --fix --php 8.2"
+ckx ckmodernize
+ckx ckmodernize --fix --php 8.2
 ```
 
 The default config combines Rector's PHP-version / code-quality sets with
@@ -546,7 +555,7 @@ noisier classes (file paths, headers, cookies, callables, eval, LDAP, secrets)
 are reported but never part of the exit code.
 
 ```bash
-docker compose exec app bash -c "cd /var/www/html/ext/myextension && cktaint"
+ckx cktaint
 ```
 
 What is modelled, what it cannot see, and how to handle a finding:

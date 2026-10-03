@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# ckx — run a command in an extension's dev stack (the template's .docker/),
+# as www-data, in the extension's directory inside the container.
+#
+#   ckx ck ci --only cklint          ckx cv ext:list
+#   ckx env CIVICRM_UF=UnitTests phpunit
+#   ckx                              an interactive shell
+#
+# Run from anywhere inside the extension repo; the subdirectory you are in maps
+# to the same one in the container. For an extension below the git root, the
+# git-reading gates get CK_TOOL_PATH=/civikitchen-repo/<directory>.
+# CKX_USER overrides the user (e.g. CKX_USER=root ckx apt-get …).
+set -euo pipefail
+
+tool="ckx"
+die() { echo "$tool: $*" >&2; exit 2; }
+
+here="$(pwd -P)"
+dir="$here"
+while [[ ! -f "$dir/.docker/docker-compose.yml" ]]; do
+  [[ "$dir" != "/" ]] || die "no .docker/docker-compose.yml above $here"
+  dir="$(dirname "$dir")"
+done
+
+[[ -f "$dir/info.xml" ]] || die "no info.xml next to $dir/.docker"
+file="$(sed -n 's:.*<file>\([^<]*\)</file>.*:\1:p' "$dir/info.xml" | head -1)"
+[[ -n "$file" ]] || die "no <file> in $dir/info.xml"
+
+workdir="/var/www/html/ext/$file${here#"$dir"}"
+args=(exec -u "${CKX_USER:-www-data}" -w "$workdir")
+[[ -t 0 && -t 1 ]] || args+=(-T)
+
+top="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -n "$top" && "$top" != "$dir" ]]; then
+  args+=(-e "CK_TOOL_PATH=/civikitchen-repo/${dir#"$top"/}")
+fi
+
+[[ $# -gt 0 ]] || set -- bash
+exec docker compose -f "$dir/.docker/docker-compose.yml" "${args[@]}" app "$@"

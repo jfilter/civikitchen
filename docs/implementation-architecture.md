@@ -44,7 +44,7 @@ Do not replace a shell file with an isolated PHP script: the point of migration
 is shared ownership, not a different suffix.
 
 The same boundary applies outside `toolbelt/bin`: image entrypoints, profile
-application, `ckcreate`, `ckup`, GitHub workflow adapters, and integration-test
+application, `ckcreate`, `ckup`, `ckx`, GitHub workflow adapters, and integration-test
 drivers remain shell because they primarily manage processes, users,
 containers, pipes, or host ports. Their structured operations call the shared
 PHP runtime. Test-only PHP snippets may create fixtures or probe a PHP runtime;

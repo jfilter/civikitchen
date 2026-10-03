@@ -33,6 +33,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   neither core nor the repository defines, with file, line and the closest
   existing name (`--crm-c-link` → `--crm-link-color`). A fallback value does
   not excuse the name: it is what renders in every theme, dark mode included.
+- `scaffold/ckx <command>` runs a command in an extension's dev stack as
+  `www-data`, in the extension's directory (`ckx ck ci`, `ckx civix upgrade`),
+  and sets `CK_TOOL_PATH` for an extension below the git root.
 
 ### Changed
 

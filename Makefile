@@ -163,6 +163,7 @@ test-phpstan: $(PHPUNIT) $(CORE) ## The phpstan extension's rule tests + catalog
 test-ckinit: $(SCENARIO_YAML_STAMP) ## ckinit seed/update/check integration checks, ckup port picking
 	bash tests/ckinit/test-ckinit.sh
 	bash tests/ckinit/test-ckup.sh
+	bash tests/ckinit/test-ckx.sh
 
 test-ckcreate: $(SCENARIO_YAML_STAMP) ## ckcreate orchestration and atomic-output checks (fake Docker)
 	bash tests/ckcreate/test-ckcreate.sh

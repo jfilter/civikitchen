@@ -46,10 +46,10 @@ for key in ckmonobase ckmonoaddon; do
 done
 
 # The local gate recipe is `ck ci`, the one gate list the shared CI runs too.
-for compose in docker-compose.yml docker-compose.ci.yml; do
-  grep -q -- '-w /var/www/html/ext/example_ext app ck ci$' "$work/clean/.docker/$compose" \
-    || { echo "$compose does not point at ck ci" >&2; exit 1; }
-done
+grep -q -- 'scaffold/ckx ck ci$' "$work/clean/.docker/docker-compose.yml" \
+  || { echo "docker-compose.yml does not point at ck ci" >&2; exit 1; }
+grep -q -- '-w /var/www/html/ext/example_ext app ck ci$' "$work/clean/.docker/docker-compose.ci.yml" \
+  || { echo "docker-compose.ci.yml does not point at ck ci" >&2; exit 1; }
 if grep -R -q '__EXTKEY__\|__EXTENSION_KEY__\|__SCENARIO_NAME__\|__VENDOR__\|__RENOVATE_PRESET__' "$work/clean"; then
   echo "placeholder remained after rendering" >&2
   exit 1
