@@ -1346,10 +1346,12 @@ broken.
 
 **Settings options must load.** After re-enable, the gate calls
 `\Civi\Core\SettingsMetadata::getMetadata()` with `loadOptions` on for every
-setting the extension declares. A `pseudoconstant` with a key core's settings
-code does not read (see `ckconform`'s `settings-metadata` check for the static
-version of this) leaves `keyColumn`/`labelColumn` `NULL` and fatals — invisible
-until someone opens `/civicrm/admin/theme` or the extension's own settings page,
+setting the extension declares, and reports each setting by name. A `table`
+pseudoconstant without `keyColumn`/`labelColumn` or a `callback` that does not
+resolve throws; a key core's settings code does not read (see `ckconform`'s
+`settings-metadata` check for the static version of this) only raises a PHP
+warning, which the gate counts as a failure too. Either is invisible until
+someone opens `/civicrm/admin/theme` or the extension's own settings page,
 because neither install nor the test suite loads options.
 
 `PHP Notice` and `PHP Deprecated` are **not** matched: core emits them on every

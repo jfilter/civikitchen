@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<extension key="cksettingsbad" type="module">
+  <file>cksettingsbad</file>
+  <name>cksettingsbad</name>
+  <description>Copied in by tests/images/boot-test-standalone.sh for cklifecycle's settings-metadata check; nothing else uses it.</description>
+  <version>1.0.0</version>
+  <releaseDate>2026-01-01</releaseDate>
+  <compatibility><ver>6.0</ver></compatibility>
+  <mixins><mixin>setting-php@1.0.0</mixin></mixins>
+</extension>

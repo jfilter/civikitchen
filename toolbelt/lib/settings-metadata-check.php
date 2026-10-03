@@ -36,13 +36,27 @@ if ($names === []) {
   exit(0);
 }
 
+// Build the metadata cache first, so a warning from another extension's
+// settings is not blamed on the first name below.
+\Civi\Core\SettingsMetadata::getMetadata();
+
 $findings = [];
 foreach ($names as $name) {
+  // Pseudoconstant keys core does not read only warn (undefined $options).
+  set_error_handler(static function (int $severity, string $message): bool {
+    if (!(error_reporting() & $severity)) {
+      return FALSE;
+    }
+    throw new \ErrorException($message, 0, $severity);
+  }, E_WARNING | E_USER_WARNING);
   try {
     \Civi\Core\SettingsMetadata::getMetadata(['name' => [$name]], NULL, TRUE);
   }
   catch (\Throwable $e) {
     $findings[] = "{$name}: " . $e->getMessage();
+  }
+  finally {
+    restore_error_handler();
   }
 }
 
