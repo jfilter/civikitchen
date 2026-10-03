@@ -1,39 +1,34 @@
-# Keep the pinned actions and base images current. Image *contents*
-# (CiviCRM, buildkit, dev tools) already track upstream via the weekly
-# rebuild — this only covers what the rebuild itself is pinned to.
+# Keeps the pinned actions and the sidecar images of the example stacks
+# current. Image contents (CiviCRM, buildkit, dev tools) track upstream through
+# the daily rebuild; the PHP base image is a build arg and bumped by hand.
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-
-  # Base images in the Dockerfiles (php:*-apache, mariadb in builder, ...).
-  - package-ecosystem: docker
     directories:
-      - /docker/standalone
-      - /docker/buildkit
+      - /
+      - /.github/actions/*
     schedule:
       interval: weekly
       day: monday
 
-  # Sidecar images in the example stacks (mariadb, phpmyadmin, maildev).
+  # Sidecar images of the example stacks, the monorepo example and the
+  # template's dev stack. One PR per image across all directories.
   - package-ecosystem: docker-compose
     directories:
-      - "/examples/*"
+      - /examples/*
+      - /examples/monorepo/*/.docker
+      - /scaffold/template/extension/.docker
     schedule:
       interval: weekly
       day: monday
-    # The database tag is one decision for every example at once, and it is
-    # taken against the database-compat matrix in build-dev-images.yml — one PR
-    # to weigh that evidence against, not one per example.
     groups:
-      mariadb:
-        patterns:
-          - mariadb
-      # The other sidecars carry no compatibility decision; one PR per image.
       sidecars:
-        patterns:
-          - phpmyadmin/phpmyadmin
-          - maildev/maildev
+        patterns: ["*"]
+        group-by: dependency-name
+    ignore:
+      # The database tag is a compatibility decision taken against the database
+      # matrix in build-dev-images.yml (docs/images.md), not a version bump.
+      - dependency-name: mariadb
+      # maildev 3 is a rewrite without the /healthz endpoint the stacks probe.
+      - dependency-name: maildev/maildev
+        update-types: ["version-update:semver-major"]

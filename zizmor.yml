@@ -8,7 +8,7 @@
 # --no-online-audits keeps the run hermetic and deterministic: the online
 # audits (known-vulnerable-actions, stale-action-refs) would turn an upstream
 # advisory into a red build on an unrelated PR. Action updates arrive through
-# Renovate instead (renovate.json5).
+# Dependabot instead (.github/dependabot.yml).
 #
 # Every entry below is an exemption, and each one has to say why it is not a
 # finding. Nothing goes in here to make the run green.
