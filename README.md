@@ -1,119 +1,262 @@
-# civikitchen 🍳
+# civikitchen
 
 [![Build Dev Images](https://github.com/jfilter/civikitchen/actions/workflows/build-dev-images.yml/badge.svg)](https://github.com/jfilter/civikitchen/actions/workflows/build-dev-images.yml)
 [![Lint](https://github.com/jfilter/civikitchen/actions/workflows/lint.yml/badge.svg)](https://github.com/jfilter/civikitchen/actions/workflows/lint.yml)
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fjfilter%2Fcivikitchen-24292f?logo=github)](https://github.com/jfilter/civikitchen/pkgs/container/civikitchen)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
 
-**CiviCRM Docker images for extension development, CI testing, and demos**: a fast Standalone dev loop, CMS compatibility targets for Drupal 10/11, WordPress, and Joomla, and single-container demos with realistic data profiles. Built for `linux/amd64` and `linux/arm64`.
+civikitchen is a set of CiviCRM Docker images with development tools built in,
+plus an extension template and reusable GitHub workflows for testing, checking
+and releasing CiviCRM extensions. Images are published to
+`ghcr.io/jfilter/civikitchen` for `linux/amd64` and `linux/arm64`.
 
-```bash
-docker run -d -p 80:80 ghcr.io/jfilter/civikitchen:standalone-demo
-# open http://localhost — admin / admin
-```
+## Images
 
-For extension work, start with [`examples/standalone/`](examples/standalone/); for a throwaway demo, use a `*-demo` image.
+| Tag | What it is |
+|-----|------------|
+| `:standalone` | CiviCRM Standalone with dev tools. Needs an external database. |
+| `:drupal10`, `:drupal11`, `:wordpress`, `:joomla` | A civibuild site on that CMS with the same dev tools. Needs an external database. |
+| `:standalone-demo`, `:drupal10-demo`, `:drupal11-demo`, `:wordpress-demo`, `:joomla-demo` | One container with an embedded MariaDB and demo data. |
+| `:v1`, `:standalone-v1`, `:drupal10-v1`, ... | Release tags. Extension repositories pin these. |
 
-## Why
+The moving tags are rebuilt daily against the current CiviCRM stable and move
+only after their tests pass. Older minors get `:standalone-<minor>` tags while
+they are listed in `CK_STANDALONE_EXTRA_MINORS` in `toolbelt/versions.env`.
+See [Tags & versions](docs/images.md#tags--versions).
 
-Testing a CiviCRM extension properly means running it against a real CiviCRM — ideally against several CMS flavors, with realistic data, and without spending a day on setup. civikitchen bakes that setup into images:
+## Extension development
 
-- **One `docker run` to a working CiviCRM** — the demo images embed MariaDB and demo data.
-- **A fast dev loop** — mount your extension, `docker compose up`, edit, reload, `phpunit`.
-- **Shared workflow across CMS flavors** — profiles, dev tools, SMTP capture, extension provisioning, and init hooks work consistently on Standalone, Drupal 10/11, WordPress, and Joomla; CMS-specific install knobs are documented per image.
-- **Batteries included** — composer, node, civix, phpunit 9, phpstan, phpcs + civicrm/coder, xdebug, pcov, plus the `ck*` tool belt: `ck ci` (every in-container gate of the shared extension CI, with a summary), `cklint` (opinionated extension linting — phpcs standard + mago bug-pattern rules), `ckconform` (repo-structure conformance), `ckcoverage` (coverage with an enforced floor), `ckrelease` (version check + the installable dist zip), `ckmodernize` (civix + Rector modernization, incl. opt-in assisted API3→API4 rewrites), `cktaint` (taint analysis: request input reaching a query, shell, path or redirect — SQL/shell/include/unserialize/SSRF block), `cksmarty` (compile every template with the real CRM_Core_Smarty), `ckeslint` (pinned oxlint baseline for extension JS/TS), `ckfmt` (code formatting — mago for PHP, oxfmt for JS/TS, tuned to agree with the phpcs standard), `ckschemadiff` (install-vs-upgrade schema parity), `cktestreset` (reset the headless-test scratch DB), and `ckcoretest` (run CiviCRM core's own phpunit suites against the installed core).
-- **One entry point** — `ck help` exposes the toolbelt as subcommands (`ck conform`, `ck lint`, `ck test`, `ck lifecycle`, `ck release`, …); the established `ck*` command names remain compatible.
-- **Realistic demo data via profiles** — one env var installs a curated extension stack, seed data, and API users (e.g. a German Verein with SEPA mandates and membership history).
-
-## Pick an image
-
-| Image | For | Database | First boot |
-|-------|-----|----------|------------|
-| [`:standalone`](docs/images.md#standalone-dev) | Extension development — fastest loop, isolated headless-test DB | external (compose stack) | automatic `cv core:install` — seconds |
-| [`:drupal10`](docs/images.md#drupal-10-dev) / [`:drupal11`](docs/images.md#drupal-11-dev) | Testing against the Drupal 10 / 11 stack | external (compose stack) | `civibuild` site build — ~60 s |
-| [`:wordpress`](docs/images.md#wordpress-dev) | Testing against the WordPress stack | external (compose stack) | `civibuild` site build — ~60 s |
-| [`:joomla`](docs/images.md#joomla-dev) | Testing against the Joomla stack | external (compose stack) | `civibuild` site build — ~60 s |
-| [`:standalone-demo` … `:joomla-demo`](docs/images.md#demo-images) | Demos, evaluation, screenshots — one container, `docker run` and go | embedded, demo data baked in | seconds |
-
-**Most users want `:standalone`** — it's the fastest dev loop and works for any extension that doesn't depend on a specific CMS. Reach for the buildkit images (`drupal10`, `drupal11`, `wordpress`, `joomla`) when you need to test CMS-specific behavior.
-
-## Quickstart: extension development
-
-Each dev image has a ready-to-run compose example with phpMyAdmin and Maildev (all you need is Docker with the compose plugin):
+The standalone example is a dev stack with CiviCRM, MariaDB, phpMyAdmin and
+Maildev:
 
 ```bash
 git clone https://github.com/jfilter/civikitchen
-cd civikitchen/examples/standalone   # or drupal10 / drupal11 / wordpress / joomla
+cd civikitchen/examples/standalone
+# uncomment the volumes: block in docker-compose.yml and point it at your extension
 docker compose up -d
-# CiviCRM:    http://localhost:8080   (login: admin / admin)
-# phpMyAdmin: http://localhost:8081
-# Maildev:    http://localhost:1080
 ```
 
-Mount your extension, enable it, run its tests. The mount path below is the standalone one; each CMS example documents its own extension path in its compose file:
+CiviCRM is at http://localhost:8080 (admin / admin), phpMyAdmin at :8081,
+Maildev at :1080. On first boot the container installs CiviCRM and enables
+every extension mounted under `/var/www/html/ext`, installing its `<requires>`
+first.
+
+Run headless tests:
 
 ```bash
-# docker-compose.yml:  volumes: ["../my-extension:/var/www/html/ext/myextension"]
-docker compose exec app cv ext:enable myextension
 docker compose exec -e CIVICRM_UF=UnitTests app \
     bash -c "cd /var/www/html/ext/myextension && phpunit"
 ```
 
-On `:standalone`, headless tests run against an isolated `<db>_test` scratch database the image configures automatically — a stray `phpunit` can't wipe your dev data; the CMS images get an isolated test database from civibuild. See [Extension development](docs/extension-development.md) for the full workflow (civix, Playwright UI tests, PHPStan, step debugging, provisioning hooks).
+They run against a separate `civicrm_test` database, not the dev site. If a
+suite leaves that database broken, `docker compose exec app cktestreset`
+rebuilds it.
 
-## Quickstart: demo with realistic data
+The image includes cv, civix, composer, node/npm, phpunit, phpstan, phpcs,
+pcov, and xdebug (off until `XDEBUG_MODE` is set). Tool versions are pinned in
+`toolbelt/versions.env`, `toolbelt/install-dev-tools.sh` and the composer roots
+under `toolbelt/`.
 
-Profiles layer a curated extension stack + seed data + API users on top of any flavor at first boot:
+To start a new extension with the civikitchen template:
 
 ```bash
-# German Verein showcase: SEPA mandates, membership types, 24 members, API users
+composer install --no-dev --working-dir=/path/to/civikitchen/packages/civikitchen-scenario-schema
+/path/to/civikitchen/scaffold/ckcreate myext \
+    --author "Example Maintainer" --email dev@example.org --copyright "Example Org"
+cd myext
+/path/to/civikitchen/scaffold/ckup
+```
+
+`ckcreate` runs `civix generate:module` in a throwaway stack, then adds the
+template: dev and CI compose files under `.docker/`, the CI and release
+workflows, phpcs/phpstan/phpunit config and the test bootstrap. `ckup` writes
+free host ports to `.docker/.env` and runs `docker compose up -d`. For an
+existing civix extension, `scaffold/ckinit.php <extension-dir>` adds the same
+files. It refuses to overwrite files that already exist.
+
+The CMS flavors work the same way, but the extension directory differs per
+CMS. The compose files in `examples/drupal10/`, `examples/drupal11/`,
+`examples/wordpress/` and `examples/joomla/` show the mount path. For browser
+tests, start from `examples/extension-with-playwright/`.
+
+## CI for extensions
+
+An extension created by `ckcreate` or `ckinit.php` has a CI caller in
+`.github/workflows/ci.yml`:
+
+```yaml
+jobs:
+  ci:
+    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+```
+
+The workflow boots the stack from `.docker/docker-compose.ci.yml`, runs PHPUnit
+under coverage and the checks listed in the next section, and fails when
+template-managed files have drifted (`ckinit.php --check`). More jobs are
+opt-in through inputs such as `matrix_images`, `lifecycle`,
+`upgrade_from_last_release`, `schema_parity`, `core_upgrade_from`, `js_tests`,
+`playwright` and `mutation`. Each input is documented in
+[`extension-ci.yml`](.github/workflows/extension-ci.yml).
+
+`@v1` pins the workflow, the template, the `ck*` tools and the `:v1` image as
+one version. See [Releases](docs/releases.md).
+
+To run the in-container part of CI locally:
+
+```bash
+docker compose exec -u www-data -w /var/www/html/ext/myext app ck ci
+docker compose exec -u www-data -w /var/www/html/ext/myext app ck ci --only cklint,ckfmt
+```
+
+Releases work the same way: the template's `release.yml` calls
+`extension-release.yml@v1` on a `vX.Y.Z` tag push. See
+[Releasing an extension](docs/extension-releases.md).
+
+For a repository that does not use the template, `examples/ci/` has a
+self-contained workflow and compose file that boot `:standalone` and run
+phpunit, with a commented-out matrix job for the CMS flavors.
+
+## Coding standards in CI
+
+`ck ci` runs these gates in order and prints a summary table. The shared
+workflow calls the same command.
+
+| Gate | What it checks |
+|------|----------------|
+| `cklint` | `php -l`, phpcs with the bundled `CiviKitchen` standard (civicrm/coder base plus CiviCRM-specific sniffs), and `mago lint` bug patterns |
+| `ckconform` | Repository conventions: required config files, licence and PHP-floor coherence between `info.xml` and `composer.json`, test bootstrap guards, workflow permissions, managed entities and more |
+| `ckcivix` | civix format is current |
+| `ckfmt` | Formatting: mago for PHP, oxfmt for JS/TS |
+| `ckcoverage` | PHPUnit line coverage against the configured floor |
+| `phpstan` | Level 10 with civikitchen's CiviCRM rules |
+| `ckcompat` | PHP compatibility with the floor declared in `composer.json` |
+| `ckdeps` | `composer.json` matches what the code uses |
+| `cktaint` | Taint analysis with psalm |
+| `cksmarty` | Every shipped Smarty template compiles |
+| `ckeslint` | oxlint baseline for JS/TS |
+
+Each gate is also a `ck` subcommand (`ck lint`, `ck conform`, ...); see `ck help`.
+
+Per-repository policy lives in `civikitchen.yaml` at the extension root:
+
+```yaml
+version: 1
+policy:
+  license: AGPL-3.0-or-later
+  coverage:
+    minimum: 80
+```
+
+Organisation-wide keys (licence, copyright, vendor) can live in one repository,
+named by the `policy_defaults` input or the `CK_POLICY_DEFAULTS` variable.
+
+Suppressions always carry a reason, for example
+`// ckconform-ignore <check> -- <reason>`. `ck conform --format=sarif` writes
+SARIF for code-scanning upload. The full checklist is in
+[Extension standards](docs/extension-standards.md).
+
+## CiviCRM core development
+
+`ckcoretest` runs core's own PHPUnit suites against the core installed in a
+`:standalone` stack:
+
+```bash
+docker compose exec app ckcoretest tests/phpunit/api/v4/Query
+docker compose exec app ckcoretest --ext search_kit
+```
+
+The first run fetches the tests, phpunit config and seed SQL for the installed
+version. It covers the headless PHP suites, and `--e2e` runs `@group e2e`
+tests against the dev site. Upgrade tests and the karma/qunit JS tests need a
+civibuild environment.
+
+To test against `master` or an unreleased branch, build Standalone from git in
+a checkout of this repository:
+
+```bash
+make build CIVICRM_SOURCE=git CIVICRM_VERSION=master   # tags civikitchen:standalone-master
+```
+
+Then mount the directory you are changing from your civicrm-core checkout over
+the image's copy, and run `cv flush` after each change:
+
+```yaml
+services:
+  app:
+    image: civikitchen:standalone-master
+    volumes:
+      - ../civicrm-core/ext/afform:/var/www/html/core/ext/afform
+```
+
+`ckeslint --core` type-checks core's own JavaScript. A buildkit image built
+with `--build-arg KEEP_GIT=1` keeps the git history of the civibuild site
+([Building locally](docs/building.md#keeping-the-civicrm-git-history-keep_git1)).
+The core fixes the standalone image applies until a release contains them are
+in `docker/standalone/core-patches/`, one file per upstream issue.
+
+## Demo instances
+
+```bash
+docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:standalone-demo
+```
+
+Open http://localhost and log in as admin / admin. To use another host port,
+set the site URL to match:
+`-p 8080:80 -e CIVIKITCHEN_SITE_URL=http://localhost:8080`. The database is
+inside the container and goes away with it.
+
+A profile adds an extension stack, seed data and API users on first boot:
+
+```bash
 docker run -d -p 80:80 --name civicrm \
     -e CIVIKITCHEN_PROFILE=verein \
     ghcr.io/jfilter/civikitchen:drupal10-demo
-docker logs -f civicrm            # first boot clones extensions — needs network, takes a few minutes
+docker logs -f civicrm
+docker exec civicrm cat /home/buildkit/api-credentials.txt
 ```
 
-Available profiles: [`verein`, `fundraising`, `events`, `mailing`](docs/images.md#profiles-civikitchen_profile) — each with seed data and least-privilege API users (credentials are kept in a mode-`0600` container file, not logs). One thing to know about demo images: the database lives inside the container — great for demos and screenshots, wrong for data you want to keep. To run on a port other than 80, set `CIVIKITCHEN_SITE_URL` to match (e.g. `-p 8080:80 -e CIVIKITCHEN_SITE_URL=http://localhost:8080`).
+The bundled profiles are `verein`, `fundraising`, `events` and `mailing`, in
+`docker/profiles/`. A comma-separated list applies several in order. The first
+boot clones extensions from GitHub, so it needs network access and takes a few
+minutes. Profiles also work on the dev images.
 
-Mount custom profile roots read-only, set `CIVIKITCHEN_PROFILE_PATH`, and make
-the execution boundary explicit with `CIVIKITCHEN_TRUST_EXTERNAL_PROFILES=1`;
-external profiles may contain shell drivers and admin-level PHP seeds. `ck
-profile validate <dir>` validates their data shape locally and at boot, but is
-not a code sandbox.
+Your own profiles are mounted with `CIVIKITCHEN_PROFILE_PATH` and
+`CIVIKITCHEN_TRUST_EXTERNAL_PROFILES=1`; they run with admin rights.
 
-## CI usage
-
-Use the same images in CI: boot a compose stack, mount the extension, run `phpunit` inside the container — headless via `CIVICRM_UF=UnitTests` as above. A copy-pasteable GitHub Actions setup (workflow + minimal compose stack) is at [`examples/ci/`](examples/ci/); `CIVIKITCHEN_EXTRA_EXTENSIONS` and `/civikitchen-init.d` hooks replace hand-rolled provisioning scripts ([Configuration](docs/configuration.md)).
-
-## Need an older CiviCRM?
-
-The published tags track the current stable. For an older or pinned version — say, to mirror a production server — build locally via civibuild on a Drupal base; a parameterized compose setup is at [`examples/custom-version/`](examples/custom-version/):
+For a CiviCRM version the published tags do not cover, for example to mirror
+a production server, `examples/custom-version/` builds a Drupal 10 image for
+any version civibuild can fetch:
 
 ```bash
 cd examples/custom-version
 CIVICRM_VERSION=5.78.2 docker compose up -d --build
 ```
 
-Details in [Custom or older CiviCRM versions](docs/images.md#custom-or-older-civicrm-versions).
+## Requirements
+
+- Using the images: Docker with the compose plugin.
+- Scaffolding (`ckcreate`, `ckinit.php`, `ckup`): bash, PHP 8.1+, composer, Docker.
+- Working on civikitchen: GNU Make 3.82+, bash, git, curl, php, composer, pipx.
+  `make doctor` reports what is missing. `make lint` and `make test` need no
+  Docker; `make build` and `make test-images` do.
 
 ## Documentation
 
-- [Images](docs/images.md) — every flavor in detail, demo profiles, tags & versioning
-- [Extension development](docs/extension-development.md) — mount, test (phpunit/headless/Playwright), civix, PHPStan, linting, IDE step debugging, provisioning hooks
-- [Configuration](docs/configuration.md) — every env var the images understand
-- [Building locally](docs/building.md) — build args, `KEEP_GIT=1`, running the test suite locally
-- [Releases](docs/releases.md) — the versioned contract extension repos pin (`@v1` / `:v1`), how a release is cut
-- [Changelog](CHANGELOG.md) — what changed in every released version
-- [Releasing an extension](docs/extension-releases.md) — the other direction: how a consuming extension repo cuts *its* release (`ckrelease`, the shared `extension-release.yml`)
-- [Reusable CI building blocks](docs/reusable-workflows.md) — frontend, standalone Playwright, and lightweight repository checks beside `extension-ci.yml`
-- [Unified configuration](docs/scenarios.md) — one validated `civikitchen.yaml` for repository policy, image, DB, locale, profile selection, mounts, and checks; profile definitions remain in `profile.json`
-- [Architecture decisions](docs/adr/) — why the contract, the release model and the checks work the way they do
-- [Implementation architecture](docs/implementation-architecture.md) — shared PHP core, thin shell boot boundaries, and Playwright-only TypeScript
-
-## Reliability
-
-Images rebuild **daily** and on image-pipeline changes, against the current CiviCRM stable, and every tag is test-then-promote: dev tags move only after dev-tool checks, first-boot tests against an external DB, and real-browser smoke tests of the compose examples; demo tags move only after single-container boot tests, including every profile on every demo flavor. If a candidate fails its gate, the previous stable tag stays in place.
+| Document | Contents |
+|----------|----------|
+| [Images](docs/images.md) | Each flavor, demo profiles, tags, database compatibility, custom versions |
+| [Configuration](docs/configuration.md) | Every environment variable the images read |
+| [Extension development](docs/extension-development.md) | Test loop, civix, PHPStan, linting, Playwright, step debugging, provisioning hooks, several extensions in one repository |
+| [Extension standards](docs/extension-standards.md) | What the checks enforce and why |
+| [Reusable workflows](docs/reusable-workflows.md) | `frontend-ci.yml`, `playwright-e2e.yml`, `command-check.yml` |
+| [Declarative scenarios](docs/scenarios.md) | `civikitchen.yaml`: policy and the scenario a stack is built from |
+| [Releasing an extension](docs/extension-releases.md) | `ckrelease` and `extension-release.yml` |
+| [Releases](docs/releases.md) | How civikitchen itself is versioned and released |
+| [Building locally](docs/building.md) | Build arguments, tool pins, running the image tests |
+| [Implementation architecture](docs/implementation-architecture.md) | Where PHP, shell and TypeScript each sit |
+| [Architecture decisions](docs/adr/) | ADRs for the contract, release model, checks and images |
+| [Changelog](CHANGELOG.md) | Changes per release |
 
 ## License
 
-AGPL-3.0 — see [LICENSE.md](LICENSE.md).
+AGPL-3.0. See [LICENSE.md](LICENSE.md).
