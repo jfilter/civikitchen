@@ -27,6 +27,19 @@ final class MixinDeclarationCheckTest extends CheckTestCase
         self::assertSame(0, $reporter->failures());
     }
 
+    public function testTheWarningNamesTheCivixCommandForEveryMissingMixin(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->info(''),
+            'xml/Menu/ext.xml' => "<menu></menu>\n",
+            'managed/Thing.mgd.php' => "<?php\nreturn [];\n",
+        ], git: true);
+        $this->assertWarns(
+            $this->run_(new MixinDeclarationCheck(), $context),
+            '`civix mixin --enable=mgd-php@<version>,menu-xml@<version>`',
+        );
+    }
+
     public function testTheMixngBeingDeclaredPasses(): void
     {
         $context = $this->repo([

@@ -72,19 +72,23 @@ final class MixinDeclarationCheck implements Check
 
         $declared = $this->declaredMixins($context);
         $missing = [];
+        $enable = [];
         foreach (self::REQUIREMENTS as $mixin => $spec) {
             if (in_array($mixin, $declared, true)) {
                 continue;
             }
             if ($this->hasArtefact($context, $spec['dir'], $spec['suffix'], $spec['direct'] ?? false)) {
                 $missing[] = $spec['label'] . ' need the ' . $mixin . ' mixin';
+                $enable[] = $mixin . '@<version>';
             }
         }
 
         if ($missing !== []) {
+            // civix insists on name@version; `civix mixin` lists what it has.
             $reporter->warn(
                 'info.xml ships files no declared mixin loads: ' . implode('; ', $missing)
-                . ' — add the mixin, or delete the files if they are a vestige'
+                . ' — enable with `civix mixin --enable=' . implode(',', $enable)
+                . '` (`civix mixin` lists the versions), or delete the files if they are a vestige'
             );
         }
     }

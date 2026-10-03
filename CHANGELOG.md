@@ -39,6 +39,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Changed
 
+- `ckconform`'s `mixin-declaration` warning names the command that fixes it,
+  `civix mixin --enable=<mixin>@<version>`, for every missing mixin.
 - `cklifecycle`'s settings check fails on a pseudoconstant key core does not
   read (`option_group_name` instead of `optionGroupName`), which core only
   warns about.
