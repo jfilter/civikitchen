@@ -1,8 +1,8 @@
 # phpstan installation root
 
-What the image installs into `/opt/civikitchen-phpstan`, and what `cklint`
-runs. The versions live in `composer.json`; `composer.lock` fixes the
-transitive tree so a monthly image rebuild cannot move the static-analysis
+What the image installs into `/opt/civikitchen-phpstan`, and what the
+`phpstan` gate of `ck ci` runs. The versions live in `composer.json`; `composer.lock` fixes the
+transitive tree so a daily image rebuild cannot move the static-analysis
 gate every extension depends on.
 
 The CiviKitchen phpstan extension itself is **not** required here — it is a

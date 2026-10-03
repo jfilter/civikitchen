@@ -53,7 +53,7 @@ services:
       # info.xml <requires> resolved. Mount siblings the same way; use
       # CIVIKITCHEN_ENABLE_EXTENSIONS only to order them or add non-mounts.
       - ..:/var/www/html/ext/__EXTKEY__
-      # - ../../othersibling:/var/www/html/ext/othersibling
+      # - ../../othersibling:/var/www/html/ext/de.example.othersibling
       # First-boot provisioning hooks (seed data, API users, settings) — run
       # after install + ext:enable, in lexical order. See init.d/README.md.
       - ./init.d:/civikitchen-init.d:ro

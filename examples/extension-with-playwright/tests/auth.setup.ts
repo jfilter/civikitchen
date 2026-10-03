@@ -6,7 +6,7 @@ import { test as setup, expect } from '@playwright/test';
 //
 // Credentials default to the standalone image's demo user (admin / admin).
 // Override via DEMO_USER / DEMO_PASS env vars if you changed
-// CIVICRM_DEMO_USER / CIVICRM_DEMO_PASS in docker-compose.yml.
+// CIVIKITCHEN_DEMO_USER / CIVIKITCHEN_DEMO_PASS in docker-compose.yml.
 
 const authFile = '.auth/admin.json';
 const DEMO_USER = process.env.DEMO_USER ?? 'admin';

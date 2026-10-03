@@ -114,7 +114,7 @@ differs (`wp-demo`, `drupal10-demo`, `drupal11-demo`, or `joomla-demo`). All
 buildkit dev images carry the same dev tools as the standalone image (composer,
 node/npm, phpunit, phpstan, phpcs+coder, cklint, ckconform, ckcoverage, ckmutate,
 ckmodernize, cktaint, cksmarty, ckeslint, ckfmt, ckschemadiff, civix, pcov, xdebug) —
-except `cktestreset`, which is
+except `cktestreset` and `ckcoretest`, which are
 standalone-only (civibuild manages the buildkit flavors' `sitetest_*` DBs).
 
 Ready-to-run: [`examples/wordpress/`](../examples/wordpress/)
@@ -204,6 +204,9 @@ writes enforce those permissions. They live in
 | `events` | RemoteEvent, EventMessages, RemoteTools, XCM, IdentityTracker | 6 past + upcoming events, 18 contacts with participant records in varied statuses | readonly, eventmanager |
 | `mailing` | Mosaico (+ core FlexMailer) | 3 segmented mailing lists, 30 subscribers, a draft newsletter | readonly, mailer |
 
+RemoteEvent is skipped on Standalone and ContactLayout on Standalone and
+Joomla; each `profile.json` gives the reason (`skipUf`).
+
 ```bash
 # German Verein showcase: Drupal 10 + DACH extension stack + seed data + API users
 docker run -d -p 80:80 --name civicrm \
@@ -260,17 +263,12 @@ trust flag is mandatory. Runtime validation and trust checks cover the complete
 selected list before the first profile changes the site; duplicate names and
 conflicting AuthX policies are errors.
 
-> **Migrating from `civicrm-eu-ngo:latest`?** That pre-baked image is retired;
-> use `civikitchen:drupal10-demo` with `CIVIKITCHEN_PROFILE=verein` instead —
-> the same extension stack (minus the deprecated Shoreditch theme), now with
-> proper membership/SEPA seed data, applied at first boot.
-
 ## Tags & versions
 
 ### Database compatibility
 
 The standalone candidate is promotion-gated against `mariadb:10.11`, the
-recommended `mariadb:11.4`, and `mysql:8.0`. Each leg performs a real install,
+recommended `mariadb:11.4`, `mariadb:12.2` and `mysql:8.0`. Each leg performs a real install,
 mounted-extension provisioning, locale rendering, and a boot through the
 isolated `CIVICRM_UF=UnitTests` scratch database. The examples keep MariaDB
 10.11 as their conservative default. The gate asserts `SELECT DATABASE()` is

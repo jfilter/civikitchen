@@ -17,12 +17,14 @@ shellcheck) and the CiviCRM source tree the catalog drift gates need into
 
 The fast loop needs, besides `git` and `curl`: **GNU Make ≥ 3.82** (the
 Makefile refuses older ones — Apple ships 3.81, which silently drops the
-strict-shell flags), a `bash` on PATH, `php`, `composer` (only `make
-test-phpstan`), and `pipx` (zizmor and the schema check). Everything else is
-fetched pinned. The slow loop (`make build`, `make test-images`, `make e2e`)
-additionally needs Docker and Node.
+strict-shell flags), a `bash` on PATH, `php` with a coverage driver (phpdbg,
+PCOV or Xdebug), `composer` (the YAML parser and the phpstan rule package),
+`npm` (the pinned oxlint), and `uvx` or `pipx` (zizmor and the schema check).
+Everything else is fetched pinned; `make doctor` reports what is missing. The
+slow loop (`make build`, `make test-images`, `make e2e`) additionally needs
+Docker.
 
-The build context is the repo root for both the standalone and buildkit-based images. The Dockerfiles copy from two trees: `toolbelt/` (the `ck*` tools, the phpcs standard, the phpstan/psalm/rector packages — everything baked into the image) and `docker/` (the image's own entrypoints, provisioning and demo profiles). Neither has to live inside the other, and `.dockerignore` keeps `.git` and host-built artifacts out.
+The build context is the repo root for both the standalone and buildkit-based images. The Dockerfiles copy from three trees: `toolbelt/` (the `ck*` tools, the phpcs standard, the phpstan/psalm/rector packages), `docker/` (the image's own entrypoints, provisioning and demo profiles) and `packages/` (the profile and scenario schemas). None has to live inside another, and `.dockerignore` keeps `.git` and host-built artifacts out.
 
 ```bash
 # Standalone (the Dockerfile's default CIVICRM_VERSION — pass the current one)
@@ -85,7 +87,7 @@ transitive that refuses to start on an 8.1/8.2 image.
 composer update --working-dir=toolbelt/phpstan-root
 ```
 
-The lock is the pin: it fixes the transitive tree as well, so a monthly image
+The lock is the pin: it fixes the transitive tree as well, so a daily image
 rebuild cannot move a gate under a repo that did not change. There is no
 `--build-arg` for these — an image whose tool tree was resolved fresh at build
 time is not the image anyone reviewed.
@@ -125,8 +127,8 @@ bash tests/images/run-local.sh -p civikitchen drupal11-demo   # your locally bui
 CK_PROFILE=verein bash tests/images/run-local.sh drupal10-demo # + a profile leg
 ```
 
-Per dev flavor it runs the dev-tools functional check and (buildkit flavors)
-the external-DB first-boot test; per demo flavor the single-container boot
+Per dev flavor it runs the dev-tools functional check and the external-DB
+first-boot test; per demo flavor the single-container boot
 test, which includes the `CIVIKITCHEN_SITE_URL` rewrite leg on a non-80 host
 port. A summary table prints at the end and the exit code reflects failures.
 Budget roughly an hour for the full default run; profile legs add up to
@@ -146,13 +148,14 @@ docker run --rm -v "$(pwd)/tests/images:/civikitchen-test:ro" \
 
 ## Linting
 
-Every push runs the `Lint` workflow: strict shellcheck (style level, see
-`.shellcheckrc` for the two disabled false-positive classes) over all shell
-scripts, a portability check that rejects BSD-only `sed -i ''`, actionlint over
-the workflows, `php -l` over the seed/profile scripts, and a shape check on the
-`profile.json` files. Locally:
+The `Lint` workflow runs on pushes to main and on pull requests: strict
+shellcheck (style level, see `.shellcheckrc` for the two disabled
+false-positive classes) over all shell scripts, a portability check that
+rejects BSD-only `sed -i ''`, actionlint over the workflows, `php -l` over the
+seed/profile scripts, and a shape check on the `profile.json` files. It then
+runs `make test` and `make test-compose-config`. Locally:
 
 ```bash
-find images examples -name '*.sh' -print0 | xargs -0 shellcheck -S style
-actionlint
+make lint                  # all static checks
+make test-compose-config   # needs the docker CLI, not a daemon
 ```

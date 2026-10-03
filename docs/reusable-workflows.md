@@ -20,14 +20,18 @@ That suite runs after the standard headless coverage suite and reuses the same
 materialized Composer dependencies, optional sibling checkouts, and container.
 
 Every one of these workflows, `extension-ci.yml` included, takes a
-`working_directory` input (default `.`, the repository root). It is the
-extension's directory in a repository that holds several of them: each job runs
-there, and `compose_file`, the lockfile the dependency cache keys on, artifact
-paths and scan targets are named relative to it. In `extension-ci.yml` the
-container paths follow from it too — everything that boots CiviCRM runs at
-`/var/www/html/ext/<key>`, the git-reading tools (`cklint`, `ckfmt`,
-`ckconform`) at the same directory inside the checkout, which the CI compose
-file mounts at `/civikitchen-repo`. Its template drift check covers that
+`working_directory` input. It defaults to `.`, the repository root, except in
+`playwright-e2e.yml`, where it is `tests/e2e`. Each job runs there. In
+`extension-ci.yml` and `extension-release.yml` it is the extension's directory
+in a repository that holds several of them, and `compose_file`, the lockfile
+the dependency cache keys on, artifact paths and scan targets are named
+relative to it. In `frontend-ci.yml` and `playwright-e2e.yml`,
+`cache_dependency_path` and `artifact_paths` stay relative to the repository
+root. In `extension-ci.yml` the container paths follow from it too —
+everything that boots CiviCRM runs at `/var/www/html/ext/<file>` (info.xml
+`<file>`), the git-reading gates of `ck ci` (`cklint`, `ckconform`, `ckcivix`, `ckfmt`,
+`ckcompat`, `cktaint`, `ckeslint`) at the same directory inside the checkout,
+which the CI compose file mounts at `/civikitchen-repo`. Its template drift check covers that
 directory, plus the repository's own managed files when the extension sits in a
 direct subdirectory of the root — the layout `ckinit` manages a root for.
 Concurrency groups carry the directory and compose project names the extension

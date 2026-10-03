@@ -38,7 +38,8 @@ ckmodernize — modernize a CiviCRM extension (structure via civix + code via re
 
   ckmodernize                preview the code changes (dry-run); list the civix steps
   ckmodernize --fix          apply: civix structure upgrade + rector code rewrite
-  ckmodernize --php 8.2      target PHP version for rector's upgrade sets (default 8.1)
+  ckmodernize --php 8.2      target PHP version for rector's upgrade sets
+                             (default: composer.json's require.php floor, else 8.1)
   ckmodernize --no-civix     code only (skip the civix structure step)
   ckmodernize --no-rector    structure only (skip the rector code step)
   ckmodernize --api          ALSO migrate api3 -> api4 OO (safe get() subset; preview!)

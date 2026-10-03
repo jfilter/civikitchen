@@ -10,7 +10,8 @@ volumes:
   - /path/to/your/extension:/var/www/html/ext/myextension
 ```
 
-**2. First start does the install automatically:**
+**2. First start does the install automatically** (with `CIVICRM_AUTO_INSTALL: "1"`,
+which the example sets):
 
 ```bash
 docker compose up -d
@@ -165,8 +166,9 @@ usual per-extension pass on every direct subdirectory that has an `info.xml`.
 Run on an extension below the root, it skips the files GitHub and Renovate read
 only at the root (the two workflows, `renovate.json`), and its CI compose file gets a
 second managed mount of the repository root at `/civikitchen-repo`.
-`cklint`, `ckfmt` and `ckconform` need `.git` and run there; everything that
-boots CiviCRM stays at `/var/www/html/ext/<key>`. The dev compose file is
+The git-reading gates of `ck ci` (`cklint`, `ckconform`, `ckcivix`, `ckfmt`,
+`ckcompat`, `cktaint`, `ckeslint`) run there; everything that
+boots CiviCRM stays at `/var/www/html/ext/<file>` (info.xml `<file>`). The dev compose file is
 seeded, not managed, so an existing repository adds that mount by hand.
 
 The root workflow has one job per extension, each calling `extension-ci.yml`
@@ -281,7 +283,8 @@ once.
 Anything a test setup needs beyond `cv ext:enable` — renderer config, seed
 data, system packages — can run automatically on first boot. Mount scripts
 into `/civikitchen-init.d/`; after a fresh auto-install they run in lexical
-order: `*.sh` via bash (as root), `*.php` via `cv scr` (as www-data). A
+order: `*.sh` via bash (as root), `*.php` via `cv scr` (as the web user: www-data
+on standalone, buildkit on the CMS images). A
 failing hook aborts the boot, so broken provisioning is loud.
 
 ```yaml

@@ -8,7 +8,7 @@ workflow has to handle a `working_directory` other than `.`, a second
 of the same checkout.
 
 - `.docker/docker-compose.ci.yml` carries two managed mounts: the extension at
-  `/var/www/html/ext/<key>`, where CiviCRM has it enabled, and the checkout at
+  `/var/www/html/ext/<file>` (info.xml `<file>`), where CiviCRM has it enabled, and the checkout at
   `/civikitchen-repo`. The addon adds the dependency's directory by hand,
   outside the managed block, targeting the dependency's extension KEY
   (`/var/www/html/ext/de.civico.ckmonobase`) — that is where a `<requires>`

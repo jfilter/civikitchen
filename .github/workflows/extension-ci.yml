@@ -130,7 +130,7 @@ on:
           Mutation testing (infection via `ckmutate`) as its own job: does the
           suite ASSERT on what it covers. Slow and its score moves with
           unrelated refactors, so it is a SCHEDULED signal, never a push gate.
-          A no-op unless the repo sets mutation_min_msi in civikitchen.yaml.
+          A no-op unless the repo sets policy.mutation.minimum_msi in civikitchen.yaml.
         type: boolean
         default: false
       playwright:
@@ -294,7 +294,7 @@ jobs:
             exit 1
           fi
           # The two container paths every stack job works from, derived once.
-          # ext/<key> is what provisioning enabled and what <requires> was
+          # ext/<file> is what provisioning enabled and what <requires> was
           # resolved against, so everything that boots CiviCRM runs there. The
           # git-reading tools need the checkout, which for an extension below
           # the root is the second mount, /civikitchen-repo — the same host
@@ -1293,7 +1293,7 @@ jobs:
   # it is a weekly reading. Belongs in the compat caller — see
   # docs/extension-standards.md.
   #
-  # The floor is the repo's own (civikitchen.yaml: mutation_min_msi), so there is
+  # The floor is the repo's own (civikitchen.yaml: policy.mutation.minimum_msi), so there is
   # nothing to configure here. Without that key ckmutate exits 0 with a line
   # saying so, which is what makes switching the input on safe before the
   # number is known.
@@ -1325,7 +1325,7 @@ jobs:
       run:
         working-directory: ${{ inputs.working_directory }}
     steps:
-      # Full history: without mutation_paths ckmutate mutates the lines changed
+      # Full history: without policy.mutation.paths ckmutate mutates the lines changed
       # against CK_MUTATE_BASE, and a shallow clone has no base to diff.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1375,10 +1375,10 @@ jobs:
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       # safe.directory first: the mount belongs to the runner user, and the
-      # changed-lines mode (no mutation_paths) shells out to git as www-data.
+      # changed-lines mode (no policy.mutation.paths) shells out to git as www-data.
       # Infection runs the suite, so this stays on the CiviCRM path — where an
       # extension below the repository root has no .git of its own, and the
-      # changed-lines mode needs mutation_paths in civikitchen.yaml instead.
+      # changed-lines mode needs policy.mutation.paths in civikitchen.yaml instead.
       - name: Mutation testing (ckmutate)
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: |

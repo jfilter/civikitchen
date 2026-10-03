@@ -52,7 +52,7 @@ carries it, without the `v` — `release-tags` prefixes the `v` itself.
 one. An entry warns as stale when it excuses nothing: the version is tagged
 after all, it is the version `info.xml` carries right now (that window belongs
 to `release-tag-coherence`), or `info.xml` never carried it. The list is meant
-to shrink. With `policy.release: none` there is no tag to miss at all, so a
+to shrink. With `policy.release.mode: none` there is no tag to miss at all, so a
 list next to it warns as well.
 
 ## Adopting it in a repo
@@ -104,7 +104,8 @@ Then, once:
 - run `ckrelease check` and fix whatever it says before the first tag.
 
 A repo that never releases declares that instead, with the reason. `ckinit`
-then neither writes the caller nor reports it missing; delete an existing one:
+then neither writes the caller nor reports it missing, and `ckinit --update`
+removes an existing one unless it carries lines of your own:
 
 ```yaml
 policy:
@@ -173,8 +174,12 @@ top-level directory named the extension key, minus the development layer:
 .github/ .docker/ .claude/ tests/ node_modules/
 .gitattributes .gitignore .editorconfig civikitchen.yaml .phpunit.result.cache
 phpcs.xml(.dist) phpstan.neon(.dist) phpstanBootstrap.php phpunit.xml(.dist)
-playwright.config.ts package-lock.json bun.lock(b) tsconfig.json
+playwright.config.ts package-lock.json bun.lock(b) tsconfig.json renovate.json
 ```
+
+Secrets are never packed, whatever the policy says: `.git`, `.env`, `.env.*`,
+`.envrc`, `.netrc`, `.npmrc`, `.pypirc`, `auth.json`, `credentials.json`.
+`ckconform --dist-paths` prints the effective list for a repo.
 
 Two things are deliberately *not* on that list. `vendor/` — a repo either
 commits it because the site needs it at runtime, or sets `composer_install: true`
@@ -316,5 +321,6 @@ ckrelease info   key|file|version|dist-name
 ```
 
 It ships in the civikitchen images (so `docker compose exec app ckrelease …`
-works) and runs standalone from a checkout with nothing but bash, git, php and
-unzip. A repo with declared build output needs its build run first.
+works) and runs standalone from a checkout with bash, git, php and unzip, once
+`composer install --working-dir=packages/civikitchen-scenario-schema` (or
+`make tools`) has fetched the YAML parser. A repo with declared build output needs its build run first.

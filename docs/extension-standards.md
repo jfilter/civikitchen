@@ -400,9 +400,10 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   so out loud. See [Releasing an extension](extension-releases.md). The caller
   `.github/workflows/release.yml` is a template-managed file, so `ckinit
   --update` adopts it. `ckconform`'s `release-workflow` fails when no workflow
-  calls `extension-release.yml`; the only opt-out is `policy.release: none`
-  with a reason. In a repository of several extensions it reports itself not
-  evaluated, because releasing that layout is not supported yet.
+  calls `extension-release.yml`; the only opt-out is `policy.release.mode:
+  none` with a reason. In a repository of several extensions each extension's
+  job must run `stage: build`, need the build jobs of the same-repository
+  extensions it requires, and be needed by a `stage: publish` job.
 - `info.xml` `<version>` is `X.Y.Z` or `X.Y.Z-<pre-release>`: SemVer 2.0
   without build metadata, no leading zeros. `ckconform`'s `version-format`
   fails on anything else — `2.2.7.1`, `1.0`, `1.3.0+build.5` — because the
@@ -599,13 +600,14 @@ with only one of the two is blind in the direction it isn't looking.
 **Dependencies — `osv-scanner` in `extension-ci.yml`.** Its own job, alongside
 the template-drift check: it boots no CiviCRM stack, so it doesn't queue behind
 one, and a fresh advisory doesn't hide a red PHPUnit. It reads the *committed
-lockfiles in the repository root* — `composer.lock`, `package-lock.json`,
-`bun.lock` — one at a time and by name:
+lockfiles in the extension directory* (`working_directory`, the repository root
+in a one-extension repo) — `composer.lock`, `package-lock.json`, `bun.lock` —
+one at a time and by name:
 
 - Lockfiles, not manifests. The range in `composer.json` says what *could* be
   installed; the lock says what CI resolved and what every install actually
   got. This is what the committed-lockfile rule above is for.
-- Root only, named explicitly. A recursive scan would also pick up the
+- That directory only, named explicitly. A recursive scan would also pick up the
   lockfiles inside `vendor/` and `node_modules/` as soon as a previous step has
   materialized them, and a dependency's own lockfile is not what this repo
   ships.
@@ -618,7 +620,7 @@ There is no input to turn it off. An advisory published overnight can turn the
 fleet red without anyone pushing a commit, which is uncomfortable and also the
 point; the escape hatch is per finding, not per repo.
 
-That escape hatch is an **`osv-scanner.toml` in the repository root**, which the
+That escape hatch is an **`osv-scanner.toml` in the extension directory**, which the
 scanner discovers on its own because it sits beside the lockfiles — no flag, no
 workflow input. It excuses a single advisory or a whole package, and it makes
 you write down why:
@@ -651,7 +653,8 @@ trees (`vendor/`, `node_modules/`) and the workflow's CiviKitchen helper
 checkout are excluded because they are separate upstream source boundaries and
 frequently carry deliberately fake-key fixtures.
 
-A false positive is scoped in `.trivyignore.yaml` by rule and path, with a
+A false positive is scoped in `.trivyignore.yaml` in the extension directory,
+by rule and path, with a
 statement and an enforced expiry date; there is no workflow switch that turns
 the scanner off for a whole repository:
 
@@ -683,7 +686,7 @@ triaging a finding that has started to matter.
 
 It reports rather than gates the release: the promote jobs don't wait for it. A
 base-image CVE is fixed by an upstream rebuild, and holding the image back would
-just freeze everyone on an older one with strictly more of them. On the weekly
+just freeze everyone on an older one with strictly more of them. On the daily
 cron the scan is wired into the failure notification, so a finding on an
 unchanged image still opens an issue instead of sitting in a summary nobody
 opens.
@@ -1321,7 +1324,7 @@ that sets none of them gets exactly the run it has today.
 
 Pick the ends of your claimed range, not everything in between: the oldest
 minor you support and current stable. The image tags are `:standalone-<minor>`
-(e.g. `:standalone-6.12`) and the moving `:standalone`; see
+(e.g. `:standalone-6.16`) and the moving `:standalone`; see
 [images.md](images.md#tags--versions). A `<minor>` tag keeps being rebuilt
 (newest patch, current `ck*` tooling) only while it is on the supported list —
 `CK_STANDALONE_EXTRA_MINORS` in `toolbelt/versions.env`. If your matrix pins a
@@ -1406,9 +1409,10 @@ core's own tables are not your business and would drown the signal.
 publishes no database port, so any tool has to run inside the app container —
 and that container already ships a mysql client, while Atlas would mean a pinned
 binary download per run to diff two whole schemas it has no way to restrict to
-your tables. The normalisation is deliberately small and documented in
-`toolbelt/bin/ckschemadiff` (the `AUTO_INCREMENT` counter and mysqldump's version
-wrappers, and nothing else). The trade is that this compares DDL *text*, so a
+your tables. The normalisation is deliberately small and lives in
+`SchemaDiffCommand::normalize()` (`toolbelt/lib/php/src/Cli/`): it drops the
+`AUTO_INCREMENT` counter, mysqldump's `/*!…*/` version wrappers, trailing
+whitespace and blank lines, and nothing else. The trade is that this compares DDL *text*, so a
 semantically empty difference is possible; the fix when it happens is one more
 normalisation rule there.
 
@@ -1429,7 +1433,7 @@ schema change, where a saved search's stored API params stop being valid, where
 a custom field's column survives a migration in name only.
 
 ```yaml
-      core_upgrade_from: ghcr.io/jfilter/civikitchen:standalone-6.12
+      core_upgrade_from: ghcr.io/jfilter/civikitchen:standalone-6.16
 ```
 
 One image tag, and it is the version to upgrade **from** — the oldest minor you
@@ -1505,7 +1509,7 @@ on) and add a second, thin caller for the slow checks — one file, one schedule
 name: Compatibility
 on:
   schedule:
-    - cron: '0 5 * * 1'   # Mondays, after the weekly image rebuild
+    - cron: '0 5 * * 1'   # Mondays, after that day's image rebuild
   workflow_dispatch:      # and on demand, before a release
 
 permissions:
@@ -1521,7 +1525,7 @@ jobs:
       # minor below, the weekly run then covers both ends of the range.
       image: ghcr.io/jfilter/civikitchen:standalone
       # Oldest minor from info.xml <compatibility>.
-      matrix_images: ghcr.io/jfilter/civikitchen:standalone-6.12
+      matrix_images: ghcr.io/jfilter/civikitchen:standalone-6.16
       lifecycle: true
       upgrade_from_last_release: true
       # The other half of that question: the upgrader ran, but did it arrive
@@ -1530,13 +1534,14 @@ jobs:
       # The site an existing user has: installed on that oldest minor, then
       # upgraded to the image above. Two boots and a core schema upgrade —
       # the slowest check here, and the one nothing else covers.
-      core_upgrade_from: ghcr.io/jfilter/civikitchen:standalone-6.12
+      core_upgrade_from: ghcr.io/jfilter/civikitchen:standalone-6.16
       # Browser tests, for a repo that has a test:e2e script — another stack
       # boot, which is exactly why it lives here and not in ci.yml.
       # playwright: true
       # Mutation testing (ckmutate): does the suite assert on what it covers.
       # A no-op until civikitchen.yaml sets policy.mutation.minimum_msi — and set
-      # mutation_paths there too, or a weekly run mutates the whole tree.
+      # policy.mutation.paths too: without it a run on main mutates only the
+      # lines changed against origin/main, which is nothing.
       mutation: true
       # The drift job already runs on every push in ci.yml.
       check_template: false

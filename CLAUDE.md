@@ -5,8 +5,8 @@ release workflows the extension repos call. User-facing: `README.md`, `docs/`.
 
 ## Layout
 
-`toolbelt/` is everything baked into an image; `scaffold/` and `scripts/` run
-on the host only. The build context is the repo root.
+`toolbelt/` (tools), `docker/` (image definitions) and `packages/` (schemas)
+are baked into the images; `scaffold/` and `scripts/` run on the host only. The build context is the repo root.
 
 ## Verify
 

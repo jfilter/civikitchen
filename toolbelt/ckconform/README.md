@@ -52,8 +52,10 @@ docker run --rm -v "$PWD":/work -w /work \
   ghcr.io/jfilter/civikitchen:standalone phpunit --no-coverage
 ```
 
-No composer, no `vendor/` — `src/Autoloader.php` is a dozen lines and the image
-already carries PHP and PHPUnit.
+Its own classes need no composer — `src/Autoloader.php` is a dozen lines. Reading
+`civikitchen.yaml` needs Symfony YAML from
+`packages/civikitchen-scenario-schema/vendor/` (`make tools`), which the image
+ships.
 
 ## Policy lives in the consuming repo
 
@@ -122,8 +124,10 @@ on whitespace and reason suffixes. `src/Policy.php` is now the single normalized
 view over the schema-validated YAML. Unknown keys and wrong types fail before a
 tool can silently proceed without the intended policy.
 
-A new key is added in three places, in this order: `Policy::KEYS`, the tool that
-reads it, and the list above.
+A new key is added in this order: the JSON Schema
+(`packages/civikitchen-scenario-schema/scenario.schema.json`), its mapping in
+`Policy::parse()`, `Policy::KEYS` if a consumer reads the normalized value, the
+tool that reads it, and the list above.
 
 ## Output formats
 

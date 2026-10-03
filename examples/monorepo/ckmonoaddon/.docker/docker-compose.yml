@@ -55,7 +55,7 @@ services:
       - ..:/var/www/html/ext/ckmonoaddon
       # The repository root: .git for cklint, ckfmt and ckconform.
       - ../../../..:/civikitchen-repo
-      # - ../../othersibling:/var/www/html/ext/othersibling
+      # - ../../othersibling:/var/www/html/ext/de.example.othersibling
       # First-boot provisioning hooks (seed data, API users, settings) — run
       # after install + ext:enable, in lexical order. See init.d/README.md.
       - ./init.d:/civikitchen-init.d:ro
