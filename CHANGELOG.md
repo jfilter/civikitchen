@@ -631,7 +631,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 - Image builds apply Debian security updates and the daily rebuild runs without
   cache.
-- Extension monorepo layouts are supported by the shared workflows.
+- `ckconform` in an extension below the repository root reads the root's
+  `.github/workflows` and runs git from the root. The shared workflows
+  support such layouts from 1.26.0 (`working_directory`).
 
 ### Fixed
 
