@@ -58,6 +58,7 @@ final class Registry
         Check\Api4EntityCheck::class,
         Check\Api4SelfEntityCheck::class,
         Check\Api4LiteralEntityCheck::class,
+        Check\RiverleaCustomPropertyCheck::class,
         Check\LockfileCheck::class,
         Check\NpmInstallCheck::class,
         Check\CommittedArtifactCheck::class,

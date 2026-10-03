@@ -40,6 +40,12 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   `["access foo"]`. Prefer it. A plain string is tolerated but non-canonical —
   core silently `explode(',')`s it, so a permission name containing a comma
   would be split into two.
+- Theming → Riverlea's `--crm-*` custom properties, under the names core
+  declares (`ext/riverlea/core/css/_variables.css`, each stream's `_dark.css`).
+  Once a name is wrong, the fallback in `var(--crm-x, #hex)` renders in every
+  theme, so `ckconform` (`riverlea-custom-property`) fails on any `--crm-*` name
+  that neither core nor the repository declares. A name only some streams
+  declare, or only the stream editor sets, passes as part of the theme.
 
 ## Code
 

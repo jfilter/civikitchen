@@ -29,6 +29,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   port, so the browser opens the URLs CiviCRM generates. A new container's
   `~/.cv.json` names the demo user as `ADMIN_USER`/`ADMIN_PASS`, and
   `ckcoretest --e2e` runs `@group e2e` tests against the dev site.
+- `ckconform`'s `riverlea-custom-property` fails on a `var(--crm-…)` that
+  neither core nor the repository defines, with file, line and the closest
+  existing name (`--crm-c-link` → `--crm-link-color`). A fallback value does
+  not excuse the name: it is what renders in every theme, dark mode included.
 
 ### Changed
 
