@@ -86,8 +86,17 @@ if [ "${do_civix}" -eq 1 ] && [ -f info.xml ] \
     && "$(_ck_main_bin)" internal xml-has-child info.xml civix; then
   if [ "${fix}" -eq 1 ]; then
     echo "== civix: modernizing scaffolding =="
-    civix upgrade -n || echo "ckmodernize: civix upgrade reported issues (continuing)" >&2
-    civix convert-entity -n 2>/dev/null || true
+    if ! civix upgrade -n; then
+      echo "ckmodernize: civix upgrade failed; fix that before the code step" >&2
+      exit 1
+    fi
+    # convert-entity boots CiviCRM, and only EFv1 schema XML gives it work.
+    if compgen -G 'xml/schema/CRM/*/*.xml' >/dev/null || compgen -G 'xml/schema/CRM/*/*/*.xml' >/dev/null; then
+      if ! civix convert-entity -n; then
+        echo "ckmodernize: civix convert-entity failed; fix that before the code step" >&2
+        exit 1
+      fi
+    fi
   else
     echo "== civix (structure): on --fix this runs 'civix upgrade' + 'civix convert-entity' (civix has no preview) =="
   fi

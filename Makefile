@@ -107,7 +107,7 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-parity \
+.PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-parity \
 	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckeslint test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
 	test-ck-headless test-ckcoretest test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
 	test-database-matrix test-compose-config test-demo-basic-auth test-release-retag test-release-steps test-ci-gates-step test-release-script \
@@ -129,7 +129,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -169,6 +169,9 @@ test-ckcreate: $(SCENARIO_YAML_STAMP) ## ckcreate orchestration and atomic-outpu
 
 test-ckcivix: ## ckcivix current/behind/missing/update checks (fake civix)
 	bash tests/toolbelt/test-ckcivix.sh
+
+test-ckmodernize: ## ckmodernize --fix stops on civix failures, convert-entity only with schema XML (fake civix)
+	bash tests/toolbelt/test-ckmodernize.sh
 
 test-ck: ## Unified ck dispatcher and compatibility aliases
 	bash tests/toolbelt/test-ck.sh

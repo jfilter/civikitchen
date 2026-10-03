@@ -47,6 +47,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- `ckmodernize --fix` stops when `civix upgrade` or `civix convert-entity`
+  fails instead of carrying on to the code step, and runs `convert-entity`
+  only when the extension has EFv1 schema XML.
 - `ck coverage`, `ck mutate`, `ck test`, `ckconform`, `ckcoretest` and
   `cktestreset` answer `--help` with their usage. `cktestreset --help` used to
   reset the test database, and `ck coverage --help` failed inside phpunit.
