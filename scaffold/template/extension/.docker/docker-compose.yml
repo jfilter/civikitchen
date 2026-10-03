@@ -77,13 +77,13 @@ services:
       retries: 10
 
   maildev:
-    image: maildev/maildev:2.1.0
+    image: maildev/maildev:2.2.1
     ports:
       - "${CK_MAILDEV_PORT:-1080}:1080"
       - "${CK_SMTP_PORT:-1025}:1025"
 
   phpmyadmin:
-    image: phpmyadmin/phpmyadmin:5.2.2
+    image: phpmyadmin/phpmyadmin:5.2.3
     depends_on:
       - db
     ports:
