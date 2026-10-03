@@ -5,8 +5,9 @@ repository/toolbelt policy plus the local or CI scenario. Profile definitions
 remain in their separate `profile.json`; the config selects them by name.
 CiviKitchen parses it with
 the pinned Symfony YAML component and then validates the resulting document
-against the published JSON Schema. JSON input is deliberately rejected so one
-canonical filename and syntax works identically on laptops and in CI.
+against the published JSON Schema. JSON input is rejected, so one
+canonical filename and syntax works identically on laptops and in CI
+([ADR-0010](adr/0010-one-yaml-configuration-file.md)).
 
 ```yaml
 "$schema": https://raw.githubusercontent.com/jfilter/civikitchen/main/packages/civikitchen-scenario-schema/scenario.schema.json

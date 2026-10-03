@@ -21,9 +21,8 @@ template rule against an image whose `ckconform` never heard of it. So they
 are released together, under one version, and a consumer pins that one
 version.
 
-Before this, every repo tracked `extension-ci.yml@main` and the moving
-`:standalone` image. That is a working rollout mechanism — it is also one with
-no step between "pushed" and "every repo has it".
+Why one contract and a moving `@v1`, and what that costs:
+[ADR-0001](adr/0001-one-versioned-contract-pinned-at-v1.md).
 
 ## What a version names
 
@@ -38,39 +37,8 @@ A release is a git tag on this repo plus the image tags that go with it.
 | `:drupal10-v1`, `:wordpress-v1`, `:joomla-demo-v1`, … | image | every other published flavor, with and without the patch level |
 | `:standalone`, `:drupal10`, `:*-demo`, … | image | unchanged: the **moving edge**, whatever last passed test-then-promote |
 
-`v1` is the pragmatic middle. Full SHA pinning is stricter and noisier — every
-fix becomes a PR in every repo. A maintained major tag lets a fix reach the
-fleet the moment it is released, while a *breaking* change (a removed input, a
-renamed managed file, a tool that starts failing what it used to pass) has to
-announce itself as `v2` and be adopted deliberately.
-
 The moving tags stay exactly as they are. They are the development and canary
 edge, and the daily rebuild keeps pointing them at current CiviCRM.
-
-### The honest cost of the moving `@v1`
-
-This repo's own workflows pin every third-party action to a 40-hex commit SHA,
-and `zizmor` enforces it. The extension repos' `@v1` is the one exception, and
-it is worth naming what it buys and what it costs rather than filing it under
-"our repo, our rules".
-
-What `@v1` costs: whoever can move the `v1` tag — a maintainer account, or
-anyone who compromises one — can change what runs in all eleven extension
-repos' CI, retroactively, with no PR and no review anywhere. A SHA pin makes
-that a reviewable diff in each repo. Tag protection rules on `v1` narrow the
-window; they do not close it.
-
-What `@v1` buys: a security fix in the shared pipeline reaches the fleet the
-moment it is released. Under SHA pins it reaches whichever repos someone
-remembers to update — which in practice means the update bot. That is the real
-alternative, not "SHA pin instead": SHA pins plus Renovate in every extension
-repo, which turns each civikitchen release into eleven PRs to review and merge.
-Eleven ignorable PRs is its own failure mode.
-
-The trade is therefore *review coverage* against *patch latency*, and it is not
-obviously settled either way. It stays `@v1` until the maintainer decides
-otherwise; the exemption is written down in `zizmor.yml` rather than silently
-skipped.
 
 ## What a consumer pins
 

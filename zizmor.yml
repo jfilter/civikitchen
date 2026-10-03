@@ -20,7 +20,7 @@ rules:
         # The extension repos call this repo's reusable workflows at a moving
         # major ref on purpose — workflow, template, ck* tools and images ship
         # as one versioned contract, and fixes have to reach the extension fleet
-        # without a PR in each. See docs/releases.md, which also spells out
+        # without a PR in each. See docs/adr/0001-*, which also spells out
         # what a hash pin would cost. Third-party actions still need a hash.
         jfilter/civikitchen/*: ref-pin
         "*": hash-pin

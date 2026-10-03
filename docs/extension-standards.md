@@ -11,7 +11,8 @@ existing civix extension, `ckinit.php <extension-directory>` applies that layer;
 existing files remain untouched unless `--force` is explicitly supplied. Afterwards,
 `ckinit.php --check` reports where template-managed files have drifted and
 `ckinit.php --update` refreshes them (seeded files like `composer.json` and
-`phpstan.neon.dist` stay the repo's own after the first copy) — see
+`phpstan.neon.dist` stay the repo's own after the first copy;
+[ADR-0013](adr/0013-managed-and-seeded-template-files.md)) — see
 [extension-development.md](extension-development.md#civix-workflow). Use the
 `ckinit.php` from the civikitchen checkout at the version the repo pins;
 [releases.md](releases.md) explains what a version covers.
@@ -104,7 +105,8 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   `civikitchen/api4-contract` rule reads the literal forms
   `CRM.api4(entity, action, params)`, `crmApi4(entity, action, params)` and
   their batch forms (an array or object of `[entity, action, params]`
-  tuples) with the same judgement as the phpstan rules, fed from the same
+  tuples) with the same judgement as the phpstan rules
+  ([ADR-0008](adr/0008-the-apiv4-contract-in-javascript-is-a-lint-rule.md)), fed from the same
   `Api4Catalog` plus the repo's own `Civi/Api4/*.php` entities and
   `Civi/Api4/Action/<Entity>/*.php` action classes, and those of checked-out
   siblings in `.civikitchen-siblings/`. It runs in the baseline config only; a
@@ -883,7 +885,7 @@ cktaint --baseline      # accept today's findings, see only new ones
 ### What it finds
 
 Psalm cannot see CiviCRM core, so CiviKitchen supplies a deliberately small set
-of stubs (`/opt/civikitchen-psalm/stubs`, signatures verified against core):
+of stubs ([ADR-0011](adr/0011-checks-report-only-what-they-are-sure-of.md)) (`/opt/civikitchen-psalm/stubs`, signatures verified against core):
 
 | role | modelled |
 | --- | --- |
@@ -1013,7 +1015,8 @@ are reported by the normal suppression-hygiene check.
 push, from inside the container, with a toolchain pinned in the image — no Node
 setup step, no `npm install`, and no linter devDependency in your
 `package.json`. The engine is [oxlint](https://oxc.rs), and the baseline is
-deliberately not a style guide: oxlint's `correctness` category (mistakes, not
+deliberately not a style guide ([ADR-0011](adr/0011-checks-report-only-what-they-are-sure-of.md)): oxlint's `correctness`,
+`suspicious` and `perf` categories plus its `promise` plugin (mistakes, not
 fashion), Mozilla's `eslint-plugin-no-unsanitized` (`innerHTML` and its family
 — an XSS in an extension is an XSS on every site that installs it), and, *only
 when the repo has a `tsconfig.json`*, the type-aware TypeScript rules, which is
@@ -1040,7 +1043,8 @@ say so:
 A repo that installs its own `@types/node` keeps it; the link is only created
 when nothing is there.
 
-**TypeScript's compiler diagnostics are opt-in:**
+**TypeScript's compiler diagnostics are opt-in**
+([ADR-0009](adr/0009-type-checking-javascript-from-outside.md)):
 
 ```yaml
 policy:
@@ -1474,10 +1478,9 @@ if (($rows->single()['my_group.my_field'] ?? NULL) !== 'teal') {
 }
 ```
 
-Scripts rather than a PHPUnit class, deliberately: these assertions have to run
-against the **live site database**, and the headless harness points
-`CIVICRM_DSN` at the isolated `civicrm_test` scratch DB. A phpunit-based
-fixture would pass while testing a database the upgrade never touched.
+Scripts rather than a PHPUnit class: the headless harness points `CIVICRM_DSN`
+at the scratch DB, which the upgrade never touches
+([ADR-0012](adr/0012-upgrade-fixtures-are-scripts.md)).
 
 Without the two files the job still boots the old core, upgrades it and runs
 the four asserts above — worth having, and the honest limit is that it says

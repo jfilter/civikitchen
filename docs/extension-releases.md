@@ -21,8 +21,9 @@ Three things, in this order:
    consistency check, the distribution archive, an install into a real CiviCRM,
    and the GitHub release.
 
-Step 1 is deliberately not automated. A version number is a compatibility claim
-about the change, and nothing derives that from a diff.
+Step 1 is deliberately not automated: a version number is a compatibility claim
+about the change, and nothing derives that from a diff
+([ADR-0002](adr/0002-a-release-is-a-human-version-and-a-tag.md)).
 
 Steps 1 and 2 belong together, and `ckconform`'s `release-tags` is what holds
 them together after the fact: it compares the `<version>` values `info.xml` has
@@ -211,6 +212,11 @@ output, and no excluded name as a path segment *at any depth* — which is how a
 second `tests/` under a sub-package gets caught, since the build only excludes
 at the root.
 
+The exclusion list lives in civikitchen (`ckconform --dist-paths`) and in
+`civikitchen.yaml`, not in `.gitattributes export-ignore`; see
+[ADR-0003](adr/0003-release-exclusions-live-in-civikitchen.md). `git archive`
+still honours a repo's own `export-ignore` attributes on top.
+
 ### Build output git does not track
 
 A frontend bundle or a third-party dist that a repo builds instead of committing
@@ -249,44 +255,6 @@ missing one, until they exist. Build at the commit you archive, since the
 outputs come from the working tree and not from `--ref`.
 
 No caller input is involved, so a repo adopts this in `civikitchen.yaml` alone.
-
-### Why not `.gitattributes export-ignore`
-
-It is the git-native way to say this, and it was rejected on purpose.
-`.gitattributes` is a template-**managed** file: civikitchen owns its bytes and
-every repo's CI compares them. Putting the exclude list there means (a) shipping
-packaging costs a fleet-wide drift round and a contract version bump, and (b) the
-list then exists in as many copies as there are repos, free to drift apart —
-the exact state the shared tooling exists to end. The central list plus
-`civikitchen.yaml` gives one source of truth and a declared, reasoned per-repo
-exception, which is the pattern already used for coverage floors and template
-deviations.
-
-`git archive` still honours a repo's own `export-ignore` attributes on top of
-this. Nothing forbids them; they are just not where the standard lives.
-
-## Why not release-please
-
-It was the obvious candidate and it solves the cheap half. What a CiviCRM
-extension release actually needs:
-
-| Need | release-please | here |
-|------|----------------|------|
-| version in `info.xml` as the source of truth | generic-updater config per repo | native — `info.xml` *is* the input |
-| `composer.json` in step | yes | yes |
-| changelog | its main strength (conventional commits) | `gh release --generate-notes`, plus a `CHANGELOG.md` check when the repo keeps one |
-| tag | release-PR flow | a human tags |
-| dist archive without dev files | not its problem | the point |
-| install smoke test | not its problem | the point |
-
-So the half it automates is the half already covered by two `gh` flags, and the
-half that costs real money — a wrong archive reaches every site that installs
-the extension — it does not address at all. Adopting it would also mean
-conventional-commit discipline across the fleet plus two more config files per
-repo, to still need a second workflow for the artifact.
-
-Delegation, not rejection: notes come from GitHub's generator and tagging is
-plain git. `ckrelease` is only the CiviCRM-shaped part.
 
 ## The smoke test
 

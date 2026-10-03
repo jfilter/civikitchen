@@ -1,10 +1,13 @@
 # Implementation architecture
 
-CiviKitchen has three implementation boundaries:
+CiviKitchen has three implementation boundaries
+([ADR-0015](adr/0015-php-shell-typescript-boundaries.md)):
 
 - **PHP owns structured and reusable logic.** YAML, JSON, XML, ZIP archives,
   policy, version constraints, filesystem rules, and reusable process handling
-  live below `toolbelt/lib/php` and are reached through the single `ck` CLI.
+  are PHP. The shared code lives below `toolbelt/lib/php` and is reached
+  through the `ck` CLI; `ckconform` and `scaffold/ckinit.php` are PHP programs
+  of their own.
 - **Shell owns bootstrapping.** Container entrypoints, user switching,
   environment export, pipes, and the final `exec` remain shell where the
   operating system is the API. Shell must not embed PHP programs or implement

@@ -26,8 +26,8 @@
 # stamps that caller at the repository root.
 #
 # NOT a version bumper: the bump is a commit an author writes and reviews, the
-# tag is the statement that it is ready. Why not release-please, and what the
-# archive contents promise: docs/extension-releases.md, and ckrelease's header.
+# tag is the statement that it is ready (docs/adr/0002-*). What the archive
+# contents promise: docs/extension-releases.md, and ckrelease's header.
 name: Extension Release
 
 on:

@@ -154,7 +154,10 @@ A repository can hold several extensions that ship together. Its root carries
 no `info.xml`; each extension sits in a direct subdirectory with its own
 `info.xml`, `civikitchen.yaml`, `composer.json` and test suite. Extensions
 nested deeper, and a repository that is an extension at its root and holds
-more below it, are not covered.
+more below it, are not covered. The decisions behind the layout are
+[ADR-0005](adr/0005-several-extensions-in-one-repository.md),
+[ADR-0006](adr/0006-lockstep-releases-in-a-multi-extension-repository.md) and
+[ADR-0007](adr/0007-the-repository-at-a-second-neutral-path.md).
 
 Run `ckinit` at the root. There it manages `.gitattributes`, `renovate.json`,
 `.github/workflows/ci.yml` and `.github/workflows/release.yml`, then runs the
