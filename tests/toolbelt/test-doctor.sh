@@ -147,4 +147,13 @@ run_doctor "$(host no-docker "${without_docker[@]}")"
 [ "$status" -eq 0 ] || fail "no docker: expected exit 0, got $status"
 expect 'no docker' 'WARN     docker' "$out"
 
+# --- npm fetches the pinned oxlint that make test runs ----------------------
+without_npm=()
+for entry in "${COMPLETE[@]}"; do
+  [ "${entry%%=*}" = npm ] || without_npm+=("$entry")
+done
+run_doctor "$(host no-npm "${without_npm[@]}")"
+[ "$status" -eq 1 ] || fail "no npm: expected exit 1, got $status"
+expect 'no npm' 'MISSING  npm' "$out"
+
 echo "doctor suite OK"

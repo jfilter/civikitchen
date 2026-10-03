@@ -8,8 +8,8 @@ declare(strict_types=1);
  * civikitchen template. Complements cklint (style) and phpstan (types): this
  * checks the repo structure, the gaps every extension audit turned up.
  *
- * Run from the extension root. Deliberately dependency-free — no composer
- * install in the image, no vendor/ to keep current.
+ * Run from the extension root. Its only dependency is the YAML parser of the
+ * scenario-schema package, which the image ships.
  */
 
 use CiviKitchen\Ckconform\Autoloader;
@@ -23,6 +23,20 @@ require_once __DIR__ . '/../src/Autoloader.php';
 Autoloader::register();
 
 $root = getcwd();
+if (in_array($argv[1] ?? '', ['-h', '--help'], true)) {
+    echo <<<'TXT'
+ckconform - repository conformance for a CiviCRM extension. Run from the extension root.
+
+  ckconform [--format=human|json|github|sarif]   run every check
+  ckconform --policy-env                         civikitchen.yaml as shell variables
+  ckconform --policy <key>                       every value of one policy key
+  ckconform --dist-paths                         what a release archive leaves out and stages
+
+Suppress a finding with `// ckconform-ignore <check> -- <reason>`.
+
+TXT;
+    exit(0);
+}
 $format = 'human';
 for ($i = 1; $i < count($argv); $i++) {
     if (str_starts_with($argv[$i], '--format=')) {

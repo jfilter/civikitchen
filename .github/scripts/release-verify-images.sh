@@ -24,17 +24,16 @@ candidate_of() {
     | map(select(test("-[0-9a-f]{40}$"))) | .[0] // ""' versions.json
 }
 
-# What decides whether a built image belongs to this release. TWO trees since
-# the toolbelt moved out of the image directories: docker/ (the image
-# definitions, entrypoints, provisioning and demo profiles) and toolbelt/
-# (the ck* tools and analysers baked into them). Both are build inputs, so
-# both are part of the identity. 2>/dev/null: a build commit from before that
-# split carries neither path, and an empty result compares unequal — which is
-# the right verdict for it anyway.
+# What decides whether a built image belongs to this release: the trees the
+# Dockerfiles copy from. docker/ (image definitions, entrypoints, provisioning,
+# demo profiles), toolbelt/ (the ck* tools and analysers) and packages/ (the
+# profile and scenario schemas). 2>/dev/null: an older build commit missing a
+# path yields an empty result, which compares unequal — the right verdict.
 image_tree_of() { # $1 = commit-ish
-  printf '%s %s' \
+  printf '%s %s %s' \
     "$(git rev-parse "$1:docker" 2>/dev/null)" \
-    "$(git rev-parse "$1:toolbelt" 2>/dev/null)"
+    "$(git rev-parse "$1:toolbelt" 2>/dev/null)" \
+    "$(git rev-parse "$1:packages" 2>/dev/null)"
 }
 RELEASE_TREE=$(image_tree_of "${RELEASE_SHA}")
 drift=()

@@ -19,6 +19,10 @@ final class PhpUnitCommand implements Command
 
     public function run(array $arguments): int
     {
+        if (in_array($arguments[0] ?? '', ['-h', '--help'], true)) {
+            echo $this->usage();
+            return 0;
+        }
         if (!is_file('info.xml')) {
             fwrite(STDERR, "ckphpunit: no info.xml here - run from the extension root.\n");
             return 2;
@@ -118,5 +122,19 @@ final class PhpUnitCommand implements Command
         $listener->setAttribute('file', $canary);
         $listeners->appendChild($listener);
         return $document->save($destination) !== false;
+    }
+
+    private function usage(): string
+    {
+        return <<<'TXT'
+ckphpunit - headless PHPUnit with a transaction canary.
+
+  ckphpunit [phpunit args]
+
+Adds a listener to the extension's phpunit config that fails a transactional
+test whose writes were committed (DDL commits implicitly) instead of rolled back. CK_TX_CANARY=0 runs plain phpunit; see
+`phpunit --help` for the phpunit arguments.
+
+TXT;
     }
 }

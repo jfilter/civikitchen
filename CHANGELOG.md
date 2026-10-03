@@ -39,6 +39,25 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - `cklifecycle`'s settings check fails on a pseudoconstant key core does not
   read (`option_group_name` instead of `optionGroupName`), which core only
   warns about.
+- The template's CI caller comment states the versioning rule of ADR-0001 (a
+  break ships as a minor marked Breaking) instead of promising `@v2`, and the
+  dev compose file's sibling example mounts at the sibling's extension key.
+  `ckinit --check` reports the managed `ci.yml` as drifted until
+  `ckinit --update` refreshes it.
+
+### Fixed
+
+- `ck coverage`, `ck mutate`, `ck test`, `ckconform`, `ckcoretest` and
+  `cktestreset` answer `--help` with their usage. `cktestreset --help` used to
+  reset the test database, and `ck coverage --help` failed inside phpunit.
+- `ckcreate` reads `$CKCREATE_*` from the environment over
+  `ckcreate.conf`, as its help says; the config file used to win.
+- `ckmutate` names `policy.mutation.paths` in its messages instead of an
+  internal key.
+- `examples/custom-version/` builds again: its build context still pointed at
+  the removed `images/` directory.
+- `examples/ci/` waits for the image's healthcheck (`up --wait`) instead of
+  polling the login page.
 
 ## [1.30.2] - 2026-09-29
 

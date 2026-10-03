@@ -1,5 +1,5 @@
-# Static checks and the fast test suites: everything that needs no Docker and
-# no built image. Runs on every push/PR.
+# Static checks and the fast test suites: everything that needs no Docker daemon
+# and no built image. Runs on pushes to main and on pull requests.
 #
 # The steps are `make` calls on purpose. What they run — which trees shellcheck
 # sweeps, which CiviCRM release the catalog drift gates test against, which
@@ -40,3 +40,7 @@ jobs:
       # would go green while the thing they guard never ran.
       - name: Test suites
         run: make test
+
+      # Needs the docker CLI, which the runner has and `make test` does not assume.
+      - name: Compose files
+        run: make test-compose-config

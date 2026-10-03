@@ -12,7 +12,7 @@
 #
 # Deliberately standalone and free of the things it checks: the make version
 # gate refuses before any recipe runs, so this has to be runnable as
-# `bash toolbelt/doctor.sh` with nothing but a shell.
+# `bash scripts/doctor.sh` with nothing but a shell.
 set -euo pipefail
 
 missing=0
@@ -139,7 +139,7 @@ check_present git 'fetching the pinned CiviCRM source tree, and every repo-aware
   'xcode-select --install' 'apt install git'
 check_present curl 'downloading the pinned phpunit/shellcheck/actionlint into .cache/' \
   'xcode-select --install' 'apt install curl'
-check_present composer 'make test-phpstan (installs the rule package vendor tree)' \
+check_present composer 'the YAML parser the policy-reading tests load, and the phpstan rule package' \
   'brew install composer' 'apt install composer'
 
 # lint-actions runs zizmor and lint-schema runs check-jsonschema. Both are
@@ -164,11 +164,8 @@ else
   say_warn docker 'absent — make build, test-images and e2e need it; lint and test do not'
 fi
 
-if command -v npm >/dev/null 2>&1; then
-  say_ok npm 'present'
-else
-  say_warn npm 'absent — make e2e and dupcheck need it; lint and test do not'
-fi
+check_present npm 'the pinned oxlint behind make test-ckeslint, and make e2e' \
+  'brew install node' 'apt install npm'
 
 echo
 if [ "$missing" -gt 0 ]; then

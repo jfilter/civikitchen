@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# ckcoretest — run CiviCRM *core* phpunit suites inside the kitchen.
+# ckcoretest — run CiviCRM *core* phpunit suites in the standalone image.
 #
-# The official civicrm/civicrm image installs core as a composer dist, and
+# The standalone image installs core from the release tarball, and
 # core's .gitattributes export-ignores tests/, phpunit.xml.dist, tools/ and the
 # two sql/test_data*.mysql seed files — so the dist can't initialize or run
 # its own suite cleanly. This fetches exactly the missing pieces for the
@@ -11,8 +11,8 @@
 # the scratch test DB.
 #
 # The fetched tree is cached in the container ([core]/tests/.ckcoretest-version
-# marker); re-runs skip the network. On buildkit flavors core is a real git
-# checkout that already ships tests/ — the fetch is skipped there too.
+# marker); re-runs skip the network. A core that already ships tests/ (a
+# CIVICRM_SOURCE=git build) is left untouched.
 #
 # Requires the CIVIKITCHEN_TEST_DB provisioning (the default): without a
 # TEST_DB_DSN in ~/.cv.json this refuses to run, because headless phpunit
@@ -36,6 +36,20 @@ set -euo pipefail
 # next to /usr/local/bin.
 # shellcheck source=../lib/ckcommon.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/ckcommon.sh"
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  cat <<'USAGE'
+ckcoretest - run CiviCRM core's PHPUnit suites against the installed core.
+
+  ckcoretest [phpunit args] <path>            a core suite, headless
+  ckcoretest --ext <name> [phpunit args]      a core extension's suite
+  ckcoretest --e2e [--ext <name>] [args]      @group e2e tests against the dev site
+  ckcoretest --fetch-only                     fetch tests/ for the installed version
+
+Headless runs need the scratch test database (CIVIKITCHEN_TEST_DB=1).
+USAGE
+  exit 0
+fi
 
 : "${CK_CORE_DIR:=/var/www/html/core}"
 : "${CK_CORE_REPO:=https://github.com/civicrm/civicrm-core.git}"

@@ -47,8 +47,14 @@ EOF
 }
 
 conf="${XDG_CONFIG_HOME:-$HOME/.config}/civikitchen/ckcreate.conf"
+# The environment outranks the config file, so it is re-applied after sourcing.
+env_overrides=""
+while IFS= read -r var; do
+  env_overrides+="$(declare -p "$var")"$'\n'
+done < <(compgen -v CKCREATE_ || true)
 # shellcheck source=/dev/null
 [ -f "$conf" ] && . "$conf"
+eval "$env_overrides"
 
 key=""; dir=""; keep_stack=0
 author="${CKCREATE_AUTHOR:-}"

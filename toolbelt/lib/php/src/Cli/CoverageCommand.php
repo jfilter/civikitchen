@@ -17,6 +17,10 @@ final class CoverageCommand implements Command
 
     public function run(array $arguments): int
     {
+        if (in_array($arguments[0] ?? '', ['-h', '--help'], true)) {
+            echo $this->usage();
+            return 0;
+        }
         if (!is_file('info.xml')) {
             return $this->error('no info.xml here - run from the extension root.');
         }
@@ -193,5 +197,19 @@ final class CoverageCommand implements Command
     {
         fwrite(STDERR, "ckcoverage: {$message}\n");
         return 2;
+    }
+
+    private function usage(): string
+    {
+        return <<<'TXT'
+ckcoverage - run the PHPUnit suite with coverage and enforce the floor.
+
+  ckcoverage [phpunit args]
+
+The floor is policy.coverage.minimum in civikitchen.yaml. Arguments go to
+phpunit; a --log-junit given there is read instead of a temporary log. Run from
+the extension root.
+
+TXT;
     }
 }

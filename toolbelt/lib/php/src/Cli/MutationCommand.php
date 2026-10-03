@@ -17,6 +17,10 @@ final class MutationCommand implements Command
 
     public function run(array $arguments): int
     {
+        if (in_array($arguments[0] ?? '', ['-h', '--help'], true)) {
+            echo $this->usage();
+            return 0;
+        }
         if (!is_file('info.xml')) {
             return $this->error('no info.xml here - run from the extension root.');
         }
@@ -52,7 +56,7 @@ final class MutationCommand implements Command
         }
         foreach ($directories as $directory) {
             if (!file_exists($directory)) {
-                return $this->error("mutation_paths names '{$directory}', which does not exist here.");
+                return $this->error("policy.mutation.paths names '{$directory}', which does not exist here.");
             }
         }
         $config = '.ckmutate.json';
@@ -85,12 +89,12 @@ final class MutationCommand implements Command
             $command[] = "--min-covered-msi={$coveredFloor}";
         }
         if ($pathValue !== '') {
-            echo 'ckmutate: mutating ', implode(' ', $directories), " (mutation_paths), floor {$floor}% MSI.\n";
+            echo 'ckmutate: mutating ', implode(' ', $directories), " (policy.mutation.paths), floor {$floor}% MSI.\n";
         } else {
             $base = (string) (getenv('CK_MUTATE_BASE') ?: 'origin/main');
             $repository = new Files($this->checkoutRoot, $this->runner);
             if ($repository->git(['rev-parse', '--verify', '--quiet', $base])['status'] !== 0) {
-                return $this->error("CK_MUTATE_BASE '{$base}' is not a resolvable ref - a shallow checkout needs fetch-depth: 0, or set mutation_paths.");
+                return $this->error("CK_MUTATE_BASE '{$base}' is not a resolvable ref - a shallow checkout needs fetch-depth: 0, or set policy.mutation.paths.");
             }
             echo "ckmutate: mutating the lines changed against {$base}, floor {$floor}% MSI.\n";
             $command = [...$command, '--git-diff-lines', "--git-diff-base={$base}"];
@@ -130,5 +134,19 @@ final class MutationCommand implements Command
     {
         fwrite(STDERR, "ckmutate: {$message}\n");
         return 2;
+    }
+
+    private function usage(): string
+    {
+        return <<<'TXT'
+ckmutate - mutation testing with infection against the floor in civikitchen.yaml.
+
+  ckmutate [infection args]
+
+The floors are policy.mutation.minimum_msi and minimum_covered_msi. It mutates
+policy.mutation.paths, or else the lines of Civi/, CRM/ and src/ changed against
+CK_MUTATE_BASE (default origin/main). Needs pcov or xdebug.
+
+TXT;
     }
 }

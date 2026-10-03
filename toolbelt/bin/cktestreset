@@ -26,12 +26,20 @@ set -euo pipefail
 # shellcheck source=../lib/ckcommon.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/ckcommon.sh"
 
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  cat <<'USAGE'
+cktestreset - rebuild the headless test database from the main database and
+clear the cached containers. Takes no arguments.
+USAGE
+  exit 0
+fi
+
 : "${CIVICRM_DB_HOST:=db}"
 : "${CIVICRM_DB_PORT:=3306}"
 : "${CIVICRM_DB_NAME:=civicrm}"
 : "${CIVICRM_DB_USER:=civicrm}"
 : "${CIVICRM_DB_PASSWORD:=civicrm}"
-# Standalone compile dir; buildkit flavors override via env.
+# Standalone compile dir (the only image that ships this tool).
 : "${CK_COMPILE_DIR:=/var/www/html/private/cache}"
 
 test_db_name="${CIVICRM_DB_NAME}_test"

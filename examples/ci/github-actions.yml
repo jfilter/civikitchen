@@ -20,24 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # --wait blocks until the image's healthcheck passes, which needs the
+      # first-boot auto-install (and the composer install of a mounted
+      # extension with a lock file) to have finished.
       - name: Boot CiviCRM (civikitchen standalone)
-        run: docker compose -f docker-compose.ci.yml up -d --pull always
-
-      # The app has no healthcheck of its own — poll the login page, which
-      # only serves once the first-boot auto-install has finished. Generous
-      # budget (10 min): the auto composer install for a mounted extension
-      # with a large lock file runs before the install.
-      - name: Wait for the auto-install
-        run: |
-          for _ in $(seq 1 120); do
-            if curl -fs http://localhost:8080/civicrm/login >/dev/null; then
-              echo "ready"; exit 0
-            fi
-            sleep 5
-          done
-          echo "site never became reachable" >&2
-          docker compose -f docker-compose.ci.yml logs app
-          exit 1
+        run: docker compose -f docker-compose.ci.yml up -d --pull always --wait --wait-timeout 900
 
       # vendor/ is installed automatically on container start when your
       # extension ships a composer.json (CIVIKITCHEN_AUTO_COMPOSER=1 default).

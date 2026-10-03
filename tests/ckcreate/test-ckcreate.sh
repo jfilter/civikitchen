@@ -183,5 +183,17 @@ test -d "$mount"
 after_down=$(grep -c 'down -v --remove-orphans' "$FAKE_DOCKER_LOG")
 test "$before_down" -eq "$after_down"
 
+# Precedence is flags, then the environment, then the config file.
+mkdir -p "$XDG_CONFIG_HOME/civikitchen"
+printf '%s\n' 'CKCREATE_AUTHOR="Conf Author"' 'CKCREATE_EMAIL=conf@example.org' \
+  'CKCREATE_COPYRIGHT="Conf Org"' 'CKCREATE_COMPATIBILITY=6.10' 'CKCREATE_LICENSE=AGPL-3.0' \
+  > "$XDG_CONFIG_HOME/civikitchen/ckcreate.conf"
+: > "$FAKE_DOCKER_LOG"
+CKCREATE_COMPATIBILITY=6.11 "$root/scaffold/ckcreate" precedence --license MIT \
+  --dir "$work/output/precedence" > "$work/precedence.out"
+grep -qF -- '--author Conf\ Author --email conf@example.org --license MIT --compatibility 6.11' "$FAKE_DOCKER_LOG" \
+  || { echo "ckcreate precedence: expected env over conf, flags over both" >&2; cat "$FAKE_DOCKER_LOG" >&2; exit 1; }
+/bin/rm "$XDG_CONFIG_HOME/civikitchen/ckcreate.conf"
+
 "$root/scaffold/ckcreate" --help >/dev/null
 echo "ckcreate integration checks passed"
