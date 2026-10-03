@@ -719,10 +719,8 @@ ck_enable_extensions() {
 # Core language files. Opt-in via CIVIKITCHEN_LOCALES=de_DE[,fr_FR,...]: the
 # version-matching civicrm-<version>-l10n.tar.gz is streamed once and only
 # the requested locales land in [civicrm.l10n], the directory core reads
-# translations from. Without a core .mo there, CRM_Core_I18n never
-# initialises gettext and setGettextDomain() returns early for extension
-# domains too — a mounted extension's own l10n/<locale> catalogue renders
-# English with no error. CIVIKITCHEN_DEFAULT_LOCALE=<locale> additionally
+# translations from; an extension's own l10n/ catalogue translates without
+# them. CIVIKITCHEN_DEFAULT_LOCALE=<locale> additionally
 # sets lcMessages; it has to be one of the installed locales.
 ck_locales() {
     local out version l10n_dir
