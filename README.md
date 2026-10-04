@@ -7,27 +7,47 @@
 
 civikitchen is a set of CiviCRM Docker images with development tools built in,
 plus an extension template and reusable GitHub workflows for testing, checking
-and releasing CiviCRM extensions. Images are published to
-`ghcr.io/jfilter/civikitchen` for `linux/amd64` and `linux/arm64`.
+and releasing CiviCRM extensions.
 
-## Images
+## Quickstart
 
-| Tag | What it is |
-|-----|------------|
-| `:standalone` | CiviCRM Standalone with dev tools. Needs an external database. |
-| `:drupal10`, `:drupal11`, `:wordpress`, `:joomla` | A civibuild site on that CMS with the same dev tools. Needs an external database. |
-| `:standalone-demo`, `:drupal10-demo`, `:drupal11-demo`, `:wordpress-demo`, `:joomla-demo` | One container with an embedded MariaDB and demo data. |
-| `:v1`, `:standalone-v1`, `:drupal10-v1`, ... | Release tags. Extension repositories pin these. |
+Look around in a throwaway CiviCRM Standalone with demo data:
 
-The moving tags are rebuilt daily against the current CiviCRM stable and move
-only after their tests pass. Older minors get `:standalone-<minor>` tags while
-they are listed in `CK_STANDALONE_EXTRA_MINORS` in `toolbelt/versions.env`.
-See [Tags & versions](docs/images.md#tags--versions).
+```bash
+docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:standalone-demo
+```
+
+Open http://localhost and log in as admin / admin.
+
+Start a new extension:
+
+```bash
+git clone https://github.com/jfilter/civikitchen
+composer install --no-dev --working-dir=civikitchen/packages/civikitchen-scenario-schema
+civikitchen/scaffold/ckcreate myext \
+    --author "Example Maintainer" --email dev@example.org --copyright "Example Org"
+cd myext
+git add -A && git commit -m "Scaffold myext"   # after reviewing it
+../civikitchen/scaffold/ckup         # dev stack on free host ports, prints the URL
+../civikitchen/scaffold/ckx ck ci    # tests and every check, as CI runs them
+```
+
+`ckcreate` runs `civix generate:module` in a throwaway stack, then adds the
+template: dev and CI compose files under `.docker/`, the CI and release
+workflows, phpcs/phpstan/phpunit config, the test bootstrap and a first test,
+in a fresh git repository that passes `ck ci`. `ckup` writes free host ports to
+`.docker/.env` and runs `docker compose up -d`. `ckx <command>` runs a command
+in that stack as `www-data`, in the extension's directory; without a command it
+opens a shell.
+
+For an existing civix extension, `scaffold/ckinit.php <extension-dir>` adds the
+same files. It refuses to overwrite files that already exist.
 
 ## Extension development
 
-The standalone example is a dev stack with CiviCRM, MariaDB, phpMyAdmin and
-Maildev:
+The dev stack from `ckup` runs CiviCRM Standalone with MariaDB, phpMyAdmin and
+Maildev. For an extension that does not use the template, the standalone
+example has the same services:
 
 ```bash
 git clone https://github.com/jfilter/civikitchen
@@ -57,29 +77,10 @@ pcov, and xdebug (off until `XDEBUG_MODE` is set). Tool versions are pinned in
 `toolbelt/versions.env`, `toolbelt/install-dev-tools.sh` and the composer roots
 under `toolbelt/`.
 
-To start a new extension with the civikitchen template:
-
-```bash
-composer install --no-dev --working-dir=/path/to/civikitchen/packages/civikitchen-scenario-schema
-/path/to/civikitchen/scaffold/ckcreate myext \
-    --author "Example Maintainer" --email dev@example.org --copyright "Example Org"
-cd myext
-/path/to/civikitchen/scaffold/ckup
-```
-
-`ckcreate` runs `civix generate:module` in a throwaway stack, then adds the
-template: dev and CI compose files under `.docker/`, the CI and release
-workflows, phpcs/phpstan/phpunit config, the test bootstrap and a first test,
-in a fresh git repository that passes `ck ci`. `ckup` writes
-free host ports to `.docker/.env` and runs `docker compose up -d`;
-`scaffold/ckx <command>` runs a command in that stack as `www-data`, in the
-extension's directory. For an
-existing civix extension, `scaffold/ckinit.php <extension-dir>` adds the same
-files. It refuses to overwrite files that already exist.
-
-The CMS flavors work the same way, but the extension directory differs per
-CMS. The compose files in `examples/drupal10/`, `examples/drupal11/`,
-`examples/wordpress/` and `examples/joomla/` show the mount path. For browser
+The `:drupal10`, `:drupal11`, `:wordpress` and `:joomla` images work the same
+way, but the extension directory differs per CMS. The compose files in
+`examples/drupal10/`, `examples/drupal11/`, `examples/wordpress/` and
+`examples/joomla/` show the mount path. For browser
 tests, start from `examples/extension-with-playwright/`.
 
 ## CI for extensions
@@ -104,12 +105,8 @@ opt-in through inputs such as `matrix_images`, `lifecycle`,
 `@v1` pins the workflow, the template, the `ck*` tools and the `:v1` image as
 one version. See [Releases](docs/releases.md).
 
-To run the in-container part of CI locally:
-
-```bash
-/path/to/civikitchen/scaffold/ckx ck ci
-/path/to/civikitchen/scaffold/ckx ck ci --only cklint,ckfmt
-```
+`ckx ck ci` runs the in-container part of CI locally; `--only cklint,ckfmt`
+picks gates.
 
 Releases work the same way: the template's `release.yml` calls
 `extension-release.yml@v1` on a `vX.Y.Z` tag push. See
@@ -131,7 +128,7 @@ workflow calls the same command.
 | `ckcivix` | civix format is current |
 | `ckfmt` | Formatting: mago for PHP, oxfmt for JS/TS |
 | `ckcoverage` | PHPUnit line coverage against the configured floor |
-| `phpstan` | Level 10 with civikitchen's CiviCRM rules |
+| `phpstan` | Level 10; the repository's `phpstan.neon.dist` includes civikitchen's CiviCRM rules, so it runs unwrapped |
 | `ckcompat` | PHP compatibility with the floor declared in `composer.json` |
 | `ckdeps` | `composer.json` matches what the code uses |
 | `cktaint` | Taint analysis with psalm |
@@ -199,14 +196,9 @@ in `docker/standalone/core-patches/`, one file per upstream issue.
 
 ## Demo instances
 
-```bash
-docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:standalone-demo
-```
-
-Open http://localhost and log in as admin / admin. To use another host port,
-set the site URL to match:
-`-p 8080:80 -e CIVIKITCHEN_SITE_URL=http://localhost:8080`. The database is
-inside the container and goes away with it.
+The `-demo` images from the quickstart keep their database inside the
+container; it goes away with it. To use another host port, set the site URL to
+match: `-p 8080:80 -e CIVIKITCHEN_SITE_URL=http://localhost:8080`.
 
 A profile adds an extension stack, seed data and API users on first boot:
 
@@ -234,6 +226,15 @@ any version civibuild can fetch:
 cd examples/custom-version
 CIVICRM_VERSION=5.78.2 docker compose up -d --build
 ```
+
+## Images
+
+`ghcr.io/jfilter/civikitchen` is multi-arch. `:standalone` is the main image;
+`:drupal10`, `:drupal11`, `:wordpress` and `:joomla` carry the same tools on a
+civibuild site, and each has a `-demo` variant with an embedded database.
+Moving tags are rebuilt daily from the current CiviCRM stable and move only
+after their tests pass; extension repositories pin the `:v1` release tags. See
+[Images](docs/images.md) and [Tags & versions](docs/images.md#tags--versions).
 
 ## Requirements
 
