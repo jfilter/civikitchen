@@ -94,17 +94,15 @@ final class UnreleasedShippedChangesCheckTest extends CheckTestCase
         );
     }
 
-    public function testWarnsUnevaluatedWhenAnAdoptedRepoHasNoTag(): void
+    /** Nothing released yet is healthy; release-tags covers a repo that lost its tags. */
+    public function testSilentWhenAnAdoptedRepoHasReleasedNothingYet(): void
     {
         $context = $this->repo([
             '.github/workflows/release.yml' => self::RELEASE_CALLER,
             'Civi/Thing.php' => '<?php',
         ], git: true);
         $this->gitCommit('initial', '2020-01-01T00:00:00Z');
-        $this->assertWarns(
-            $this->run_(new UnreleasedShippedChangesCheck(), $context),
-            'unreleased-shipped-changes not evaluated: no v* tag',
-        );
+        $this->assertSilent($this->run_(new UnreleasedShippedChangesCheck(), $context));
     }
 
     public function testSilentWhenTheRepoHasNeitherTagsNorAReleaseWorkflow(): void

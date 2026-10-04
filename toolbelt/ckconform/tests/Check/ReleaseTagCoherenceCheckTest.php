@@ -108,17 +108,15 @@ final class ReleaseTagCoherenceCheckTest extends CheckTestCase
         );
     }
 
-    public function testWarnsUnevaluatedWhenAnAdoptedRepoHasNoTag(): void
+    /** Nothing released yet is healthy; release-tags covers a repo that lost its tags. */
+    public function testSilentWhenAnAdoptedRepoHasReleasedNothingYet(): void
     {
         $context = $this->repo([
             'info.xml' => $this->infoXml(extra: '<version>1.0.0</version>'),
             '.github/workflows/release.yml' => self::RELEASE_CALLER,
         ], git: true);
         $this->gitCommit('initial');
-        $this->assertWarns(
-            $this->run_(new ReleaseTagCoherenceCheck(), $context),
-            'release-tag-coherence not evaluated: no v* tag',
-        );
+        $this->assertSilent($this->run_(new ReleaseTagCoherenceCheck(), $context));
     }
 
     public function testWarnsUnevaluatedOutsideAGitCheckout(): void

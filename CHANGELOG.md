@@ -39,6 +39,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Changed
 
+- `release-tag-coherence` and `unreleased-shipped-changes` no longer warn in a
+  full checkout without tags, the state of every repository before its first
+  release. A shallow clone is still reported, and a repository that released
+  and lost its tags fails `release-tags`.
 - `ckconform`'s `mixin-declaration` warning names the command that fixes it,
   `civix mixin --enable=<mixin>@<version>`, for every missing mixin.
 - `cklifecycle`'s settings check fails on a pseudoconstant key core does not

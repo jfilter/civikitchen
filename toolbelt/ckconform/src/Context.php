@@ -435,16 +435,6 @@ final class Context
     public const SHARED_RELEASE = 'extension-release.yml';
 
     /**
-     * Does any workflow publish releases through the shared pipeline? A repo
-     * that does produces a tagged, verified archive; one that does not offers a
-     * consumer nothing but a branch.
-     */
-    public function publishesReleases(): bool
-    {
-        return $this->releaseCallers() !== [];
-    }
-
-    /**
      * The jobs that publish through the shared release workflow, workflow =>
      * job name => job. A `dry_run: true` job publishes nothing.
      *
