@@ -75,7 +75,9 @@ final class LintCommand implements Command
         } elseif (!$hasProjectConfig) {
             $phpcs[] = '.';
         }
-        $failed = $this->runner->passthrough($phpcs) !== 0;
+        $status = $this->runner->passthrough($phpcs);
+        // phpcbf exits 1 when it fixed everything it found, 2 when it could not.
+        $failed = $fix ? $status > 1 : $status !== 0;
 
         $mago = $this->findExecutable('mago');
         if ($mago === null) {

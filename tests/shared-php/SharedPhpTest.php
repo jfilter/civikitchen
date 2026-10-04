@@ -733,6 +733,24 @@ final class SharedPhpTest extends TestCase
         }
     }
 
+    public function testLintFixSucceedsWhenPhpcbfFixedEverything(): void
+    {
+        $before = getcwd();
+        chdir($this->temporary);
+        ob_start();
+        try {
+            // phpcbf: 1 = all fixed, 2 = some left; phpcs: 1 = findings.
+            foreach ([['phpcbf', 1, ['--fix', '--all'], 0], ['phpcbf', 2, ['--fix', '--all'], 1], ['phpcs', 1, ['--all'], 1]] as [$tool, $exit, $arguments, $expected]) {
+                $runner = new RecordingRunner();
+                $runner->exitCodes[$tool] = $exit;
+                self::assertSame($expected, (new LintCommand(dirname(__DIR__, 2), $runner))->run($arguments), "$tool exit $exit");
+            }
+        } finally {
+            ob_end_clean();
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
     public function testLintRefusesOutsideAGitCheckoutInsteadOfPassingUnchecked(): void
     {
         file_put_contents($this->temporary . '/Probe.php', "<?php\nreturn @unlink('/tmp/nope');\n");
@@ -936,10 +954,13 @@ final class RecordingRunner extends Runner
         return ['status' => 0, 'output' => ''];
     }
 
+    /** @var array<string, int> exit status per program, 0 when absent */
+    public array $exitCodes = [];
+
     public function passthrough(array $command, ?array $environment = null, ?string $workingDirectory = null): int
     {
         $this->commands[] = $command;
-        return 0;
+        return $this->exitCodes[$command[0]] ?? 0;
     }
 
     public function passedArgument(string $argument): bool
