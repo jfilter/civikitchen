@@ -7,14 +7,14 @@ audits and as the target state when modernizing an existing extension.
 For a new extension, run `/path/to/civikitchen/scaffold/ckcreate <key>` to
 generate the civix scaffold and apply the versioned
 `scaffold/template/extension/` tooling layer in one atomic operation. For an
-existing civix extension, `ckinit.php <extension-directory>` applies that layer;
+existing civix extension, `ckinit <extension-directory>` applies that layer;
 existing files remain untouched unless `--force` is explicitly supplied. Afterwards,
-`ckinit.php --check` reports where template-managed files have drifted and
-`ckinit.php --update` refreshes them (seeded files like `composer.json` and
+`ckinit --check` reports where template-managed files have drifted and
+`ckinit --update` refreshes them (seeded files like `composer.json` and
 `phpstan.neon.dist` stay the repo's own after the first copy;
 [ADR-0013](adr/0013-managed-and-seeded-template-files.md)) — see
 [extension-development.md](extension-development.md#civix-workflow). Use the
-`ckinit.php` from the civikitchen checkout at the version the repo pins;
+`ckinit` from the civikitchen checkout at the version the repo pins;
 [releases.md](releases.md) explains what a version covers.
 
 ## UI: declarative before imperative

@@ -60,7 +60,7 @@ list next to it warns as well.
 The caller `.github/workflows/release.yml` is a template-managed file:
 
 ```bash
-/path/to/civikitchen/scaffold/ckinit.php --update .
+/path/to/civikitchen/scaffold/ckinit --update .
 ```
 
 writes it, and the template drift job in CI keeps it in line afterwards. The

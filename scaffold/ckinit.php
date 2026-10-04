@@ -125,7 +125,7 @@ a non-empty reason under policy.template_custom in civikitchen.yaml.
 
 Typical flow:
   civix generate:module org.example.myext
-  /path/to/civikitchen/scaffold/ckinit.php ./org.example.myext   # the directory civix created
+  /path/to/civikitchen/scaffold/ckinit ./org.example.myext   # runs this file in the image
 TXT);
   exit($status);
 }

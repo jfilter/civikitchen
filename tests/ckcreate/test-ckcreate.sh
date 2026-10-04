@@ -11,77 +11,7 @@ export TMPDIR="$work/tmp"
 export FAKE_DOCKER_LOG="$work/docker.log"
 mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$TMPDIR" "$work/bin"
 
-cat > "$work/bin/docker" <<'FAKE'
-#!/usr/bin/env bash
-set -euo pipefail
-
-printf '%q ' "$@" >> "$FAKE_DOCKER_LOG"
-printf '\n' >> "$FAKE_DOCKER_LOG"
-
-for ((i = 1; i <= $#; i++)); do
-  if [ "${!i}" = "generate:module" ]; then
-    if [ "${FAKE_CIVIX_FAIL:-0}" = "1" ]; then
-      exit 17
-    fi
-    next=$((i + 1))
-    key="${!next}"
-    break
-  fi
-done
-
-if [ -z "${key:-}" ]; then
-  exit 0
-fi
-
-author="" email="" license="" compatibility=""
-for ((i = 1; i <= $#; i++)); do
-  case "${!i}" in
-    --author|--email|--license|--compatibility)
-      option="${!i}"
-      next=$((i + 1))
-      value="${!next}"
-      case "$option" in
-        --author) author="$value" ;;
-        --email) email="$value" ;;
-        --license) license="$value" ;;
-        --compatibility) compatibility="$value" ;;
-      esac
-      ;;
-  esac
-done
-
-out="$HOME/.cache/civikitchen/ckcreate.$PPID/$key"
-mkdir -p "$out"
-cat > "$out/info.xml" <<EOF
-<?xml version="1.0"?>
-<extension key="$key" type="module">
-  <file>$key</file>
-  <name>$key</name>
-  <description>FIXME</description>
-  <version>1.0</version>
-  <license>$license</license>
-  <authors><author><name>$author</name><email>$email</email><role>Maintainer</role></author></authors>
-  <urls><url desc="Licensing">https://opensource.org/licenses/$license</url></urls>
-  <compatibility><ver>$compatibility</ver></compatibility>
-  <php_compatibility mode="list"><ver>8.0</ver><ver>8.1</ver><ver>8.2</ver><ver>8.3</ver><ver>8.4</ver></php_compatibility>
-  <civix><namespace>CRM/$key</namespace><format>25.10.2</format></civix>
-  <mixins><mixin>scan-classes@1.0.0</mixin></mixins>
-</extension>
-EOF
-cat > "$out/README.md" <<EOF
-# $key
-
-This is an extension for CiviCRM, licensed under [$license](LICENSE.txt).
-EOF
-cat > "$out/LICENSE.txt" <<EOF
-Copyright (C) 2020 $author
-
-$license fixture text.
-EOF
-printf '%s\n' '<?php' > "$out/$key.php"
-printf '%s\n' '<?php' > "$out/$key.civix.php"
-FAKE
-chmod +x "$work/bin/docker"
+ln -s "$root/tests/ckinit/fake-docker" "$work/bin/docker"
 export PATH="$work/bin:$PATH"
 
 expect_failure() {
@@ -135,7 +65,7 @@ php -r '
   assert($d["policy"]["license"] === "Proprietary");
   assert($d["policy"]["copyright"] === "Acme Collective");
 ' "$root/packages/civikitchen-scenario-schema/scenario.php" "$proprietary/civikitchen.yaml"
-drift=$("$root/scaffold/ckinit.php" --check "$proprietary")
+drift=$("$root/scaffold/ckinit" --check "$proprietary")
 grep -q 'up to date' <<<"$drift"
 grep -q -- '--license MIT --compatibility 6.12' "$FAKE_DOCKER_LOG"
 grep -q -- '--enable=no' "$FAKE_DOCKER_LOG"

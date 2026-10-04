@@ -36,9 +36,17 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - `scaffold/ckx <command>` runs a command in an extension's dev stack as
   `www-data`, in the extension's directory (`ckx ck ci`, `ckx civix upgrade`),
   and sets `CK_TOOL_PATH` for an extension below the git root.
+- `scaffold/ckinit` runs the checkout's `ckinit.php` in the image
+  (`CKINIT_IMAGE`, default `:v1`) with the git root and `CK_DEFAULT_CONFIG`
+  mounted, so seeding, `--check` and `--update` need no PHP or composer on the
+  host.
 
 ### Changed
 
+- `ckcreate` runs its PHP, composer and git steps in the image: the host needs
+  bash and Docker, and the `composer install` of the scenario schema before the
+  first run is gone. The civikitchen checkout has to be mountable by Docker
+  (on macOS, under `$HOME`).
 - `release-tag-coherence` and `unreleased-shipped-changes` no longer warn in a
   full checkout without tags, the state of every repository before its first
   release. A shallow clone is still reported, and a repository that released

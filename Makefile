@@ -162,6 +162,7 @@ test-phpstan: $(PHPUNIT) $(CORE) ## The phpstan extension's rule tests + catalog
 # must not touch or waves drift through.
 test-ckinit: $(SCENARIO_YAML_STAMP) ## ckinit seed/update/check integration checks, ckup port picking
 	bash tests/ckinit/test-ckinit.sh
+	bash tests/ckinit/test-ckinit-wrapper.sh
 	bash tests/ckinit/test-ckup.sh
 	bash tests/ckinit/test-ckx.sh
 

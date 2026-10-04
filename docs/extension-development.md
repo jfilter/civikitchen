@@ -370,10 +370,10 @@ Modern extensions configure features in `info.xml` via [standard mixins](https:/
 Create a module with the host-side wrapper. It boots the temporary CiviCRM
 database which `civix generate:module` requires, generates the civix scaffold,
 applies the versioned CiviKitchen tooling layer, and only then moves the complete
-directory into place:
+directory into place. Every step runs in the image; the host needs bash and
+Docker:
 
 ```bash
-composer install --no-dev --working-dir=/path/to/civikitchen/packages/civikitchen-scenario-schema
 /path/to/civikitchen/scaffold/ckcreate example_ext \
   --author "Example Maintainer" \
   --email dev@example.org \
@@ -395,14 +395,14 @@ that checks the extension installs, so every gate of `ck ci` passes from the sta
 
 `ckcreate` is atomic: missing mandatory values, a civix error, or a template
 error leaves no partial target directory. For an existing civix module that
-only lacks the tooling layer, run `ckinit.php` directly:
+only lacks the tooling layer, run `ckinit` directly. It runs the checkout's
+`ckinit.php` in the image (`CKINIT_IMAGE` overrides `:v1`):
 
 ```bash
-composer install --no-dev --working-dir=/path/to/civikitchen/packages/civikitchen-scenario-schema
-/path/to/civikitchen/scaffold/ckinit.php /path/to/org.example.myext
+/path/to/civikitchen/scaffold/ckinit /path/to/org.example.myext
 ```
 
-The argument is the extension directory, not the extension key. `ckinit.php`
+The argument is the extension directory, not the extension key. `ckinit`
 reads the extension `<file>` value from that directory's `info.xml`, renders
 `scaffold/template/extension/`, and refuses to overwrite existing files. Use `--force`
 only after reviewing conflicts. This makes the template an executable
@@ -417,8 +417,8 @@ files the repo takes ownership of after the first copy (`composer.json`,
 Two more modes work with that split:
 
 ```bash
-/path/to/civikitchen/scaffold/ckinit.php --check  /path/to/org.example.myext   # report drift, exit 1 on any
-/path/to/civikitchen/scaffold/ckinit.php --update /path/to/org.example.myext   # rewrite managed files, create missing ones
+/path/to/civikitchen/scaffold/ckinit --check  /path/to/org.example.myext   # report drift, exit 1 on any
+/path/to/civikitchen/scaffold/ckinit --update /path/to/org.example.myext   # rewrite managed files, create missing ones
 ```
 
 `--update` never touches an existing seeded file; review its output with

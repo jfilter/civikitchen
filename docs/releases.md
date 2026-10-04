@@ -199,7 +199,7 @@ release does. So the first time through, the order is not negotiable:
    still on `@main` see template drift (their caller says `@main`, the new
    template says `@v1`), which shows up as a red drift job — the one check
    whose whole purpose is to notice exactly this.
-3. Only now update the repos: `scaffold/ckinit.php --update <repo>` rewrites the
+3. Only now update the repos: `scaffold/ckinit --update <repo>` rewrites the
    caller and the CI compose stack to the released refs.
 4. Leave the canary on `@main` with the `policy.template_custom` line above.
 

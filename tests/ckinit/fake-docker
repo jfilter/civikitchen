@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# Fake docker for the scaffold tests: logs every call, fakes civix's
+# generate:module, and runs php/git/composer steps on the host.
+set -euo pipefail
+
+printf '%q ' "$@" >> "$FAKE_DOCKER_LOG"
+printf '\n' >> "$FAKE_DOCKER_LOG"
+
+# The PHP, git and composer steps run for real on the host, with each mount
+# target rewritten to its source; everything else is a no-op.
+mounts=() command=() envs=()
+if [ "$1" = run ]; then
+  shift
+  entrypoint=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -v) mounts+=("${2%:ro}"); shift 2 ;;
+      -e) envs+=("$2"); shift 2 ;;
+      -u) shift 2 ;;
+      --entrypoint) entrypoint="$2"; shift 2 ;;
+      --rm) shift ;;
+      *) shift; command=("$entrypoint" "$@"); break ;;
+    esac
+  done
+elif [ "$1" = compose ] && [[ " $* " == *" exec "* ]]; then
+  while [ "$1" != exec ]; do
+    if [ "$1" = -f ]; then
+      while IFS= read -r line; do mounts+=("${line%:ro}"); done \
+        < <(sed -n 's/^      - \(\/.*:\/.*\)$/\1/p' "$2")
+    fi
+    shift
+  done
+  shift
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -T) shift ;;
+      -u|-w) shift 2 ;;
+      -e) envs+=("$2"); shift 2 ;;
+      *) shift; command=("$@"); break ;;
+    esac
+  done
+fi
+# A mount target at the start of a path, in an argument or an env value.
+translate() {
+  local value="$1" mount
+  for mount in ${mounts[@]+"${mounts[@]}"}; do
+    value=$(FAKE_SRC="${mount%%:*}" FAKE_DST="${mount#*:}" \
+      perl -pe 's{(?<![\w./-])\Q$ENV{FAKE_DST}\E(?=/|$|["\x27\s])}{$ENV{FAKE_SRC}}g' <<<"$value")
+  done
+  printf '%s' "$value"
+}
+case "${command[0]:-}" in
+  php|git|test|bash|composer)
+    for i in "${!command[@]}"; do command[i]=$(translate "${command[i]}"); done
+    for env in ${envs[@]+"${envs[@]}"}; do
+      case "$env" in HOME=*) ;; *) export "$(translate "$env")" ;; esac
+    done
+    exec "${command[@]}"
+    ;;
+esac
+
+for ((i = 1; i <= $#; i++)); do
+  if [ "${!i}" = "generate:module" ]; then
+    if [ "${FAKE_CIVIX_FAIL:-0}" = "1" ]; then
+      exit 17
+    fi
+    next=$((i + 1))
+    key="${!next}"
+    break
+  fi
+done
+
+if [ -z "${key:-}" ]; then
+  exit 0
+fi
+
+author="" email="" license="" compatibility=""
+for ((i = 1; i <= $#; i++)); do
+  case "${!i}" in
+    --author|--email|--license|--compatibility)
+      option="${!i}"
+      next=$((i + 1))
+      value="${!next}"
+      case "$option" in
+        --author) author="$value" ;;
+        --email) email="$value" ;;
+        --license) license="$value" ;;
+        --compatibility) compatibility="$value" ;;
+      esac
+      ;;
+  esac
+done
+
+out="$HOME/.cache/civikitchen/ckcreate.$PPID/$key"
+mkdir -p "$out"
+cat > "$out/info.xml" <<EOF
+<?xml version="1.0"?>
+<extension key="$key" type="module">
+  <file>$key</file>
+  <name>$key</name>
+  <description>FIXME</description>
+  <version>1.0</version>
+  <license>$license</license>
+  <authors><author><name>$author</name><email>$email</email><role>Maintainer</role></author></authors>
+  <urls><url desc="Licensing">https://opensource.org/licenses/$license</url></urls>
+  <compatibility><ver>$compatibility</ver></compatibility>
+  <php_compatibility mode="list"><ver>8.0</ver><ver>8.1</ver><ver>8.2</ver><ver>8.3</ver><ver>8.4</ver></php_compatibility>
+  <civix><namespace>CRM/$key</namespace><format>25.10.2</format></civix>
+  <mixins><mixin>scan-classes@1.0.0</mixin></mixins>
+</extension>
+EOF
+cat > "$out/README.md" <<EOF
+# $key
+
+This is an extension for CiviCRM, licensed under [$license](LICENSE.txt).
+EOF
+cat > "$out/LICENSE.txt" <<EOF
+Copyright (C) 2020 $author
+
+$license fixture text.
+EOF
+printf '%s\n' '<?php' > "$out/$key.php"
+printf '%s\n' '<?php' > "$out/$key.civix.php"

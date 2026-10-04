@@ -1,0 +1,53 @@
+#!/bin/bash
+#
+# ckinit — run this checkout's ckinit.php inside the civikitchen image, so the
+# host needs only bash and Docker. Same arguments as ckinit.php:
+#
+#   ckinit [--force] <extension-dir>   ckinit --update <dir>   ckinit --check <dir>
+#
+# The git root above the target is mounted too: ckinit derives the repository
+# mount of the dev compose file from it. The checkout's YAML parser is
+# installed in the container on the first run. CKINIT_IMAGE overrides the image.
+set -euo pipefail
+
+die() { echo "ckinit: $*" >&2; exit 2; }
+
+checkout="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+image="${CKINIT_IMAGE:-ghcr.io/jfilter/civikitchen:v1}"
+command -v docker >/dev/null 2>&1 || die "docker is required"
+
+options=()
+target=""
+for arg in "$@"; do
+  case "$arg" in
+    -*) options+=("$arg") ;;
+    *)  [ -z "$target" ] || die "more than one directory given"; target="$arg" ;;
+  esac
+done
+
+schema=packages/civikitchen-scenario-schema
+run=(docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp
+     -v "$checkout:/civikitchen:ro" -v "$checkout/$schema:/civikitchen/$schema")
+if [ -n "${CK_DEFAULT_CONFIG:-}" ]; then
+  [ -f "$CK_DEFAULT_CONFIG" ] || die "CK_DEFAULT_CONFIG is not a file: $CK_DEFAULT_CONFIG"
+  run+=(-v "$(cd "$(dirname "$CK_DEFAULT_CONFIG")" && pwd -P)/$(basename "$CK_DEFAULT_CONFIG"):/ck-default-config:ro"
+        -e CK_DEFAULT_CONFIG=/ck-default-config)
+fi
+
+script="composer install -q --no-dev --no-interaction --working-dir=/civikitchen/$schema \
+  && exec php /civikitchen/scaffold/ckinit.php \"\$@\""
+
+if [ -z "$target" ]; then
+  # --help, or no directory: ckinit.php prints its usage.
+  exec "${run[@]}" --entrypoint bash "$image" -c "$script" ckinit ${options[@]+"${options[@]}"}
+fi
+
+[ -d "$target" ] || die "target directory does not exist: $target"
+target="$(cd "$target" && pwd -P)"
+top="$target"
+while [ "$top" != "/" ] && [ ! -e "$top/.git" ]; do top="$(dirname "$top")"; done
+[ "$top" != "/" ] || top="$target"
+relative="${target#"$top"}"
+
+exec "${run[@]}" -v "$top:/repo" --entrypoint bash "$image" -c "$script" ckinit \
+  ${options[@]+"${options[@]}"} "/repo$relative"

@@ -3,9 +3,10 @@
 # ckcreate — create a new extension that already conforms to the house standard.
 #
 # Three things have to meet for a new extension, and they live in three places:
-# civix (in the image) generates the scaffold, ckinit (in this repo) seeds the
-# template layer, and the org's own values (license, copyright, author) belong
-# to whoever runs this — they are deliberately NOT baked in here.
+# civix (in the image) generates the scaffold, ckinit (this checkout's, run in
+# the image) seeds the template layer, and the org's own values (license,
+# copyright, author) belong to whoever runs this — they are deliberately NOT
+# baked in here. The host needs only bash and Docker.
 #
 # The awkward part is civix: `generate:module` boots CiviCRM and opens a real
 # database connection, so it cannot run against the bare image. This boots a
@@ -119,11 +120,8 @@ dir="${dir:-$PWD/$key}"
 command -v docker >/dev/null 2>&1 || die "docker is required (civix needs a booted CiviCRM to generate)"
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -f "$here/ckinit.php" ] || die "cannot find ckinit.php next to this script"
-ck_cli="$here/../toolbelt/bin/ck"
-[ -x "$ck_cli" ] || die "cannot find the shared ck PHP CLI"
-[ -f "$here/../packages/civikitchen-scenario-schema/vendor/autoload.php" ] \
-  || die "YAML parser dependency is missing; run composer install --working-dir=packages/civikitchen-scenario-schema"
+[ -x "$here/ckinit" ] || die "cannot find ckinit next to this script"
+checkout="$(cd "$here/.." && pwd -P)"
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/ckcreate.XXXXXX")"
 # The generated tree has to live somewhere Docker can mount. macOS VMs do not
@@ -164,6 +162,7 @@ services:
       CIVIKITCHEN_SITE_URL: "http://localhost"
     volumes:
       - $mount_root:/out
+      - $checkout:/civikitchen:ro
   db:
     image: mariadb:10.11
     environment:
@@ -202,29 +201,41 @@ generated="$mount_root/$key"
 docker compose -p "$project" -f "$work/compose.yml" exec -T app \
   chown -R "$(id -u):$(id -g)" "/out/$key" 2>/dev/null || true
 
-"$ck_cli" internal scaffold-license "$generated" "$license" "$copyright"
+# This checkout's PHP steps, run in the stack as the calling user.
+in_app() {
+  docker compose -p "$project" -f "$work/compose.yml" exec -T \
+    -u "$(id -u):$(id -g)" -e HOME=/tmp app "$@"
+}
+in_app test -f /civikitchen/toolbelt/bin/ck \
+  || die "Docker cannot mount $checkout (on macOS the checkout has to live under \$HOME)"
+ck() { in_app php /civikitchen/toolbelt/bin/ck "$@"; }
+out="/out/$key"
+
+ck internal scaffold-license "$out" "$license" "$copyright"
 [ "$rewrite_license" = "0" ] \
   || echo "$tool: rewrote the license to '$license' (civix cannot generate it)"
 
+# cklint takes its file list from git, and ckinit places the repository mount
+# relative to the git root, so the repository starts here.
+in_app git -C "$out" init -q
+
 echo "$tool: seeding the civikitchen template …"
-php "$here/ckinit.php" --update "$generated"
+CKINIT_IMAGE="$image" "$here/ckinit" --update "$generated"
 
 # ckinit owns the initial composer.json, but the licence comes from this
 # command. Keep both declarations consistent before the directory appears.
-"$ck_cli" internal scaffold-composer "$generated/composer.json" "$license" "$php_floor"
+ck internal scaffold-composer "$out/composer.json" "$license" "$php_floor"
 
 # The template's composer constraint is the installation floor. Trim civix's
 # broad default list to the same value so package and extension metadata agree.
-"$ck_cli" internal scaffold-php-floor \
-  "$generated/composer.json" "$generated/info.xml" "$generated/phpstan.neon.dist"
+ck internal scaffold-php-floor "$out/composer.json" "$out/info.xml" "$out/phpstan.neon.dist"
 
 # civix writes <version>1.0</version>; version-format accepts only SemVer.
-"$ck_cli" internal scaffold-version "$generated/info.xml"
+ck internal scaffold-version "$out/info.xml"
 
 # Add the repository policy to the one generated CiviKitchen config.
-"$ck_cli" internal scaffold-policy \
-  "$here/../packages/civikitchen-scenario-schema/scenario.php" \
-  "$generated/civikitchen.yaml" "$license" "$copyright"
+ck internal scaffold-policy /civikitchen/packages/civikitchen-scenario-schema/scenario.php \
+  "$out/civikitchen.yaml" "$license" "$copyright"
 echo "$tool: wrote civikitchen.yaml policy (license, copyright)"
 
 # A suite with no test fails ckcoverage, so the scaffold starts with one.
@@ -259,16 +270,14 @@ final class InstallTest extends TestCase implements HeadlessInterface {
 }
 EOF
 
-# civix's own files do not meet the CiviKitchen standard; cklint takes its file
-# list from git, so the repository starts here.
-git -C "$generated" init -q
+# civix's own files do not meet the CiviKitchen standard.
 echo "$tool: fixing lint findings in the civix output …"
 docker compose -p "$project" -f "$work/compose.yml" exec -T -w "/out/$key" app cklint --fix --all >/dev/null \
   || echo "$tool: cklint --fix could not fix everything; run cklint --all in the new extension" >&2
 docker compose -p "$project" -f "$work/compose.yml" exec -T app \
   chown -R "$(id -u):$(id -g)" "/out/$key" 2>/dev/null || true
 
-php "$here/ckinit.php" --check "$generated" >/dev/null
+CKINIT_IMAGE="$image" "$here/ckinit" --check "$generated" >/dev/null
 
 mkdir -p "$(dirname "$dir")"
 mv "$generated" "$dir"

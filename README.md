@@ -23,7 +23,6 @@ Start a new extension:
 
 ```bash
 git clone https://github.com/jfilter/civikitchen
-composer install --no-dev --working-dir=civikitchen/packages/civikitchen-scenario-schema
 civikitchen/scaffold/ckcreate myext \
     --author "Example Maintainer" --email dev@example.org --copyright "Example Org"
 cd myext
@@ -40,7 +39,7 @@ in a fresh git repository that passes `ck ci`. `ckup` writes free host ports to
 in that stack as `www-data`, in the extension's directory; without a command it
 opens a shell.
 
-For an existing civix extension, `scaffold/ckinit.php <extension-dir>` adds the
+For an existing civix extension, `scaffold/ckinit <extension-dir>` adds the
 same files. It refuses to overwrite files that already exist.
 
 ## Extension development
@@ -85,7 +84,7 @@ tests, start from `examples/extension-with-playwright/`.
 
 ## CI for extensions
 
-An extension created by `ckcreate` or `ckinit.php` has a CI caller in
+An extension created by `ckcreate` or `ckinit` has a CI caller in
 `.github/workflows/ci.yml`:
 
 ```yaml
@@ -96,7 +95,7 @@ jobs:
 
 The workflow boots the stack from `.docker/docker-compose.ci.yml`, runs PHPUnit
 under coverage and the checks listed in the next section, and fails when
-template-managed files have drifted (`ckinit.php --check`). More jobs are
+template-managed files have drifted (`ckinit --check`). More jobs are
 opt-in through inputs such as `matrix_images`, `lifecycle`,
 `upgrade_from_last_release`, `schema_parity`, `core_upgrade_from`, `js_tests`,
 `playwright` and `mutation`. Each input is documented in
@@ -239,7 +238,8 @@ after their tests pass; extension repositories pin the `:v1` release tags. See
 ## Requirements
 
 - Using the images: Docker with the compose plugin.
-- Scaffolding (`ckcreate`, `ckinit.php`, `ckup`, `ckx`): bash, PHP 8.1+, composer, Docker.
+- Scaffolding (`ckcreate`, `ckinit`, `ckup`, `ckx`): bash and Docker; everything
+  else runs in the image.
 - Working on civikitchen: GNU Make 3.82+, bash, git, curl, php, composer, pipx.
   `make doctor` reports what is missing. `make lint` and `make test` need no
   Docker; `make build` and `make test-images` do.
