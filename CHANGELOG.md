@@ -52,6 +52,15 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- A new extension from `ckcreate` passes `ck ci`. It used to fail four gates.
+  The template's `phpstan.neon.dist` listed `Civi`, `CRM` and `managed`, which
+  civix leaves empty or does not create; it now analyses the whole repository
+  minus generated and foreign code, and `phpstan-tests.neon.dist` puts `tests/`
+  back for its pass. `ckcreate` runs `cklint --fix` over civix's files and adds
+  a headless install test. It also creates the git repository.
+  `make e2e-ckcreate` and the image workflow check this with real civix.
+- `cklint --fix` exits 0 when phpcbf fixed every finding. phpcbf reports that
+  case with exit code 1, which cklint passed on as a failure.
 - `ckmodernize --fix` stops when `civix upgrade` or `civix convert-entity`
   fails instead of carrying on to the code step, and runs `convert-entity`
   only when the extension has EFv1 schema XML.

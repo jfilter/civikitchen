@@ -389,6 +389,10 @@ values may live in `~/.config/civikitchen/ckcreate.conf` as `CKCREATE_AUTHOR`,
 PHP floor while keeping `info.xml` and Composer aligned. `ckcreate --help`
 lists the flags and defaults.
 
+The result is a git repository with nothing committed: the civix files run
+through `cklint --fix`, and one headless test (`tests/phpunit/Civi/<Namespace>/InstallTest.php`)
+that checks the extension installs, so every gate of `ck ci` passes from the start.
+
 `ckcreate` is atomic: missing mandatory values, a civix error, or a template
 error leaves no partial target directory. For an existing civix module that
 only lacks the tooling layer, run `ckinit.php` directly:

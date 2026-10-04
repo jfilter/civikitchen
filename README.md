@@ -69,7 +69,8 @@ cd myext
 
 `ckcreate` runs `civix generate:module` in a throwaway stack, then adds the
 template: dev and CI compose files under `.docker/`, the CI and release
-workflows, phpcs/phpstan/phpunit config and the test bootstrap. `ckup` writes
+workflows, phpcs/phpstan/phpunit config, the test bootstrap and a first test,
+in a fresh git repository that passes `ck ci`. `ckup` writes
 free host ports to `.docker/.env` and runs `docker compose up -d`;
 `scaffold/ckx <command>` runs a command in that stack as `www-data`, in the
 extension's directory. For an

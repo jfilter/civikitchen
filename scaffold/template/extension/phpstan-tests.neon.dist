@@ -23,12 +23,15 @@ parameters:
 	# second pass over the tests, not a re-run of the production analysis.
 	paths!:
 		- tests/phpunit
-	# The second pass replaces production `paths`; scan extension classes so
-	# APIv4 façades loaded by CiviCRM's runtime classloader remain known while
+	# phpstan.neon.dist leaves tests/ out of the analysis; this pass puts it
+	# back. Its other exclusions only concern files outside tests/.
+	excludePaths:
+		analyse!: []
+	# The second pass replaces production `paths`; scan the extension's classes
+	# so APIv4 façades loaded by CiviCRM's runtime classloader remain known while
 	# only tests themselves are analysed for findings.
 	scanDirectories:
-		- Civi
-		- CRM
+		- .
 	# PHPUnit's own classes come from core's dev dependencies. A packaged
 	# install may not have them; point phpstan at wherever they are, e.g.:
 	#	scanDirectories:

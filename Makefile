@@ -111,7 +111,7 @@ endef
 	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckeslint test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
 	test-ck-headless test-ckcoretest test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
 	test-database-matrix test-compose-config test-demo-basic-auth test-release-retag test-release-steps test-ci-gates-step test-release-script \
-        lint-actions lint-php lint-schema lint-changelog test-changelog build test-images e2e tools clean
+        lint-actions lint-php lint-schema lint-changelog test-changelog build test-images e2e-ckcreate e2e tools clean
 
 help: ## Show this help
 	@echo "civikitchen — make targets"
@@ -373,6 +373,9 @@ build: ## Build the standalone image locally; CIVICRM_VERSION=<release>, or CIVI
 	    $(if $(CIVICRM_VERSION),--build-arg CIVICRM_VERSION=$(CIVICRM_VERSION)) \
 	    $(if $(CIVICRM_SOURCE),--build-arg CIVICRM_SOURCE=$(CIVICRM_SOURCE)) \
 	    -t civikitchen:standalone$(if $(CIVICRM_VERSION),-$(CIVICRM_VERSION)) .
+
+e2e-ckcreate: ## A fresh ckcreate scaffold passes ck ci in its dev stack (Docker; IMAGE=, default :v1)
+	bash tests/ckcreate/e2e-ckcreate.sh $(or $(IMAGE),ghcr.io/jfilter/civikitchen:v1)
 
 test-images: ## Boot tests + dev-tool tests against the published images (~1 h)
 	bash tests/images/run-local.sh

@@ -21,8 +21,10 @@ strict-shell flags), a `bash` on PATH, `php` with a coverage driver (phpdbg,
 PCOV or Xdebug), `composer` (the YAML parser and the phpstan rule package),
 `npm` (the pinned oxlint), and `uvx` or `pipx` (zizmor and the schema check).
 Everything else is fetched pinned; `make doctor` reports what is missing. The
-slow loop (`make build`, `make test-images`, `make e2e`) additionally needs
-Docker.
+slow loop (`make build`, `make test-images`, `make e2e`, `make e2e-ckcreate`)
+additionally needs Docker. `make e2e-ckcreate IMAGE=civikitchen:standalone`
+creates an extension with real civix and runs `ck ci` on it in the template's
+dev stack, the same check the image workflow runs before promoting.
 
 The build context is the repo root for both the standalone and buildkit-based images. The Dockerfiles copy from three trees: `toolbelt/` (the `ck*` tools, the phpcs standard, the phpstan/psalm/rector packages), `docker/` (the image's own entrypoints, provisioning and demo profiles) and `packages/` (the profile and scenario schemas). None has to live inside another, and `.dockerignore` keeps `.git` and host-built artifacts out.
 

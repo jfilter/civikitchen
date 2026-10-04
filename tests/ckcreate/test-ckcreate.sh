@@ -140,6 +140,11 @@ grep -q 'up to date' <<<"$drift"
 grep -q -- '--license MIT --compatibility 6.12' "$FAKE_DOCKER_LOG"
 grep -q -- '--enable=no' "$FAKE_DOCKER_LOG"
 grep -q 'down -v --remove-orphans' "$FAKE_DOCKER_LOG"
+# A new repository with one test, and the civix output run through the fixer.
+git -C "$proprietary" rev-parse --git-dir >/dev/null
+grep -q '^namespace Civi\\probe;$' "$proprietary/tests/phpunit/Civi/probe/InstallTest.php"
+grep -q "getStatus('probe')" "$proprietary/tests/phpunit/Civi/probe/InstallTest.php"
+grep -q -- '-w /out/probe app cklint --fix --all' "$FAKE_DOCKER_LOG"
 
 # A civix-supported licence stays intact while composer and the copyright
 # holder are still normalised to the caller's values.

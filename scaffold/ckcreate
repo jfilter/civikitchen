@@ -41,8 +41,8 @@ CKCREATE_LICENSE, CKCREATE_COMPATIBILITY, CKCREATE_PHP_COMPATIBILITY and
 CKCREATE_IMAGE override their defaults. This repo is public and carries no
 organisation's data.
 
-Afterwards the extension is a plain git-ready directory: `git init`, commit, and
-point its CI at the shared workflow.
+Afterwards the extension is a git repository with nothing committed yet: review,
+commit, and point its CI at the shared workflow.
 EOF
 }
 
@@ -227,6 +227,47 @@ php "$here/ckinit.php" --update "$generated"
   "$generated/civikitchen.yaml" "$license" "$copyright"
 echo "$tool: wrote civikitchen.yaml policy (license, copyright)"
 
+# A suite with no test fails ckcoverage, so the scaffold starts with one.
+namespace="$(sed -n 's:.*<namespace>CRM/\([A-Za-z0-9_]*\)</namespace>.*:\1:p' "$generated/info.xml")"
+[ -n "$namespace" ] || die "civix wrote no <civix><namespace>CRM/...</namespace> into info.xml"
+mkdir -p "$generated/tests/phpunit/Civi/$namespace"
+cat > "$generated/tests/phpunit/Civi/$namespace/InstallTest.php" <<EOF
+<?php
+
+declare(strict_types=1);
+
+namespace Civi\\$namespace;
+
+use Civi\\Test\\CiviEnvBuilder;
+use Civi\\Test\\HeadlessInterface;
+use PHPUnit\\Framework\\TestCase;
+
+/**
+ * @group headless
+ */
+final class InstallTest extends TestCase implements HeadlessInterface {
+
+  public function setUpHeadless(): CiviEnvBuilder {
+    return ck_headless()->apply();
+  }
+
+  public function testTheExtensionIsInstalled(): void {
+    \$status = \\CRM_Extension_System::singleton()->getManager()->getStatus('$key');
+    self::assertSame(\\CRM_Extension_Manager::STATUS_INSTALLED, \$status);
+  }
+
+}
+EOF
+
+# civix's own files do not meet the CiviKitchen standard; cklint takes its file
+# list from git, so the repository starts here.
+git -C "$generated" init -q
+echo "$tool: fixing lint findings in the civix output …"
+docker compose -p "$project" -f "$work/compose.yml" exec -T -w "/out/$key" app cklint --fix --all >/dev/null \
+  || echo "$tool: cklint --fix could not fix everything; run cklint --all in the new extension" >&2
+docker compose -p "$project" -f "$work/compose.yml" exec -T app \
+  chown -R "$(id -u):$(id -g)" "/out/$key" 2>/dev/null || true
+
 php "$here/ckinit.php" --check "$generated" >/dev/null
 
 mkdir -p "$(dirname "$dir")"
@@ -237,4 +278,4 @@ fi
 
 echo
 echo "$tool: created $dir"
-echo "  next: git init, review the scaffold, and make the first commit"
+echo "  next: review the scaffold and make the first commit"
