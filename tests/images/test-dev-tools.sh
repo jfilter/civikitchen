@@ -116,9 +116,9 @@ fi
 # 2. phpcs has Drupal + DrupalPractice + the bundled CiviKitchen standard
 echo "== phpcs standards =="
 STANDARDS="$(phpcs -i 2>&1)"
-if echo "${STANDARDS}" | grep -q Drupal; then ok "Drupal standard registered"; else fail "Drupal standard missing ($STANDARDS)"; fi
-if echo "${STANDARDS}" | grep -q DrupalPractice; then ok "DrupalPractice standard registered"; else fail "DrupalPractice standard missing"; fi
-if echo "${STANDARDS}" | grep -q CiviKitchen; then ok "CiviKitchen standard registered"; else fail "CiviKitchen standard missing"; fi
+if grep -q Drupal <<<"${STANDARDS}"; then ok "Drupal standard registered"; else fail "Drupal standard missing ($STANDARDS)"; fi
+if grep -q DrupalPractice <<<"${STANDARDS}"; then ok "DrupalPractice standard registered"; else fail "DrupalPractice standard missing"; fi
+if grep -q CiviKitchen <<<"${STANDARDS}"; then ok "CiviKitchen standard registered"; else fail "CiviKitchen standard missing"; fi
 
 # ---------------------------------------------------------------------------
 # 3. phpcs lints a sample file
@@ -155,7 +155,7 @@ PHP
 # phpcs exits non-zero when issues are found — that's the *success* path here.
 # We want to confirm it actually parses + reports, not that the code is clean.
 PHPCS_OUT="$(phpcs --standard=Drupal "${WORKDIR}/Bad.php" 2>&1 || true)"
-if echo "${PHPCS_OUT}" | grep -qiE "error|warning|FOUND"; then
+if grep -qiE "error|warning|FOUND" <<<"${PHPCS_OUT}"; then
     ok "phpcs --standard=Drupal reports issues"
 else
     fail "phpcs --standard=Drupal didn't report any issue (output: ${PHPCS_OUT:0:200})"
@@ -180,17 +180,17 @@ CK_OUT="$(phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/Legacy.php" 
 # are NOT asserted here any more — they left this standard for phpstan
 # (civicrm-disallowed.neon) and phpat, which resolve types instead of matching
 # tokens. See the ruleset description.
-if echo "${CK_OUT}" | grep -q "DeclareStrictTypesMissing\|Missing declare(strict_types"; then
+if grep -q "DeclareStrictTypesMissing\|Missing declare(strict_types" <<<"${CK_OUT}"; then
     ok "CiviKitchen DeclareStrictTypes (Slevomat) flags the missing declare"
 else
     fail "Slevomat DeclareStrictTypes didn't fire — is slevomat installed? (output: ${CK_OUT:0:200})"
 fi
-if echo "${CK_OUT}" | grep -qi "translation domain"; then
+if grep -qi "translation domain" <<<"${CK_OUT}"; then
     ok "CiviKitchen UseExtensionTs flags bare ts()"
 else
     fail "CiviKitchen UseExtensionTs didn't flag bare ts() (output: ${CK_OUT:0:200})"
 fi
-if echo "${CK_OUT}" | grep -q "civicrm_managed"; then
+if grep -q "civicrm_managed" <<<"${CK_OUT}"; then
     ok "CiviKitchen UseMixinsForStandardHooks flags legacy mixin hooks"
 else
     fail "CiviKitchen UseMixinsForStandardHooks didn't flag legacy hook (output: ${CK_OUT:0:200})"
@@ -209,7 +209,7 @@ mkdir -p "${LEGACYDIR}"
 cp "${WORKDIR}/Legacy.php" "${LEGACYDIR}/"
 (cd "${LEGACYDIR}" && git init -q . && git add -A) >/dev/null 2>&1
 CKLINT_OUT="$( (cd "${LEGACYDIR}" && cklint Legacy.php) 2>&1 || true)"
-if echo "${CKLINT_OUT}" | grep -qi "translation domain"; then
+if grep -qi "translation domain" <<<"${CKLINT_OUT}"; then
     ok "cklint lints with the CiviKitchen fallback standard"
 else
     fail "cklint didn't report the bare ts() (output: ${CKLINT_OUT:0:200})"
@@ -337,7 +337,7 @@ function acme_label(): string {
 PHP
 (cd "${WARNDIR}" && git init -q . && git add -A) >/dev/null 2>&1
 if WARN_OUT="$( (cd "${WARNDIR}" && cklint Warn.php) 2>&1 )"; then
-    if echo "${WARN_OUT}" | grep -qi "warning"; then
+    if grep -qi "warning" <<<"${WARN_OUT}"; then
         ok "cklint reports a phpcs warning and still exits 0"
     else
         fail "cklint exited 0 but swallowed the warning (output: ${WARN_OUT:0:300})"
@@ -366,12 +366,12 @@ function magoext_probe(array $params): bool {
 PHP
 (cd "${MAGODIR}" && git init -q . && git add -A) >/dev/null 2>&1
 MAGO_OUT="$( (cd "${MAGODIR}" && cklint --all) 2>&1 || true)"
-if echo "${MAGO_OUT}" | grep -q "no-error-control-operator"; then
+if grep -q "no-error-control-operator" <<<"${MAGO_OUT}"; then
     ok "cklint mago stage flags the error control operator"
 else
     fail "cklint mago stage didn't flag @ (output: ${MAGO_OUT:0:300})"
 fi
-if echo "${MAGO_OUT}" | grep -q "no-empty"; then
+if grep -q "no-empty" <<<"${MAGO_OUT}"; then
     fail "cklint mago stage runs no-empty — the baseline should disable it"
 else
     ok "cklint mago stage honors the baseline's disabled rules"
@@ -387,7 +387,7 @@ function magoext_probe(array $params): bool {
 }
 PHP
 MAGO_OUT2="$( (cd "${MAGODIR}" && cklint --all) 2>&1 || true)"
-if echo "${MAGO_OUT2}" | grep -q "no-error-control-operator"; then
+if grep -q "no-error-control-operator" <<<"${MAGO_OUT2}"; then
     fail "@mago-expect did not suppress the finding (output: ${MAGO_OUT2:0:300})"
 else
     ok "cklint mago stage honors @mago-expect"
@@ -413,12 +413,12 @@ MAGO_OUT3="$( (cd "${MAGODIR}" && cklint --all) 2>&1 || true)"
 # stage names both fixtures in the same output — so look only at the lines
 # belonging to the too-many-methods diagnostic itself.
 TMM_CTX="$(echo "${MAGO_OUT3}" | grep -A3 'too-many-methods' || true)"
-if echo "${TMM_CTX}" | grep -q "BigProd.php"; then
+if grep -q "BigProd.php" <<<"${TMM_CTX}"; then
     ok "cklint mago stage flags too-many-methods in production code"
 else
     fail "too-many-methods didn't fire outside tests/ (output: ${MAGO_OUT3:0:300})"
 fi
-if echo "${TMM_CTX}" | grep -q "BigTest.php"; then
+if grep -q "BigTest.php" <<<"${TMM_CTX}"; then
     fail "too-many-methods fired under tests/ — the baseline excludes that path"
 else
     ok "cklint mago stage excludes tests/ from too-many-methods"
@@ -450,7 +450,7 @@ else
 fi
 
 CKMOD_OUT="$( (cd "${WORKDIR}" && ckmodernize Modernize.php) 2>&1 || true)"
-if echo "${CKMOD_OUT}" | grep -q '\?\?'; then
+if grep -q '\?\?' <<<"${CKMOD_OUT}"; then
     ok "ckmodernize previews CRM_Utils_Array::value rewrite"
 else
     fail "ckmodernize did not preview the array-value rewrite (output: ${CKMOD_OUT:0:300})"
@@ -634,27 +634,27 @@ NODEJS
 # --format=unix: oxlint's default reporter is the graphical one in some
 # terminals and a one-liner in others, and these assertions name file AND rule.
 ESLINT_OUT="$( (cd "${ESDIR}" && ckeslint --format=unix) 2>&1 || true)"
-if echo "${ESLINT_OUT}" | grep -q "^js/widget.js:.*no-unsanitized(property)"; then
+if grep -q "^js/widget.js:.*no-unsanitized(property)" <<<"${ESLINT_OUT}"; then
     ok "ckeslint flags an unsafe innerHTML assignment in .js"
 else
     fail "ckeslint didn't flag innerHTML in .js (output: ${ESLINT_OUT:0:400})"
 fi
-if echo "${ESLINT_OUT}" | grep -q "^js/widget.ts:.*no-unsanitized(property)"; then
+if grep -q "^js/widget.ts:.*no-unsanitized(property)" <<<"${ESLINT_OUT}"; then
     ok "ckeslint flags an unsafe innerHTML assignment in .ts"
 else
     fail "ckeslint didn't flag innerHTML in .ts (output: ${ESLINT_OUT:0:400})"
 fi
-if echo "${ESLINT_OUT}" | grep -q "^js/widget.js:.*Contact.display_nam.*civikitchen(api4-contract)"; then
+if grep -q "^js/widget.js:.*Contact.display_nam.*civikitchen(api4-contract)" <<<"${ESLINT_OUT}"; then
     ok "ckeslint checks APIv4 field names against the image's catalog"
 else
     fail "ckeslint didn't flag the misspelt APIv4 field (output: ${ESLINT_OUT:0:400})"
 fi
-if echo "${ESLINT_OUT}" | grep -q "no-unused-vars"; then
+if grep -q "no-unused-vars" <<<"${ESLINT_OUT}"; then
     ok "ckeslint applies oxlint's correctness rules"
 else
     fail "ckeslint didn't report the unused variable (output: ${ESLINT_OUT:0:400})"
 fi
-if echo "${ESLINT_OUT}" | grep -q "no-floating-promises"; then
+if grep -q "no-floating-promises" <<<"${ESLINT_OUT}"; then
     ok "ckeslint runs the type-aware rules (tsgolint is wired up)"
 else
     fail "ckeslint didn't report the floating promise (output: ${ESLINT_OUT:0:400})"
@@ -689,12 +689,12 @@ export function render(el: HTMLElement, userInput: string): void {
 TS
 (cd "${ESNOTS}" && git init -q . && git add -A) >/dev/null 2>&1
 NOTS_OUT="$( (cd "${ESNOTS}" && ckeslint --format=unix) 2>&1 || true)"
-if echo "${NOTS_OUT}" | grep -q "no-unsafe"; then
+if grep -q "no-unsafe" <<<"${NOTS_OUT}"; then
     fail "ckeslint ran type-aware rules without a tsconfig (output: ${NOTS_OUT:0:300})"
 else
     ok "ckeslint skips type-aware rules when the repo has no tsconfig"
 fi
-if echo "${NOTS_OUT}" | grep -q "no-unsanitized(property)"; then
+if grep -q "no-unsanitized(property)" <<<"${NOTS_OUT}"; then
     ok "ckeslint keeps no-unsanitized live without a tsconfig"
 else
     fail "ckeslint lost no-unsanitized in the no-tsconfig baseline (output: ${NOTS_OUT:0:300})"
@@ -712,7 +712,7 @@ echo 'export default [];' > "${ESCFG}/eslint.config.mjs"
 ESCFG_OUT="$( (cd "${ESCFG}" && ckeslint) 2>&1 || true)"
 if (cd "${ESCFG}" && ckeslint) >/dev/null 2>&1; then
     fail "ckeslint passed a repo whose only config is an eslint.config.* (output: ${ESCFG_OUT:0:300})"
-elif echo "${ESCFG_OUT}" | grep -q "the image gate is oxlint now"; then
+elif grep -q "the image gate is oxlint now" <<<"${ESCFG_OUT}"; then
     ok "ckeslint refuses a stale eslint.config.* with a pointer to the fix"
 else
     fail "ckeslint's eslint.config.* refusal is unclear (output: ${ESCFG_OUT:0:300})"
@@ -724,7 +724,7 @@ cat > "${ESCFG}/.oxlintrc.json" <<'JSON'
 JSON
 (cd "${ESCFG}" && git add -A) >/dev/null 2>&1
 OWN_OUT="$( (cd "${ESCFG}" && ckeslint --format=unix) 2>&1 || true)"
-if echo "${OWN_OUT}" | grep -q "own .oxlintrc.json"; then
+if grep -q "own .oxlintrc.json" <<<"${OWN_OUT}"; then
     ok "ckeslint prefers the repo's own .oxlintrc.json"
 else
     fail "ckeslint ignored the repo's .oxlintrc.json (output: ${OWN_OUT:0:300})"
@@ -739,7 +739,7 @@ export function boot() {
 JS
 (cd "${ESDIR}" && git add -A) >/dev/null 2>&1
 GLOBALS_OUT="$( (cd "${ESDIR}" && ckeslint --format=unix js/globals.js) 2>&1 || true)"
-if echo "${GLOBALS_OUT}" | grep -q "no-undef"; then
+if grep -q "no-undef" <<<"${GLOBALS_OUT}"; then
     fail "ckeslint reports CiviCRM globals as undefined (output: ${GLOBALS_OUT:0:300})"
 else
     ok "ckeslint knows the CiviCRM globals"
@@ -753,7 +753,7 @@ mkdir -p "${NOJS}"
 cp "${ESDIR}/info.xml" "${NOJS}/info.xml"
 (cd "${NOJS}" && git init -q . && git add -A) >/dev/null 2>&1
 if NOJS_OUT="$( (cd "${NOJS}" && ckeslint) 2>&1 )" \
-    && echo "${NOJS_OUT}" | grep -q "nothing to lint"; then
+    && grep -q "nothing to lint" <<<"${NOJS_OUT}"; then
     ok "ckeslint passes with a log line when there is no JS"
 else
     fail "ckeslint on a JS-free repo (output: ${NOJS_OUT:0:200})"
@@ -787,7 +787,7 @@ export function baseUrl(): string {
 TS
 (cd "${ESNODE}" && git init -q . && git add -A) >/dev/null 2>&1
 NODE_OUT="$( (cd "${ESNODE}" && ckeslint --format=unix) 2>&1 || true)"
-if echo "${NODE_OUT}" | grep -q "no-unsafe"; then
+if grep -q "no-unsafe" <<<"${NODE_OUT}"; then
     fail "ckeslint reports no-unsafe-* on process.env — the image's @types/node did not reach the program (output: ${NODE_OUT:0:400})"
 else
     ok "ckeslint types process.env from the image's @types/node"
@@ -808,7 +808,7 @@ cp "${ESNODE}/e2e/env.ts" "${ESOWNNODE}/e2e/env.ts"
 cp -R /opt/civikitchen-oxlint/node_modules/@types/node "${ESOWNNODE}/node_modules/@types/node"
 (cd "${ESOWNNODE}" && git init -q . && git add -A) >/dev/null 2>&1
 OWNNODE_OUT="$( (cd "${ESOWNNODE}" && ckeslint --format=unix) 2>&1 || true)"
-if echo "${OWNNODE_OUT}" | grep -q "no-unsafe"; then
+if grep -q "no-unsafe" <<<"${OWNNODE_OUT}"; then
     fail "ckeslint broke a repo that ships its own @types/node (output: ${OWNNODE_OUT:0:400})"
 elif [ -L "${ESOWNNODE}/node_modules/@types/node" ]; then
     fail "ckeslint replaced the repo's own @types/node with its overlay"
@@ -1002,7 +1002,7 @@ mkdir -p "${NOFMT}"
 cp "${FMTDIR}/info.xml" "${NOFMT}/info.xml"
 (cd "${NOFMT}" && git init -q . && git add -A) >/dev/null 2>&1
 if NOFMT_OUT="$( (cd "${NOFMT}" && ckfmt --check) 2>&1 )" \
-    && echo "${NOFMT_OUT}" | grep -q "no PHP files"; then
+    && grep -q "no PHP files" <<<"${NOFMT_OUT}"; then
     ok "ckfmt passes with a log line when there is nothing to format"
 else
     fail "ckfmt on an empty repo (output: ${NOFMT_OUT:0:200})"
@@ -1087,7 +1087,7 @@ if (cd "${CMPDIR}" && ckcompat) >/dev/null 2>&1; then
 else
     ok "ckcompat rejects PHP-8.4-only syntax against the declared 8.3 floor"
 fi
-if echo "${CMP_OUT}" | grep -q "semantics"; then
+if grep -q "semantics" <<<"${CMP_OUT}"; then
     ok "ckcompat runs the mago floor-parse stage"
 else
     fail "ckcompat's mago parse stage did not run (output: ${CMP_OUT:0:300})"
@@ -1140,7 +1140,7 @@ parameters:
 NEON
 
 PHPSTAN_OUT="$(phpstan analyse -c "${WORKDIR}/phpstan.neon" --no-progress 2>&1 || true)"
-if echo "${PHPSTAN_OUT}" | grep -qiE "should return int|error"; then
+if grep -qiE "should return int|error" <<<"${PHPSTAN_OUT}"; then
     ok "phpstan reports the typed-return error"
 else
     fail "phpstan didn't catch the type error (output: ${PHPSTAN_OUT:0:200})"
@@ -1183,14 +1183,14 @@ NEON
 done
 
 DEPR_OUT="$(phpstan analyse -c "${WORKDIR}/phpstan-plain-caller.neon" --no-progress 2>&1 || true)"
-if echo "${DEPR_OUT}" | grep -q "deprecatedClass"; then
+if grep -q "deprecatedClass" <<<"${DEPR_OUT}"; then
     ok "phpstan reports the call into a deprecated class"
 else
     fail "deprecation rules not active (output: ${DEPR_OUT:0:200})"
 fi
 
 MARKED_OUT="$(phpstan analyse -c "${WORKDIR}/phpstan-marked-caller.neon" --no-progress 2>&1 || true)"
-if echo "${MARKED_OUT}" | grep -q "deprecatedClass"; then
+if grep -q "deprecatedClass" <<<"${MARKED_OUT}"; then
     fail "@ck-legacy scope was still reported (output: ${MARKED_OUT:0:400})"
 else
     ok "@ck-legacy exempts the scope from the deprecation rules"
@@ -1404,7 +1404,7 @@ cat > "${MUT}/phpunit.xml.dist" <<'XML'
 </phpunit>
 XML
 MUT_OUT="$( (cd "${MUT}" && ckmutate) 2>&1 || true)"
-if (cd "${MUT}" && ckmutate) >/dev/null 2>&1 && echo "${MUT_OUT}" | grep -q 'no policy.mutation.minimum_msi'; then
+if (cd "${MUT}" && ckmutate) >/dev/null 2>&1 && grep -q 'no policy.mutation.minimum_msi' <<<"${MUT_OUT}"; then
     ok "ckmutate is a no-op without mutation_min_msi in civikitchen.yaml"
 else
     fail "ckmutate without a floor should pass and say so (output: ${MUT_OUT:0:300})"
@@ -1417,7 +1417,7 @@ if (cd "${MUT}" && ckmutate) >/dev/null 2>&1; then
 else
     ok "ckmutate fails the floor when a mutant escapes the suite"
 fi
-if echo "${MUT_OUT}" | grep -q 'GreaterThan'; then
+if grep -q 'GreaterThan' <<<"${MUT_OUT}"; then
     ok "ckmutate names the escaped mutant"
 else
     fail "ckmutate did not report the escaped GreaterThan mutant (output: ${MUT_OUT:0:300})"
@@ -1656,7 +1656,7 @@ fi
 # report the finding but keep exit 0 — that is the blocking/advisory split.
 ADV_RC=0
 ADV_OUT="$( (cd "${TAINT}" && cktaint --no-cache 03_uri_header_bad.php) 2>&1 )" || ADV_RC=$?
-if [[ "${ADV_RC}" -eq 0 ]] && printf '%s' "${ADV_OUT}" | grep -q 'TaintedHeader'; then
+if [[ "${ADV_RC}" -eq 0 ]] && grep -q 'TaintedHeader' <<<"${ADV_OUT}"; then
     ok "cktaint reports advisory TaintedHeader without failing (exit 0)"
 else
     fail "advisory-only run: expected TaintedHeader + exit 0, got exit ${ADV_RC}"
@@ -1679,13 +1679,13 @@ TAINT_CASES=(
 )
 for case in "${TAINT_CASES[@]}"; do
     file="${case%%:*}"; rest="${case#*:}"; issue="${rest%%:*}"; label="${rest#*:}"
-    if echo "${TAINT_OUT}" | grep -q "${issue}.*${file}"; then
+    if grep -q "${issue}.*${file}" <<<"${TAINT_OUT}"; then
         ok "cktaint reports ${issue}: ${label}"
     else
         fail "cktaint missed ${issue} in ${file} (${label})"
     fi
     good="${file/_bad.php/_good.php}"
-    if echo "${TAINT_OUT}" | grep -q "${good}"; then
+    if grep -q "${good}" <<<"${TAINT_OUT}"; then
         fail "cktaint false positive: the escaped ${good} was reported"
     else
         ok "cktaint stays silent on the escaped ${good}"

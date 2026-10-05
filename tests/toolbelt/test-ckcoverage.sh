@@ -60,8 +60,8 @@ exit 0
 EOF
 chmod +x "$work/bin/ckphpunit"
 out=$(cd "$work/ext" && PATH="$work/bin:$PATH" "$root/toolbelt/bin/ckcoverage")
-echo "$out" | grep -q '75.00% line coverage (6/8 statements)'
-echo "$out" | grep -q 'reporting only'
+grep -q '75.00% line coverage (6/8 statements)' <<<"$out"
+grep -q 'reporting only' <<<"$out"
 
 echo 'ok   ckcoverage uses the shared PHP CLI and a unique temporary run log'
 
@@ -74,8 +74,8 @@ policy:
     minimum: 0
 EOF
 out=$(cd "$work/ext" && PATH="$work/bin:$PATH" "$root/toolbelt/bin/ckcoverage")
-echo "$out" | grep -q 'floor 0% met'
-if echo "$out" | grep -q 'reporting only'; then exit 1; fi
+grep -q 'floor 0% met' <<<"$out"
+if grep -q 'reporting only' <<<"$out"; then exit 1; fi
 
 echo 'ok   ckcoverage reads policy.coverage.minimum 0 as a configured floor'
 
@@ -85,7 +85,7 @@ status=0
 out=$(cd "$work/ext" && PATH="$work/bin:$PATH" CK_FIXTURE_TESTS=0 \
   "$root/toolbelt/bin/ckcoverage" 2>&1) || status=$?
 test "$status" -ne 0
-echo "$out" | grep -q 'no test was executed'
+grep -q 'no test was executed' <<<"$out"
 
 echo 'ok   ckcoverage fails when no test was executed'
 
@@ -95,12 +95,12 @@ status=0
 out=$(cd "$work/ext" && PATH="$work/bin:$PATH" CK_FIXTURE_TESTS=0 CK_FIXTURE_SKIPPED=2 \
   "$root/toolbelt/bin/ckcoverage" 2>&1) || status=$?
 test "$status" -ne 0
-echo "$out" | grep -q 'every test was skipped'
+grep -q 'every test was skipped' <<<"$out"
 
 # One test that ran among skipped ones is a run.
 out=$(cd "$work/ext" && PATH="$work/bin:$PATH" CK_FIXTURE_TESTS=1 CK_FIXTURE_SKIPPED=2 \
   "$root/toolbelt/bin/ckcoverage")
-echo "$out" | grep -q 'line coverage'
+grep -q 'line coverage' <<<"$out"
 
 echo 'ok   ckcoverage fails when every test was skipped and passes a mixed run'
 
@@ -118,10 +118,10 @@ for form in separate joined; do
   out=$(cd "$work/ext" && PATH="$work/bin:$PATH" CK_FIXTURE_TESTS=0 \
     "$root/toolbelt/bin/ckcoverage" "$@" 2>&1) || status=$?
   test "$status" -ne 0
-  echo "$out" | grep -q 'no test was executed'
+  grep -q 'no test was executed' <<<"$out"
   test -s "$caller"
   out=$(cd "$work/ext" && PATH="$work/bin:$PATH" "$root/toolbelt/bin/ckcoverage" "$@")
-  echo "$out" | grep -q 'line coverage'
+  grep -q 'line coverage' <<<"$out"
   test -s "$caller"
 done
 
@@ -138,11 +138,11 @@ policy:
 EOF
 out=$(cd "$work/ext" && PATH="$work/bin:$PATH" CK_FIXTURE_TESTS=0 \
   "$root/toolbelt/bin/ckcoverage")
-echo "$out" | grep -q 'policy.tests declares tests optional'
+grep -q 'policy.tests declares tests optional' <<<"$out"
 
 out=$(cd "$work/ext" && PATH="$work/bin:$PATH" CK_FIXTURE_TESTS=0 CK_FIXTURE_SKIPPED=2 \
   "$root/toolbelt/bin/ckcoverage")
-echo "$out" | grep -q 'every test was skipped, and policy.tests'
+grep -q 'every test was skipped, and policy.tests' <<<"$out"
 
 echo 'ok   ckcoverage honours policy.tests=optional with a phpunit config present'
 
@@ -152,7 +152,7 @@ cat > "$work/ext/phpunit.xml.dist" <<'EOF'
 <phpunit/>
 EOF
 out=$(cd "$work/ext" && PATH="$work/bin:$PATH" "$root/toolbelt/bin/ckcoverage")
-echo "$out" | grep -q 'nothing to measure'
+grep -q 'nothing to measure' <<<"$out"
 cat > "$work/ext/phpunit.xml.dist" <<'EOF'
 <phpunit><coverage/></phpunit>
 EOF
@@ -163,7 +163,7 @@ echo 'ok   ckcoverage skips a config without <coverage> when tests are optional'
 # once ckconform renders it with its mandatory reason, not just the bare word.
 rm "$work/ext/phpunit.xml.dist"
 out=$(cd "$work/ext" && PATH="$work/bin:$PATH" "$root/toolbelt/bin/ckcoverage")
-echo "$out" | grep -q 'nothing to measure'
+grep -q 'nothing to measure' <<<"$out"
 
 echo 'ok   ckcoverage accepts policy.tests=optional with its reason attached'
 
@@ -177,6 +177,6 @@ EOF
 status=0
 out=$(cd "$work/ext" && PATH="$work/bin:$PATH" "$root/toolbelt/bin/ckcoverage" 2>&1) || status=$?
 test "$status" -ne 0
-echo "$out" | grep -q 'no phpunit config'
+grep -q 'no phpunit config' <<<"$out"
 
 echo 'ok   ckcoverage still fails without phpunit config and no tests opt-out'

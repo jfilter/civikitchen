@@ -13,21 +13,21 @@ php "$CHECK" .github/workflows/extension-ci.yml .github/workflows/playwright-e2e
 
 out=$(php "$CHECK" tests/parity/fixtures/workflow.sibling-unwired.yml 2>&1) \
   && fail "checker passed a workflow whose booting job has no sibling wiring"
-echo "$out" | grep -q "'boots'" \
+grep -q "'boots'" <<<"$out" \
   || fail "checker failed but did not name job 'boots' (got: $out)"
-echo "$out" | grep -q "'execs'" \
+grep -q "'execs'" <<<"$out" \
   && fail "checker flagged a job that only execs into an existing stack"
 
 out=$(php "$CHECK" tests/parity/fixtures/workflow.sibling-bespoke.yml 2>&1) \
   && fail "checker passed a workflow that checks the sibling out itself"
-echo "$out" | grep -q "'bespoke'" \
+grep -q "'bespoke'" <<<"$out" \
   || fail "checker failed but did not name job 'bespoke' (got: $out)"
 
 # The same bespoke checkout with a comment that names the action it does not
 # use: the gate reads the steps' `uses:`, so the comment changes nothing.
 out=$(php "$CHECK" tests/parity/fixtures/workflow.sibling-comment-bait.yml 2>&1) \
   && fail "checker passed a bespoke checkout carrying a private-deps comment"
-echo "$out" | grep -q "'bait'" \
+grep -q "'bait'" <<<"$out" \
   || fail "checker failed but did not name job 'bait' (got: $out)"
 
 echo "sibling wiring suite OK"

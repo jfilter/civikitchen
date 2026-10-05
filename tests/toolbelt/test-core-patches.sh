@@ -38,11 +38,11 @@ out=$(bash "$apply" "$work/core" "$work/patches") || fail "a contained patch was
 
 sed 's/^-one$/-three/; s/^+two$/+four/' "$work/patches/10-change.patch" > "$work/bad/20-stale.patch"
 out=$(bash "$apply" "$work/core" "$work/bad" 2>&1) && fail "a stale patch passed"
-echo "$out" | grep -q '20-stale.patch neither applies' || fail "stale patch not named: $out"
+grep -q '20-stale.patch neither applies' <<<"$out" || fail "stale patch not named: $out"
 
 grep -v '^Upstream:' "$work/patches/10-change.patch" > "$work/bad/20-stale.patch"
 out=$(bash "$apply" "$work/core" "$work/bad" 2>&1) && fail "a patch without upstream link passed"
-echo "$out" | grep -q 'names no Upstream: link' || fail "missing link not named: $out"
+grep -q 'names no Upstream: link' <<<"$out" || fail "missing link not named: $out"
 
 mkdir "$work/empty"
 out=$(bash "$apply" "$work/core" "$work/empty") || fail "an empty patch directory failed"

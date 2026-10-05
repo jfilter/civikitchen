@@ -100,7 +100,7 @@ fi
 make_extension "$work/drift"
 "$root/scaffold/ckinit.php" "$work/drift" >/dev/null
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
-echo "$out" | grep -q 'up to date'
+grep -q 'up to date' <<<"$out"
 
 # A drifted MANAGED file fails --check; an edited SEEDED file does not.
 # Inside the managed block — an addition after the END marker would be the repo's own.
@@ -110,8 +110,8 @@ if out=$("$root/scaffold/ckinit.php" --check "$work/drift" 2>&1); then
   echo "managed drift was not detected" >&2
   exit 1
 fi
-echo "$out" | grep -q 'drifted   .github/workflows/ci.yml'
-if echo "$out" | grep -q 'composer.json'; then
+grep -q 'drifted   .github/workflows/ci.yml' <<<"$out"
+if grep -q 'composer.json' <<<"$out"; then
   echo "seeded file was reported as drift" >&2
   exit 1
 fi
@@ -120,13 +120,13 @@ fi
 /bin/rm "$work/drift/phpcs.xml.dist"
 rewrite_with_sed 's|mariadb:10.11|mariadb:10.6|' "$work/drift/.docker/docker-compose.ci.yml"
 out=$("$root/scaffold/ckinit.php" --update "$work/drift")
-echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
-echo "$out" | grep -q 'updated   .docker/docker-compose.ci.yml'
-echo "$out" | grep -q 'created   phpcs.xml.dist'
+grep -q 'updated   .github/workflows/ci.yml' <<<"$out"
+grep -q 'updated   .docker/docker-compose.ci.yml' <<<"$out"
+grep -q 'created   phpcs.xml.dist' <<<"$out"
 grep -q 'ext/example_ext' "$work/drift/.docker/docker-compose.ci.yml"
 grep -q '"edited": true' "$work/drift/composer.json"
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
-echo "$out" | grep -q 'up to date'
+grep -q 'up to date' <<<"$out"
 
 # A deviation declared in civikitchen.yaml (with its mandatory reason) is respected.
 php -r '
@@ -136,7 +136,7 @@ php -r '
 ' "$root/packages/civikitchen-scenario-schema/scenario.php" "$work/drift/civikitchen.yaml"
 printf '%s\n' '# local edit' >> "$work/drift/.github/workflows/ci.yml"
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
-echo "$out" | grep -q 'custom    .github/workflows/ci.yml'
+grep -q 'custom    .github/workflows/ci.yml' <<<"$out"
 "$root/scaffold/ckinit.php" --update "$work/drift" >/dev/null
 grep -q '# local edit' "$work/drift/.github/workflows/ci.yml"
 
@@ -168,7 +168,7 @@ php -r '
 ' "$root/packages/civikitchen-scenario-schema/scenario.php" "$work/drift/civikitchen.yaml"
 /bin/rm "$work/drift/phpunit.xml.dist"
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
-echo "$out" | grep -q 'custom    phpunit.xml.dist'
+grep -q 'custom    phpunit.xml.dist' <<<"$out"
 "$root/scaffold/ckinit.php" --update "$work/drift" >/dev/null
 if [ -e "$work/drift/phpunit.xml.dist" ]; then
   echo "--update reseeded a custom-declared seeded file" >&2
@@ -184,7 +184,7 @@ if out=$("$root/scaffold/ckinit.php" --check "$work/drift" 2>&1); then
   echo "executable-bit drift was not detected" >&2
   exit 1
 fi
-echo "$out" | grep -q 'drifted   phpstanBootstrap.php'
+grep -q 'drifted   phpstanBootstrap.php' <<<"$out"
 "$root/scaffold/ckinit.php" --update "$work/drift" >/dev/null
 if [ -x "$work/drift/phpstanBootstrap.php" ]; then
   echo "--update did not restore the file mode" >&2
@@ -194,15 +194,15 @@ fi
 # phpcs.xml.dist is SEEDED (a repo's project layer): edits must not be drift.
 printf '%s\n' '<!-- local layer -->' >> "$work/drift/phpcs.xml.dist"
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
-echo "$out" | grep -q 'up to date'
+grep -q 'up to date' <<<"$out"
 
 # phpstan-tests.neon.dist is seeded but OPTIONAL: its absence is not drift,
 # and --update must not reintroduce it (existence is the CI opt-in switch).
 test -f "$work/drift/phpstan-tests.neon.dist"
 /bin/rm "$work/drift/phpstan-tests.neon.dist"
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
-echo "$out" | grep -q 'optional  phpstan-tests.neon.dist'
-echo "$out" | grep -q 'up to date'
+grep -q 'optional  phpstan-tests.neon.dist' <<<"$out"
+grep -q 'up to date' <<<"$out"
 "$root/scaffold/ckinit.php" --update "$work/drift" >/dev/null
 if [ -e "$work/drift/phpstan-tests.neon.dist" ]; then
   echo "--update recreated the opt-in phpstan-tests.neon.dist" >&2
@@ -234,7 +234,7 @@ YAML
 rewrite_with_sed 's|^# END CIVIKITCHEN MANAGED app$|# END CIVIKITCHEN MANAGED app\
       - ../../other:/var/www/html/ext/other:ro|' "$work/blocks/.docker/docker-compose.ci.yml"
 out=$("$root/scaffold/ckinit.php" --check "$work/blocks")
-echo "$out" | grep -q 'up to date' || { echo "additions outside the managed blocks were reported as drift: $out" >&2; exit 1; }
+grep -q 'up to date' <<<"$out" || { echo "additions outside the managed blocks were reported as drift: $out" >&2; exit 1; }
 # An edit inside a block is drift; --update restores the block and keeps the additions.
 rewrite_with_sed 's|extension-ci.yml@v1|extension-ci.yml@v0|' "$work/blocks/.github/workflows/ci.yml"
 rewrite_with_sed 's|mariadb:10.11|mariadb:10.6|' "$work/blocks/.docker/docker-compose.ci.yml"
@@ -242,8 +242,8 @@ if "$root/scaffold/ckinit.php" --check "$work/blocks" >/dev/null 2>&1; then
   echo "an edit inside a managed block was not detected" >&2; exit 1
 fi
 out=$("$root/scaffold/ckinit.php" --update "$work/blocks")
-echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
-echo "$out" | grep -q 'updated   .docker/docker-compose.ci.yml'
+grep -q 'updated   .github/workflows/ci.yml' <<<"$out"
+grep -q 'updated   .docker/docker-compose.ci.yml' <<<"$out"
 grep -q 'extension-ci.yml@v1' "$work/blocks/.github/workflows/ci.yml"
 grep -q 'sibling_repo: acme/other' "$work/blocks/.github/workflows/ci.yml"
 grep -q 'runs-on: ubuntu-latest' "$work/blocks/.github/workflows/ci.yml"
@@ -256,7 +256,7 @@ make_extension "$work/legacy"
 grep -v 'CIVIKITCHEN MANAGED' "$work/legacy/.github/workflows/ci.yml" > "$work/legacy/ci.tmp"
 /bin/mv "$work/legacy/ci.tmp" "$work/legacy/.github/workflows/ci.yml"
 out=$("$root/scaffold/ckinit.php" --update "$work/legacy")
-echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
+grep -q 'updated   .github/workflows/ci.yml' <<<"$out"
 grep -q 'BEGIN CIVIKITCHEN MANAGED caller' "$work/legacy/.github/workflows/ci.yml"
 # The release caller: seeded with the trigger for plain and pre-release tags.
 rel="$work/legacy/.github/workflows/release.yml"
@@ -265,7 +265,7 @@ grep -q 'extension-release.yml@v1' "$rel"
 # A repo without one gets it from --update; --check reports it missing first.
 /bin/rm "$rel"
 out=$("$root/scaffold/ckinit.php" --check "$work/legacy" 2>&1 || true)
-echo "$out" | grep -q 'missing   .github/workflows/release.yml' || { echo "a missing release caller was not reported: $out" >&2; exit 1; }
+grep -q 'missing   .github/workflows/release.yml' <<<"$out" || { echo "a missing release caller was not reported: $out" >&2; exit 1; }
 "$root/scaffold/ckinit.php" --update "$work/legacy" >/dev/null
 test -f "$rel"
 # A repo that declares release: none gets no caller and is not told one is missing.
@@ -273,7 +273,7 @@ cp -R "$work/legacy" "$work/norelease"
 /bin/rm "$work/norelease/.github/workflows/release.yml"
 printf '%s\n' 'version: 1' 'policy:' '  release:' '    mode: none' "    reason: 'no archives yet'" > "$work/norelease/civikitchen.yaml"
 out=$("$root/scaffold/ckinit.php" --check "$work/norelease" 2>&1 || true)
-if echo "$out" | grep -q 'release.yml'; then
+if grep -q 'release.yml' <<<"$out"; then
   echo "release: none still asks for a release caller: $out" >&2
   exit 1
 fi
@@ -284,11 +284,11 @@ test ! -e "$work/norelease/.github/workflows/release.yml"
 cp -R "$work/legacy" "$work/stalerelease"
 cp "$work/norelease/civikitchen.yaml" "$work/stalerelease/civikitchen.yaml"
 out=$("$root/scaffold/ckinit.php" --check "$work/stalerelease" 2>&1 || true)
-echo "$out" | grep -q 'drifted   .github/workflows/release.yml (release: none' \
+grep -q 'drifted   .github/workflows/release.yml (release: none' <<<"$out" \
   || { echo "a caller left behind by release: none was not reported: $out" >&2; exit 1; }
 cp -R "$work/stalerelease" "$work/stalerelease-owned"
 out=$("$root/scaffold/ckinit.php" --update "$work/stalerelease")
-echo "$out" | grep -q 'removed   .github/workflows/release.yml'
+grep -q 'removed   .github/workflows/release.yml' <<<"$out"
 test ! -e "$work/stalerelease/.github/workflows/release.yml"
 "$root/scaffold/ckinit.php" --check "$work/stalerelease" >/dev/null
 printf '%s\n' '    secrets:' '      composer_app_id: ${{ secrets.APP_ID }}' >> "$work/stalerelease-owned/.github/workflows/release.yml"
@@ -297,7 +297,7 @@ if out=$("$root/scaffold/ckinit.php" --update "$work/stalerelease-owned" 2>&1); 
   echo "--update deleted a release caller carrying repository lines" >&2
   exit 1
 fi
-echo "$out" | grep -q 'composer_app_id' || { echo "the refusal did not name the repository lines: $out" >&2; exit 1; }
+grep -q 'composer_app_id' <<<"$out" || { echo "the refusal did not name the repository lines: $out" >&2; exit 1; }
 cmp -s "$work/stalerelease-owned/.github/workflows/release.yml" "$work/stalerelease-owned.yml" \
   || { echo "--update touched a release caller it refused to delete" >&2; exit 1; }
 # A release.yml that calls no release is the repository's, release: none or not.
@@ -323,7 +323,7 @@ if "$root/scaffold/ckinit.php" --check "$work/legacy" >/dev/null 2>&1; then
   exit 1
 fi
 out=$("$root/scaffold/ckinit.php" --update "$work/legacy")
-echo "$out" | grep -q 'updated   .github/workflows/release.yml'
+grep -q 'updated   .github/workflows/release.yml' <<<"$out"
 grep -qF "'v[0-9]+.[0-9]+.[0-9]+-*'" "$rel"
 grep -q '# The install needs a payment processor no headless site has.' "$rel"
 grep -q 'smoke_test: false' "$rel"
@@ -359,7 +359,7 @@ jobs:
       composer_app_private_key: ${{ secrets.EXAMPLE_APP_KEY }}
 YAML
 out=$("$root/scaffold/ckinit.php" --check "$adopt" 2>&1 || true)
-echo "$out" | grep -q 'drifted   .github/workflows/release.yml$' || { echo "a marker-less caller was not plain drift: $out" >&2; exit 1; }
+grep -q 'drifted   .github/workflows/release.yml$' <<<"$out" || { echo "a marker-less caller was not plain drift: $out" >&2; exit 1; }
 "$root/scaffold/ckinit.php" --update "$adopt" >/dev/null
 arel="$adopt/.github/workflows/release.yml"
 grep -q 'BEGIN CIVIKITCHEN MANAGED caller' "$arel"
@@ -397,13 +397,13 @@ YAML
 cp "$arel" "$work/adopt-before.yml"
 /bin/rm "$adopt/tests/e2e/lib.sh"
 out=$("$root/scaffold/ckinit.php" --check "$adopt" 2>&1 || true)
-echo "$out" | grep -q 'would drop: .*on.workflow_dispatch' || { echo "--check did not name the lost trigger: $out" >&2; exit 1; }
-echo "$out" | grep -q 'would drop: .*env' || { echo "--check did not name the lost env: $out" >&2; exit 1; }
+grep -q 'would drop: .*on.workflow_dispatch' <<<"$out" || { echo "--check did not name the lost trigger: $out" >&2; exit 1; }
+grep -q 'would drop: .*env' <<<"$out" || { echo "--check did not name the lost env: $out" >&2; exit 1; }
 if out=$("$root/scaffold/ckinit.php" --update "$adopt" 2>&1); then
   echo "--update accepted a caller it would have cut down" >&2
   exit 1
 fi
-echo "$out" | grep -q 'would drop: .*on.workflow_dispatch'
+grep -q 'would drop: .*on.workflow_dispatch' <<<"$out"
 cmp -s "$arel" "$work/adopt-before.yml" || { echo "--update rewrote a caller it refused" >&2; exit 1; }
 test ! -e "$adopt/tests/e2e/lib.sh" || { echo "--update wrote files after refusing" >&2; exit 1; }
 
@@ -422,7 +422,7 @@ if out=$("$root/scaffold/ckinit.php" --update "$adopt" 2>&1); then
   echo "--update created a second release caller" >&2
   exit 1
 fi
-echo "$out" | grep -q '.github/workflows/publish.yml also calls extension-release.yml'
+grep -q '.github/workflows/publish.yml also calls extension-release.yml' <<<"$out"
 test ! -e "$arel"
 # A mention in a comment is no caller.
 printf '%s\n' '# see extension-release.yml' 'name: Publish' 'on: push' 'jobs:' '  x:' '    runs-on: ubuntu-latest' \
@@ -433,7 +433,7 @@ test -f "$arel"
 printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
   > "$adopt/.github/workflows/publish.yml"
 out=$("$root/scaffold/ckinit.php" --check "$adopt" 2>&1 || true)
-echo "$out" | grep -q 'publish.yml also calls extension-release.yml' \
+grep -q 'publish.yml also calls extension-release.yml' <<<"$out" \
   || { echo "a second caller beside release.yml was not reported: $out" >&2; exit 1; }
 /bin/rm "$adopt/.github/workflows/publish.yml"
 # A dry-run caller publishes nothing, so it is no second caller.
@@ -446,7 +446,7 @@ printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github
 # A repo that removed a block is reported, never silently rewritten.
 rewrite_with_sed '/CIVIKITCHEN MANAGED db/d' "$work/blocks/.docker/docker-compose.ci.yml"
 out=$("$root/scaffold/ckinit.php" --check "$work/blocks" 2>&1 || true)
-echo "$out" | grep -q 'managed blocks do not match' || { echo "a removed block was not reported: $out" >&2; exit 1; }
+grep -q 'managed blocks do not match' <<<"$out" || { echo "a removed block was not reported: $out" >&2; exit 1; }
 
 # --- several extensions in one repository ------------------------------------
 
@@ -525,7 +525,7 @@ if out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1); then
   echo "a missing /civikitchen-repo mount was not detected" >&2
   exit 1
 fi
-echo "$out" | grep -q 'drifted   .docker/docker-compose.ci.yml'
+grep -q 'drifted   .docker/docker-compose.ci.yml' <<<"$out"
 "$root/scaffold/ckinit.php" --update "$mono" >/dev/null
 "$root/scaffold/ckinit.php" --check "$mono" >/dev/null
 
@@ -539,7 +539,7 @@ if "$root/scaffold/ckinit.php" --check "$mono" >/dev/null 2>&1; then
   exit 1
 fi
 out=$("$root/scaffold/ckinit.php" --update "$mono")
-echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
+grep -q 'updated   .github/workflows/ci.yml' <<<"$out"
 grep -q 'extension-ci.yml@v1' "$mono/.github/workflows/ci.yml"
 grep -q 'playwright: true' "$mono/.github/workflows/ci.yml"
 
@@ -552,10 +552,10 @@ rewrite_with_sed 's|^  # END CIVIKITCHEN MANAGED job-addon$|  # END CIVIKITCHEN 
 "$root/scaffold/ckinit.php" --check "$mono" >/dev/null
 rewrite_with_sed 's|^      stage: publish$|      stage: release|' "$mono/.github/workflows/release.yml"
 out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
-echo "$out" | grep -q 'drifted   .github/workflows/release.yml' \
+grep -q 'drifted   .github/workflows/release.yml' <<<"$out" \
   || { echo "a stale release publish job was not reported: $out" >&2; exit 1; }
 out=$("$root/scaffold/ckinit.php" --update "$mono")
-echo "$out" | grep -q 'updated   .github/workflows/release.yml'
+grep -q 'updated   .github/workflows/release.yml' <<<"$out"
 grep -q 'composer_app_id: ${{ secrets.APP_ID }}' "$mono/.github/workflows/release.yml"
 assert_release_jobs "addon[base](working_directory='addon',stage='build',smoke_test=false) base[](working_directory='base',stage='build') publish[addon,base](stage='publish')"
 
@@ -587,10 +587,10 @@ assert_root_jobs "addon(working_directory='addon',playwright=true) base(working_
 # and leaves the other jobs' repo-owned inputs where they were.
 make_keyed_extension "$mono/third" org.acme.third third
 out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
-echo "$out" | grep -q 'drifted   .github/workflows/ci.yml' \
+grep -q 'drifted   .github/workflows/ci.yml' <<<"$out" \
   || { echo "an extension directory without a job was not reported: $out" >&2; exit 1; }
 out=$("$root/scaffold/ckinit.php" --update "$mono")
-echo "$out" | grep -q 'updated   .github/workflows/ci.yml'
+grep -q 'updated   .github/workflows/ci.yml' <<<"$out"
 "$root/scaffold/ckinit.php" --check "$mono" >/dev/null
 assert_root_jobs "addon(working_directory='addon',playwright=true) base(working_directory='base') third(working_directory='third')"
 assert_release_jobs "addon[base](working_directory='addon',stage='build',smoke_test=false) base[](working_directory='base',stage='build') publish[addon,base,third](stage='publish') third[](working_directory='third',stage='build')"
@@ -598,7 +598,7 @@ assert_release_jobs "addon[base](working_directory='addon',stage='build',smoke_t
 # A removed directory whose job carries no repo-owned input: --update drops it.
 /bin/rm -rf "$mono/third"
 out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
-echo "$out" | grep -q 'drifted   .github/workflows/ci.yml' \
+grep -q 'drifted   .github/workflows/ci.yml' <<<"$out" \
   || { echo "a job for a removed directory was not reported: $out" >&2; exit 1; }
 "$root/scaffold/ckinit.php" --update "$mono" >/dev/null
 if grep -q 'job-third' "$mono/.github/workflows/ci.yml" "$mono/.github/workflows/release.yml"; then
@@ -613,14 +613,14 @@ assert_root_jobs "addon(working_directory='addon',playwright=true) base(working_
 cp -R "$mono" "$work/mono-gone"
 /bin/rm -rf "$work/mono-gone/addon"
 out=$("$root/scaffold/ckinit.php" --check "$work/mono-gone" 2>&1 || true)
-echo "$out" | grep -q 'drifted   .github/workflows/ci.yml' \
+grep -q 'drifted   .github/workflows/ci.yml' <<<"$out" \
   || { echo "a job for a removed directory was not reported: $out" >&2; exit 1; }
 cp "$work/mono-gone/.github/workflows/ci.yml" "$work/mono-gone-ci.yml"
 if out=$("$root/scaffold/ckinit.php" --update "$work/mono-gone" 2>&1); then
   echo "--update silently dropped repo-owned inputs of a removed job" >&2
   exit 1
 fi
-echo "$out" | grep -q 'playwright: true' \
+grep -q 'playwright: true' <<<"$out" \
   || { echo "the refusal did not name the orphaned lines: $out" >&2; exit 1; }
 cmp -s "$work/mono-gone-ci.yml" "$work/mono-gone/.github/workflows/ci.yml" \
   || { echo "--update rewrote the file it refused" >&2; exit 1; }
@@ -653,9 +653,9 @@ for mode in seed check update; do
     echo "colliding job ids were accepted ($mode)" >&2
     exit 1
   fi
-  echo "$out" | grep -q "'foo.bar' and 'foo_bar'" \
+  grep -q "'foo.bar' and 'foo_bar'" <<<"$out" \
     || { echo "the collision did not name both directories: $out" >&2; exit 1; }
-  echo "$out" | grep -q "job id 'foo_bar'" \
+  grep -q "job id 'foo_bar'" <<<"$out" \
     || { echo "the collision did not name the job id: $out" >&2; exit 1; }
 done
 for stray in .github/workflows/ci.yml renovate.json .gitattributes foo.bar/composer.json; do
@@ -670,7 +670,7 @@ done
 cp "$mono/.github/workflows/release.yml" "$work/mono-release.yml"
 /bin/rm "$mono/.github/workflows/release.yml"
 out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
-echo "$out" | grep -q 'missing   .github/workflows/release.yml' \
+grep -q 'missing   .github/workflows/release.yml' <<<"$out" \
   || { echo "a missing root release caller was not reported: $out" >&2; exit 1; }
 # Another workflow already calling the shared release blocks a second caller.
 mkdir -p "$mono/.github/workflows"
@@ -680,7 +680,7 @@ if out=$("$root/scaffold/ckinit.php" --update "$mono" 2>&1); then
   echo "a second release caller was stamped beside an existing one" >&2
   exit 1
 fi
-echo "$out" | grep -q 'publish.yml also calls extension-release.yml' \
+grep -q 'publish.yml also calls extension-release.yml' <<<"$out" \
   || { echo "the existing release caller was not named: $out" >&2; exit 1; }
 test ! -e "$mono/.github/workflows/release.yml"
 /bin/rm "$mono/.github/workflows/publish.yml"
@@ -690,7 +690,7 @@ cp "$work/mono-release.yml" "$mono/.github/workflows/release.yml"
 printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
   > "$mono/.github/workflows/publish.yml"
 out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
-echo "$out" | grep -q 'publish.yml also calls extension-release.yml' \
+grep -q 'publish.yml also calls extension-release.yml' <<<"$out" \
   || { echo "a second caller beside the root release.yml was not reported: $out" >&2; exit 1; }
 /bin/rm "$mono/.github/workflows/publish.yml"
 printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
@@ -705,7 +705,7 @@ printf '%s\n' 'name: Release' 'on: {push: {tags: ["v*"]}}' 'jobs:' '  release:' 
   > "$mono/.github/workflows/release.yml"
 cp "$mono/.github/workflows/release.yml" "$work/mono-handwritten.yml"
 out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
-echo "$out" | grep -q 'drifted   .github/workflows/release.yml (no managed markers' \
+grep -q 'drifted   .github/workflows/release.yml (no managed markers' <<<"$out" \
   || { echo "a hand-written root release caller was not reported: $out" >&2; exit 1; }
 if "$root/scaffold/ckinit.php" --update "$mono" >/dev/null 2>&1; then
   echo "--update accepted a hand-written root release caller" >&2
@@ -736,7 +736,7 @@ for layout in publish-dir none-dependency; do
     echo "the $layout layout was accepted" >&2
     exit 1
   fi
-  echo "$out" | grep -q "$expected" || { echo "the $layout refusal did not say why: $out" >&2; exit 1; }
+  grep -q "$expected" <<<"$out" || { echo "the $layout refusal did not say why: $out" >&2; exit 1; }
   test ! -e "$tree/.github/workflows/release.yml"
 done
 
@@ -761,18 +761,18 @@ for extension in base addon; do
   printf '%s\n' 'version: 1' 'policy:' '  release:' '    mode: none' '    reason: internal glue' > "$none/$extension/civikitchen.yaml"
 done
 out=$("$root/scaffold/ckinit.php" --check "$none" 2>&1 || true)
-echo "$out" | grep -q 'drifted   .github/workflows/release.yml (release: none' \
+grep -q 'drifted   .github/workflows/release.yml (release: none' <<<"$out" \
   || { echo "a root caller left behind by release: none was not reported: $out" >&2; exit 1; }
 printf '%s\n' '      smoke_test: false' >> "$none/.github/workflows/release.yml"
 if out=$("$root/scaffold/ckinit.php" --update "$none" 2>&1); then
   echo "--update deleted a root release caller carrying repository lines" >&2
   exit 1
 fi
-echo "$out" | grep -q 'smoke_test: false' || { echo "the refusal did not name the repository lines: $out" >&2; exit 1; }
+grep -q 'smoke_test: false' <<<"$out" || { echo "the refusal did not name the repository lines: $out" >&2; exit 1; }
 test -f "$none/.github/workflows/release.yml"
 cp "$work/none-release.yml" "$none/.github/workflows/release.yml"
 out=$("$root/scaffold/ckinit.php" --update "$none")
-echo "$out" | grep -q 'removed   .github/workflows/release.yml'
+grep -q 'removed   .github/workflows/release.yml' <<<"$out"
 test ! -e "$none/.github/workflows/release.yml"
 "$root/scaffold/ckinit.php" --check "$none" >/dev/null
 printf '%s\n' 'name: Docs' 'on: {push: {tags: ["v*"]}}' 'jobs:' '  docs:' '    runs-on: ubuntu-latest' \

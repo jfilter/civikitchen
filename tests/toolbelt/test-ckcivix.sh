@@ -38,11 +38,11 @@ expect_failure() {
 write_info 25.10.2
 printf '%s\n' '<?php' > "$work/ext/fixture.civix.php"
 out=$(cd "$work/ext" && "$root/toolbelt/bin/ckcivix" --check)
-echo "$out" | grep -q 'format 25.10.2 (current)'
+grep -q 'format 25.10.2 (current)' <<<"$out"
 
 write_info 25.01.1
 out=$(cd "$work/ext" && "$root/toolbelt/bin/ckcivix")
-echo "$out" | grep -q 'format 25.01.1 is behind 25.10.2'
+grep -q 'format 25.01.1 is behind 25.10.2' <<<"$out"
 expect_failure "behind scaffold in check mode" "$root/toolbelt/bin/ckcivix" --check
 
 write_info 26.01.0
@@ -58,7 +58,7 @@ cat > "$work/ext/info.xml" <<'EOF'
 <?xml version="1.0"?><extension key="fixture" type="module"><file>fixture</file></extension>
 EOF
 out=$(cd "$work/ext" && "$root/toolbelt/bin/ckcivix")
-echo "$out" | grep -q 'no scaffold'
+grep -q 'no scaffold' <<<"$out"
 expect_failure "missing scaffold in check mode" "$root/toolbelt/bin/ckcivix" --check
 expect_failure "updating missing scaffold" "$root/toolbelt/bin/ckcivix" --update
 

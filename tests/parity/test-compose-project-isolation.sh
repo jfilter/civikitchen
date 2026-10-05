@@ -17,13 +17,13 @@ php "$CHECK" .github/workflows/*.yml \
 out=$(php "$CHECK" tests/parity/fixtures/workflow.shared-compose-project.yml 2>&1) \
   && fail "checker passed a workflow with a shared compose project"
 for job in ci compat; do
-  echo "$out" | grep -q "'$job'" \
+  grep -q "'$job'" <<<"$out" \
     || fail "checker failed but did not name job '$job' (got: $out)"
 done
 
 # The GitHub-hosted job in the same fixture must NOT be reported, or the gate
 # would demand a project name where no collision is possible.
-echo "$out" | grep -q "'hosted'" \
+grep -q "'hosted'" <<<"$out" \
   && fail "checker flagged a job pinned to a GitHub-hosted runner"
 
 # Comments that name what the job does not do: the gate reads the `runs-on`
@@ -31,7 +31,7 @@ echo "$out" | grep -q "'hosted'" \
 out=$(php "$CHECK" tests/parity/fixtures/workflow.compose-project-comment-bait.yml 2>&1) \
   && fail "checker passed a shared compose project excused only by comments"
 for job in bait hosted-in-a-comment; do
-  echo "$out" | grep -q "'$job'" \
+  grep -q "'$job'" <<<"$out" \
     || fail "checker failed but did not name job '$job' (got: $out)"
 done
 

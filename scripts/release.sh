@@ -8,7 +8,7 @@ usage() { echo "usage: release.sh X.Y.Z [--apply]" >&2; exit 2; }
 version="${1:-}"
 apply="${2:-}"
 [ "$#" -ge 1 ] && [ "$#" -le 2 ] || usage
-printf '%s' "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' || usage
+grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' <<<"$version" || usage
 [ -z "$apply" ] || [ "$apply" = --apply ] || usage
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
