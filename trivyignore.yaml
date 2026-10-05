@@ -85,7 +85,7 @@ vulnerabilities:
   # -------------------------------------------------------------------------
   # Go stdlib inside the oxlint-tsgolint binary
   #
-  # opt/civikitchen-oxlint/node_modules/@oxlint-tsgolint/*/tsgolint is a
+  # opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/*/tsgolint is a
   # prebuilt Go binary from npm; its stdlib version is whatever oxlint built
   # with (1.26.5), and nothing here can relink it. All six CVEs are in server
   # or wire-format code paths (HTTP/2 server, URL/path parsing, XML decoding,
@@ -99,7 +99,7 @@ vulnerabilities:
   # -------------------------------------------------------------------------
   - id: CVE-2026-33818
     paths:
-      - "opt/civikitchen-oxlint/node_modules/@oxlint-tsgolint/**"
+      - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
     statement: >-
       Go stdlib encoding/asn1 stack exhaustion on nested input in the prebuilt tsgolint binary — unreachable
       from a local linter that serves nothing; see the group note above.
@@ -107,7 +107,7 @@ vulnerabilities:
 
   - id: CVE-2026-56853
     paths:
-      - "opt/civikitchen-oxlint/node_modules/@oxlint-tsgolint/**"
+      - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
     statement: >-
       Go stdlib net/http h2c server pre-read in the prebuilt tsgolint binary — unreachable
       from a local linter that serves nothing; see the group note above.
@@ -115,7 +115,7 @@ vulnerabilities:
 
   - id: CVE-2026-56858
     paths:
-      - "opt/civikitchen-oxlint/node_modules/@oxlint-tsgolint/**"
+      - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
     statement: >-
       Go stdlib net/url unescaped-slash path parsing in the prebuilt tsgolint binary — unreachable
       from a local linter that serves nothing; see the group note above.
@@ -123,7 +123,7 @@ vulnerabilities:
 
   - id: CVE-2026-56859
     paths:
-      - "opt/civikitchen-oxlint/node_modules/@oxlint-tsgolint/**"
+      - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
     statement: >-
       Go stdlib encoding/xml DecodeElement depth reset in the prebuilt tsgolint binary — unreachable
       from a local linter that serves nothing; see the group note above.
@@ -131,7 +131,7 @@ vulnerabilities:
 
   - id: CVE-2026-56860
     paths:
-      - "opt/civikitchen-oxlint/node_modules/@oxlint-tsgolint/**"
+      - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
     statement: >-
       Go stdlib path resolution of .. segments in the prebuilt tsgolint binary — unreachable
       from a local linter that serves nothing; see the group note above.
@@ -139,7 +139,7 @@ vulnerabilities:
 
   - id: CVE-2026-56862
     paths:
-      - "opt/civikitchen-oxlint/node_modules/@oxlint-tsgolint/**"
+      - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
     statement: >-
       Go stdlib crypto/tls KeyUpdate state handling in the prebuilt tsgolint binary — unreachable
       from a local linter that serves nothing; see the group note above.
@@ -427,7 +427,7 @@ vulnerabilities:
   # -------------------------------------------------------------------------
   # tsgolint's Go stdlib
   #
-  # opt/civikitchen-oxlint/node_modules/@oxlint-tsgolint/linux-*/tsgolint, the
+  # opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/linux-*/tsgolint, the
   # prebuilt binary oxlint runs for its type-aware rules. Trivy reports these
   # as `fixed` because Go fixed them — but the fix is a Go toolchain version,
   # not a tsgolint release: oxlint-tsgolint 7.0.2001 is the newest published
@@ -438,7 +438,7 @@ vulnerabilities:
   # -------------------------------------------------------------------------
   - id: CVE-2026-39821
     paths:
-      - "opt/civikitchen-oxlint/**"
+      - "opt/civikitchen/toolbelt/oxlint/**"
     statement: >-
       net/http request smuggling via x/net/idna in the Go stdlib compiled into
       tsgolint. tsgolint is a local type checker: ckeslint execs it over files
@@ -449,7 +449,7 @@ vulnerabilities:
 
   - id: CVE-2026-46600
     paths:
-      - "opt/civikitchen-oxlint/**"
+      - "opt/civikitchen/toolbelt/oxlint/**"
     statement: >-
       Same binary, same absence of a fixed build: a parsing flaw in
       x/net/dns/dnsmessage, reachable only by feeding the process DNS responses.
