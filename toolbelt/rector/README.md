@@ -1,7 +1,7 @@
 # rector setup
 
 CiviCRM-specific modernization rules plus the off-the-shelf sets, installed
-into `/opt/civikitchen-rector` and run by `ckmodernize`. `composer.lock` fixes
+into `/opt/civikitchen/toolbelt/rector` and run by `ckmodernize`. `composer.lock` fixes
 the tree so a rebuild cannot silently change what gets rewritten.
 
 ## Why each pin

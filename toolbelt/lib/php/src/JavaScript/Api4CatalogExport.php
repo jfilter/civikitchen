@@ -10,17 +10,6 @@ namespace CiviKitchen\Toolbelt\JavaScript;
  */
 final class Api4CatalogExport
 {
-    /** The catalog class in the image, or in a checkout of this repository. */
-    public static function locate(string $checkoutRoot): ?string
-    {
-        foreach (['/opt/civikitchen-phpstan-ext/src/Api4Catalog.php', $checkoutRoot . '/toolbelt/phpstan/src/Api4Catalog.php'] as $file) {
-            if (is_file($file)) {
-                return $file;
-            }
-        }
-        return null;
-    }
-
     /**
      * @param list<string> $extensionDirs
      * @return array<string, mixed>

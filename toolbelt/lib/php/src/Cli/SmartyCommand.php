@@ -45,14 +45,7 @@ final class SmartyCommand implements Command
             return 2;
         }
 
-        $payload = '/usr/local/share/civikitchen/cksmarty-compile.php';
-        if (!is_file($payload)) {
-            $payload = $this->checkoutRoot . '/toolbelt/lib/smarty-compile.php';
-        }
-        if (!is_file($payload)) {
-            fwrite(STDERR, "cksmarty: cannot find the compile payload\n");
-            return 2;
-        }
+        $payload = $this->checkoutRoot . '/toolbelt/lib/smarty-compile.php';
         $skip = $this->policyValues('smarty_skip_templates');
         $environment = getenv();
         $environment = is_array($environment) ? $environment : [];
@@ -68,9 +61,7 @@ final class SmartyCommand implements Command
     /** @return list<string> */
     private function policyValues(string $key): array
     {
-        $local = $this->checkoutRoot . '/toolbelt/bin/ckconform';
-        $binary = is_executable($local) ? $local : 'ckconform';
-        $result = $this->runner->capture([$binary, '--policy', $key]);
+        $result = $this->runner->capture([$this->checkoutRoot . '/toolbelt/bin/ckconform', '--policy', $key]);
         if ($result['status'] !== 0) {
             return [];
         }

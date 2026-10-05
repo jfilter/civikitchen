@@ -9,7 +9,7 @@
   turn into noise if someone runs psalm with this config by hand.
 
   resolveFromConfigFile="false": this file lives in the image
-  (/opt/civikitchen-psalm), the code lives in the extension. With "false",
+  (/opt/civikitchen/toolbelt/psalm), the code lives in the extension. With "false",
   <projectFiles> resolves against the working directory — the extension root
   cktaint runs in — instead of against the image directory, which would hold
   no project code at all. The <stubs> entries below therefore have to be
@@ -48,16 +48,16 @@
   </projectFiles>
 
   <stubs>
-    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_Request.php" />
-    <file name="/opt/civikitchen-psalm/stubs/Psr7.php" />
-    <file name="/opt/civikitchen-psalm/stubs/CRM_Core_DAO.php" />
-    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_SQL_Select.php" />
-    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_Type.php" />
-    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_String.php" />
-    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_System.php" />
-    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_File.php" />
-    <file name="/opt/civikitchen-psalm/stubs/CRM_Utils_HttpClient.php" />
-    <file name="/opt/civikitchen-psalm/stubs/Guzzle.php" />
+    <file name="/opt/civikitchen/toolbelt/psalm/stubs/CRM_Utils_Request.php" />
+    <file name="/opt/civikitchen/toolbelt/psalm/stubs/Psr7.php" />
+    <file name="/opt/civikitchen/toolbelt/psalm/stubs/CRM_Core_DAO.php" />
+    <file name="/opt/civikitchen/toolbelt/psalm/stubs/CRM_Utils_SQL_Select.php" />
+    <file name="/opt/civikitchen/toolbelt/psalm/stubs/CRM_Utils_Type.php" />
+    <file name="/opt/civikitchen/toolbelt/psalm/stubs/CRM_Utils_String.php" />
+    <file name="/opt/civikitchen/toolbelt/psalm/stubs/CRM_Utils_System.php" />
+    <file name="/opt/civikitchen/toolbelt/psalm/stubs/CRM_Utils_File.php" />
+    <file name="/opt/civikitchen/toolbelt/psalm/stubs/CRM_Utils_HttpClient.php" />
+    <file name="/opt/civikitchen/toolbelt/psalm/stubs/Guzzle.php" />
   </stubs>
 
   <issueHandlers>

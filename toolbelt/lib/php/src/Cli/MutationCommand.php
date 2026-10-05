@@ -113,9 +113,7 @@ final class MutationCommand implements Command
 
     private function policyValue(string $key): string
     {
-        $binary = is_executable($this->checkoutRoot . '/toolbelt/bin/ckconform')
-            ? $this->checkoutRoot . '/toolbelt/bin/ckconform' : 'ckconform';
-        $result = $this->runner->capture([$binary, '--policy', $key]);
+        $result = $this->runner->capture([$this->checkoutRoot . '/toolbelt/bin/ckconform', '--policy', $key]);
         if ($result['status'] !== 0) {
             return '';
         }

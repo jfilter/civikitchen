@@ -1,4 +1,4 @@
-# The ck* tools source toolbelt/lib/ckcommon.sh through a path that resolves in
+# The ck* tools source toolbelt/lib/ckcommon.sh beside their own real path, in
 # a checkout and in the image alike. Following it is what keeps shellcheck able
 # to see ck_die, ck_git and the ck_re_* patterns as assigned — without these two
 # it reports every use as SC2154 "referenced but not assigned".

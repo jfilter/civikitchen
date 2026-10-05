@@ -176,9 +176,7 @@ final class CoverageCommand implements Command
 
     private function policyValue(string $key): string
     {
-        $local = $this->checkoutRoot . '/toolbelt/bin/ckconform';
-        $binary = is_executable($local) ? $local : 'ckconform';
-        $result = $this->runner->capture([$binary, '--policy', $key]);
+        $result = $this->runner->capture([$this->checkoutRoot . '/toolbelt/bin/ckconform', '--policy', $key]);
         if ($result['status'] !== 0) {
             return '';
         }

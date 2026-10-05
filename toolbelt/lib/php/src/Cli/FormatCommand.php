@@ -45,11 +45,8 @@ final class FormatCommand implements Command
         if ($mago === null) {
             return $this->error('no mago on PATH - is this a civikitchen image?');
         }
-        $magoConfig = is_file('/opt/civikitchen-mago/mago.toml')
-            ? '/opt/civikitchen-mago/mago.toml' : $this->checkoutRoot . '/toolbelt/mago/mago.toml';
-        $oxfmt = is_executable('/opt/civikitchen-oxfmt/node_modules/.bin/oxfmt')
-            ? '/opt/civikitchen-oxfmt/node_modules/.bin/oxfmt'
-            : $this->checkoutRoot . '/toolbelt/oxfmt/node_modules/.bin/oxfmt';
+        $magoConfig = $this->checkoutRoot . '/toolbelt/mago/mago.toml';
+        $oxfmt = $this->checkoutRoot . '/toolbelt/oxfmt/node_modules/.bin/oxfmt';
         $failed = false;
 
         // Untracked files included: a new file is exactly the one nobody has
@@ -87,7 +84,7 @@ final class FormatCommand implements Command
         if ($jsFiles === []) {
             echo "ckfmt: no JavaScript or TypeScript to format.\n";
         } elseif (!is_executable($oxfmt)) {
-            return $this->error('no oxfmt toolchain at /opt/civikitchen-oxfmt - is this a civikitchen image?');
+            return $this->error("no oxfmt toolchain at {$oxfmt} - is this a civikitchen image?");
         } else {
             $oxArguments = [$oxfmt, $check ? '--check' : '--write'];
             if (glob('.oxfmtrc.*')) {

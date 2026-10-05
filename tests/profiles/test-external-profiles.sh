@@ -8,6 +8,8 @@ mkdir -p "$work/bundled/builtin" "$work/external/custom"
 printf '{"description":"built in","dependencies":[]}\n' > "$work/bundled/builtin/profile.json"
 printf '{"description":"custom","dependencies":[]}\n' > "$work/external/custom/profile.json"
 
+# provision.sh runs where the image links ck into PATH.
+PATH="$root/toolbelt/bin:$PATH"
 CK_PROFILE_DIR="$work/bundled"
 CK_PROFILE_SCHEMA_DIR="$root/packages/civicrm-profile-schema"
 CIVIKITCHEN_PROFILE_PATH="$work/external"

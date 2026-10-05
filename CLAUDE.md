@@ -30,7 +30,11 @@ the rest; `make test-images` is the ~1 h Docker round.
 - **A fix ships with the fixture that would have failed.** Most checks here are
   silent on success.
 - **Container paths are the interface** (`/usr/local/bin/ck*`,
-  `/opt/civikitchen-*`). Repo paths move freely; those do not.
+  `/opt/civikitchen/`). The image mirrors the checkout under `/opt/civikitchen/`
+  and the tools resolve everything from their own real path, so no code
+  branches on image vs. checkout. A path a consumer config names moves only
+  with a deprecation link and a `ckconform` warning, like the v1
+  `/opt/civikitchen-*` links (removed in v2).
 - **One versioned contract**: workflows, template, tools and images release
   together and consumers pin `@v1` (`docs/releases.md`).
 

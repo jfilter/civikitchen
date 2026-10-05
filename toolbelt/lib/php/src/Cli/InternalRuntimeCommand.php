@@ -20,9 +20,6 @@ final class InternalRuntimeCommand implements Command
     {
         $operation = array_shift($arguments) ?? '';
         $autoload = $this->checkoutRoot . '/packages/civikitchen-scenario-schema/vendor/autoload.php';
-        if (!is_file($autoload)) {
-            $autoload = '/usr/local/share/civikitchen/scenario-schema/vendor/autoload.php';
-        }
         $inspector = new ExtensionInspector($autoload);
         try {
             if ($operation === 'install-extension-archive' && count($arguments) === 4) {

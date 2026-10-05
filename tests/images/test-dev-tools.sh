@@ -50,6 +50,31 @@ for bin in composer node npm civix phpunit phpstan phpcs phpcbf cv infection; do
     fi
 done
 
+# Every toolbelt tool is on PATH as a link into /opt/civikitchen/toolbelt, the
+# two standalone-only helpers only there, and the deprecated v1 paths resolve.
+TOOLBELT_BIN=/opt/civikitchen/toolbelt/bin
+for expected in cktestreset ckcoretest; do
+    if [ "${CIVICRM_UF:-}" = "Standalone" ] && [ ! -x "${TOOLBELT_BIN}/${expected}" ]; then
+        fail "${expected} ships on standalone"
+    elif [ "${CIVICRM_UF:-}" != "Standalone" ] && [ -e "${TOOLBELT_BIN}/${expected}" ]; then
+        fail "${expected} is standalone-only"
+    fi
+done
+for tool in "${TOOLBELT_BIN}"/ck*; do
+    name="${tool##*/}"
+    if [ "$(readlink -f "$(command -v "${name}" || true)")" = "$(readlink -f "${tool}")" ]; then
+        ok "${name} on PATH"
+    else
+        fail "${name} on PATH resolves to ${tool}"
+    fi
+done
+for old in ckconform/bin/ckconform coder/CiviKitchen/ruleset.xml rector/rector.php \
+    phpstan/vendor/autoload.php phpstan-ext/composer.json phpstan-config/civicrm-disallowed.neon \
+    psalm/psalm-taint.xml.dist oxlint/.oxlintrc.json oxfmt/oxfmtrc.json mago/mago.toml \
+    composer-deps.php; do
+    if [ -f "/opt/civikitchen-${old}" ]; then ok "deprecated /opt/civikitchen-${old}"; else fail "deprecated /opt/civikitchen-${old}"; fi
+done
+
 # The unified commands depend on files copied outside /usr/local/bin. Exercise
 # them in-image so a missing schema/implementation layer cannot pass the host
 # dispatcher tests and then ship broken.
@@ -57,7 +82,7 @@ done
 # one-off miss on a CI runner is undiagnosable from "✗" alone.
 ck_out=$(ck help 2>&1) || true
 if grep -q 'ck scenario' <<<"${ck_out}"; then ok "ck dispatcher"; else fail "ck dispatcher"; echo "      ${ck_out}"; fi
-ck_out=$(ck profile validate /usr/local/share/civikitchen/profiles/verein 2>&1) && ck_rc=0 || ck_rc=$?
+ck_out=$(ck profile validate /opt/civikitchen/docker/profiles/verein 2>&1) && ck_rc=0 || ck_rc=$?
 if [ "${ck_rc}" -eq 0 ]; then
     ok "ck profile validates a bundled profile"
 else
@@ -427,7 +452,7 @@ fi
 # The sniffs' own unit tests ship with the standard (exact codes + line
 # numbers per fixture, zero findings on the modern counterparts, the
 # externalActions arming behavior).
-if SNIFF_TESTS_OUT="$(phpunit --no-configuration /opt/civikitchen-coder/CiviKitchen/tests 2>&1)"; then
+if SNIFF_TESTS_OUT="$(phpunit --no-configuration /opt/civikitchen/toolbelt/phpcs/CiviKitchen/tests 2>&1)"; then
     ok "CiviKitchen sniff unit tests"
 else
     fail "CiviKitchen sniff unit tests (${SNIFF_TESTS_OUT:0:300})"
@@ -522,7 +547,7 @@ fi
 # Tested against the shared helper because it is now the only implementation.
 echo "== ckcommon xml reader =="
 # shellcheck source=/dev/null
-. /usr/local/lib/ckcommon.sh
+. /opt/civikitchen/toolbelt/lib/ckcommon.sh
 
 XMLDIR="${WORKDIR}/xmlread"
 mkdir -p "${XMLDIR}"
@@ -805,7 +830,7 @@ mkdir -p "${ESOWNNODE}/e2e/../node_modules/@types"
 cp "${ESNODE}/info.xml" "${ESOWNNODE}/info.xml"
 cp "${ESNODE}/tsconfig.json" "${ESOWNNODE}/tsconfig.json"
 cp "${ESNODE}/e2e/env.ts" "${ESOWNNODE}/e2e/env.ts"
-cp -R /opt/civikitchen-oxlint/node_modules/@types/node "${ESOWNNODE}/node_modules/@types/node"
+cp -R /opt/civikitchen/toolbelt/oxlint/node_modules/@types/node "${ESOWNNODE}/node_modules/@types/node"
 (cd "${ESOWNNODE}" && git init -q . && git add -A) >/dev/null 2>&1
 OWNNODE_OUT="$( (cd "${ESOWNNODE}" && ckeslint --format=unix) 2>&1 || true)"
 if grep -q "no-unsafe" <<<"${OWNNODE_OUT}"; then
@@ -1302,7 +1327,7 @@ if (cd "${WORKDIR}" && cklifecycle >/dev/null 2>&1); then
 else
     ok "cklifecycle refuses to run without info.xml"
 fi
-if [ -f /usr/local/share/civikitchen/settings-metadata-check.php ]; then
+if [ -f /opt/civikitchen/toolbelt/lib/settings-metadata-check.php ]; then
     ok "cklifecycle's settings-metadata-check.php payload is baked in"
 else
     fail "settings-metadata-check.php missing from the image"

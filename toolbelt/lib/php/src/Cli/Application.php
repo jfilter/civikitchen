@@ -57,23 +57,17 @@ final class Application
             return (new ProfileCommand($this->checkoutRoot))->run($arguments);
         }
         if (in_array($command, ['dependencies', 'deps'], true)) {
-            return (new DependenciesCommand($this->runner))->run($arguments);
+            return (new DependenciesCommand($this->checkoutRoot, $this->runner))->run($arguments);
         }
         if ($command === 'internal') {
             return (new InternalRuntimeCommand($this->checkoutRoot))->run($arguments);
         }
         if ($command === 'conform') {
             $implementation = $this->checkoutRoot . '/toolbelt/ckconform/bin/ckconform';
-            if (!is_file($implementation)) {
-                $implementation = '/opt/civikitchen-ckconform/bin/ckconform';
-            }
             return $this->runner->passthrough([PHP_BINARY, $implementation, ...$arguments]);
         }
         if (in_array($command, ['config', 'scenario'], true)) {
             $implementation = $this->checkoutRoot . '/packages/civikitchen-scenario-schema/scenario.php';
-            if (!is_file($implementation)) {
-                $implementation = '/usr/local/share/civikitchen/scenario-schema/scenario.php';
-            }
             return $this->runner->passthrough([PHP_BINARY, $implementation, ...$arguments]);
         }
         if ($command === 'civix') {
@@ -121,7 +115,11 @@ final class Application
             return 2;
         }
         $local = $this->binDirectory . '/' . $tool;
-        return $this->runner->passthrough([is_executable($local) ? $local : $tool, ...$arguments]);
+        if (!is_executable($local)) {
+            fwrite(STDERR, "ck: {$command} is not available here ({$tool} is a standalone-image tool)\n");
+            return 2;
+        }
+        return $this->runner->passthrough([$local, ...$arguments]);
     }
 
     private function usage(): string

@@ -2,7 +2,7 @@
 
 Psalm used ONLY as a taint engine (`cktaint`), never as a second phpstan:
 does request input reach a query, shell command, file path or redirect
-unescaped? Installed into `/opt/civikitchen-psalm` together with
+unescaped? Installed into `/opt/civikitchen/toolbelt/psalm` together with
 `psalm-taint.xml.dist` and the CiviCRM source/sink/escape stubs.
 
 Isolated from the phpstan root on purpose: psalm brings ~50 packages of its

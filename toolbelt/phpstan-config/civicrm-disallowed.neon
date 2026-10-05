@@ -2,8 +2,9 @@
 # spaze/phpstan-disallowed-calls config rather than a sniff: phpstan resolves
 # types, so a ban also holds through a variable (`$class::value()`) and an alias.
 #
-# Shipped at /opt/civikitchen-phpstan/civicrm-disallowed.neon; a project opts in
-# with one `includes:` line (the template's phpstan.neon.dist has it).
+# Shipped at /opt/civikitchen/toolbelt/phpstan-config/civicrm-disallowed.neon;
+# a project opts in with one `includes:` line (the template's phpstan.neon.dist
+# has it).
 parameters:
 	disallowedFunctionCalls:
 		-

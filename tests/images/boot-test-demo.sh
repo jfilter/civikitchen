@@ -111,7 +111,7 @@ if [ -n "${PROFILE}" ]; then
     for prof in "${PROFILES[@]}"; do
         ext_key=$(docker exec "${APP}" \
             jq -r '[.dependencies[] | select(.enable)][0].name // empty' \
-            "/usr/local/share/civikitchen/profiles/${prof}/profile.json" 2>/dev/null || true)
+            "/opt/civikitchen/docker/profiles/${prof}/profile.json" 2>/dev/null || true)
         if [ -n "${ext_key}" ]; then
             status=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${APP}" \
                 bash -lc "export PATH=/home/buildkit/buildkit/bin:\$PATH; cv api4 Extension.get +w key=${ext_key} +w status=installed +s key 2>/dev/null" || true)
@@ -129,7 +129,7 @@ if [ -n "${PROFILE}" ]; then
                 "[ '${actual_commit}' = '${git_version}' ]"
         done < <(docker exec "${APP}" jq -r --arg uf "${UF}" \
             '.dependencies[] | select(.repo) | select((.skipUf // []) | index($uf) | not) | [.name,.version] | @tsv' \
-            "/usr/local/share/civikitchen/profiles/${prof}/profile.json" 2>/dev/null || true)
+            "/opt/civikitchen/docker/profiles/${prof}/profile.json" 2>/dev/null || true)
     done
     check "API credentials are absent from docker logs by default" \
         "! grep -q 'API User Credentials' '${LOGFILE}'"
@@ -142,7 +142,7 @@ if [ -n "${PROFILE}" ]; then
             n=$(printf '%s\n' "${creds_all}" | grep -c "^${u}:" || true)
             check "credentials file has exactly one line for '${u}' (${prof})" "[ '${n}' = 1 ]"
         done < <(docker exec "${APP}" jq -r '.apiUsers[].username' \
-            "/usr/local/share/civikitchen/profiles/${prof}/profile.json" 2>/dev/null || true)
+            "/opt/civikitchen/docker/profiles/${prof}/profile.json" 2>/dev/null || true)
     done
     # A seed failure aborts provisioning and therefore prevents a healthy
     # container. Keep the log assertion as defense in depth against a future

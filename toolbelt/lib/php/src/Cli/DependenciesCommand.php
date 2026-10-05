@@ -8,7 +8,7 @@ use CiviKitchen\Toolbelt\Process\Runner;
 
 final class DependenciesCommand implements Command
 {
-    public function __construct(private readonly Runner $runner)
+    public function __construct(private readonly string $checkoutRoot, private readonly Runner $runner)
     {
     }
 
@@ -48,7 +48,7 @@ TXT;
             return 2;
         }
         if (!$customConfig && !is_file('composer-dependency-analyser.php')) {
-            array_push($toolArguments, '--config', '/opt/civikitchen-composer-deps.php');
+            array_push($toolArguments, '--config', $this->checkoutRoot . '/toolbelt/lib/composer-deps.php');
         }
         $result = $this->runner->capture(['composer-dependency-analyser', ...$toolArguments]);
         echo $result['output'];

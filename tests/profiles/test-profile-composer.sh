@@ -7,6 +7,8 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/bin" "$work/ext" "$work/profile" "$work/repo"
+# apply.sh finds ck on PATH, where the image links it.
+ln -s "$root/toolbelt/bin/ck" "$work/bin/ck"
 
 printf '%s\n' '<?php' > "$work/repo/demo.php"
 printf '%s\n' '<extension key="org.example.demo" type="module"><file>demo</file></extension>' \

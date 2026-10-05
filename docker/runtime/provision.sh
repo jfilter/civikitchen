@@ -42,8 +42,8 @@
 # boot through their CMS, not a stub).
 : "${CK_BOOT_STUB:=/var/www/html/civicrm.standalone.php}"
 # Where named profiles (docker/profiles/<name>/) ship inside the image.
-: "${CK_PROFILE_DIR:=/usr/local/share/civikitchen/profiles}"
-: "${CK_PROFILE_SCHEMA_DIR:=/usr/local/share/civikitchen/profile-schema}"
+: "${CK_PROFILE_DIR:=/opt/civikitchen/docker/profiles}"
+: "${CK_PROFILE_SCHEMA_DIR:=/opt/civikitchen/packages/civicrm-profile-schema}"
 # Optional civibuild-style settings.d dir (loaded into civicrm.settings.php).
 # Only the buildkit entrypoint sets this; see ck_smtp.
 : "${CK_SETTINGS_D:=}"
@@ -57,16 +57,10 @@
 # --- functions -------------------------------------------------------------
 
 ck_runtime_cli() {
-    local bin
-    bin="$(command -v ck 2>/dev/null || true)"
-    if [[ -z "${bin}" ]]; then
-        bin="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/toolbelt/bin/ck"
-    fi
-    [[ -x "${bin}" ]] || {
-        echo "[civikitchen] ERROR: cannot find the shared ck PHP CLI." >&2
+    command -v ck 2>/dev/null || {
+        echo "[civikitchen] ERROR: no ck on PATH." >&2
         return 1
     }
-    printf '%s' "${bin}"
 }
 
 # Attach the scenario's flavor-neutral source mount to the extension directory

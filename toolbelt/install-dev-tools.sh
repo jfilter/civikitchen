@@ -29,12 +29,13 @@ set -euo pipefail
 # this image bakes); everything else below has exactly one consumer and stays
 # here, next to the comment that explains it.
 #
-# One path expression for both worlds: versions.env sits beside this script in
-# the checkout AND beside it at /tmp/ in the image, because the Dockerfiles COPY
-# the pair. The CK_ prefix is why a --build-arg still wins — the file's values
-# land in CK_*, and the ${VAR:-...} defaults below only fall back to them.
+# The image carries the toolbelt at /opt/civikitchen/toolbelt, laid out as in
+# the checkout, so versions.env and every tool root sit beside this script.
+# The CK_ prefix is why a --build-arg still wins — the file's values land in
+# CK_*, and the ${VAR:-...} defaults below only fall back to them.
+TOOLBELT="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=versions.env
-. "$(dirname "$0")/versions.env"
+. "${TOOLBELT}/versions.env"
 
 # ---------------------------------------------------------------------------
 # Pinned tool versions — bump deliberately here. The image tags are floating
@@ -177,23 +178,22 @@ rm -rf "${CODER_DIR}/.git"
 # the setting applies to every user that invokes phpcs in this image.
 # Two paths (comma-separated): the civicrm-coder fork (Drupal/DrupalPractice)
 # AND the bundled CiviKitchen standard (CiviCRM-tuned Drupal + footgun sniffs,
-# what `cklint` runs). The Dockerfile COPYs the CiviKitchen dir to
-# ${CIVIKITCHEN_CODER_DIR} before this script runs.
+# what `cklint` runs), toolbelt/phpcs/CiviKitchen.
 #
 # This SETS the list, so the paths the composer installer plugin registered for
 # PHPCompatibility (and the PHPCSUtils it is built on) have to be repeated here
 # or `ckcompat` loses its standard on the next build.
-CIVIKITCHEN_CODER_DIR=/opt/civikitchen-coder
+CIVIKITCHEN_CODER_DIR="${TOOLBELT}/phpcs"
 phpcs --config-set installed_paths \
     "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR},${COMPOSER_HOME}/vendor/phpcompatibility/php-compatibility,${COMPOSER_HOME}/vendor/phpcsstandards/phpcsutils,${COMPOSER_HOME}/vendor/slevomat/coding-standard"
 
 # ---------------------------------------------------------------------------
-# rector (isolated install in its own dir) — powers `ckmodernize`. Its config +
-# CiviCRM rules dir is COPYed to /opt/civikitchen-rector by the Dockerfile
-# before this script runs; here we add the pinned rector and dump the autoload.
+# rector (isolated install in its own dir) — powers `ckmodernize`. Beside its
+# config and CiviCRM rules in toolbelt/rector, we add the pinned rector and dump
+# the autoload.
 # From the committed lock (toolbelt/rector), which also holds rector's phpstan
 # at the last release before it lost the private property rector reaches into.
-composer install --working-dir=/opt/civikitchen-rector --no-interaction --no-progress
+composer install --working-dir="${TOOLBELT}/rector" --no-interaction --no-progress
 
 # ---------------------------------------------------------------------------
 # phpstan (isolated install, same shape as rector above).
@@ -207,16 +207,16 @@ composer install --working-dir=/opt/civikitchen-rector --no-interaction --no-pro
 # phpcs installer above — both declared in their composer.json. It writes a GeneratedConfig.php into its own vendor
 # tree, which means the rules are active for every project this phpstan
 # analyses without a single project neon mentioning them.
-PHPSTAN_DIR=/opt/civikitchen-phpstan
+PHPSTAN_DIR="${TOOLBELT}/phpstan-root"
 # CiviKitchen's own phpstan extension (@ck-legacy deprecated-scope resolver).
-# The Dockerfile COPYs it here; it joins the install as a composer path
+# It joins the install as a composer path
 # repository so extension-installer registers it exactly like the upstream
 # rules — see docs/extension-standards.md. Its composer.json carries an
 # explicit `version` because the COPYed directory has no git history for
 # composer to derive one from.
-PHPSTAN_EXT_DIR=/opt/civikitchen-phpstan-ext
-# The engine and the upstream extensions come from the committed lock the
-# Dockerfile COPYs to PHPSTAN_DIR (toolbelt/phpstan-root/README.md explains
+PHPSTAN_EXT_DIR="${TOOLBELT}/phpstan"
+# The engine and the upstream extensions come from the committed lock in
+# PHPSTAN_DIR (toolbelt/phpstan-root/README.md explains
 # each pin, including why strict-rules is installed but not auto-registered).
 composer install --working-dir="${PHPSTAN_DIR}" --no-interaction --no-progress
 # Only the local extension is added at build time — it cannot be in the lock,
@@ -239,9 +239,8 @@ EOF
 chmod +x /usr/local/bin/phpstan
 
 # ---------------------------------------------------------------------------
-# psalm (isolated install in its own dir) — powers `cktaint`. Its taint config
-# and CiviCRM stubs are COPYed to /opt/civikitchen-psalm by the Dockerfile
-# before this script runs, composer.json and its lock among them.
+# psalm (isolated install in its own dir) — powers `cktaint`, installed beside
+# its taint config and CiviCRM stubs in toolbelt/psalm from the committed lock.
 #
 # Isolated, NOT `composer global require` alongside phpcs, and deliberately not
 # near phpstan: psalm pulls ~50 packages of its own (amphp, nikic/php-parser,
@@ -251,7 +250,7 @@ chmod +x /usr/local/bin/phpstan
 # From the committed lockfile: psalm drags ~50 transitive packages, and a
 # monthly rebuild re-resolving them would be exactly the drift the pins exist
 # to prevent (oxlint installs from its lockfile for the same reason).
-composer install --working-dir=/opt/civikitchen-psalm --no-interaction --no-progress
+composer install --working-dir="${TOOLBELT}/psalm" --no-interaction --no-progress
 
 # ---------------------------------------------------------------------------
 # infection (isolated install, same shape as rector/psalm) — powers `ckmutate`.
@@ -290,8 +289,8 @@ npm install -g "npm@${NPM_VERSION}" --no-audit --no-fund --loglevel=error
 npm config set dangerously-allow-all-scripts true --location=global
 
 # ---------------------------------------------------------------------------
-# oxlint toolchain (powers `ckeslint`) — installed into the directory the
-# Dockerfile COPYd the baseline .oxlintrc.json to, so the config's `jsPlugins`
+# oxlint toolchain (powers `ckeslint`) — installed into the directory of the
+# baseline .oxlintrc.json, so the config's `jsPlugins`
 # resolve against the node_modules right beside it.
 #
 # In the IMAGE and not in a dozen package.json files, for the same reason the
@@ -307,7 +306,7 @@ npm config set dangerously-allow-all-scripts true --location=global
 # green repo red with no code change. Exactly what the phpstan pin above
 # prevents on the PHP side, and the same rule this project's own standards put
 # on every extension's lockfile.
-OXLINT_DIR=/opt/civikitchen-oxlint
+OXLINT_DIR="${TOOLBELT}/oxlint"
 npm ci --prefix "${OXLINT_DIR}" --no-audit --no-fund --loglevel=error
 
 # The type-aware half is a Go binary in a platform-specific subpackage; if npm
@@ -323,11 +322,19 @@ ls "${OXLINT_DIR}"/node_modules/@types/node/package.json >/dev/null
 # oxfmt toolchain (JS half of `ckfmt`) — same shape as the oxlint install:
 # pinned in its package.json, resolved from its committed lockfile. The npm
 # package selects the platform binding itself via optionalDependencies.
-OXFMT_DIR=/opt/civikitchen-oxfmt
+OXFMT_DIR="${TOOLBELT}/oxfmt"
 npm ci --prefix "${OXFMT_DIR}" --no-audit --no-fund --loglevel=error
 
+# ---------------------------------------------------------------------------
+# The ck* tools run from the toolbelt and are only linked into PATH. The
+# /opt/civikitchen-* links are the v1 paths repo configs may still name;
+# ckconform's deprecated-image-path warns about them, and v2 drops them.
+ln -s "${TOOLBELT}"/bin/ck* /usr/local/bin/
+for link in ckconform:ckconform coder:phpcs rector:rector phpstan:phpstan-root \
+    phpstan-ext:phpstan phpstan-config:phpstan-config psalm:psalm oxlint:oxlint \
+    oxfmt:oxfmt mago:mago composer-deps.php:lib/composer-deps.php; do
+    ln -s "${TOOLBELT}/${link#*:}" "/opt/civikitchen-${link%%:*}"
+done
+
 rm -rf /opt/composer/cache ~/.npm
-chmod -R a+rX /opt/composer "${CODER_DIR}" "${CIVIKITCHEN_CODER_DIR}" \
-    /opt/civikitchen-rector "${PHPSTAN_DIR}" "${PHPSTAN_EXT_DIR}" \
-    /opt/civikitchen-phpstan-config /opt/civikitchen-psalm "${INFECTION_DIR}" "${OXLINT_DIR}" \
-    "${OXFMT_DIR}" /opt/civikitchen-mago /usr/local/bin/mago
+chmod -R a+rX /opt/composer "${CODER_DIR}" "${TOOLBELT}" "${INFECTION_DIR}" /usr/local/bin/mago

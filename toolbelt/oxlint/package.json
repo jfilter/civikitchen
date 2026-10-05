@@ -1,7 +1,7 @@
 {
   "name": "@civikitchen/oxlint-toolchain",
   "private": true,
-  "description": "Pinned oxlint toolchain for ckeslint. Installed into /opt/civikitchen-oxlint at image build time; never installed into a consuming extension.",
+  "description": "Pinned oxlint toolchain for ckeslint. Installed into /opt/civikitchen/toolbelt/oxlint at image build time; never installed into a consuming extension.",
   "dependencies": {
     "@types/node": "24.13.3",
     "eslint-plugin-no-unsanitized": "4.1.5",

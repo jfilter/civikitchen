@@ -1,8 +1,7 @@
 # ckcommon.sh — the plumbing every ck* tool needs, defined once.
 #
-# Sourced with one line and no fallback branch, because the image mirrors the
-# repo layout: toolbelt/bin + toolbelt/lib here, /usr/local/bin + /usr/local/lib
-# there, so `$(dirname "${BASH_SOURCE[0]}")/../lib/ckcommon.sh` resolves in both.
+# Sourced from ../lib relative to the tool's real path: the image carries the
+# toolbelt at /opt/civikitchen/toolbelt and only links the tools into PATH.
 #
 # Shell plumbing only. Anything with a structure is parsed elsewhere —
 # `civikitchen.yaml` by `ckconform --policy-env`, XML and JSON by php.
@@ -12,9 +11,7 @@
 
 ck_tool="${ck_tool:-$(basename "$0")}"
 
-# The toolbelt root: /usr/local in the image, <repo>/toolbelt in a checkout.
-# Only for the "developing the tools themselves" fallback — in the image every
-# toolchain sits at its own /opt path, which the caller tries first.
+# The toolbelt root, where every toolchain and config the tools use lives.
 ck_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Exit 2 is "cannot run", distinct from 1 = "ran, found something". CI treats
@@ -51,43 +48,28 @@ ck_git() { git -c safe.directory="$(ck_git_root)" "$@"; }
 
 ck_in_git_repo() { ck_git rev-parse --is-inside-work-tree >/dev/null 2>&1; }
 
-_ck_main_bin() {
-    local bin="$ck_root/bin/ck"
-    [ -x "$bin" ] || bin=$(command -v ck || true)
-    [ -n "$bin" ] && [ -x "$bin" ] || ck_die "cannot find the shared ck PHP CLI"
-    printf '%s' "$bin"
-}
-
 # --- civikitchen.yaml --------------------------------------------------------------
 # Read through ckconform, which owns the format; never parsed here. Why that
 # matters: toolbelt/ckconform/src/Policy.php.
-
-_ck_conform_bin() {
-    local bin
-    bin=$(command -v ckconform || true)
-    [ -n "$bin" ] || bin="$ck_root/bin/ckconform"
-    [ -x "$bin" ] || ck_die "cannot find ckconform, which reads civikitchen.yaml"
-    printf '%s' "$bin"
-}
 
 # Sets CK_POLICY_<KEY> for every scalar key, ` -- <reason>` stripped. A missing
 # file sets nothing, so callers test for an empty value.
 ck_policy_load() {
     local env
-    env=$("$(_ck_conform_bin)" --policy-env) || ck_die "could not read civikitchen.yaml"
+    env=$("$ck_root/bin/ckconform" --policy-env) || ck_die "could not read civikitchen.yaml"
     eval "$env"
 }
 
 # Every value of one repeatable key, verbatim — its callers are the ones whose
 # job is to check that the reason is there.
-ck_policy_all() { "$(_ck_conform_bin)" --policy "$1"; }
+ck_policy_all() { "$ck_root/bin/ckconform" --policy "$1"; }
 
 # What a release archive leaves out, `dir <name>` / `file <name>` per line: the
 # central list ± this repo's dist_exclude/dist_include, already resolved. Read
 # through ckconform for the reason civikitchen.yaml is — one owner, in the language
 # that owns the list (toolbelt/ckconform/src/DistPaths.php). Non-zero when a
 # declared value is not a repo-relative path.
-ck_dist_paths() { "$(_ck_conform_bin)" --dist-paths; }
+ck_dist_paths() { "$ck_root/bin/ckconform" --dist-paths; }
 
 # --- info.xml and composer.json ----------------------------------------------
 # XML is parsed as XML and JSON as JSON: a line-oriented `tr | grep -o | sed`
@@ -95,12 +77,12 @@ ck_dist_paths() { "$(_ck_conform_bin)" --dist-paths; }
 
 # $1 = file, $2 = 'key' (the root attribute) or a child element name.
 ck_xml_field() {
-    "$(_ck_main_bin)" internal xml-field "$1" "$2"
+    "$ck_root/bin/ck" internal xml-field "$1" "$2"
 }
 
 # $1 = file, $2 = top-level key. A missing file or key prints nothing.
 ck_json_field() {
-    "$(_ck_main_bin)" internal json-field "$1" "$2"
+    "$ck_root/bin/ck" internal json-field "$1" "$2"
 }
 
 # --- file-selection patterns -------------------------------------------------

@@ -1,6 +1,6 @@
 # phpstan installation root
 
-What the image installs into `/opt/civikitchen-phpstan`, and what the
+What the image installs into `/opt/civikitchen/toolbelt/phpstan-root`, and what the
 `phpstan` gate of `ck ci` runs. The versions live in `composer.json`; `composer.lock` fixes the
 transitive tree so a daily image rebuild cannot move the static-analysis
 gate every extension depends on.

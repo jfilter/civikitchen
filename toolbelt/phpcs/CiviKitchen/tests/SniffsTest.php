@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
  * is a near-miss a sloppy token matcher would flag.
  *
  * Runs anywhere phpcs + the CiviKitchen standard are available:
- *   - inside a civikitchen image:  phpunit /opt/civikitchen-coder/CiviKitchen/tests
+ *   - inside a civikitchen image:  phpunit /opt/civikitchen/toolbelt/phpcs/CiviKitchen/tests
  *   - from a repo checkout:        phpunit toolbelt/phpcs/CiviKitchen/tests
  *     (the standard is resolved via --runtime-set installed_paths below,
  *      so the repo copy needs no prior phpcs --config-set)

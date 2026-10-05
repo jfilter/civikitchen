@@ -4,11 +4,7 @@
 declare(strict_types=1);
 
 $checkoutRoot = dirname(__DIR__, 2);
-$library = dirname(__DIR__) . '/lib/php/bootstrap.php';
-if (!is_file($library)) {
-    $library = '/usr/local/lib/php/bootstrap.php';
-}
-require $library;
+require dirname(__DIR__) . '/lib/php/bootstrap.php';
 
 $application = new CiviKitchen\Toolbelt\Cli\Application(__DIR__, $checkoutRoot);
 exit($application->run(array_slice($argv, 1), $argv[0]));

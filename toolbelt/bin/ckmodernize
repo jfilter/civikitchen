@@ -22,13 +22,11 @@
 set -uo pipefail
 
 # Shared plumbing: tool name, ck_die, ck_git, the extension-root check and the
-# file-exclusion patterns. Resolves in a checkout and in the image alike —
-# toolbelt/lib/ckcommon.sh next to toolbelt/bin, /usr/local/lib/ckcommon.sh
-# next to /usr/local/bin.
+# file-exclusion patterns, beside this file's real path (PATH holds a link).
 # shellcheck source=../lib/ckcommon.sh
-. "$(dirname "${BASH_SOURCE[0]}")/../lib/ckcommon.sh"
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ckcommon.sh"
 
-RECTOR_DIR=/opt/civikitchen-rector
+RECTOR_DIR="${ck_root}/rector"
 RECTOR_BIN="${RECTOR_DIR}/vendor/bin/rector"
 DEFAULT_CONFIG="${RECTOR_DIR}/rector.php"
 
@@ -83,7 +81,7 @@ while [ "$#" -gt 0 ]; do paths+=("$1"); shift; done
 # 1. Structure — civix (writes; civix has no dry-run, so we only run it on --fix
 #    and otherwise just announce the plan).
 if [ "${do_civix}" -eq 1 ] && [ -f info.xml ] \
-    && "$(_ck_main_bin)" internal xml-has-child info.xml civix; then
+    && "$ck_root/bin/ck" internal xml-has-child info.xml civix; then
   if [ "${fix}" -eq 1 ]; then
     echo "== civix: modernizing scaffolding =="
     if ! civix upgrade -n; then

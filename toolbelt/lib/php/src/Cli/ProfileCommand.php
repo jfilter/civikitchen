@@ -80,11 +80,7 @@ TXT;
         if ($environmentRoots !== false && $environmentRoots !== '') {
             array_push($roots, ...explode(PATH_SEPARATOR, $environmentRoots));
         }
-        foreach ([$this->checkoutRoot . '/docker/profiles', '/usr/local/share/civikitchen/profiles'] as $bundled) {
-            if (is_dir($bundled)) {
-                $roots[] = $bundled;
-            }
-        }
+        $roots[] = $this->checkoutRoot . '/docker/profiles';
         $seen = [];
         foreach ($roots as $root) {
             if (!is_dir($root)) {
@@ -107,10 +103,7 @@ TXT;
     /** @return array{string, string} */
     private function profileSchemaPaths(): array
     {
-        $checkoutValidator = $this->checkoutRoot . '/packages/civicrm-profile-schema/validate.php';
-        if (is_file($checkoutValidator)) {
-            return [$checkoutValidator, $this->checkoutRoot . '/packages/civicrm-profile-schema/profile.schema.json'];
-        }
-        return ['/usr/local/share/civikitchen/profile-schema/validate.php', '/usr/local/share/civikitchen/profile-schema/profile.schema.json'];
+        $package = $this->checkoutRoot . '/packages/civicrm-profile-schema';
+        return [$package . '/validate.php', $package . '/profile.schema.json'];
     }
 }

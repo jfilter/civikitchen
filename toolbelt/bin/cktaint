@@ -20,13 +20,11 @@
 set -uo pipefail
 
 # Shared plumbing: tool name, ck_die, ck_git, the extension-root check and the
-# file-exclusion patterns. Resolves in a checkout and in the image alike —
-# toolbelt/lib/ckcommon.sh next to toolbelt/bin, /usr/local/lib/ckcommon.sh
-# next to /usr/local/bin.
+# file-exclusion patterns, beside this file's real path (PATH holds a link).
 # shellcheck source=../lib/ckcommon.sh
-. "$(dirname "${BASH_SOURCE[0]}")/../lib/ckcommon.sh"
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ckcommon.sh"
 
-PSALM_DIR=/opt/civikitchen-psalm
+PSALM_DIR="${ck_root}/psalm"
 PSALM_BIN="${PSALM_DIR}/vendor/bin/psalm"
 DEFAULT_CONFIG="${PSALM_DIR}/psalm-taint.xml.dist"
 

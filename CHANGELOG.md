@@ -40,9 +40,22 @@ except that a break the consumers are adjusted for ships as a minor, marked
   (`CKINIT_IMAGE`, default `:v1`) with the git root and `CK_DEFAULT_CONFIG`
   mounted, so seeding, `--check` and `--update` need no PHP or composer on the
   host.
+- `ckconform`'s `deprecated-image-path` warns on a config, script or workflow
+  that names a `/opt/civikitchen-<tool>` path, with the replacement under
+  `/opt/civikitchen/toolbelt/`. Prose (`*.md`, `*.txt`) is not read.
 
 ### Changed
 
+- The images carry the toolbelt, the schema packages and the profiles under
+  `/opt/civikitchen/`, laid out as in a checkout, and `/usr/local/bin/ck*`
+  link into `/opt/civikitchen/toolbelt/bin/`. Every tool resolves its configs
+  and toolchains from its own location; none tries an image path first and a
+  checkout path second. The bundled profiles moved from
+  `/usr/local/share/civikitchen/profiles` to `/opt/civikitchen/docker/profiles`.
+- The template's `phpstan.neon.dist` includes
+  `/opt/civikitchen/toolbelt/phpstan-config/civicrm-disallowed.neon`. The file
+  is seeded, never managed, so an existing repository changes its include by
+  hand; `ckconform` points at the line.
 - `ckcreate` runs its PHP, composer and git steps in the image: the host needs
   bash and Docker, and the `composer install` of the scenario schema before the
   first run is gone. The civikitchen checkout has to be mountable by Docker
@@ -61,6 +74,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
   dev compose file's sibling example mounts at the sibling's extension key.
   `ckinit --check` reports the managed `ci.yml` as drifted until
   `ckinit --update` refreshes it.
+
+### Deprecated
+
+- The `/opt/civikitchen-<tool>` paths (`-phpstan-config`, `-phpstan`,
+  `-phpstan-ext`, `-psalm`, `-rector`, `-coder`, `-ckconform`, `-oxlint`,
+  `-oxfmt`, `-mago`, `-composer-deps.php`) are links to their place under
+  `/opt/civikitchen/toolbelt/` and go away in v2.
 
 ### Fixed
 

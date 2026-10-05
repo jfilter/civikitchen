@@ -69,9 +69,7 @@ final class Files
     /** @return list<string> */
     public function vendoredPrefixes(): array
     {
-        $binary = is_executable($this->checkoutRoot . '/toolbelt/bin/ckconform')
-            ? $this->checkoutRoot . '/toolbelt/bin/ckconform' : 'ckconform';
-        $result = $this->runner->capture([$binary, '--policy', 'vendored_paths']);
+        $result = $this->runner->capture([$this->checkoutRoot . '/toolbelt/bin/ckconform', '--policy', 'vendored_paths']);
         if ($result['status'] !== 0) {
             return [];
         }

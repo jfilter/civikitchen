@@ -83,7 +83,7 @@ final class LifecycleCommand implements Command
         $environment['CK_LC_KEY'] = $key;
         $environment['CK_LC_DIR'] = $extensionDirectory;
         $environment['CK_LC_PREFIX'] = $prefix;
-        $invariant = $this->runner->capture(['cv', 'scr', '/usr/local/share/civikitchen/lifecycle-check.php'], $environment);
+        $invariant = $this->runner->capture(['cv', 'scr', $this->checkoutRoot . '/toolbelt/lib/lifecycle-check.php'], $environment);
         echo $invariant['output'];
         $transcript .= $invariant['output'];
         if ($invariant['status'] !== 0) {
@@ -92,7 +92,7 @@ final class LifecycleCommand implements Command
         $this->step('re-enable', ['cv', 'ext:enable', $key], $transcript);
 
         echo "cklifecycle: checking settings metadata (option loading)\n";
-        $settingsCheck = $this->runner->capture(['cv', 'scr', '/usr/local/share/civikitchen/settings-metadata-check.php'], $environment);
+        $settingsCheck = $this->runner->capture(['cv', 'scr', $this->checkoutRoot . '/toolbelt/lib/settings-metadata-check.php'], $environment);
         echo $settingsCheck['output'];
         $transcript .= $settingsCheck['output'];
         if ($settingsCheck['status'] !== 0) {
@@ -183,9 +183,7 @@ final class LifecycleCommand implements Command
     /** @return list<string> */
     private function policyRules(string $key): array
     {
-        $binary = is_executable($this->checkoutRoot . '/toolbelt/bin/ckconform')
-            ? $this->checkoutRoot . '/toolbelt/bin/ckconform' : 'ckconform';
-        $result = $this->runner->capture([$binary, '--policy', $key]);
+        $result = $this->runner->capture([$this->checkoutRoot . '/toolbelt/bin/ckconform', '--policy', $key]);
         if ($result['status'] !== 0) {
             $this->failed = true;
             fwrite(STDERR, "cklifecycle: could not read policy.lifecycle.log_ignore\n");

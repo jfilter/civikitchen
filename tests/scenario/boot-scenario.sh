@@ -74,7 +74,7 @@ docker compose -f "$compose" exec -T \
       export PATH="/home/buildkit/buildkit/bin:${PATH}"
       cd /home/buildkit/buildkit/build/site/web
     fi
-    cv scr /usr/local/share/civikitchen/profiles/configure-api-users.php
+    cv scr /opt/civikitchen/docker/profiles/configure-api-users.php
   ' >/dev/null
 role_union=$(app_cv ev '
   $wanted=["access CiviCRM", "view all contacts"];
@@ -107,7 +107,7 @@ if docker compose -f "$compose" exec -T \
       export PATH="/home/buildkit/buildkit/bin:${PATH}"
       cd /home/buildkit/buildkit/build/site/web
     fi
-    cv scr /usr/local/share/civikitchen/profiles/configure-api-users.php
+    cv scr /opt/civikitchen/docker/profiles/configure-api-users.php
   ' >"$work/collision.log" 2>&1; then
   echo "scenario profile seized the unmanaged admin username" >&2
   exit 1
@@ -157,7 +157,7 @@ docker compose -f "$compose" exec -T \
       export PATH="/home/buildkit/buildkit/bin:${PATH}"
       cd /home/buildkit/buildkit/build/site/web
     fi
-    cv scr /usr/local/share/civikitchen/profiles/configure-api-users.php
+    cv scr /opt/civikitchen/docker/profiles/configure-api-users.php
   ' >/dev/null
 state=$(app_cv ev '
   $contact=\Civi\Api4\Contact::get(FALSE)

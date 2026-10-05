@@ -17,7 +17,7 @@
 # profile.schema.json (draft 2020-12, enforced in CI; published as
 # @jfilter/civicrm-profile-schema).
 #
-#   apply.sh <profile-dir>     # e.g. /usr/local/share/civikitchen/profiles/verein
+#   apply.sh <profile-dir>     # e.g. /opt/civikitchen/docker/profiles/verein
 set -euo pipefail
 
 # Packaged code replaced by an immutable Git pin remains recoverable until the
@@ -45,11 +45,7 @@ trap ck_profile_cleanup EXIT
 PROFILE_DIR="${1:?usage: apply.sh <profile-dir>}"
 PROFILE_NAME="$(basename "${PROFILE_DIR}")"
 JSON="${PROFILE_DIR}/profile.json"
-CK_PROFILE_CLI="$(command -v ck 2>/dev/null || true)"
-if [ -z "${CK_PROFILE_CLI}" ]; then
-    CK_PROFILE_CLI="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/toolbelt/bin/ck"
-fi
-[ -x "${CK_PROFILE_CLI}" ] || { echo "apply.sh: cannot find the shared ck PHP CLI" >&2; exit 1; }
+CK_PROFILE_CLI="$(command -v ck 2>/dev/null)" || { echo "apply.sh: no ck on PATH" >&2; exit 1; }
 # civibuild layout if present (demo + buildkit dev images); on the standalone
 # dev image cv is on the global PATH and finds the site via env, no cd needed.
 SITE_WEB="/home/buildkit/buildkit/build/site/web"

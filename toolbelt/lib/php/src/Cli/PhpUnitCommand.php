@@ -28,12 +28,8 @@ final class PhpUnitCommand implements Command
             return 2;
         }
         $config = $this->configuration($arguments);
-        $canary = is_file('/usr/local/share/civikitchen/tx-canary.php')
-            ? '/usr/local/share/civikitchen/tx-canary.php' : $this->checkoutRoot . '/toolbelt/lib/tx-canary.php';
-        if (getenv('CK_TX_CANARY') === '0' || $config === '' || !is_file($canary)) {
-            if (!is_file($canary)) {
-                fwrite(STDERR, "ckphpunit: no canary in this image - running plain phpunit.\n");
-            }
+        $canary = $this->checkoutRoot . '/toolbelt/lib/tx-canary.php';
+        if (getenv('CK_TX_CANARY') === '0' || $config === '') {
             return $this->runner->passthrough(['phpunit', ...$arguments]);
         }
         $generated = tempnam(sys_get_temp_dir(), 'ckphpunit-canary-');

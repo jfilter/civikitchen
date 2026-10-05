@@ -263,6 +263,19 @@ trust flag is mandatory. Runtime validation and trust checks cover the complete
 selected list before the first profile changes the site; duplicate names and
 conflicting AuthX policies are errors.
 
+## Toolbelt layout
+
+Every image carries this repository's `toolbelt/`, `packages/` and
+`docker/profiles/` under `/opt/civikitchen/`, laid out as in a checkout;
+`/usr/local/bin/ck*` are links into `/opt/civikitchen/toolbelt/bin/`. A repo
+config names files there, for example
+`/opt/civikitchen/toolbelt/phpstan-config/civicrm-disallowed.neon` in
+`phpstan.neon.dist`.
+
+The v1 paths `/opt/civikitchen-<tool>` are links to the same directories and
+are **deprecated**: they go away in v2. `ckconform` warns about every file
+that still names one, with the replacement.
+
 ## Tags & versions
 
 ### Database compatibility

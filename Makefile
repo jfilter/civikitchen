@@ -107,7 +107,7 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-parity \
+.PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario \
 	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckeslint test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
 	test-ck-headless test-ckcoretest test-phpstan-bootstrap test-shell-portability test-install-trivy lint lint-shell lint-shell-portability \
 	test-database-matrix test-compose-config test-demo-basic-auth test-release-retag test-release-steps test-ci-gates-step test-release-script \
@@ -129,7 +129,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-parity test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-ckinit test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -223,11 +223,6 @@ test-ck-headless: ## ck_headless() installs the manager's <requires> closure (st
 
 test-phpstan-bootstrap: ## phpstanBootstrap.php autoloads mounted <requires> extensions (stubbed core)
 	bash tests/toolbelt/test-phpstan-bootstrap.sh
-
-# The Dockerfiles COPY the toolbelt selectively; without this gate a new tool
-# lands in git and silently never reaches the images the fleet's CI runs on.
-test-parity: ## Toolbelt components vs. Dockerfile COPY parity
-	bash tests/parity/test-toolbelt-parity.sh
 
 # `vendored_paths` decides what the linters never see; a regression there is
 # silent by construction — the run says "clean" about files it skipped, or

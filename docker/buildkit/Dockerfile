@@ -96,88 +96,18 @@ ARG INFECTION_VERSION
 # The phpcs installation root IS composer's home dir — `composer global
 # install` in install-dev-tools.sh reads exactly these two files.
 COPY toolbelt/phpcs-root /opt/composer
-COPY toolbelt/install-dev-tools.sh /tmp/install-dev-tools.sh
-# Beside the script, because that is where it looks for it — the same relative
-# path that resolves in a checkout. Shared pins only (the phpunit phar the tool
-# test suites also run on); everything single-consumer stays in the script.
-COPY toolbelt/versions.env /tmp/versions.env
-
-# Shared plumbing every ck* tool sources. The destination is /usr/local/lib on
-# purpose: the tools resolve it as "../lib/ckcommon.sh" relative to their own
-# location, which then works unchanged in a checkout (toolbelt/bin +
-# toolbelt/lib) and here (/usr/local/bin + /usr/local/lib). One source line, no
-# image-vs-checkout branch to keep in sync.
-COPY toolbelt/lib /usr/local/lib
-COPY toolbelt/bin/ck /usr/local/bin/ck
-COPY toolbelt/bin/ckprofile /usr/local/bin/ckprofile
-COPY toolbelt/bin/ckscenario /usr/local/bin/ckscenario
-# The bundled CiviKitchen phpcs standard (registered into installed_paths by
-# install-dev-tools.sh) and the cklint linter that runs it.
-COPY toolbelt/phpcs/CiviKitchen /opt/civikitchen-coder/CiviKitchen
-COPY toolbelt/bin/cklint /usr/local/bin/cklint
-# cross-version compatibility against the declared PHP floor (PHPCompatibility).
-COPY toolbelt/bin/ckcompat /usr/local/bin/ckcompat
-COPY toolbelt/bin/ckcivix /usr/local/bin/ckcivix
-# composer.json vs the dependencies the code really uses.
-COPY toolbelt/bin/ckdeps /usr/local/bin/ckdeps
-COPY toolbelt/lib/composer-deps.php /opt/civikitchen-composer-deps.php
-# repo-conformance check against the extension template (structure, not style).
-# A PHP application: it parses info.xml as XML and the manifests as JSON.
-# `ckconform` in PATH is a thin shim.
-COPY toolbelt/ckconform /opt/civikitchen-ckconform
-COPY toolbelt/bin/ckconform /usr/local/bin/ckconform
-# coverage gate: runs the suite with clover and enforces civikitchen.yaml's min_coverage
-COPY toolbelt/bin/ckcoverage /usr/local/bin/ckcoverage
-# mutation testing (infection): coverage's harder question, nightly-only.
-COPY toolbelt/bin/ckmutate /usr/local/bin/ckmutate
-# Transactional-test gate + lifecycle gate, same pairing as the standalone image.
-COPY toolbelt/bin/ckphpunit /usr/local/bin/ckphpunit
-COPY toolbelt/lib/tx-canary.php /usr/local/share/civikitchen/tx-canary.php
-COPY toolbelt/bin/cklifecycle /usr/local/bin/cklifecycle
-COPY toolbelt/lib/lifecycle-check.php /usr/local/share/civikitchen/lifecycle-check.php
-COPY toolbelt/lib/settings-metadata-check.php /usr/local/share/civikitchen/settings-metadata-check.php
-# release helper: version consistency + the installable dist zip (docs/extension-releases.md)
-COPY toolbelt/bin/ckrelease /usr/local/bin/ckrelease
-# rector setup (config + CiviCRM footgun rules) + the `ckmodernize` wrapper.
-COPY toolbelt/rector /opt/civikitchen-rector
-COPY toolbelt/bin/ckmodernize /usr/local/bin/ckmodernize
-# The phpstan installation root: pinned engine + extensions, from its lock.
-COPY toolbelt/phpstan-root /opt/civikitchen-phpstan
-# CiviKitchen's phpstan extension (@ck-legacy deprecated-scope resolver) —
-# install-dev-tools.sh pulls it in as a composer path repository from here.
-COPY toolbelt/phpstan /opt/civikitchen-phpstan-ext
-# Ban lists as config (spaze/phpstan-disallowed-calls); inert until included.
-COPY toolbelt/phpstan-config /opt/civikitchen-phpstan-config
-# psalm taint setup (taint-only config + CiviCRM source/sink/escape stubs) +
-# the `cktaint` wrapper. Advisory gate — see docs/extension-standards.md.
-COPY toolbelt/psalm /opt/civikitchen-psalm
-COPY toolbelt/bin/cktaint /usr/local/bin/cktaint
-# Smarty compile smoke (needs a booted site — drives `cv scr`), schema parity,
-# and the pinned oxlint toolchain + baseline config. Kept in lockstep with the
-# standalone image: a tool that exists in one and not the other is how a repo's
-# CI starts depending on which image it happens to run on.
-COPY toolbelt/bin/cksmarty /usr/local/bin/cksmarty
-COPY toolbelt/lib/smarty-compile.php /usr/local/share/civikitchen/cksmarty-compile.php
-COPY toolbelt/bin/ckschemadiff /usr/local/bin/ckschemadiff
-COPY toolbelt/oxlint /opt/civikitchen-oxlint
-COPY toolbelt/bin/ckeslint /usr/local/bin/ckeslint
-# Formatting (ckfmt): mago baseline + oxfmt toolchain + runner, same trio as
-# the standalone image.
-COPY toolbelt/mago /opt/civikitchen-mago
-COPY toolbelt/oxfmt /opt/civikitchen-oxfmt
-COPY toolbelt/bin/ckfmt /usr/local/bin/ckfmt
-RUN CODER_REF="${CODER_REF}" \
+# The toolbelt, laid out as in a checkout, as in the standalone image — minus
+# the two standalone-only helpers: cktestreset reseeds the standalone scratch
+# DB, ckcoretest runs core suites against its dist core.
+COPY toolbelt /opt/civikitchen/toolbelt
+RUN rm /opt/civikitchen/toolbelt/bin/cktestreset /opt/civikitchen/toolbelt/bin/ckcoretest \
+    && CODER_REF="${CODER_REF}" \
         CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
         PHPUNIT_VERSION="${PHPUNIT_VERSION}" PHPUNIT_SHA256="${PHPUNIT_SHA256}" \
         INFECTION_VERSION="${INFECTION_VERSION}" \
         MAGO_VERSION="${MAGO_VERSION}" MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64}" \
         MAGO_SHA256_AARCH64="${MAGO_SHA256_AARCH64}" \
-        bash /tmp/install-dev-tools.sh && rm /tmp/install-dev-tools.sh /tmp/versions.env \
-    && chmod +x /usr/local/bin/ck /usr/local/bin/ckprofile /usr/local/bin/ckscenario /usr/local/bin/cklint /usr/local/bin/ckconform /usr/local/bin/ckcoverage \
-       /usr/local/bin/ckphpunit /usr/local/bin/cklifecycle \
-        /usr/local/bin/ckrelease /usr/local/bin/ckmodernize /usr/local/bin/cktaint \
-        /usr/local/bin/cksmarty /usr/local/bin/ckschemadiff /usr/local/bin/ckeslint \
-        /usr/local/bin/ckfmt /usr/local/bin/ckmutate
+        bash /opt/civikitchen/toolbelt/install-dev-tools.sh
 
 # PHP runtime tuning — matches what civibuild expects for site builds.
 RUN { \
@@ -215,9 +145,9 @@ COPY docker/buildkit/site-types /usr/local/share/civikitchen/site-types
 # The scenario CLI parses the canonical civikitchen.yaml with Symfony's
 # maintained YAML component. Install it once in the shared base so both final
 # and demo targets inherit the exact locked parser without runtime downloads.
-COPY packages/civikitchen-scenario-schema /usr/local/share/civikitchen/scenario-schema
+COPY packages/civikitchen-scenario-schema /opt/civikitchen/packages/civikitchen-scenario-schema
 RUN composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
-    --working-dir=/usr/local/share/civikitchen/scenario-schema \
+    --working-dir=/opt/civikitchen/packages/civikitchen-scenario-schema \
     && composer clear-cache
 
 # buildkit user owns the site tree so civibuild can write to it. Apache is
@@ -347,9 +277,8 @@ RUN if [ "${DEFAULT_SITE_TYPE}" = "standalone-demo" ]; then \
 COPY docker/runtime/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.sh
 COPY docker/runtime/provision.sh /usr/local/share/civikitchen/provision.sh
 COPY docker/buildkit/entrypoint-common.sh /usr/local/share/civikitchen/entrypoint-common.sh
-COPY docker/profiles /usr/local/share/civikitchen/profiles
-COPY packages/civicrm-profile-schema /usr/local/share/civikitchen/profile-schema
-COPY packages/civikitchen-scenario-schema /usr/local/share/civikitchen/scenario-schema
+COPY docker/profiles /opt/civikitchen/docker/profiles
+COPY packages/civicrm-profile-schema /opt/civikitchen/packages/civicrm-profile-schema
 
 COPY docker/buildkit/entrypoint-demo.sh /home/buildkit/entrypoint.sh
 RUN chmod +x /home/buildkit/entrypoint.sh
@@ -411,9 +340,8 @@ COPY --from=builder --chown=buildkit:buildkit /home/buildkit /home/buildkit
 COPY docker/runtime/xdebug-toggle.sh /usr/local/share/civikitchen/xdebug-toggle.sh
 COPY docker/runtime/provision.sh /usr/local/share/civikitchen/provision.sh
 COPY docker/buildkit/entrypoint-common.sh /usr/local/share/civikitchen/entrypoint-common.sh
-COPY docker/profiles /usr/local/share/civikitchen/profiles
-COPY packages/civicrm-profile-schema /usr/local/share/civikitchen/profile-schema
-COPY packages/civikitchen-scenario-schema /usr/local/share/civikitchen/scenario-schema
+COPY docker/profiles /opt/civikitchen/docker/profiles
+COPY packages/civicrm-profile-schema /opt/civikitchen/packages/civicrm-profile-schema
 
 COPY docker/buildkit/entrypoint.sh /home/buildkit/entrypoint.sh
 RUN chmod +x /home/buildkit/entrypoint.sh

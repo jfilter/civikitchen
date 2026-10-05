@@ -138,8 +138,7 @@ final class ReleaseCommand implements Command
 
     private function ckconform(): string
     {
-        return is_executable($this->checkoutRoot . '/toolbelt/bin/ckconform')
-            ? $this->checkoutRoot . '/toolbelt/bin/ckconform' : 'ckconform';
+        return $this->checkoutRoot . '/toolbelt/bin/ckconform';
     }
 
     /** @param list<string> $positionals */

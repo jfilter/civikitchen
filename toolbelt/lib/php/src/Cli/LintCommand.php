@@ -93,9 +93,7 @@ final class LintCommand implements Command
             if (is_file('mago.toml')) {
                 echo "cklint: using this repo's own mago.toml (the CiviKitchen lint baseline does not apply).\n";
             } else {
-                $config = is_file('/opt/civikitchen-mago/mago.toml')
-                    ? '/opt/civikitchen-mago/mago.toml' : $this->checkoutRoot . '/toolbelt/mago/mago.toml';
-                $magoArguments = [...$magoArguments, '--config', $config];
+                $magoArguments = [...$magoArguments, '--config', $this->checkoutRoot . '/toolbelt/mago/mago.toml'];
             }
             $magoArguments[] = 'lint';
             if ($fix) {

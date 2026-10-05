@@ -105,9 +105,7 @@ final class SharedPhpTest extends TestCase
 
     public function testApi4CatalogExportAddsTheExtensionsEntitiesAndActionClasses(): void
     {
-        $checkout = dirname(__DIR__, 2);
-        $catalog = Api4CatalogExport::locate($checkout);
-        self::assertNotNull($catalog);
+        $catalog = dirname(__DIR__, 2) . '/toolbelt/phpstan/src/Api4Catalog.php';
         foreach (['own' => ['Widget.php', 'Action/Contact/Greet.php'], 'sibling' => ['Action/Activity/Archive.php', 'Widget.php']] as $dir => $files) {
             foreach ($files as $file) {
                 $parent = dirname($this->temporary . "/{$dir}/Civi/Api4/{$file}");

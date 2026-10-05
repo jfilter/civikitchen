@@ -240,29 +240,8 @@ final class Policy
     /** @param array<string, mixed> $document */
     private static function validateDocument(array $document): void
     {
-        if (!class_exists('CkProfileSchemaValidator')) {
-            foreach ([
-                dirname(__DIR__, 3) . '/packages/civicrm-profile-schema/validate.php',
-                '/usr/local/share/civikitchen/profile-schema/validate.php',
-            ] as $validator) {
-                if (is_file($validator)) {
-                    require_once $validator;
-                    break;
-                }
-            }
-        }
-        if (!class_exists('CkProfileSchemaValidator')) {
-            throw new \RuntimeException('CiviKitchen configuration validator is missing');
-        }
-        foreach ([
-            dirname(__DIR__, 3) . '/packages/civikitchen-scenario-schema/scenario.schema.json',
-            '/usr/local/share/civikitchen/scenario-schema/scenario.schema.json',
-        ] as $schemaFile) {
-            if (is_file($schemaFile)) break;
-        }
-        if (!isset($schemaFile) || !is_file($schemaFile)) {
-            throw new \RuntimeException('CiviKitchen configuration schema is missing');
-        }
+        require_once dirname(__DIR__, 3) . '/packages/civicrm-profile-schema/validate.php';
+        $schemaFile = dirname(__DIR__, 3) . '/packages/civikitchen-scenario-schema/scenario.schema.json';
         $schema = json_decode((string) file_get_contents($schemaFile), true, 512, JSON_THROW_ON_ERROR);
         $object = json_decode(json_encode($document, JSON_THROW_ON_ERROR), false, 512, JSON_THROW_ON_ERROR);
         $errors = (new \CkProfileSchemaValidator($schema))->validate($object);
@@ -298,18 +277,11 @@ final class Policy
         if (class_exists(Yaml::class)) {
             return;
         }
-        foreach ([
-            dirname(__DIR__, 3) . '/packages/civikitchen-scenario-schema/vendor/autoload.php',
-            '/usr/local/share/civikitchen/scenario-schema/vendor/autoload.php',
-        ] as $autoload) {
-            if (is_file($autoload)) {
-                require_once $autoload;
-                if (class_exists(Yaml::class)) {
-                    return;
-                }
-            }
+        $package = dirname(__DIR__, 3) . '/packages/civikitchen-scenario-schema';
+        if (!is_file($package . '/vendor/autoload.php')) {
+            throw new \RuntimeException("CiviKitchen YAML parser dependency is missing - run composer install in {$package}");
         }
-        throw new \RuntimeException('CiviKitchen YAML parser dependency is missing');
+        require_once $package . '/vendor/autoload.php';
     }
 
     /**

@@ -51,16 +51,12 @@ final class JavaScriptLintCommand implements Command
                 $paths[] = $argument;
             }
         }
-        $toolchain = is_executable('/opt/civikitchen-oxlint/node_modules/.bin/oxlint')
-            ? '/opt/civikitchen-oxlint' : $this->checkoutRoot . '/toolbelt/oxlint';
+        $toolchain = $this->checkoutRoot . '/toolbelt/oxlint';
         $oxlint = $toolchain . '/node_modules/.bin/oxlint';
         if (!is_executable($oxlint)) {
-            return $this->error('no oxlint toolchain at /opt/civikitchen-oxlint - is this a civikitchen image?');
+            return $this->error("no oxlint toolchain at {$toolchain} - is this a civikitchen image?");
         }
-        $catalog = Api4CatalogExport::locate($this->checkoutRoot);
-        if ($catalog === null) {
-            return $this->error('no Api4Catalog at /opt/civikitchen-phpstan-ext - is this a civikitchen image?');
-        }
+        $catalog = $this->checkoutRoot . '/toolbelt/phpstan/src/Api4Catalog.php';
         $report = $format !== '' ? [$oxlint, "--format={$format}"] : [$oxlint];
         $command = $fix ? [...$report, '--fix'] : $report;
         if ($core) {
@@ -243,8 +239,7 @@ final class JavaScriptLintCommand implements Command
     /** A boolean policy key; null after reporting an unreadable civikitchen.yaml. */
     private function policyFlag(string $key): ?bool
     {
-        $local = $this->checkoutRoot . '/toolbelt/bin/ckconform';
-        $result = $this->runner->capture([is_executable($local) ? $local : 'ckconform', '--policy', $key]);
+        $result = $this->runner->capture([$this->checkoutRoot . '/toolbelt/bin/ckconform', '--policy', $key]);
         if ($result['status'] !== 0) {
             $this->error('cannot read civikitchen.yaml: ' . trim($result['output']));
             return null;

@@ -52,7 +52,7 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
 
 - APIv4 only (`civicrm_api4()` / OO builders) — no `civicrm_api3()`. Enforced
   by phpstan, not phpcs: the bans live in
-  `/opt/civikitchen-phpstan-config/civicrm-disallowed.neon`
+  `/opt/civikitchen/toolbelt/phpstan-config/civicrm-disallowed.neon`
   (spaze/phpstan-disallowed-calls) and the template's `phpstan.neon.dist`
   includes it. Because phpstan resolves types, an indirect `$class::value()`
   is caught too. An exception is an `allowIn`/`allowInMethods` entry in the
@@ -222,7 +222,7 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   every webhook should have. No configuration is involved: the rule parses
   `xml/Menu/*.xml` out of the analysed repo itself, so a route added there
   is covered the moment it exists. (A generated `.ck-routes.json` —
-  `php /opt/civikitchen-phpstan-ext/tools/gen-route-catalog.php .` — is
+  `php /opt/civikitchen/toolbelt/phpstan/tools/gen-route-catalog.php .` — is
   honoured when present, as an override for a repo whose routes are not
   where the parser looks; it is never a precondition, because a gate that
   silently stops seeing new routes is worse than no gate.) The one
@@ -888,7 +888,7 @@ cktaint --baseline      # accept today's findings, see only new ones
 ### What it finds
 
 Psalm cannot see CiviCRM core, so CiviKitchen supplies a deliberately small set
-of stubs ([ADR-0011](adr/0011-checks-report-only-what-they-are-sure-of.md)) (`/opt/civikitchen-psalm/stubs`, signatures verified against core):
+of stubs ([ADR-0011](adr/0011-checks-report-only-what-they-are-sure-of.md)) (`/opt/civikitchen/toolbelt/psalm/stubs`, signatures verified against core):
 
 | role | modelled |
 | --- | --- |
