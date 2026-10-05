@@ -61,6 +61,24 @@ final class DeprecatedImagePathCheckTest extends CheckTestCase
         $this->assertWarns($reporter, 'use /opt/civikitchen/toolbelt/' . $replacement);
     }
 
+    public function testWarnsOnAProfileMountedBelowTheV1ProfileDirectory(): void
+    {
+        $context = $this->repo([
+            'compose.yml' => "services:\n  civicrm:\n    volumes:\n      - .:/usr/local/share/civikitchen/profiles/kurs:ro\n",
+        ], git: true);
+        self::assertSame([
+            'compose.yml:4: /usr/local/share/civikitchen/profiles is deprecated and goes away in civikitchen v2 — use /opt/civikitchen/docker/profiles',
+        ], $this->run_(new DeprecatedImagePathCheck(), $context)->messages('warn'));
+    }
+
+    public function testSilentOnTheRuntimeFilesThatStayInPlace(): void
+    {
+        $context = $this->repo([
+            'compose.yml' => "command: sh /usr/local/share/civikitchen/provision.sh\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new DeprecatedImagePathCheck(), $context));
+    }
+
     public function testReportsTheFirstHitPerFile(): void
     {
         $context = $this->repo([

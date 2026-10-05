@@ -40,9 +40,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   (`CKINIT_IMAGE`, default `:v1`) with the git root and `CK_DEFAULT_CONFIG`
   mounted, so seeding, `--check` and `--update` need no PHP or composer on the
   host.
-- `ckconform`'s `deprecated-image-path` warns on a config, script or workflow
-  that names a `/opt/civikitchen-<tool>` path, with the replacement under
-  `/opt/civikitchen/toolbelt/`. Prose (`*.md`, `*.txt`) is not read.
+- `ckconform`'s `deprecated-image-path` warns on a config, script, workflow or
+  compose mount that names a `/opt/civikitchen-<tool>` path or
+  `/usr/local/share/civikitchen/profiles`, with the replacement. Prose (`*.md`,
+  `*.txt`) is not read.
 
 ### Changed
 
@@ -51,7 +52,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
   link into `/opt/civikitchen/toolbelt/bin/`. Every tool resolves its configs
   and toolchains from its own location; none tries an image path first and a
   checkout path second. The bundled profiles moved from
-  `/usr/local/share/civikitchen/profiles` to `/opt/civikitchen/docker/profiles`.
+  `/usr/local/share/civikitchen/profiles` to `/opt/civikitchen/docker/profiles`;
+  a profile a stack mounts below the old directory still lands in the new one.
 - The template's `phpstan.neon.dist` includes
   `/opt/civikitchen/toolbelt/phpstan-config/civicrm-disallowed.neon`. The file
   is seeded, never managed, so an existing repository changes its include by
@@ -81,6 +83,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `-phpstan-ext`, `-psalm`, `-rector`, `-coder`, `-ckconform`, `-oxlint`,
   `-oxfmt`, `-mago`, `-composer-deps.php`) are links to their place under
   `/opt/civikitchen/toolbelt/` and go away in v2.
+- `/usr/local/share/civikitchen/profiles` is a link to
+  `/opt/civikitchen/docker/profiles` and goes away in v2. Mount a stack's own
+  profile at `/opt/civikitchen/docker/profiles/<name>`.
 
 ### Fixed
 

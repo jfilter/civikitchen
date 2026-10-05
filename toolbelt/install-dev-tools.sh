@@ -327,14 +327,17 @@ npm ci --prefix "${OXFMT_DIR}" --no-audit --no-fund --loglevel=error
 
 # ---------------------------------------------------------------------------
 # The ck* tools run from the toolbelt and are only linked into PATH. The
-# /opt/civikitchen-* links are the v1 paths repo configs may still name;
-# ckconform's deprecated-image-path warns about them, and v2 drops them.
+# /opt/civikitchen-* links and the profile directory link are the v1 paths repo
+# configs may still name or mount into; ckconform's deprecated-image-path warns
+# about them, and v2 drops them.
 ln -s "${TOOLBELT}"/bin/ck* /usr/local/bin/
 for link in ckconform:ckconform coder:phpcs rector:rector phpstan:phpstan-root \
     phpstan-ext:phpstan phpstan-config:phpstan-config psalm:psalm oxlint:oxlint \
     oxfmt:oxfmt mago:mago composer-deps.php:lib/composer-deps.php; do
     ln -s "${TOOLBELT}/${link#*:}" "/opt/civikitchen-${link%%:*}"
 done
+mkdir -p /usr/local/share/civikitchen
+ln -s "$(dirname "${TOOLBELT}")/docker/profiles" /usr/local/share/civikitchen/profiles
 
 rm -rf /opt/composer/cache ~/.npm
 chmod -R a+rX /opt/composer "${CODER_DIR}" "${TOOLBELT}" "${INFECTION_DIR}" /usr/local/bin/mago

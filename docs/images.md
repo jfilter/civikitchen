@@ -272,9 +272,11 @@ config names files there, for example
 `/opt/civikitchen/toolbelt/phpstan-config/civicrm-disallowed.neon` in
 `phpstan.neon.dist`.
 
-The v1 paths `/opt/civikitchen-<tool>` are links to the same directories and
-are **deprecated**: they go away in v2. `ckconform` warns about every file
-that still names one, with the replacement.
+The v1 paths `/opt/civikitchen-<tool>` and the v1 profile directory
+`/usr/local/share/civikitchen/profiles` are links to the same directories and
+are **deprecated**: they go away in v2. A profile a stack mounts below the old
+directory still lands in `/opt/civikitchen/docker/profiles`. `ckconform` warns
+about every file that still names one, with the replacement.
 
 ## Tags & versions
 

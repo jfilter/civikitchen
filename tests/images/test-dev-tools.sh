@@ -74,6 +74,12 @@ for old in ckconform/bin/ckconform coder/CiviKitchen/ruleset.xml rector/rector.p
     composer-deps.php; do
     if [ -f "/opt/civikitchen-${old}" ]; then ok "deprecated /opt/civikitchen-${old}"; else fail "deprecated /opt/civikitchen-${old}"; fi
 done
+# A profile a stack mounts below the v1 directory has to land where provisioning looks.
+if [ "$(readlink -f /usr/local/share/civikitchen/profiles)" = /opt/civikitchen/docker/profiles ]; then
+    ok "deprecated /usr/local/share/civikitchen/profiles"
+else
+    fail "deprecated /usr/local/share/civikitchen/profiles resolves to /opt/civikitchen/docker/profiles"
+fi
 
 # The unified commands depend on files copied outside /usr/local/bin. Exercise
 # them in-image so a missing schema/implementation layer cannot pass the host
