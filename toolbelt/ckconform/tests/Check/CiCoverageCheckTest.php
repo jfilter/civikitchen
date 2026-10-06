@@ -112,4 +112,42 @@ final class CiCoverageCheckTest extends CheckTestCase
         ]);
         $this->assertPasses($this->run_(new CiCoverageCheck(), $context));
     }
+
+    /** @param list<string> $steps */
+    private function measuredRepo(array $steps): \CiviKitchen\Ckconform\Context
+    {
+        $body = "jobs:\n  test:\n    runs-on: ubuntu-24.04\n    steps:\n";
+        foreach ($steps as $step) {
+            $body .= str_starts_with($step, '#') ? "      {$step}\n" : "      - run: {$step}\n";
+        }
+
+        return $this->repo([
+            '__policy_fixture' => "min_coverage=80\n",
+            'tests/phpunit/SomeTest.php' => '<?php',
+            '.github/workflows/ci.yml' => $body,
+        ], git: true);
+    }
+
+    public function testCkCiMeasuresCoverage(): void
+    {
+        $this->assertSilent($this->run_(new CiCoverageCheck(), $this->measuredRepo(['docker compose exec -T app ck ci'])));
+    }
+
+    public function testCkCoverageMeasuresCoverage(): void
+    {
+        $context = $this->measuredRepo(['ck lint --all', 'ck coverage tests/phpunit']);
+        $this->assertSilent($this->run_(new CiCoverageCheck(), $context));
+    }
+
+    public function testACkCiThatSkipsTheCoverageGateMeasuresNothing(): void
+    {
+        $context = $this->measuredRepo(['ck ci --skip=ckcoverage,ckeslint']);
+        $this->assertFails($this->run_(new CiCoverageCheck(), $context), 'no workflow runs ckcoverage');
+    }
+
+    public function testACommentNamingCkcoverageMeasuresNothing(): void
+    {
+        $context = $this->measuredRepo(['# TODO: switch to ckcoverage once the suite is green; cklint later', 'phpunit']);
+        $this->assertFails($this->run_(new CiCoverageCheck(), $context), 'no workflow runs ckcoverage');
+    }
 }

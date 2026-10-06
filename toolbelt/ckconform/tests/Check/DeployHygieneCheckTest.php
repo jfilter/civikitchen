@@ -110,4 +110,42 @@ final class DeployHygieneCheckTest extends CheckTestCase
             'deploy ships .env',
         );
     }
+
+    public function testADeclaredDirectoryCoversTheFilesBelowIt(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "deploy_hygiene=resources/postcodes/ -- postcode lookup the extension reads at runtime\n",
+            'resources/postcodes/de.csv' => "10115\n",
+            'resources/postcodes/at.csv' => "1010\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new DeployHygieneCheck(), $context));
+    }
+
+    public function testADeclaredDirectoryDoesNotCoverASiblingWithTheSamePrefix(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "deploy_hygiene=resources/postcodes -- postcode lookup the extension reads at runtime\n",
+            'resources/postcodes/de.csv' => "10115\n",
+            'resources/postcodes-old/de.csv' => "10115\n",
+        ], git: true);
+        $reporter = $this->run_(new DeployHygieneCheck(), $context);
+        self::assertCount(1, $reporter->messages('FAIL'), $reporter->render());
+        $this->assertFails($reporter, 'deploy ships resources/postcodes-old/de.csv');
+    }
+
+    public function testSampleAndTemplateEnvFilesAreTemplates(): void
+    {
+        $context = $this->repo(['.env.sample' => "DB=\n", '.env.template' => "DB=\n"], git: true);
+        $this->assertSilent($this->run_(new DeployHygieneCheck(), $context));
+    }
+
+    public function testRealDataStillFails(): void
+    {
+        $context = $this->repo([
+            '.env.local' => "DB=x\n",
+            'var/cache.txt' => 'x',
+            'data/members.csv' => "1\n",
+        ], git: true);
+        self::assertCount(3, $this->run_(new DeployHygieneCheck(), $context)->messages('FAIL'));
+    }
 }

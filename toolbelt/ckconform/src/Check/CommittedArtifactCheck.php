@@ -13,8 +13,9 @@ use CiviKitchen\Ckconform\Reporter;
  * run regenerates them, and every regeneration diverges from what the last
  * commit checked in. A committed copy is stale by construction.
  *
- * Checked as both a tracked file of that exact name and a tracked directory
- * of that name anywhere in the tree, top-level or nested.
+ * Checked as a tracked file of that exact name and as a tracked directory:
+ * node_modules anywhere, vendor/ only beside the composer.json that installs it
+ * (a `js/vendor/` of hand-picked bundles is source). Each hit names its path.
  */
 final class CommittedArtifactCheck implements Check
 {
@@ -60,24 +61,38 @@ final class CommittedArtifactCheck implements Check
             if ($bad === 'vendor' && $allowVendor) {
                 continue;
             }
-            if ($this->isCommitted($context, $bad)) {
-                $reporter->fail("build/cache artifact committed: {$bad}");
+            foreach ($this->committed($context, $bad) as $path) {
+                $reporter->fail("build/cache artifact committed: {$path}");
             }
         }
     }
 
-    private function isCommitted(Context $context, string $bad): bool
+    /** @return list<string> the tracked file, or each tracked directory of that name, outermost first */
+    private function committed(Context $context, string $bad): array
     {
         if ($context->isTracked($bad)) {
-            return true;
+            return [$bad];
         }
 
+        $paths = [];
         foreach ($context->trackedFiles() as $file) {
-            if (str_starts_with($file, "{$bad}/") || str_contains($file, "/{$bad}/")) {
-                return true;
+            $segments = explode('/', $file);
+            foreach (array_slice($segments, 0, -1) as $index => $segment) {
+                if ($segment !== $bad) {
+                    continue;
+                }
+                $parent = implode('/', array_slice($segments, 0, $index));
+                $prefix = $parent === '' ? '' : $parent . '/';
+                if ($bad === 'vendor' && !$context->isTracked($prefix . 'composer.json')) {
+                    continue;
+                }
+                $paths[$prefix . $bad . '/'] = true;
+                break;
             }
         }
+        $paths = array_keys($paths);
+        sort($paths);
 
-        return false;
+        return $paths;
     }
 }

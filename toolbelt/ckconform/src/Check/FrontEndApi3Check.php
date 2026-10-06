@@ -9,7 +9,7 @@ use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
- * CRM.api3 in JS/Smarty.
+ * CRM.api3, and core's Angular wrapper crmApi() around it, in JS/TS/Smarty.
  *
  * The NoLegacyCall sniff only reads PHP, so an APIv3 call in a template or a
  * bundle survives a whole migration unnoticed. Some entities genuinely have no
@@ -22,7 +22,7 @@ use CiviKitchen\Ckconform\Reporter;
  */
 final class FrontEndApi3Check implements Check
 {
-    private const GLOBS = ['*.js', '*.tpl', '*.html', '*.vue'];
+    private const GLOBS = ['*.js', '*.jsx', '*.ts', '*.tsx', '*.tpl', '*.html', '*.vue'];
 
     public function name(): string
     {
@@ -36,16 +36,22 @@ final class FrontEndApi3Check implements Check
         }
 
         foreach ($this->candidates($context) as $file) {
-            $contents = $context->read($file);
-            if ($contents === null || !str_contains($contents, 'CRM.api3')) {
+            $contents = $context->read($file) ?? '';
+            $call = match (true) {
+                str_contains($contents, 'CRM.api3') => 'CRM.api3',
+                preg_match('/(?<![\w$.])crmApi\s*\(/', $contents) === 1 => 'crmApi',
+                default => null,
+            };
+            if ($call === null) {
                 continue;
             }
 
             if ($this->hasDocumentedReason($contents)) {
-                $reporter->ok("{$file} uses CRM.api3 with a documented reason");
+                $reporter->ok("{$file} uses {$call} with a documented reason");
             } else {
                 $reporter->fail(
-                    "{$file} calls CRM.api3 — migrate to CRM.api4, or annotate 'ck-allow-api3 -- <reason>'",
+                    "{$file} calls {$call} — migrate to " . ($call === 'crmApi' ? 'crmApi4' : 'CRM.api4')
+                    . ", or annotate 'ck-allow-api3 -- <reason>'",
                 );
             }
         }

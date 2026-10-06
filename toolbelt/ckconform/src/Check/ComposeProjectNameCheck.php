@@ -31,6 +31,11 @@ final class ComposeProjectNameCheck implements Check
             return;
         }
 
+        $named = [];
+        foreach ($context->composeFiles() as $file) {
+            $named[$file] = preg_match('/^name:[ \t]*\S/m', $context->read($file) ?? '') === 1;
+        }
+
         $unnamed = [];
         foreach ($context->composeFiles() as $file) {
             // A file in the repo root derives the repo's own directory name,
@@ -39,10 +44,9 @@ final class ComposeProjectNameCheck implements Check
             if (!str_contains($file, '/')) {
                 continue;
             }
-            $contents = $context->read($file) ?? '';
             // [ \t] rather than \s: \s matches the newline, so a bare "name:"
             // would be satisfied by the first word of the NEXT line.
-            if (preg_match('/^name:[ \t]*\S/m', $contents) !== 1) {
+            if (!$named[$file] && !$this->mergedIntoNamedBase($file, $named)) {
                 $unnamed[] = $file;
             }
         }
@@ -51,10 +55,31 @@ final class ComposeProjectNameCheck implements Check
             return;
         }
 
+        sort($unnamed);
         $reporter->fail(
             'compose file without an explicit project name: ' . implode(', ', $unnamed)
             . ' — compose falls back to the directory name, so every stack kept in .docker/'
             . ' shares one project'
         );
+    }
+
+    /**
+     * Compose merges a `compose.override.y(a)ml` into the base file beside it,
+     * so the base file's name is the override's too.
+     *
+     * @param array<string, bool> $named
+     */
+    private function mergedIntoNamedBase(string $file, array $named): bool
+    {
+        if (preg_match('/^(?:docker-)?compose\.override\.ya?ml$/', basename($file)) !== 1) {
+            return false;
+        }
+        foreach (['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'] as $base) {
+            if ($named[dirname($file) . '/' . $base] ?? false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

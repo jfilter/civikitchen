@@ -39,14 +39,47 @@ final class ExtensionNamespace
             }
         }
 
-        $files = $context->isGitRepo() ? $context->trackedFiles() : $context->findFiles('');
-        foreach ($files as $file) {
-            if (preg_match('#^(?:CRM|Civi)/([A-Za-z0-9]+)/#', $file, $match) === 1) {
+        foreach (array_keys(self::psr4($context)) as $prefix) {
+            if (preg_match('/^(?:Civi|CRM)\\\\([A-Za-z0-9]+)\\\\/', $prefix, $match) === 1) {
                 $names[] = strtolower($match[1]);
             }
         }
 
+        // A shipped directory vouches for a namespace only where core has none:
+        // a payment processor in CRM/Core/Payment/ does not make CRM_Core_ ours.
+        $files = $context->isGitRepo() ? $context->trackedFiles() : $context->findFiles('');
+        foreach ($files as $file) {
+            if (preg_match('#^(CRM|Civi)/([A-Za-z0-9]+)/#', $file, $match) === 1 && $context->coreDir !== null
+                && !is_dir($context->coreDir . '/' . $match[1] . '/' . $match[2])
+            ) {
+                $names[] = strtolower($match[2]);
+            }
+        }
+
         return array_values(array_unique(array_filter($names, static fn (string $n): bool => $n !== '')));
+    }
+
+    /**
+     * PSR-4 prefixes (`Civi\Myext\` => `src`) from the info.xml classloader,
+     * which core honours, and from composer.json's autoload section.
+     *
+     * @return array<string, string>
+     */
+    private static function psr4(Context $context): array
+    {
+        $map = [];
+        foreach ($context->infoXml()?->xpath('//classloader/psr4') ?: [] as $entry) {
+            $map[trim((string) $entry['prefix'], '\\') . '\\'] = trim((string) $entry['path'], '/');
+        }
+        $composer = json_decode($context->read('composer.json') ?? '', true);
+        foreach ((array) ($composer['autoload']['psr-4'] ?? []) as $prefix => $paths) {
+            foreach ((array) $paths as $path) {
+                $map[trim((string) $prefix, '\\') . '\\'] ??= trim((string) $path, '/');
+            }
+        }
+        unset($map['\\']);
+
+        return $map;
     }
 
     /**
@@ -56,7 +89,7 @@ final class ExtensionNamespace
      */
     public static function isOwnClass(string $class, array $namespaces): bool
     {
-        if (preg_match('/^CRM_([A-Za-z0-9]+)_/', $class, $match) !== 1) {
+        if (preg_match('/^\\\\?CRM_([A-Za-z0-9]+)_/', $class, $match) !== 1) {
             return false;
         }
 
@@ -69,9 +102,15 @@ final class ExtensionNamespace
      *
      * @param list<string> $namespaces
      */
-    public static function ownClassFile(string $class, array $namespaces): ?string
+    public static function ownClassFile(Context $context, string $class, array $namespaces): ?string
     {
         $class = ltrim(str_replace('\\\\', '\\', $class), '\\');
+
+        foreach (self::psr4($context) as $prefix => $path) {
+            if (str_starts_with($class, $prefix)) {
+                return ltrim($path . '/', '/') . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+            }
+        }
 
         if (self::isOwnClass($class, $namespaces)) {
             return str_replace('_', '/', $class) . '.php';

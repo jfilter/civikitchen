@@ -115,4 +115,19 @@ final class HeadlessBuilderAppliedCheckTest extends CheckTestCase
 
         return $this->run_(new HeadlessBuilderAppliedCheck(), $context);
     }
+
+    public function testAGroupImportedCoreBuilderFails(): void
+    {
+        $this->assertFails($this->check('return Test::headless();', 'use Civi\\{Test, Api4\\Contact};'), 'never applied');
+    }
+
+    public function testAnAliasInAGroupImportFails(): void
+    {
+        $this->assertFails($this->check('return T::headless();', 'use Civi\\{Api4\\Contact, Test as T};'), 'never applied');
+    }
+
+    public function testAGroupImportOfAnotherTestClassIsNotTheCoreBuilder(): void
+    {
+        $this->assertSilent($this->check('return Test::headless();', 'use Civi\\{Api4\\Test};'));
+    }
 }

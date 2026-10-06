@@ -134,4 +134,45 @@ final class MessageTemplateTokenCheckTest extends CheckTestCase
 
         return $this->repo($files, git: true);
     }
+
+    public function testAnOwnNamespaceInAMessageTemplateStillFails(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'myext'),
+            'msg_templates/myext_receipt.html' => '<p>{myext.amount}</p>',
+        ], git: true);
+        $this->assertFails($this->run_(new MessageTemplateTokenCheck(), $context), "'myext.' is this extension's own namespace");
+    }
+
+    /** Page templates are no message templates, and `${x.y}` is a JavaScript interpolation. */
+    public function testPageTemplatesAndJavascriptLiteralsAreNoTokens(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'myext'),
+            'templates/CRM/Myext/Page/List.tpl' => "{literal}<script>\nrows.map(r => `<p>\${r.display_name}</p>`);\nalert(`Error: \${e.error_message}`);\n</script>{/literal}\n<p>{x.y}</p>\n",
+            'msg_templates/myext_note.html' => "<script>alert(`\${e.error_message}`)</script>",
+        ], git: true);
+        $this->assertSilent($this->run_(new MessageTemplateTokenCheck(), $context));
+    }
+
+    public function testCoreSiteAndGroupTokensAreCore(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'myext'),
+            'msg_templates/myext_welcome.html' => '{site.message_header}<p>{group.title} {survey.title} {financial_trxn.trxn_id} {contribution_product.product_id}</p>',
+        ], git: true);
+        $this->assertSilent($this->run_(new MessageTemplateTokenCheck(), $context));
+    }
+
+    /** A one-letter namespace that happens to occur in the short name is no evidence of ownership. */
+    public function testAShortNamespaceInsideTheShortNameIsForeign(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'myext'),
+            'msg_templates/myext_note.html' => '<p>{e.amount}</p>',
+        ], git: true);
+        $reporter = $this->run_(new MessageTemplateTokenCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, "token namespace 'e.'");
+    }
 }

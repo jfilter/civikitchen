@@ -109,7 +109,8 @@ final class MixinDeclarationCheck implements Check
     private function hasArtefact(Context $context, string $dir, string $suffix, bool $direct = false): bool
     {
         foreach ($context->trackedFiles() as $file) {
-            if (!str_ends_with($file, $suffix)) {
+            // Test trees ship nothing; their fixtures are no artefacts.
+            if (!str_ends_with($file, $suffix) || str_starts_with($file, 'tests/') || str_contains($file, '/tests/')) {
                 continue;
             }
             if ($dir === '') {

@@ -13,8 +13,8 @@ use CiviKitchen\Ckconform\Suppressions;
 /**
  * A malformed `*.mgd.php` record does not fail at install time in a readable
  * way — it fails inside the managed-entity reconciliation that runs on every
- * enable, upgrade and `System.flush`. A record without `name`/`entity`, without
- * `params.version`, or with a v4 record missing `params.values`, makes
+ * enable, upgrade and `System.flush`. A record without `name`/`entity`, or a
+ * v4 record missing `params.values`, makes
  * CRM_Core_ManagedEntities throw mid-reconcile, which aborts the whole
  * reconciliation — so unrelated managed records of unrelated extensions stop
  * being created too, and the upgrade screen shows a stack trace instead.
@@ -90,10 +90,10 @@ final class ManagedEntityMetadataCheck implements Check
                     $params = null;
                 }
                 if (is_array($params)) {
-                    $version = $params['version'] ?? null;
-                    if (!isset($params['version'])) {
-                        $reporter->fail("$label: params has no 'version' — the API version is not optional");
-                    } elseif (!in_array($version, self::VERSIONS, true)) {
+                    // mgd-php@1 and @2 set an empty params.version to '3'.
+                    $defaulted = empty($params['version']);
+                    $version = $defaulted ? 3 : $params['version'];
+                    if (!in_array($version, self::VERSIONS, true)) {
                         $reporter->fail("$label: params version '" . Scalar::describe($version) . "' is not 3 or 4");
                     } elseif ((int) $version === 4 && !isset($params['values'])) {
                         $reporter->fail("$label: APIv4 params without 'values' — nothing would be written");
@@ -103,7 +103,7 @@ final class ManagedEntityMetadataCheck implements Check
                         // Records are evaluated via require, so there is no line
                         // to anchor an inline ignore to — the escape is the
                         // file-wide `ckconform-ignore-file managed-entity-metadata`.
-                        $reporter->warn("$label: managed record uses APIv3 — prefer version 4 with 'values' when the entity supports APIv4 save/update on the minimum supported core; otherwise document the compatibility exception");
+                        $reporter->warn("$label: managed record uses APIv3" . ($defaulted ? ' (no params.version, which mgd-php defaults to 3)' : '') . " — prefer version 4 with 'values' when the entity supports APIv4 save/update on the minimum supported core; otherwise document the compatibility exception");
                     }
                 }
 

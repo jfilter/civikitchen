@@ -381,4 +381,48 @@ final class TranslationCatalogCheckTest extends CheckTestCase
 
         return $header . $originals . $translations . $blob;
     }
+
+    /** @return iterable<string, array{string}> */
+    public static function literalCalls(): iterable
+    {
+        yield 'comment before the string' => ["E::ts(/* ctx */ 'Hello')"];
+        yield 'named text argument' => ["E::ts(text: 'Hello')"];
+        yield 'named params first' => ["E::ts(params: ['domain' => 'x'], text: 'Hello')"];
+        yield 'method in another case' => ["E::TS('Hello')"];
+    }
+
+    /** @dataProvider literalCalls */
+    public function testALiteralFirstArgumentIsALiteral(string $call): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'Civi/Greeter/Thing.php' => $this->php($call),
+            'l10n/de_DE/LC_MESSAGES/greeter.po' => $this->po([['Hello', 'Hallo']]),
+            'l10n/de_DE/LC_MESSAGES/greeter.mo' => $this->mo(['Hello' => 'Hallo']),
+        ], git: true);
+        $this->assertSilent($this->run_(new TranslationCatalogCheck(), $context));
+    }
+
+    /** Near misses: a call in a comment or string is no call at all. */
+    public function testACallInACommentOrStringIsNotJudged(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'Civi/Greeter/Thing.php' => $this->php("'E::ts(\$label)' /* E::ts('Brand new') */"),
+            'l10n/de_DE/LC_MESSAGES/greeter.po' => $this->po([['Hello', 'Hallo']]),
+            'l10n/de_DE/LC_MESSAGES/greeter.mo' => $this->mo(['Hello' => 'Hallo']),
+        ], git: true);
+        $this->assertSilent($this->run_(new TranslationCatalogCheck(), $context));
+    }
+
+    public function testAConcatenatedFirstArgumentWarns(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'Civi/Greeter/Thing.php' => $this->php("E::ts('Hello' . \$suffix)"),
+            'l10n/de_DE/LC_MESSAGES/greeter.po' => $this->po([['Hello', 'Hallo']]),
+            'l10n/de_DE/LC_MESSAGES/greeter.mo' => $this->mo(['Hello' => 'Hallo']),
+        ], git: true);
+        $this->assertWarns($this->run_(new TranslationCatalogCheck(), $context), 'non-literal first argument');
+    }
 }

@@ -60,7 +60,7 @@ final class LicenseCoherenceCheck implements Check
     }
 
     /**
-     * SPDX allows `"license": ["MIT", "GPL-2.0"]` for disjunctive licensing, and
+     * Composer allows `"license": ["MIT", "GPL-2.0"]` or `"(MIT or GPL-2.0)"` for disjunctive licensing, and
      * that form is permitted here — but permitted is not the same as unchecked:
      * an unchecked array would be the way to bypass every licence rule.
      *
@@ -75,7 +75,7 @@ final class LicenseCoherenceCheck implements Check
         $license = $composer['license'] ?? null;
 
         if (is_string($license)) {
-            return $license === '' ? [] : [$license];
+            return $license === '' ? [] : $this->alternatives($license);
         }
         if (is_array($license)) {
             return array_values(array_filter(
@@ -85,6 +85,22 @@ final class LicenseCoherenceCheck implements Check
         }
 
         return [];
+    }
+
+    /**
+     * The members of an SPDX disjunction, `(A or B)` or `A OR B` (composer's
+     * grammar takes the operator in any case); any other expression stays whole.
+     *
+     * @return list<string>
+     */
+    private function alternatives(string $expression): array
+    {
+        $inner = preg_replace('/^\(\s*([^()]*?)\s*\)$/', '$1', trim($expression)) ?? $expression;
+        if (str_contains($inner, '(') || preg_match('/\s(?:and|with)\s/i', $inner) === 1) {
+            return [$expression];
+        }
+
+        return preg_split('/\s+or\s+/i', $inner) ?: [$expression];
     }
 
     /**

@@ -140,4 +140,27 @@ final class ManagedReferenceGraphCheckTest extends CheckTestCase
             ];
             PHP;
     }
+
+    /** Core's component guard (civicrm_admin_ui) evaluates with the stub's CRM_Core_Component. */
+    public function testAComponentGuardedFileStillYieldsItsRecords(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'myext'),
+            'managed/SavedSearch_MyextCases.mgd.php' => "<?php\nif (!CRM_Core_Component::isEnabled('CiviCase')) {\n  return [];\n}\nreturn [\n  ['name' => 'SavedSearch_myext_cases', 'entity' => 'SavedSearch', 'params' => ['values' => ['name' => 'myext_cases']]],\n  ['name' => 'SearchDisplay_myext_cases_table', 'entity' => 'SearchDisplay', 'params' => ['values' => ['name' => 'myext_cases_table', 'saved_search_id.name' => 'myext_cases']]],\n];\n",
+            'ang/afsearchMyextCases.aff.html' => '<crm-search-display-table search-name="myext_cases" display-name="myext_cases_table"></crm-search-display-table>',
+        ], git: true);
+        $this->assertSilent($this->run_(new ManagedReferenceGraphCheck(), $context));
+    }
+
+    public function testAnUnevaluatedFileTurnsDanglingTargetsIntoWarnings(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'myext'),
+            'managed/Broken.mgd.php' => "<?php\nthrow new \\RuntimeException('needs a live site');\n",
+            'ang/afsearchMyextCases.aff.html' => '<crm-search-display-table search-name="myext_cases" display-name="myext_cases_table"></crm-search-display-table>',
+        ], git: true);
+        $reporter = $this->run_(new ManagedReferenceGraphCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'search-name="myext_cases" has no SavedSearch');
+    }
 }

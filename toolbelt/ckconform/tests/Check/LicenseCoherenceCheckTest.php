@@ -128,4 +128,38 @@ final class LicenseCoherenceCheckTest extends CheckTestCase
         ]);
         $this->assertFails($this->run_(new LicenseCoherenceCheck(), $context), 'MIT or GPL-2.0');
     }
+
+    /** Composer's documented disjunctive form; its SPDX grammar takes the operator in any case. */
+    public function testAParenthesisedOrExpressionListsAlternatives(): void
+    {
+        foreach (['(MIT or GPL-3.0-or-later)', 'MIT OR GPL-3.0-or-later'] as $expression) {
+            $context = $this->repo([
+                'info.xml' => $this->infoXml(license: 'MIT'),
+                'composer.json' => json_encode(['license' => $expression]),
+            ]);
+            $this->assertSilent($this->run_(new LicenseCoherenceCheck(), $context));
+        }
+    }
+
+    public function testAnOrExpressionWithoutTheDeclaredLicenceFails(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(license: 'MIT'),
+            'composer.json' => json_encode(['license' => '(Apache-2.0 or GPL-3.0-or-later)']),
+        ]);
+        $this->assertFails(
+            $this->run_(new LicenseCoherenceCheck(), $context),
+            "info.xml 'MIT' vs composer.json 'Apache-2.0 or GPL-3.0-or-later'",
+        );
+    }
+
+    /** A conjunction grants both licences together, not either one. */
+    public function testAnAndExpressionIsNoListOfAlternatives(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(license: 'MIT'),
+            'composer.json' => json_encode(['license' => '(MIT and GPL-3.0-or-later)']),
+        ]);
+        $this->assertFails($this->run_(new LicenseCoherenceCheck(), $context), 'licence declarations disagree');
+    }
 }

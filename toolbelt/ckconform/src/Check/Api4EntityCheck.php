@@ -28,11 +28,6 @@ use CiviKitchen\Ckconform\Reporter;
  */
 final class Api4EntityCheck implements Check
 {
-    /**
-     * Namespace segments under Civi\Api4\ that are not entities.
-     */
-    private const NOT_ENTITIES = ['Generic', 'Action', 'Utils', 'Query', 'Service', 'Event'];
-
     public function name(): string
     {
         return 'api4-entity';
@@ -49,7 +44,8 @@ final class Api4EntityCheck implements Check
         $tooNew = [];
         $undeclared = [];
 
-        $referenced = $this->referencedEntities($context);
+        $classUses = [];
+        $referenced = $this->referencedEntities($context, $classUses);
         $external = $this->declaredExternalEntities($context, $referenced, $reporter);
 
         foreach ($referenced as $entity) {
@@ -58,9 +54,12 @@ final class Api4EntityCheck implements Check
                 continue;
             }
 
-            $classFile = $this->locateInCore($context->coreDir, $entity);
+            $classFile = CoreApi4::classFile($context->coreDir, $entity);
             if ($classFile === null) {
-                $missing[] = $entity;
+                // `use Civi\Api4\Generic;` imports a namespace, not an entity.
+                if (isset($classUses[$entity]) || !$this->isCoreNamespace($context->coreDir, $entity)) {
+                    $missing[] = $entity;
+                }
                 continue;
             }
 
@@ -158,14 +157,17 @@ final class Api4EntityCheck implements Check
 
     /**
      * Entity names referenced as \Civi\Api4\Foo in the extension's shipped PHP.
+     * An entity is a class directly in Civi\Api4; a deeper name such as
+     * \Civi\Api4\Provider\ActionObjectProvider lives in a sub-namespace.
      *
      * Shipped source only: tests never run on a customer's site, so a test-only
      * reference cannot fatal there, and test fixtures may name fake entities on
      * purpose. A broken reference in a test fails that test in CI on its own.
      *
+     * @param array<string, true> $classUses names used as a class (`Name::`), filled in
      * @return list<string>
      */
-    private function referencedEntities(Context $context): array
+    private function referencedEntities(Context $context, array &$classUses = []): array
     {
         $entities = [];
         foreach ($context->sourceFiles('', ['.php']) as $file) {
@@ -185,11 +187,12 @@ final class Api4EntityCheck implements Check
             // A bare `Civi\Api4\Foo` without the leading backslash is NOT a
             // reference to the entity — inside a namespaced file it resolves
             // relative to that namespace — so it is usually prose in a comment.
-            preg_match_all('/\\\\Civi\\\\Api4\\\\([A-Z][A-Za-z0-9_]*)/', $source, $qualified);
-            preg_match_all('/^\s*use\s+Civi\\\\Api4\\\\([A-Z][A-Za-z0-9_]*)/m', $source, $imported);
-            foreach ([...$qualified[1], ...$imported[1]] as $name) {
-                if (!in_array($name, self::NOT_ENTITIES, true)) {
-                    $entities[$name] = true;
+            preg_match_all('/\\\\Civi\\\\Api4\\\\([A-Z][A-Za-z0-9_]*)(?![\\\\\w])/', $source, $qualified);
+            foreach ([...$qualified[1], ...$this->importedEntities($source)] as $name) {
+                $entities[$name] = true;
+                // `Action::get()` names a class; a namespace only ever prefixes one.
+                if (preg_match('/(?<![\\\\\w])(?:\\\\Civi\\\\Api4\\\\)?' . $name . '\s*::/', $source) === 1) {
+                    $classUses[$name] = true;
                 }
             }
         }
@@ -200,36 +203,62 @@ final class Api4EntityCheck implements Check
     }
 
     /**
-     * Core proper, then the extensions core bundles — an entity living in
-     * ext/civi_mail is still shipped with core, and is exactly the case that
-     * makes this subtle.
+     * Entities a top-level `use` imports, including a group use
+     * (`use Civi\Api4\{Contact, Email}`) and comma-separated clauses.
+     *
+     * @return list<string>
      */
-    private function locateInCore(string $coreDir, string $entity): ?string
+    private function importedEntities(string $source): array
     {
-        $direct = $coreDir . '/Civi/Api4/' . $entity . '.php';
-        if (is_file($direct)) {
-            return $direct;
-        }
-
-        foreach ([$coreDir . '/ext', dirname($coreDir) . '/ext'] as $extRoot) {
-            if (!is_dir($extRoot)) {
+        $tokens = PhpSource::codeTokens($source);
+        $names = [];
+        foreach ($tokens as $i => $token) {
+            // A closure's `use (` and `use function`/`use const` import no class.
+            if (!$token->is(T_USE) || PhpSource::name($tokens[$i + 1] ?? $token) === null) {
                 continue;
             }
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($extRoot, \FilesystemIterator::SKIP_DOTS)
-            );
-            foreach ($iterator as $file) {
-                if (!$file instanceof \SplFileInfo || !$file->isFile()) {
-                    continue;
-                }
-                $path = $file->getPathname();
-                if (str_ends_with($path, '/Civi/Api4/' . $entity . '.php')) {
-                    return $path;
+            $prefix = '';
+            for ($j = $i + 1; isset($tokens[$j]) && $tokens[$j]->text !== ';'; $j++) {
+                $name = PhpSource::name($tokens[$j]);
+                if ($tokens[$j]->is(T_NS_SEPARATOR) && ($tokens[$j + 1] ?? null)?->text === '{') {
+                    $prefix = (PhpSource::name($tokens[$j - 1]) ?? '') . '\\';
+                    $names = array_slice($names, 0, -1);
+                } elseif ($tokens[$j]->text === '}') {
+                    $prefix = '';
+                } elseif ($name !== null && !$tokens[$j - 1]->is(T_AS)) {
+                    $names[] = $prefix . $name;
                 }
             }
         }
 
-        return null;
+        $entities = [];
+        foreach ($names as $name) {
+            if (preg_match('/^Civi\\\\Api4\\\\([A-Z][A-Za-z0-9_]*)$/', $name, $match) === 1) {
+                $entities[] = $match[1];
+            }
+        }
+
+        return $entities;
+    }
+
+    /**
+     * A Civi\Api4 sub-namespace core or a bundled extension ships, such as
+     * Generic or Action, as opposed to an entity class.
+     */
+    private function isCoreNamespace(string $coreDir, string $name): bool
+    {
+        $roots = [
+            $coreDir . '/Civi/Api4',
+            ...(glob($coreDir . '/ext/*/Civi/Api4') ?: []),
+            ...(glob(dirname($coreDir) . '/ext/*/Civi/Api4') ?: []),
+        ];
+        foreach ($roots as $root) {
+            if (is_dir($root . '/' . $name)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

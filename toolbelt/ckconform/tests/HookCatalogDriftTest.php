@@ -7,7 +7,7 @@ namespace CiviKitchen\Ckconform\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The committed hook catalog must match what the generator produces.
+ * The committed hook and permission catalogs must match their generators.
  *
  * Without this, `src/HookCatalog.php` silently rots: core adds hooks every
  * release, and a stale catalog reports them as typos. Skipped when no core
@@ -16,15 +16,23 @@ use PHPUnit\Framework\TestCase;
  */
 final class HookCatalogDriftTest extends TestCase
 {
-    public function testTheCommittedCatalogMatchesTheGenerator(): void
+    /** @return iterable<string, array{string, string}> */
+    public static function catalogs(): iterable
+    {
+        yield 'hooks' => ['gen-hook-catalog.php', 'HookCatalog.php'];
+        yield 'permissions' => ['gen-permission-catalog.php', 'PermissionCatalog.php'];
+    }
+
+    /** @dataProvider catalogs */
+    public function testTheCommittedCatalogMatchesTheGenerator(string $tool, string $catalog): void
     {
         $coreDir = getenv('CIVICRM_CORE_DIR') ?: '/var/www/html/core';
         if (!is_file($coreDir . '/CRM/Utils/Hook.php')) {
             self::markTestSkipped("no CiviCRM core at $coreDir (set CIVICRM_CORE_DIR)");
         }
 
-        $generator = dirname(__DIR__) . '/tools/gen-hook-catalog.php';
-        $committed = dirname(__DIR__) . '/src/HookCatalog.php';
+        $generator = dirname(__DIR__) . '/tools/' . $tool;
+        $committed = dirname(__DIR__) . '/src/' . $catalog;
         $fresh = tempnam(sys_get_temp_dir(), 'hookcatalog');
 
         try {
@@ -42,7 +50,7 @@ final class HookCatalogDriftTest extends TestCase
             self::assertSame(
                 $this->withoutHeader((string) file_get_contents($fresh)),
                 $this->withoutHeader((string) file_get_contents($committed)),
-                'src/HookCatalog.php is stale — regenerate: php tools/gen-hook-catalog.php ' . $coreDir,
+                "src/$catalog is stale — regenerate: php tools/$tool $coreDir",
             );
         } finally {
             @unlink($fresh);

@@ -8,8 +8,8 @@ declare(strict_types=1);
  * civikitchen template. Complements cklint (style) and phpstan (types): this
  * checks the repo structure, the gaps every extension audit turned up.
  *
- * Run from the extension root. Its only dependency is the YAML parser of the
- * scenario-schema package, which the image ships.
+ * Run from the extension root. Beside the toolbelt's shared PHP library its only
+ * dependency is the YAML parser of the scenario-schema package, which the image ships.
  */
 
 use CiviKitchen\Ckconform\Autoloader;
@@ -136,6 +136,7 @@ if ($root === false || !is_file($root . '/info.xml')) {
 $coreDir = getenv('CIVICRM_CORE_DIR') ?: '/var/www/html/core';
 $context = new Context($root, is_dir($coreDir . '/Civi/Api4') ? $coreDir : null);
 $reporter = new Reporter();
+$reporter->suppressWith($context);
 if ($context->exists(Policy::LEGACY_FILE)) {
     fwrite(STDERR, 'ckconform: ' . Policy::LEGACY_FILE . ' is no longer supported; migrate its policy to ' . Policy::CONFIG_FILE . "\n");
     exit(2);

@@ -6,6 +6,7 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\Policy;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -16,7 +17,7 @@ use CiviKitchen\Ckconform\Reporter;
  * queries a 404 route) stops every stack coming up with no diff to point at.
  *
  * A missing tag is the same defect spelled shorter: `image: mariadb` means
- * `mariadb:latest`.
+ * `mariadb:latest`. A service with `build:` names its own image and is exempt.
  *
  * This is a FAIL rather than the warning its workflow counterpart emits: a
  * floating tag in CI makes a run unattributable, but a floating tag in the stack
@@ -38,9 +39,11 @@ final class ComposeFloatingTagCheck implements Check
 
         $floating = [];
         foreach ($files as $file) {
-            foreach (explode("\n", $context->read($file) ?? '') as $index => $line) {
+            $contents = $context->read($file) ?? '';
+            $built = $this->builtImages($contents);
+            foreach (explode("\n", $contents) as $index => $line) {
                 $image = $this->floatingImage($line);
-                if ($image !== null) {
+                if ($image !== null && !in_array($image, $built, true)) {
                     $floating[] = sprintf('%s:%d %s', $file, $index + 1, $image);
                 }
             }
@@ -57,7 +60,26 @@ final class ComposeFloatingTagCheck implements Check
     }
 
     /**
-     * The image reference on this line if it floats, otherwise null.
+     * Images of services that also carry `build:` — compose tags what it builds
+     * with that name and pulls nothing.
+     *
+     * @return list<string>
+     */
+    private function builtImages(string $contents): array
+    {
+        $services = Policy::parseYaml($contents)['services'] ?? null;
+        $built = [];
+        foreach (is_array($services) ? $services : [] as $service) {
+            if (is_array($service) && isset($service['build']) && is_string($service['image'] ?? null)) {
+                $built[] = $service['image'];
+            }
+        }
+
+        return $built;
+    }
+
+    /**
+     * The image reference on this line, unquoted, if it floats, otherwise null.
      */
     private function floatingImage(string $line): ?string
     {
@@ -68,26 +90,9 @@ final class ComposeFloatingTagCheck implements Check
         if (preg_match('/^image:\s*(\S+)/', $trimmed, $match) !== 1) {
             return null;
         }
-        $image = $match[1];
 
-        // Interpolated defaults (${CIVIKITCHEN_IMAGE:-ghcr.io/...:standalone})
-        // are the project's own moving tag by design — the stack is meant to
-        // track it, and it is built from this very repo.
-        if (str_starts_with($image, '$')) {
-            return null;
-        }
-        if (str_ends_with($image, ':latest')) {
-            return $image;
-        }
-        // No tag at all is ':latest' spelled shorter. A digest (@sha256:...) is
-        // pinned as hard as it gets.
-        $lastColon = strrpos($image, ':');
-        $lastSlash = strrpos($image, '/');
-        $hasTag = $lastColon !== false && ($lastSlash === false || $lastColon > $lastSlash);
-        if (!$hasTag && !str_contains($image, '@')) {
-            return $image;
-        }
-
-        return null;
+        // Interpolated defaults (${CIVIKITCHEN_IMAGE:-ghcr.io/...:standalone}) are
+        // the project's own moving tag by design; ImageReference leaves them alone.
+        return ImageReference::floats($match[1]) ? ImageReference::unquote($match[1]) : null;
     }
 }

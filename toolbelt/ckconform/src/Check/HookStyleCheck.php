@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\HookSurface;
+use CiviKitchen\Ckconform\PhpSource;
 use CiviKitchen\Ckconform\Reporter;
 use CiviKitchen\Ckconform\Suppressions;
 
@@ -95,19 +96,20 @@ final class HookStyleCheck implements Check
             }
             $listenerClasses = $listenerClasses || $this->usesListenerClasses($contents);
 
-            if (!str_contains($contents, '_civicrm_')) {
+            if (stripos($contents, '_civicrm_') === false) {
                 continue;
             }
             $suppressions = Suppressions::of($contents);
             foreach (HookSurface::globalFunctions($contents) as $function => $line) {
-                if (preg_match('/^([A-Za-z0-9_]+)_civicrm_([a-zA-Z]+)$/', $function, $m) !== 1) {
+                if (preg_match('/^([A-Za-z0-9_]+)_civicrm_([a-zA-Z]+)$/i', $function, $m) !== 1) {
                     continue;
                 }
                 [, $prefix, $suffix] = $m;
                 // Foreign prefixes are HookDispatchNameCheck's finding, not a
                 // style question; the classic-only remainder is exactly what
                 // the style permits as functions.
-                if (!in_array($prefix, $expected, true) || in_array($suffix, self::CLASSIC_ONLY, true)
+                if (!HookSurface::hasPrefix($prefix, $expected)
+                    || in_array(strtolower($suffix), array_map('strtolower', self::CLASSIC_ONLY), true)
                     || $suppressions->suppressed($this->name(), $line)
                 ) {
                     continue;
@@ -132,20 +134,23 @@ final class HookStyleCheck implements Check
 
     /**
      * Whether the file references the scan-class bases, judged on real code
-     * tokens so comments and strings cannot trip it.
+     * tokens so comments and strings cannot trip it; bare, imported or
+     * fully qualified, in any case, as PHP resolves class names.
      */
     private function usesListenerClasses(string $contents): bool
     {
-        if (!str_contains($contents, 'AutoSubscriber')
-            && !str_contains($contents, 'HookInterface')
-            && !str_contains($contents, 'AutoService')
-        ) {
+        if (preg_match('/AutoSubscriber|HookInterface|AutoService/i', $contents) !== 1) {
             return false;
         }
-        foreach (@token_get_all($contents) as $token) {
-            if (is_array($token) && $token[0] === \T_STRING
-                && in_array($token[1], ['AutoSubscriber', 'HookInterface', 'AutoService'], true)
-            ) {
+        // Only a class's parents, interfaces and imports; a method hookInterface() is none of them.
+        $tokens = PhpSource::codeTokens($contents);
+        $inList = false;
+        foreach ($tokens as $i => $token) {
+            if ($token->is([T_EXTENDS, T_IMPLEMENTS]) || ($token->is(T_USE) && ($tokens[$i + 1] ?? null)?->text !== '(')) {
+                $inList = true;
+            } elseif ($token->is([';', '{']) && !($tokens[$i - 1] ?? null)?->is(T_NS_SEPARATOR)) {
+                $inList = false;
+            } elseif ($inList && in_array(strtolower(PhpSource::shortName($token) ?? ''), ['autosubscriber', 'hookinterface', 'autoservice'], true)) {
                 return true;
             }
         }

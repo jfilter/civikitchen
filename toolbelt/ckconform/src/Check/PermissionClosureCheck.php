@@ -6,6 +6,7 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\PermissionCatalog;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -21,65 +22,14 @@ use CiviKitchen\Ckconform\Reporter;
  * The check closes the loop over the strings the repo *uses* (menu XML,
  * ::check() literals, 'permission'/'permissions' specs, APIv4 permissions(),
  * aff.json) against the ones it
- * *defines* (hook_civicrm_permission) plus an embedded list of core
- * permissions. A near-miss on an own permission is a provable typo and fails; a
+ * *defines* (hook_civicrm_permission) plus core's own (PermissionCatalog,
+ * generated from core). A near-miss on an own permission is a provable typo and fails; a
  * completely unknown string may legitimately come from a dependency and only
  * warns. Defined-but-unused is not reported: a permission an extension only
  * hands to ACLs or to a downstream repo is perfectly normal.
  */
 final class PermissionClosureCheck implements Check
 {
-    /**
-     * Core permissions, generously. Wrong in the "too small" direction only
-     * produces warnings, never a false FAIL — a FAIL additionally requires a
-     * near-identical *own* permission, which core strings never have.
-     *
-     * @var list<string>
-     */
-    private const CORE_PERMISSIONS = [
-        'access CiviCRM', 'administer CiviCRM', 'administer CiviCRM data',
-        'administer CiviCRM system', 'edit all contacts', 'view all contacts',
-        'add contacts', 'delete contacts', 'access deleted contacts',
-        'merge duplicate contacts', 'edit groups', 'manage tags', 'import contacts',
-        'access CiviContribute', 'edit contributions', 'delete in CiviContribute',
-        'access CiviMail', 'delete in CiviMail', 'view public CiviMail content',
-        'access CiviMember', 'edit memberships', 'delete in CiviMember',
-        'access CiviEvent', 'edit event participants', 'register for events',
-        'view event info', 'delete in CiviEvent', 'access CiviReport',
-        'administer reserved reports', 'save Report Criteria', 'access Report Criteria',
-        'access CiviCase', 'add cases', 'delete in CiviCase', 'administer CiviCase',
-        'access my cases and activities', 'access all cases and activities',
-        'administer CiviCampaign', 'manage campaign', 'sign CiviCRM Petition',
-        'gotv campaign contacts', 'interview campaign contacts',
-        'release campaign contacts', 'reserve campaign contacts',
-        'view all activities', 'delete activities', 'access all custom data',
-        'access uploaded files', 'profile listings and forms', 'profile listings',
-        'profile create', 'profile edit', 'profile view',
-        'close all manual batches', 'create manual batch', 'edit all manual batches',
-        'view all manual batches', 'export all manual batches',
-        'delete all manual batches', 'view all notes', 'add contact notes',
-        'view my contact', 'edit my contact', 'edit message templates',
-        'edit system workflow message templates', 'edit user-driven message templates',
-        'render templates', 'administer payment processors',
-        'all CiviCRM permissions and ACLs', 'skip IDS check', 'access AJAX API',
-        'edit api keys', 'edit own api key', 'view my invoices',
-        'make online contributions', 'view debug output', 'manage queues',
-        'administer queues', 'translate CiviCRM', 'import SQL datasource',
-        'force merge duplicate contacts', 'administer dedupe rules',
-        'manage tag groups', 'administer reserved groups', 'administer reserved tags',
-        'edit inbound email basic information',
-        'edit inbound email basic information and content',
-        'access contact reference fields', 'view own manual batches',
-        'edit own manual batches', 'delete own manual batches',
-        'export own manual batches', 'reopen own manual batches',
-        'reopen all manual batches', 'close own manual batches',
-        'refund contributions', 'edit contact summary layouts', 'administer afform',
-        'manage own afform', '@afformPageToken',
-        'administer search_kit', 'administer API keys', 'authenticate with password',
-        'authenticate with api key', "generate any user's JWT",
-        "validate any user's credentials",
-    ];
-
     /**
      * Not permissions at all but the sentinels CiviCRM accepts in the same slot.
      *
@@ -143,8 +93,10 @@ final class PermissionClosureCheck implements Check
     private function isKnown(string $permission, array $defined): bool
     {
         return in_array($permission, self::PSEUDO_PERMISSIONS, true)
-            || in_array($permission, self::CORE_PERMISSIONS, true)
-            || in_array($permission, $defined, true);
+            || in_array($permission, PermissionCatalog::PERMISSIONS, true)
+            || in_array($permission, $defined, true)
+            // `Drupal:administer users` goes to the CMS unjudged; `cms:` names are in the catalog.
+            || preg_match('/^(?:' . implode('|', PermissionCatalog::CMS_PREFIXES) . '):/', $permission) === 1;
     }
 
     /**

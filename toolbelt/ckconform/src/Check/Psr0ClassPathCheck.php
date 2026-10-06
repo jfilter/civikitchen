@@ -6,6 +6,7 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\PhpSource;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -36,6 +37,7 @@ final class Psr0ClassPathCheck implements Check
         }
 
         $misfiled = [];
+        $extras = [];
         $checked = false;
         foreach ($context->trackedFiles() as $file) {
             if (preg_match('#(?:^|/)CRM/.+\.php$#', $file) !== 1) {
@@ -45,15 +47,27 @@ final class Psr0ClassPathCheck implements Check
             if ($source === null) {
                 continue;
             }
-            $class = $this->crmClass($source);
-            if ($class === null) {
-                continue;
+            $classes = $this->crmClasses($source);
+            $atPath = array_values(array_filter($classes, fn (string $class): bool => $this->expected($class, $file) === null));
+            // The file's own class: the one at this path, else the first.
+            $primary = $atPath[0] ?? $classes[0] ?? null;
+            foreach ($classes as $class) {
+                $checked = true;
+                $expected = $this->expected($class, $file);
+                if ($expected !== null && $class === $primary) {
+                    $misfiled[] = $class . ' is in ' . $file . ', PSR-0 wants …/' . $expected;
+                } elseif ($expected !== null && !str_starts_with($file, 'tests/') && !str_contains($file, '/tests/')) {
+                    // PHPUnit loads test files by path, so a fixture class beside the test is fine.
+                    $extras[] = $class . ' beside ' . $primary . ' in ' . $file;
+                }
             }
-            $checked = true;
-            $expected = str_replace('_', '/', $class) . '.php';
-            if (!str_ends_with($file, '/' . $expected) && $file !== $expected) {
-                $misfiled[] = $class . ' is in ' . $file . ', PSR-0 wants …/' . $expected;
-            }
+        }
+
+        if ($extras !== []) {
+            $reporter->warn(
+                'CRM_ classes sharing another class\'s file: ' . implode('; ', $extras)
+                . ' — the autoloader finds them only once that class is loaded; give each its own PSR-0 file'
+            );
         }
 
         if (!$checked) {
@@ -70,15 +84,35 @@ final class Psr0ClassPathCheck implements Check
         }
     }
 
-    /**
-     * The first CRM_-prefixed class/interface/trait/enum a file declares.
-     */
-    private function crmClass(string $source): ?string
+    /** The path PSR-0 wants for $class, or null when $file is it. */
+    private function expected(string $class, string $file): ?string
     {
-        if (preg_match('/\b(?:class|interface|trait|enum)\s+(CRM_[A-Za-z0-9_]+)/', $source, $match) === 1) {
-            return $match[1];
+        $expected = str_replace('_', '/', $class) . '.php';
+
+        return str_ends_with($file, '/' . $expected) || $file === $expected ? null : $expected;
+    }
+
+    /**
+     * Every CRM_-prefixed class/interface/trait/enum a file declares at the top
+     * level; one inside a block (`if (!class_exists(…))`) is a guarded polyfill.
+     *
+     * @return list<string>
+     */
+    private function crmClasses(string $source): array
+    {
+        $tokens = PhpSource::codeTokens($source);
+        $classes = [];
+        $depth = 0;
+        foreach ($tokens as $i => $token) {
+            $depth += $token->text === '}' ? -1 : ($token->is(['{', T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES]) ? 1 : 0);
+            $name = $tokens[$i + 1] ?? null;
+            if ($depth === 0 && $token->is([T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM]) && $name !== null && $name->is(T_STRING)
+                && str_starts_with($name->text, 'CRM_') && !($tokens[$i - 1] ?? null)?->is(T_DOUBLE_COLON)
+            ) {
+                $classes[] = $name->text;
+            }
         }
 
-        return null;
+        return $classes;
     }
 }

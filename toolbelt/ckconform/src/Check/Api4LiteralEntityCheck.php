@@ -40,7 +40,9 @@ final class Api4LiteralEntityCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        if (!$context->isGitRepo()) {
+        // Without core, a typo cannot be told from a core entity sharing our
+        // leading word (MembershipType beside an own MembershipPeriod).
+        if ($context->coreDir === null || !$context->isGitRepo()) {
             return;
         }
 
@@ -60,22 +62,24 @@ final class Api4LiteralEntityCheck implements Check
             $family[$word] = true;
         }
 
+        $external = CoreApi4::declaredExternal($context);
         $dangling = [];
         foreach ($context->sourceFiles('', ['.php']) as $file) {
             if ($this->skipped($file)) {
                 continue;
             }
             $source = $context->read($file);
-            if ($source === null || !str_contains($source, 'civicrm_api4')) {
+            if ($source === null || stripos($source, 'civicrm_api4') === false) {
                 continue;
             }
             foreach ($this->calledEntities($source) as $entity) {
-                if (in_array($entity, $local, true)) {
+                if (in_array($entity, [...$local, ...$external], true) || !isset($family[$this->leadingWord($entity)])
+                    || CoreApi4::classFile($context->coreDir, $entity) !== null
+                    || CoreApi4::inRequiredExtension($context, $entity)
+                ) {
                     continue;
                 }
-                if (isset($family[$this->leadingWord($entity)])) {
-                    $dangling[$entity][$file] = true;
-                }
+                $dangling[$entity][$file] = true;
             }
         }
 
@@ -114,21 +118,49 @@ final class Api4LiteralEntityCheck implements Check
     }
 
     /**
-     * Entity names in the first argument of a civicrm_api4() call. Comments are
-     * stripped first, so an example in a docblock is not read as a call.
+     * Literal entity names passed to civicrm_api4() in code, positionally or
+     * as `entity:`, directly or through call_user_func('civicrm_api4', …).
      *
      * @return list<string>
      */
     private function calledEntities(string $source): array
     {
-        $code = PhpSource::withoutComments($source);
-        preg_match_all(
-            '/civicrm_api4\s*\(\s*[\'"]([A-Z][A-Za-z0-9_]*)[\'"]/',
-            $code,
-            $matches
-        );
+        $tokens = PhpSource::codeTokens($source);
+        $entities = [];
+        foreach ($tokens as $i => $token) {
+            $function = strtolower(PhpSource::name($token) ?? '');
+            if (!in_array($function, ['civicrm_api4', 'call_user_func'], true)
+                || ($tokens[$i + 1] ?? null)?->text !== '('
+            ) {
+                continue;
+            }
+            $arguments = PhpSource::arguments($tokens, $i + 1) ?? [];
+            if ($function === 'call_user_func') {
+                $callback = PhpSource::argument($arguments, 0, 'callback') ?? [];
+                if (strcasecmp($this->literal($callback) ?? '', 'civicrm_api4') !== 0) {
+                    continue;
+                }
+                $arguments = array_slice($arguments, 1);
+            }
+            $entity = $this->literal(PhpSource::argument($arguments, 0, 'entity') ?? []);
+            if ($entity !== null && preg_match('/^[A-Z][A-Za-z0-9_]*$/', $entity) === 1) {
+                $entities[] = $entity;
+            }
+        }
 
-        return array_values(array_unique($matches[1]));
+        return array_values(array_unique($entities));
+    }
+
+    /**
+     * The value of an argument that is one plain string literal.
+     *
+     * @param list<\PhpToken> $argument
+     */
+    private function literal(array $argument): ?string
+    {
+        return count($argument) === 1 && $argument[0]->is(T_CONSTANT_ENCAPSED_STRING)
+            ? ltrim(substr($argument[0]->text, 1, -1), '\\')
+            : null;
     }
 
     private function leadingWord(string $name): string

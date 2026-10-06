@@ -63,9 +63,9 @@ final class DeclaredCallbackCheck implements Check
                 $method = null;
                 if (str_contains($callback, '::')) {
                     [$callback, $method] = explode('::', $callback, 2);
-                    $callback = trim($callback);
                     $method = trim($method);
                 }
+                $callback = ltrim(trim($callback), '\\');
                 if (!ExtensionNamespace::isOwnClass($callback, $namespaces)) {
                     // Core or another extension: not resolvable without a boot.
                     continue;
@@ -80,7 +80,8 @@ final class DeclaredCallbackCheck implements Check
                 }
                 if ($method !== null && $method !== '') {
                     $source = $context->read($expected) ?? '';
-                    if (preg_match('/\bfunction\s+' . preg_quote($method, '/') . '\s*\(/', $source) !== 1) {
+                    // PHP method names are case-insensitive.
+                    if (preg_match('/\bfunction\s+&?\s*' . preg_quote($method, '/') . '\s*\(/i', $source) !== 1) {
                         $reporter->fail(
                             "$relative: page_callback $callback::$method — $expected declares no function $method()"
                         );

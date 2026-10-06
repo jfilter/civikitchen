@@ -1,0 +1,168 @@
+<?php
+
+declare(strict_types=1);
+
+namespace CiviKitchen\Ckconform;
+
+/**
+ * The CiviCRM permission catalog — GENERATED, do not edit.
+ *
+ * Regenerate with:
+ *   php tools/gen-permission-catalog.php <core-dir>
+ *
+ * Generated from CiviCRM 6.18.0.
+ */
+final class PermissionCatalog
+{
+    /**
+     * Permissions core and its bundled extensions declare.
+     *
+     * @var list<string>
+     */
+    public const PERMISSIONS = [
+        '@afformPageToken',
+        'access AJAX API',
+        'access CiviCRM',
+        'access CiviContribute',
+        'access CiviEvent',
+        'access CiviGrant',
+        'access CiviMail',
+        'access CiviMail subscribe/unsubscribe pages',
+        'access CiviMember',
+        'access CiviPledge',
+        'access CiviReport',
+        'access Contact Dashboard',
+        'access Report Criteria',
+        'access Reports',
+        'access all cases and activities',
+        'access all custom data',
+        'access contact reference fields',
+        'access deleted contacts',
+        'access my cases and activities',
+        'access password resets',
+        'access uploaded files',
+        'add cases',
+        'add contact notes',
+        'add contacts',
+        'administer CiviCRM',
+        'administer CiviCRM Financial Types',
+        'administer CiviCRM data',
+        'administer CiviCRM system',
+        'administer CiviCampaign',
+        'administer CiviCase',
+        'administer Multiple Organizations',
+        'administer Reports',
+        'administer Tagsets',
+        'administer afform',
+        'administer dedupe rules',
+        'administer payment processors',
+        'administer private reports',
+        'administer queues',
+        'administer reserved groups',
+        'administer reserved reports',
+        'administer reserved tags',
+        'administer search_kit',
+        'all CiviCRM permissions and ACLs',
+        'approve mailings',
+        'authenticate with api key',
+        'authenticate with password',
+        'close all manual batches',
+        'close own manual batches',
+        'cms:administer users',
+        'cms:bypass maintenance mode',
+        'cms:view user account',
+        'create mailings',
+        'create manual batch',
+        'delete activities',
+        'delete all manual batches',
+        'delete contacts',
+        'delete in CiviCase',
+        'delete in CiviContribute',
+        'delete in CiviEvent',
+        'delete in CiviGrant',
+        'delete in CiviMail',
+        'delete in CiviMember',
+        'delete in CiviPledge',
+        'delete own manual batches',
+        'edit afform html',
+        'edit all contacts',
+        'edit all events',
+        'edit all manual batches',
+        'edit api keys',
+        'edit contributions',
+        'edit event participants',
+        'edit grants',
+        'edit groups',
+        'edit inbound email basic information',
+        'edit inbound email basic information and content',
+        'edit memberships',
+        'edit message templates',
+        'edit my contact',
+        'edit own api keys',
+        'edit own manual batches',
+        'edit pledges',
+        'edit system workflow message templates',
+        'edit user-driven message templates',
+        'export all manual batches',
+        'export own manual batches',
+        'force merge duplicate contacts',
+        'generate any authx credential',
+        'gotv campaign contacts',
+        'import SQL datasource',
+        'import contacts',
+        'interview campaign contacts',
+        'make online contributions',
+        'manage OAuth client',
+        'manage OAuth client secrets',
+        'manage all OAuth contact tokens',
+        'manage campaign',
+        'manage event profiles',
+        'manage my OAuth contact tokens',
+        'manage own afform',
+        'manage own search_kit',
+        'manage tags',
+        'merge duplicate contacts',
+        'profile create',
+        'profile edit',
+        'profile listings',
+        'profile listings and forms',
+        'profile view',
+        'refund contributions',
+        'register for events',
+        'release campaign contacts',
+        'render templates',
+        'reopen all manual batches',
+        'reopen own manual batches',
+        'reserve campaign contacts',
+        'save Report Criteria',
+        'schedule communications',
+        'schedule mailings',
+        'send SMS',
+        'sign CiviCRM Petition',
+        'skip IDS check',
+        'translate CiviCRM',
+        'validate any authx credential',
+        'view all activities',
+        'view all contacts',
+        'view all manual batches',
+        'view all notes',
+        'view debug output',
+        'view event info',
+        'view event participants',
+        'view my contact',
+        'view my invoices',
+        'view own manual batches',
+        'view public CiviMail content',
+        'view report sql',
+    ];
+
+    /**
+     * Prefixes core hands to the CMS unjudged (`Drupal:administer users`).
+     *
+     * @var list<string>
+     */
+    public const CMS_PREFIXES = [
+        'Drupal',
+        'WordPress',
+    ];
+}

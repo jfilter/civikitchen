@@ -206,6 +206,8 @@ abstract class CheckTestCase extends TestCase
     protected function run_(Check $check, Context $context): Reporter
     {
         $reporter = new Reporter();
+        $reporter->suppressWith($context);
+        $reporter->setRule($check->name());
         $check->run($context, $reporter);
 
         return $reporter;

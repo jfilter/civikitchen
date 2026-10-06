@@ -96,9 +96,19 @@ final class PermissionClosureCheckTest extends CheckTestCase
         );
     }
 
+    /** Defined with plain literals, so only a correctly decoded escape matches. */
+    private const APOSTROPHE_HOOK = <<<'PHP'
+        <?php
+        function myext_civicrm_permission(&$permissions) {
+          $permissions["generate any user's JWT"] = ['label' => 'JWT'];
+          $permissions["validate any user's credentials"] = ['label' => 'Credentials'];
+        }
+        PHP;
+
     public function testEscapesInPermissionLiteralsFollowPhpStringRules(): void
     {
         $context = $this->repo([
+            'myext.php' => self::APOSTROPHE_HOOK,
             'managed/Thing.mgd.php' => <<<'PHP'
                 <?php
                 return [
@@ -169,6 +179,7 @@ final class PermissionClosureCheckTest extends CheckTestCase
     public function testEscapesInACheckLiteralFollowPhpStringRules(): void
     {
         $context = $this->repo([
+            'myext.php' => self::APOSTROPHE_HOOK,
             'CRM/Myext/Page/Thing.php' => "<?php\nif (CRM_Core_Permission::check('generate any user\\'s JWT')) {}\n",
         ], git: true);
         $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
@@ -562,5 +573,45 @@ final class PermissionClosureCheckTest extends CheckTestCase
             'ang/myext.ang.php' => "<?php\nreturn ['js' => ['ang/myext.js'], 'settings' => ['permissions' => ['Some label text']]];\n",
         ], git: true);
         $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function corePermissionsTheOldListMissed(): iterable
+    {
+        yield 'CiviEvent' => ['view event participants'];
+        yield 'api keys, plural in core' => ['edit own api keys'];
+        yield 'SMS' => ['send SMS'];
+        yield 'synthetic cms: permission' => ['cms:administer users'];
+        yield 'CMS-native prefix' => ['Drupal:administer users'];
+    }
+
+    /** @dataProvider corePermissionsTheOldListMissed */
+    public function testCorePermissionsAreKnown(string $permission): void
+    {
+        $context = $this->repo(['myext.php' => self::HOOK, 'xml/Menu/myext.xml' => $this->menu($permission)], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    /** A core permission one edit away from an own one is no typo of it. */
+    public function testACorePermissionNearAnOwnOneIsSilent(): void
+    {
+        $context = $this->repo([
+            'myext.php' => "<?php\nfunction myext_civicrm_permission(&\$permissions) {\n  \$permissions['edit own events'] = ['label' => 'x'];\n}\n",
+            'xml/Menu/myext.xml' => $this->menu('edit all events'),
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
+    /** Core maps an unknown cms: name to always-deny. */
+    public function testAnUnknownCmsPermissionWarns(): void
+    {
+        $context = $this->repo(['myext.php' => self::HOOK, 'xml/Menu/myext.xml' => $this->menu('cms:administer everything')], git: true);
+        $this->assertWarns($this->run_(new PermissionClosureCheck(), $context), 'cms:administer everything');
+    }
+
+    public function testACaseDriftOfAnOwnPermissionStillFails(): void
+    {
+        $context = $this->repo(['myext.php' => self::HOOK, 'xml/Menu/myext.xml' => $this->menu('administer myext')], git: true);
+        $this->assertFails($this->run_(new PermissionClosureCheck(), $context), "defines 'administer MyExt'");
     }
 }

@@ -179,4 +179,55 @@ final class UpgraderIntegrityCheckTest extends CheckTestCase
     {
         return "<?php\n\nclass CRM_Fixture_Upgrader extends CRM_Extension_Upgrader_Base\n{\n" . $methods . "\n}\n";
     }
+
+    public function testACommentedOutSqlFileRunsNothing(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(extra: '  <upgrader>CRM_Fixture_Upgrader</upgrader>'),
+            'CRM/Fixture/Upgrader.php' => $this->upgrader(<<<'PHP'
+                    public function upgrade_1001(): bool
+                    {
+                        // $this->executeSqlFile('sql/old.sql');
+                        /* public function upgrade_01() {} */
+                        return true;
+                    }
+                PHP),
+        ], git: true);
+
+        $this->assertSilent($this->run_(new UpgraderIntegrityCheck(), $context));
+    }
+
+    /** @param array<string, string> $sql */
+    private function orphanWarnings(array $sql): array
+    {
+        $context = $this->repo($sql + [
+            'CRM/Greeter/Upgrader.php' => "<?php\nclass CRM_Greeter_Upgrader extends CRM_Extension_Upgrader_Base {}\n",
+        ], git: true);
+
+        return array_values(array_filter(
+            $this->run_(new UpgraderIntegrityCheck(), $context)->messages('warn'),
+            static fn (string $m): bool => str_contains($m, 'committed SQL'),
+        ));
+    }
+
+    /** CRM_Extension_Upgrader_Base globs sql/*_install.sql and sql/*_uninstall.sql. */
+    public function testInstallAndUninstallSqlByCoreConventionAreRunByCore(): void
+    {
+        self::assertSame([], $this->orphanWarnings([
+            'sql/greeter_install.sql' => "SELECT 1;\n",
+            'sql/greeter_uninstall.sql' => "SELECT 1;\n",
+            'sql/auto_install.sql' => "SELECT 1;\n",
+        ]));
+    }
+
+    public function testSqlOutsideTheConventionIsStillAnOrphan(): void
+    {
+        $warnings = $this->orphanWarnings([
+            'sql/greeter_install_extra.sql' => "SELECT 1;\n",
+            'sql/upgrade/greeter_install.sql' => "SELECT 1;\n",
+        ]);
+        self::assertCount(1, $warnings);
+        self::assertStringContainsString('sql/greeter_install_extra.sql', $warnings[0]);
+        self::assertStringContainsString('sql/upgrade/greeter_install.sql', $warnings[0]);
+    }
 }

@@ -15,9 +15,8 @@ use CiviKitchen\Ckconform\Reporter;
  * phpunit.xml.dist no job invokes, a Playwright harness CI never touches: each
  * looks like coverage from the outside — the config is there, the badge is green.
  *
- * The check is deliberately indirect-aware: a workflow that runs `npm run test`
- * counts as running whatever that script maps to, because that is how these
- * repos actually wire their front ends.
+ * The check is deliberately indirect-aware (CiCommands): `ck ci`, the shared CI,
+ * and an `npm test` or `composer test` count as running what they run.
  */
 final class ConfigWithoutRunnerCheck implements Check
 {
@@ -50,7 +49,7 @@ final class ConfigWithoutRunnerCheck implements Check
         if (!$context->isGitRepo()) {
             return;
         }
-        $reachable = $this->ciReachableText($context);
+        $reachable = CiCommands::reachable($context);
         if ($reachable === '') {
             // No workflows at all is CiWorkflowCheck's finding, not ours.
             return;
@@ -63,7 +62,7 @@ final class ConfigWithoutRunnerCheck implements Check
             }
             $found = false;
             foreach ($tokens as $token) {
-                if (str_contains($reachable, $token)) {
+                if (CiCommands::runs($reachable, $token)) {
                     $found = true;
                     break;
                 }
@@ -78,78 +77,5 @@ final class ConfigWithoutRunnerCheck implements Check
         } else {
             $reporter->ok('every tool config has a CI step that runs it');
         }
-    }
-
-    /**
-     * Everything CI can reach: the workflow files, plus the package.json scripts
-     * those workflows invoke by name.
-     *
-     * Without the indirection a repo that runs `npm run test` would read as
-     * having no vitest step, which is the kind of false positive that teaches
-     * people to ignore the output.
-     */
-    private function ciReachableText(Context $context): string
-    {
-        $text = '';
-        foreach ($context->scopedWorkflows() as $body) {
-            $text .= $this->withoutComments($body) . "\n";
-        }
-        if ($text === '') {
-            return '';
-        }
-
-        // Delegating to the shared CI runs phpcs, phpstan and phpunit — but not
-        // playwright or vitest, which stay in the repo's own workflows. Add only
-        // the tokens the shared workflow actually invokes, so a playwright config
-        // it does not run is still correctly flagged.
-        if ($context->scopedJobsCalling(Context::SHARED_CI) !== []) {
-            $text .= ' cklint phpcs phpstan phpunit ckcoverage ';
-        }
-
-        preg_match_all('/(?:npm|yarn|pnpm|bun)\s+run\s+([A-Za-z0-9:_-]+)/', $text, $matches);
-        $wanted = array_unique($matches[1]);
-        if ($wanted === []) {
-            return $text;
-        }
-
-        foreach ($context->tracked('package.json', Context::outsideNodeModules(...)) as $manifest) {
-            $scripts = $context->json($manifest)['scripts'] ?? null;
-            if (!is_array($scripts)) {
-                continue;
-            }
-            foreach ($wanted as $name) {
-                $body = $scripts[$name] ?? null;
-                if (is_string($body)) {
-                    $text .= $body . "\n";
-                }
-            }
-        }
-
-        return $text;
-    }
-
-    /**
-     * Workflow text with YAML comments removed.
-     *
-     * Matching the raw file means a step described in a comment counts as a step
-     * that runs — a workflow explaining why its phpunit job was retired satisfies
-     * a naive search for "phpunit". Never match a tool name against prose.
-     *
-     * Line-based and therefore approximate (a '#' inside a quoted string is
-     * dropped too), which errs toward reporting a missing runner rather than
-     * inventing one — the safe direction for this rule.
-     */
-    private function withoutComments(string $yaml): string
-    {
-        $out = [];
-        foreach (explode("\n", $yaml) as $line) {
-            $trimmed = ltrim($line);
-            if (str_starts_with($trimmed, '#')) {
-                continue;
-            }
-            $out[] = preg_replace('/\s+#.*$/', '', $line) ?? $line;
-        }
-
-        return implode("\n", $out);
     }
 }

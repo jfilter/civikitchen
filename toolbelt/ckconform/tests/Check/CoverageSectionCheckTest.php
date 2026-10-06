@@ -34,7 +34,7 @@ final class CoverageSectionCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'tests/phpunit/SomeTest.php' => '<?php',
-            'phpunit.xml' => '<?xml version="1.0"?><phpunit><coverage/></phpunit>',
+            'phpunit.xml' => '<?xml version="1.0"?><phpunit><coverage><include><file>CRM/Fixture.php</file></include></coverage></phpunit>',
         ]);
         $this->assertPasses($this->run_(new CoverageSectionCheck(), $context));
     }
@@ -67,5 +67,24 @@ final class CoverageSectionCheckTest extends CheckTestCase
     public function testSilentWithoutATestDirectory(): void
     {
         $this->assertSilent($this->run_(new CoverageSectionCheck(), $this->repo([])));
+    }
+
+    public function testACoverageElementWithoutSourcesFails(): void
+    {
+        $context = $this->repo([
+            'tests/phpunit/SomeTest.php' => '<?php',
+            'phpunit.xml.dist' => '<?xml version="1.0"?><phpunit><coverage cacheDirectory=".phpunit.cache"/></phpunit>',
+        ]);
+        $this->assertFails($this->run_(new CoverageSectionCheck(), $context), 'lists no sources');
+    }
+
+    /** PHPUnit 10 moved the include list from <coverage> to <source>. */
+    public function testSourcesUnderTheSourceElementCount(): void
+    {
+        $context = $this->repo([
+            'tests/phpunit/SomeTest.php' => '<?php',
+            'phpunit.xml.dist' => '<?xml version="1.0"?><phpunit><coverage/><source><include><directory>Civi</directory></include></source></phpunit>',
+        ]);
+        $this->assertOk($this->run_(new CoverageSectionCheck(), $context), 'declares coverage sources');
     }
 }

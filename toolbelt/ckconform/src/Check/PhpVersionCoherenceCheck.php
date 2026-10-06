@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
+use CiviKitchen\Toolbelt\Repository\PhpFloor;
 
 /**
  * composer's PHP floor and info.xml's declared PHP support disagreeing.
@@ -103,19 +104,15 @@ final class PhpVersionCoherenceCheck implements Check
     }
 
     /**
-     * The lowest MAJOR.MINOR in composer's require.php constraint, e.g. ">=8.3"
-     * or "8.1.2" -> "8.1". The first version token in the constraint is its
-     * lower bound for the ranges these repos use (">=x", "^x", "x.*").
+     * The lowest MAJOR.MINOR composer's require.php constraint admits, e.g.
+     * ">=8.3" -> "8.3", "^8.2 || ^8.1" -> "8.1".
      */
     private function composerFloor(Context $context): ?string
     {
         $composer = $context->json('composer.json');
         $constraint = $composer['require']['php'] ?? null;
-        if (!is_string($constraint) || preg_match('/(\d+)\.(\d+)/', $constraint, $match) !== 1) {
-            return null;
-        }
 
-        return $match[1] . '.' . $match[2];
+        return is_string($constraint) ? PhpFloor::of($constraint) : null;
     }
 
     /**

@@ -148,12 +148,12 @@ final class AutoloadPathCheck implements Check
     }
 
     /**
-     * The base dir sans the trailing slash and the '.' / '' roots, which always
-     * exist (PSR-0 "CRM_": ".").
+     * The base dir sans leading './', the trailing slash and the '.' / '' roots,
+     * which always exist (PSR-0 "CRM_": ".").
      */
     private function normalise(string $path): string
     {
-        $path = rtrim($path, '/');
+        $path = rtrim($this->stripDotSlash($path), '/');
 
         return $path === '.' ? '' : $path;
     }

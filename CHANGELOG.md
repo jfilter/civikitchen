@@ -75,6 +75,83 @@ except that a break the consumers are adjusted for ships as a minor, marked
   similar.
 - `CiviKitchen.Files.MaxFileLength` measures files that start with `<?=` or
   HTML and reports on line 1.
+- ckconform reads PHP through the tokenizer in more checks, so comments, case
+  and named arguments no longer cause false findings or hide real ones: hook
+  functions match their prefix and catalogued suffix case-insensitively, as
+  `function_exists()` does; `raw-sql` judges a named `query:` argument;
+  `api4-entity` reads group and comma-separated `use` imports and no longer
+  reports `Civi\Api4` sub-namespaces such as `Provider` or `Result` as missing
+  entities; `api4-literal-entity` reads upper-case, named and
+  `call_user_func()` calls; `psr0-class-path` ignores class names in
+  docblocks and judges every declared class; `template-reference` and
+  `declared-callback` accept a leading backslash and method names in any
+  case; `deprecation-gate` evaluates the whole `error_reporting()` mask and
+  ignores commented-out calls; `translation-catalog` reads `E::ts(text: …)`
+  and ignores comments inside the call; `covers-nothing` reads docblocks and
+  `#[CoversNothing]` only; `upgrader-integrity` ignores commented-out
+  `executeSqlFile()` calls.
+- ckconform's api4 checks accept core, required-extension and
+  `known_api4_entities` entities; `api4-self-entity` ignores Angular
+  constant/value/decorator registrations, web-storage keys and constructors; a
+  missing entity named like a core sub-namespace still fails.
+- ckconform resolves classes through info.xml and composer PSR-4 mappings, and
+  a shipped `CRM/<Core>/` directory no longer claims core's namespace.
+  `psr0-class-path` judges only top-level declarations, ignores guarded
+  polyfills and test fixture classes, and warns, with its own message, on an
+  extra class in a shipped file.
+- ckconform's `deprecation-gate` evaluates `<ini>` values and
+  `ini_set('error_reporting', …)` as PHPUnit and PHP do, and no longer accepts
+  a lowercase `e_all`.
+- Inline `ckconform-ignore` markers apply to every line-located finding of any
+  check.
+- ckconform's hook catalog includes the hooks core dispatches outside
+  `CRM_Utils_Hook`; own helpers such as `myext_minimum_civicrm_version()` are
+  not hooks. `permission-closure` reads a permission catalog generated from
+  core, which adds the missing core and `cms:` permissions and drops entries
+  core does not declare.
+- ckconform's `template-reference` skips traits, AJAX holders and core parents
+  that supply a template; `upgrader-integrity` honours core's
+  `*_install.sql`/`*_uninstall.sql`; `covers-nothing` matches only the
+  attribute name; `hook-style` reads only names after `extends`, `implements`
+  and `use`; `deprecated-image-path` ignores YAML comments; `api3-surface`
+  sees if-guarded definitions; `headless-builder-applied` reads group imports.
+- ckconform's `afform-contract` no longer warns about fieldset-less fields in
+  blocks and search forms; `autoload-path` accepts directory paths starting
+  with `./`.
+- ckconform's `ci-coverage`, `ci-workflow` and `config-without-runner`
+  recognise `ck ci` (with `--only`/`--skip`), `ck lint`, `ck coverage` and `ck
+  test`, ignore comments, match tool names as whole words and follow
+  npm/yarn/pnpm/bun and composer scripts.
+- ckconform's `committed-artifact` flags only a `vendor/` beside a
+  composer.json and names each path; `compose-floating-tag` reads quoted
+  images and skips services with `build:`; `compose-project-name` accepts an
+  override beside a named base file; `floating-tag` covers the `container:`
+  shorthand, untagged images and `docker://` steps.
+- ckconform's `deploy-hygiene` accepts directories in `deploy_hygiene.paths`
+  and `.env.sample`/`.env.template`; `coverage-section` requires coverage
+  sources; `front-end-api3` scans `.ts`/`.tsx`/`.jsx` and `crmApi()`;
+  `gitignore` and `gitignore-coverage` honour a repository-root .gitignore and
+  phpunit's `cacheResult`/`cacheResultFile`.
+- ckconform's `license-skeleton` accepts CRLF and trailing spaces;
+  `license-coherence` reads `(A or B)` expressions; `lockfile` honours
+  workspaces, platform packages and dependency-free manifests, and flags an
+  ignored lockfile only where one is required; `npm-license` skips manifests
+  under `vendored_paths`.
+- ckconform's `playwright-diagnostics` reads typed, semicolon-free and
+  CommonJS configs, accepts the retain trace modes and splits steps correctly
+  in jobs with services.
+- ckconform's ExtensionUtil stub defines `SHORT_NAME`, `LONG_NAME` and
+  `CLASS_PREFIX` and answers `CRM_Core_Component::isEnabled()`;
+  `managed-reference-graph` warns about dangling references only while a
+  managed file could not be evaluated; `managed-entity-metadata` treats a
+  missing `params.version` as the APIv3 default mgd-php applies and warns
+  instead of failing.
+- ckconform's `required-extensions` demands search_kit only for
+  SearchDisplays, not for core SavedSearches; `message-template-token` scans
+  only message templates, ignores JavaScript `${…}` interpolations, no longer
+  treats short namespaces as the extension's own by substring, and knows the
+  site, group, survey, financial_trxn and contribution_product namespaces;
+  `mixin-declaration` ignores files under `tests/`.
 - The rector rules map named arguments by name and skip calls they cannot
   map (spread, unknown name). `Api4ArrayToOopRector` maps AND/OR/NOT where
   groups to `addClause()` and skips where rows with an `isExpression` flag

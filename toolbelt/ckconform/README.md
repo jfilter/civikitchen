@@ -168,6 +168,11 @@ suppresses nothing and is itself reported, and one naming a check that does
 not exist is reported as a dead ignore — a typo'd check name would otherwise
 silently narrow nothing.
 
+Inline markers act on every finding a check ties to a source line (those
+printed as `file:line:`), whichever check reports it; a finding about the
+repository as a whole has no line to sit on and is silenced only through
+`ignore_checks`.
+
 Playwright configs may use the file form as a standalone `//` comment too. The
 narrow legitimate case is a manual live-provider suite with reusable
 credentials: traces can contain action parameters, request data, tokens,

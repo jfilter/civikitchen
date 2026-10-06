@@ -16,7 +16,8 @@ use CiviKitchen\Ckconform\Reporter;
  * to its config on every run, so a `git add -A` straight after a test run commits it.
  *
  * Only artifacts the repo can generate are demanded, so a PHP-only extension is
- * never nagged about node_modules. The counterpart rule lives in LockfileCheck:
+ * never nagged about node_modules, nor one with cacheResult="false" about the
+ * result cache. git check-ignore decides, so a repository-root .gitignore counts. The counterpart rule lives in LockfileCheck:
  * a lockfile must NEVER be ignored. Ignore what a build regenerates, commit what
  * pins it.
  */
@@ -36,7 +37,7 @@ final class GitignoreCoverageCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        if (!$context->isGitRepo() || !$context->exists('.gitignore')) {
+        if (!$context->isGitRepo() || !GitignoreScope::applies($context)) {
             // A missing .gitignore is GitignoreCheck's business, not ours.
             return;
         }
@@ -57,7 +58,7 @@ final class GitignoreCoverageCheck implements Check
             }
             foreach ($samples as $sample) {
                 if (!$context->isIgnored($sample)) {
-                    $missing[] = $pattern;
+                    $missing[] = $pattern === '.phpunit.result.cache' ? $sample : $pattern;
                     break;
                 }
             }
@@ -99,8 +100,7 @@ final class GitignoreCoverageCheck implements Check
 
         switch ($pattern) {
             case '.phpunit.result.cache':
-                return ($context->exists('phpunit.xml.dist') || $context->exists('phpunit.xml'))
-                    ? ['.phpunit.result.cache'] : [];
+                return $this->resultCache($context);
 
             case 'vendor/':
                 return $context->exists('composer.json') ? ['vendor/autoload.php'] : [];
@@ -121,6 +121,36 @@ final class GitignoreCoverageCheck implements Check
         }
 
         return [];
+    }
+
+    /**
+     * Where phpunit writes its result cache: nowhere with cacheResult="false",
+     * at cacheResultFile (relative to the config, a directory gaining the default
+     * name) when set, otherwise .phpunit.result.cache — PHPUnit 9's Loader.
+     *
+     * @return list<string>
+     */
+    private function resultCache(Context $context): array
+    {
+        $xml = $context->readAny('phpunit.xml.dist', 'phpunit.xml');
+        if ($xml === null) {
+            return [];
+        }
+        $previous = libxml_use_internal_errors(true);
+        $root = simplexml_load_string($xml);
+        libxml_use_internal_errors($previous);
+        if ($root === false) {
+            return ['.phpunit.result.cache'];
+        }
+        if (strtolower(trim((string) $root['cacheResult'])) === 'false') {
+            return [];
+        }
+        $file = preg_replace('#^(\./)+#', '', trim((string) $root['cacheResultFile'])) ?? '';
+        if ($file === '') {
+            return ['.phpunit.result.cache'];
+        }
+
+        return [str_ends_with($file, '/') || is_dir($context->path($file)) ? rtrim($file, '/') . '/.phpunit.result.cache' : $file];
     }
 
 }

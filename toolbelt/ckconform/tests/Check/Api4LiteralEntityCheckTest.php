@@ -6,14 +6,27 @@ namespace CiviKitchen\Ckconform\Tests\Check;
 
 use CiviKitchen\Ckconform\Check\Api4LiteralEntityCheck;
 use CiviKitchen\Ckconform\Tests\CheckTestCase;
+use CiviKitchen\Ckconform\Tests\FakeCoreTrait;
 
 final class Api4LiteralEntityCheckTest extends CheckTestCase
 {
+    use FakeCoreTrait;
+
+    /** @param list<string> $entities */
+    private function core(array $entities = []): void
+    {
+        $this->makeCore();
+        foreach ($entities as $name) {
+            file_put_contents($this->core . '/Civi/Api4/' . $name . '.php', "<?php\nnamespace Civi\\Api4;\nclass {$name} {}\n");
+        }
+    }
     /**
      * @param array<string, string> $extra
      */
     private function widget(array $extra): \CiviKitchen\Ckconform\Context
     {
+        $this->core();
+
         return $this->repo([
             'Civi/Api4/Widget.php' => "<?php\n",
             'Civi/Api4/WidgetState.php' => "<?php\n",
@@ -113,6 +126,79 @@ final class Api4LiteralEntityCheckTest extends CheckTestCase
         $context = $this->repo([
             'Civi/Api4/CiviRulesRule.php' => "<?php\n",
             'Civi/Ext/Runner.php' => "<?php\ncivicrm_api4('CiviCase', 'get', []);\n",
+        ], git: true);
+        $this->assertPasses($this->run_(new Api4LiteralEntityCheck(), $context));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function callForms(): iterable
+    {
+        yield 'upper-case function name' => ["CIVICRM_API4('WidgetTypo', 'get', []);"];
+        yield 'named entity argument' => ["civicrm_api4(action: 'get', entity: 'WidgetTypo');"];
+        yield 'comment before the argument' => ["civicrm_api4(/* entity */ 'WidgetTypo', 'get');"];
+        yield 'through call_user_func' => ["call_user_func('civicrm_api4', 'WidgetTypo', 'get', []);"];
+        yield 'fully qualified function' => ["\\civicrm_api4('WidgetTypo', 'get');"];
+    }
+
+    /** @dataProvider callForms */
+    public function testEveryCallFormIsRead(string $call): void
+    {
+        $context = $this->widget(['Civi/Widget/Runner.php' => "<?php\n$call\n"]);
+        $this->assertFails($this->run_(new Api4LiteralEntityCheck(), $context), 'WidgetTypo');
+    }
+
+    /** Near misses: the literal is not the entity argument of a civicrm_api4() call. */
+    public function testOtherArgumentsAndCallbacksAreNotEntities(): void
+    {
+        $context = $this->widget(['Civi/Widget/Runner.php' => <<<'PHP'
+            <?php
+            civicrm_api4(action: 'WidgetTypo', entity: 'WidgetState');
+            call_user_func('civicrm_api3', 'WidgetTypo', 'get', []);
+            call_user_func('civicrm_api4', 'Widget', 'WidgetTypo');
+            civicrm_api4('Widget' . 'Typo', 'get');
+            PHP]);
+        $this->assertPasses($this->run_(new Api4LiteralEntityCheck(), $context));
+    }
+
+    /** Which entities core ships is unknowable without a checkout, so nothing is judged. */
+    public function testSilentWithoutACoreCheckout(): void
+    {
+        $context = $this->repo([
+            'Civi/Api4/Widget.php' => "<?php\n",
+            'Civi/Widget/Runner.php' => "<?php\ncivicrm_api4('WidgetTypo', 'get', []);\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new Api4LiteralEntityCheck(), $context));
+    }
+
+    /** An own MembershipPeriod shares its leading word with core's Membership entities. */
+    public function testCoreEntitiesSharingTheLeadingWordAreLeftAlone(): void
+    {
+        $this->core(['MembershipType', 'MembershipStatus']);
+        $context = $this->repo([
+            'Civi/Api4/MembershipPeriod.php' => "<?php\n",
+            'Civi/Myext/Runner.php' => "<?php\ncivicrm_api4('MembershipType', 'get', []);\ncivicrm_api4('MembershipStatus', 'get', []);\n",
+        ], git: true);
+        $this->assertPasses($this->run_(new Api4LiteralEntityCheck(), $context));
+    }
+
+    public function testATypoOfAnOwnEntityStillFailsBesideCore(): void
+    {
+        $this->core(['MembershipType']);
+        $context = $this->repo([
+            'Civi/Api4/MyextWidget.php' => "<?php\n",
+            'Civi/Myext/Runner.php' => "<?php\ncivicrm_api4('MyextWidgett', 'get', []);\n",
+        ], git: true);
+        $this->assertFails($this->run_(new Api4LiteralEntityCheck(), $context), 'MyextWidgett');
+    }
+
+    public function testADeclaredExternalEntityIsLeftAlone(): void
+    {
+        $this->core();
+        $context = $this->repo([
+            '__policy_fixture' => "known_api4_entities=WidgetLegacy -- supplied by required widgetlegacy\n",
+            'info.xml' => $this->infoXml(extra: '<requires><ext>widgetlegacy</ext></requires>'),
+            'Civi/Api4/Widget.php' => "<?php\n",
+            'Civi/Widget/Runner.php' => "<?php\ncivicrm_api4('WidgetLegacy', 'get', []);\n",
         ], git: true);
         $this->assertPasses($this->run_(new Api4LiteralEntityCheck(), $context));
     }

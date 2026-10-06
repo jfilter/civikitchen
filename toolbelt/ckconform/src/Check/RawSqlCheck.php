@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\HookSurface;
+use CiviKitchen\Ckconform\PhpSource;
 use CiviKitchen\Ckconform\Reporter;
 use CiviKitchen\Ckconform\Suppressions;
 
@@ -41,7 +42,7 @@ final class RawSqlCheck implements Check
     {
         foreach (HookSurface::candidates($context) as $file) {
             $contents = $context->read($file);
-            if ($contents === null || !str_contains($contents, 'CRM_Core_DAO::')) {
+            if ($contents === null || stripos($contents, 'CRM_Core_DAO') === false) {
                 continue;
             }
             $suppressions = Suppressions::of($contents);
@@ -74,122 +75,61 @@ final class RawSqlCheck implements Check
     }
 
     /**
-     * Sink calls with their line and whether the first argument visibly builds
+     * Sink calls with their line and whether the SQL argument visibly builds
      * SQL out of variables: a variable inside a double-quoted/heredoc string,
      * or an argument-level concatenation mixing literals and variables. A bare
      * `$sql` variable is NOT flagged as interpolation — where it was built is
-     * beyond a token scan.
+     * beyond a token scan. Class and method names match case-insensitively,
+     * as PHP resolves them.
      *
      * @return list<array{string, int, bool}> [method, line, interpolates]
      */
     private function sinkCalls(string $contents): array
     {
-        $tokens = @token_get_all($contents);
+        $tokens = PhpSource::codeTokens($contents);
+        $sinks = array_combine(array_map('strtolower', self::SINKS), self::SINKS);
         $calls = [];
 
-        for ($i = 0, $n = count($tokens); $i < $n; $i++) {
-            $token = $tokens[$i];
-            if (!is_array($token)
-                || !in_array($token[0], [\T_STRING, \T_NAME_FULLY_QUALIFIED], true)
-                || ltrim($token[1], '\\') !== 'CRM_Core_DAO'
+        foreach ($tokens as $i => $token) {
+            $method = $sinks[strtolower($tokens[$i + 2]->text ?? '')] ?? null;
+            if ($method === null || strcasecmp(PhpSource::name($token) ?? '', 'CRM_Core_DAO') !== 0
+                || !$tokens[$i + 1]->is(T_DOUBLE_COLON) || !$tokens[$i + 2]->is(T_STRING)
             ) {
                 continue;
             }
-            $j = $this->nextMeaningful($tokens, $i + 1);
-            if ($j === null || !is_array($tokens[$j]) || $tokens[$j][0] !== \T_DOUBLE_COLON) {
-                continue;
-            }
-            $k = $this->nextMeaningful($tokens, $j + 1);
-            if ($k === null || !is_array($tokens[$k]) || $tokens[$k][0] !== \T_STRING
-                || !in_array($tokens[$k][1], self::SINKS, true)
-            ) {
-                continue;
-            }
-            $calls[] = [$tokens[$k][1], $tokens[$k][2], $this->firstArgInterpolates($tokens, $k + 1)];
+            $arguments = ($tokens[$i + 3] ?? null)?->text === '(' ? PhpSource::arguments($tokens, $i + 3) : null;
+            $query = PhpSource::argument($arguments ?? [], 0, 'query') ?? [];
+            $calls[] = [$method, $tokens[$i + 2]->line, $this->interpolates($query)];
         }
 
         return $calls;
     }
 
     /**
-     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @param list<\PhpToken> $argument
      */
-    private function firstArgInterpolates(array $tokens, int $start): bool
+    private function interpolates(array $argument): bool
     {
-        $n = count($tokens);
-        $i = $this->nextMeaningful($tokens, $start);
-        if ($i === null || $tokens[$i] !== '(') {
-            return false;
-        }
-
-        $depth = 1;
         $inString = false;
         $sawLiteral = false;
         $sawConcat = false;
         $sawVariable = false;
-        for ($i++; $i < $n && $depth > 0; $i++) {
-            $token = $tokens[$i];
-
-            if (is_string($token)) {
-                if ($token === '(') {
-                    $depth++;
-                } elseif ($token === ')') {
-                    $depth--;
-                } elseif ($token === ',' && $depth === 1) {
-                    break;
-                } elseif ($token === '"') {
-                    $inString = !$inString;
-                    $sawLiteral = true;
-                } elseif ($token === '.' && !$inString) {
-                    $sawConcat = true;
+        foreach ($argument as $token) {
+            if ($token->is(['"', T_START_HEREDOC, T_END_HEREDOC])) {
+                $inString = $token->is(T_END_HEREDOC) ? false : !$inString;
+                $sawLiteral = true;
+            } elseif ($token->is(T_CONSTANT_ENCAPSED_STRING)) {
+                $sawLiteral = true;
+            } elseif ($token->is([T_VARIABLE, T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES])) {
+                if ($inString) {
+                    return true;
                 }
-                continue;
-            }
-
-            switch ($token[0]) {
-                case \T_START_HEREDOC:
-                    $inString = true;
-                    $sawLiteral = true;
-                    break;
-                case \T_END_HEREDOC:
-                    $inString = false;
-                    break;
-                case \T_CONSTANT_ENCAPSED_STRING:
-                    $sawLiteral = true;
-                    break;
-                case \T_VARIABLE:
-                    if ($inString) {
-                        return true;
-                    }
-                    $sawVariable = true;
-                    break;
-                case \T_CURLY_OPEN:
-                case \T_DOLLAR_OPEN_CURLY_BRACES:
-                    if ($inString) {
-                        return true;
-                    }
-                    break;
+                $sawVariable = $sawVariable || $token->is(T_VARIABLE);
+            } elseif ($token->text === '.' && !$inString) {
+                $sawConcat = true;
             }
         }
 
         return $sawConcat && $sawLiteral && $sawVariable;
-    }
-
-    /**
-     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
-     */
-    private function nextMeaningful(array $tokens, int $start): ?int
-    {
-        for ($i = $start, $n = count($tokens); $i < $n; $i++) {
-            if (is_array($tokens[$i])
-                && in_array($tokens[$i][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
-            ) {
-                continue;
-            }
-
-            return $i;
-        }
-
-        return null;
     }
 }

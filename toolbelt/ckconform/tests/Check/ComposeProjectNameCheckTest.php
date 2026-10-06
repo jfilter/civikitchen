@@ -66,4 +66,23 @@ final class ComposeProjectNameCheckTest extends CheckTestCase
         ], git: true);
         $this->assertPasses($this->run_(new ComposeProjectNameCheck(), $context));
     }
+
+    /** Compose merges compose.override.yml into the base file beside it, name included. */
+    public function testAnOverrideBesideANamedBaseFileIsNamed(): void
+    {
+        $context = $this->repo([
+            '.docker/compose.yml' => "name: myext\nservices:\n  app:\n    image: mariadb:11.4\n",
+            '.docker/compose.override.yml' => "services:\n  app:\n    ports: ['8080:80']\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new ComposeProjectNameCheck(), $context));
+    }
+
+    public function testAnOverrideBesideAnUnnamedBaseFileIsNotNamed(): void
+    {
+        $context = $this->repo([
+            '.docker/compose.yml' => "services:\n  app:\n    image: mariadb:11.4\n",
+            '.docker/compose.override.yml' => "services:\n  app:\n    ports: ['8080:80']\n",
+        ], git: true);
+        $this->assertFails($this->run_(new ComposeProjectNameCheck(), $context), '.docker/compose.override.yml, .docker/compose.yml');
+    }
 }

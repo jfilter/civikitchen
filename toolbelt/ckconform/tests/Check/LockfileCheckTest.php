@@ -11,7 +11,7 @@ final class LockfileCheckTest extends CheckTestCase
 {
     public function testFailsWhenPackageJsonHasNoTrackedLockfile(): void
     {
-        $context = $this->repo(['package.json' => '{}'], git: true);
+        $context = $this->repo(['package.json' => '{"dependencies": {"left-pad": "^1.3.0"}}'], git: true);
         $this->assertFails(
             $this->run_(new LockfileCheck(), $context),
             'package.json has no tracked lockfile (builds are unreproducible)',
@@ -29,7 +29,7 @@ final class LockfileCheckTest extends CheckTestCase
 
     public function testChecksTheLockfileNextToANestedManifest(): void
     {
-        $context = $this->repo(['frontend/package.json' => '{}'], git: true);
+        $context = $this->repo(['frontend/package.json' => '{"dependencies": {"left-pad": "^1.3.0"}}'], git: true);
         $this->assertFails(
             $this->run_(new LockfileCheck(), $context),
             'frontend/package.json has no tracked lockfile (builds are unreproducible)',
@@ -49,7 +49,7 @@ final class LockfileCheckTest extends CheckTestCase
     public function testALockfileInAnotherDirectoryDoesNotCount(): void
     {
         $context = $this->repo([
-            'frontend/package.json' => '{}',
+            'frontend/package.json' => '{"dependencies": {"left-pad": "^1.3.0"}}',
             'backend/yarn.lock' => '',
         ], git: true);
         $this->assertFails($this->run_(new LockfileCheck(), $context), 'frontend/package.json');
@@ -97,7 +97,7 @@ final class LockfileCheckTest extends CheckTestCase
 
     public function testGitignoreExcludingALockfileFails(): void
     {
-        $context = $this->repo(['.gitignore' => "yarn.lock\n"], git: true);
+        $context = $this->repo(['.gitignore' => "yarn.lock\n", 'package.json' => '{"dependencies": {"left-pad": "^1.3.0"}}'], git: true);
         $this->assertFails(
             $this->run_(new LockfileCheck(), $context),
             '.gitignore excludes yarn.lock — lockfiles belong in the repo',
@@ -108,7 +108,7 @@ final class LockfileCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             '.gitignore' => "/build/composer.lock\n",
-            'build/composer.json' => '{"name": "acme/build"}',
+            'build/composer.json' => '{"name": "acme/build", "require": {"guzzlehttp/guzzle": "^7.9"}}',
         ], git: true);
         $this->assertFails(
             $this->run_(new LockfileCheck(), $context),
@@ -126,7 +126,7 @@ final class LockfileCheckTest extends CheckTestCase
     /** A wildcard pattern must count like a literal name. */
     public function testAWildcardPatternCoveringLockfilesFails(): void
     {
-        $context = $this->repo(['.gitignore' => "*.lock\n"], git: true);
+        $context = $this->repo(['.gitignore' => "*.lock\n", 'package.json' => '{"dependencies": {"left-pad": "^1.3.0"}}'], git: true);
         $this->assertFails(
             $this->run_(new LockfileCheck(), $context),
             '.gitignore excludes yarn.lock — lockfiles belong in the repo',
@@ -152,7 +152,7 @@ final class LockfileCheckTest extends CheckTestCase
     /** bun.lockb counts as a JS lockfile, so ignoring it is just as fatal. */
     public function testGitignoreExcludingBunLockbFails(): void
     {
-        $context = $this->repo(['.gitignore' => "bun.lockb\n"], git: true);
+        $context = $this->repo(['.gitignore' => "bun.lockb\n", 'package.json' => '{"dependencies": {"left-pad": "^1.3.0"}}'], git: true);
         $this->assertFails(
             $this->run_(new LockfileCheck(), $context),
             '.gitignore excludes bun.lockb — lockfiles belong in the repo',
@@ -183,5 +183,71 @@ final class LockfileCheckTest extends CheckTestCase
             'tests/fixtures/sub-package.json' => '{}',
         ], git: true);
         $this->assertSilent($this->run_(new LockfileCheck(), $context));
+    }
+
+    /** npm install writes only the workspace root's lockfile. */
+    public function testWorkspacePackagesShareTheRootLockfile(): void
+    {
+        $context = $this->repo([
+            'package.json' => '{"workspaces": ["packages/*"], "devDependencies": {"typescript": "^5.6.0"}}',
+            'package-lock.json' => '{}',
+            'packages/ui/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'packages/admin/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+        ], git: true);
+        $this->assertSilent($this->run_(new LockfileCheck(), $context));
+    }
+
+    public function testAManifestOutsideTheWorkspaceGlobsNeedsItsOwnLockfile(): void
+    {
+        $context = $this->repo([
+            'package.json' => '{"workspaces": {"packages": ["packages/*"]}}',
+            'package-lock.json' => '{}',
+            'packages/ui/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'tools/package.json' => '{"devDependencies": {"eslint": "^9.0.0"}}',
+        ], git: true);
+        self::assertSame(
+            ['tools/package.json has no tracked lockfile (builds are unreproducible)'],
+            $this->run_(new LockfileCheck(), $context)->messages('FAIL'),
+        );
+    }
+
+    public function testAManifestWithoutDependenciesNeedsNoLockfile(): void
+    {
+        $context = $this->repo(['ang/package.json' => '{"type": "module"}'], git: true);
+        $this->assertSilent($this->run_(new LockfileCheck(), $context));
+    }
+
+    public function testPlatformPackagesAreNoDependencies(): void
+    {
+        $context = $this->repo([
+            'composer.json' => '{"require": {"php": ">=8.1", "ext-intl": "*", "ext-json": "*", "lib-icu": ">=60", "composer-runtime-api": "^2.2"}}',
+        ], git: true);
+        $this->assertSilent($this->run_(new LockfileCheck(), $context));
+    }
+
+    public function testARealPackageBesidePlatformPackagesNeedsALockfile(): void
+    {
+        $context = $this->repo([
+            'composer.json' => '{"require": {"php": ">=8.1", "ext-intl": "*", "guzzlehttp/guzzle": "^7.9"}}',
+        ], git: true);
+        $this->assertFails($this->run_(new LockfileCheck(), $context), 'composer.json declares dependencies');
+    }
+
+    public function testIgnoringALockfileNobodyNeedsIsSilent(): void
+    {
+        $context = $this->repo([
+            '.gitignore' => "/composer.lock\n",
+            'composer.json' => '{"require": {"php": ">=8.1"}}',
+        ], git: true);
+        $this->assertSilent($this->run_(new LockfileCheck(), $context));
+    }
+
+    public function testIgnoringARequiredComposerLockFails(): void
+    {
+        $context = $this->repo([
+            '.gitignore' => "/composer.lock\n",
+            'composer.json' => '{"require": {"guzzlehttp/guzzle": "^7.9"}}',
+        ], git: true);
+        $this->assertFails($this->run_(new LockfileCheck(), $context), '.gitignore excludes composer.lock');
     }
 }

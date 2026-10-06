@@ -95,4 +95,20 @@ final class DeprecatedImagePathCheckTest extends CheckTestCase
         );
         $this->assertWarns($this->run_(new DeprecatedImagePathCheck(), $context), '../.github/workflows/ci.yml:1:');
     }
+
+    public function testAYamlCommentIsProse(): void
+    {
+        $context = $this->repo([
+            '.github/workflows/ci.yml' => "jobs:\n  psalm:\n    # formerly /opt/civikitchen-psalm/bin/psalm\n    run: psalm\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new DeprecatedImagePathCheck(), $context));
+    }
+
+    public function testAPathAfterAHashInsideAYamlValueStillCounts(): void
+    {
+        $context = $this->repo([
+            '.github/workflows/ci.yml' => "jobs:\n  psalm:\n    run: /opt/civikitchen-psalm/bin/psalm --tag=#1 # run psalm\n",
+        ], git: true);
+        $this->assertWarns($this->run_(new DeprecatedImagePathCheck(), $context), 'ci.yml:3');
+    }
 }

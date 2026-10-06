@@ -11,7 +11,8 @@ use CiviKitchen\Ckconform\Reporter;
 /**
  * No .gitignore means build output and vendor/ have no guard rail keeping
  * them out of the next commit — see CommittedArtifactCheck for what lands
- * there once nothing stops it.
+ * there once nothing stops it. One in a directory above the extension (a
+ * repository of several extensions) guards it too.
  */
 final class GitignoreCheck implements Check
 {
@@ -26,7 +27,7 @@ final class GitignoreCheck implements Check
             return;
         }
 
-        if (!$context->exists('.gitignore')) {
+        if (!GitignoreScope::applies($context)) {
             $reporter->fail('no .gitignore (build output and vendor/ land in git)');
         }
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CiviKitchen\Ckconform\Tests\Check;
 
 use CiviKitchen\Ckconform\Check\HookDispatchNameCheck;
+use CiviKitchen\Ckconform\HookSurface;
 use CiviKitchen\Ckconform\Tests\CheckTestCase;
 
 final class HookDispatchNameCheckTest extends CheckTestCase
@@ -497,5 +498,86 @@ final class HookDispatchNameCheckTest extends CheckTestCase
         } finally {
             putenv('CK_EXT_DIR');
         }
+    }
+
+    /** Core finds hook functions with function_exists(), which ignores case. */
+    public function testAPrefixInAnotherCaseStillFires(): void
+    {
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            function Fixture_civicrm_post($op, $objectName, $objectId, &$objectRef) {
+            }
+            function FIXTURE_CIVICRM_config(&$config) {
+            }
+            PHP,
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
+
+    public function testARemovedHookInAnotherCaseFails(): void
+    {
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            function fixture_civicrm_Tabs(&$tabs, $contactID) {
+            }
+            PHP,
+        ]);
+        $this->assertFails($this->run_(new HookDispatchNameCheck(), $context), 'hook_civicrm_tabs was removed');
+    }
+
+    /** Listener strings bind by exact event name, so case drift there stays a finding. */
+    public function testAListenerStringInAnotherCaseStillWarns(): void
+    {
+        $context = $this->repo(['Civi/Fixture/Listener.php' => <<<'PHP'
+            <?php
+            \Civi::dispatcher()->addListener('hook_civicrm_Post', 'fixture_listener');
+            PHP,
+        ]);
+        $this->assertWarns($this->run_(new HookDispatchNameCheck(), $context), "unknown hook suffix 'Post'");
+    }
+
+    public function testADispatchSiteWithACommentOrAnotherCasePublishesItsHook(): void
+    {
+        $dependency = sys_get_temp_dir() . '/ckconform-dep-' . bin2hex(random_bytes(6));
+        mkdir($dependency . '/acme', 0777, true);
+        try {
+            file_put_contents($dependency . '/acme/info.xml', '<?xml version="1.0"?><extension key="acme" type="module"><file>acme</file></extension>');
+            file_put_contents($dependency . '/acme/acme.php', <<<'PHP'
+                <?php
+                \Civi::dispatcher()->dispatch /* first */ ('hook_civicrm_acmeConnectors', $event);
+                \Civi::dispatcher()->Dispatch('hook_civicrm_acmeWidgets', $event);
+                PHP);
+            self::assertSame(['acmeConnectors', 'acmeWidgets'], HookSurface::dispatchedSuffixes($dependency . '/acme'));
+        } finally {
+            exec('rm -rf ' . escapeshellarg($dependency));
+        }
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function hooksDispatchedOutsideTheHookClass(): iterable
+    {
+        yield 'search_kit' => ['searchKitTasks'];
+        yield 'CRM_Utils_System' => ['alterExternUrl'];
+        yield 'oauth-client' => ['oauthProviders'];
+    }
+
+    /** @dataProvider hooksDispatchedOutsideTheHookClass */
+    public function testHooksCoreDispatchesOutsideTheHookClassAreKnown(string $suffix): void
+    {
+        $context = $this->repo(['fixture.php' => "<?php\nfunction fixture_civicrm_{$suffix}(&\$a) {}\n"]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
+
+    /** An own prefix followed by more words names a helper, not a misnamed hook. */
+    public function testAnOwnHelperWithCivicrmInItsNameIsNotAHook(): void
+    {
+        $context = $this->repo(['fixture.php' => "<?php\nfunction fixture_minimum_civicrm_version() {}\n"]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
+
+    public function testAForeignPrefixSharingTheStartStillFails(): void
+    {
+        $context = $this->repo(['fixture.php' => "<?php\nfunction fixtureother_civicrm_post() {}\n"]);
+        $this->assertFails($this->run_(new HookDispatchNameCheck(), $context), 'will never fire');
     }
 }

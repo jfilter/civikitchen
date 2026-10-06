@@ -493,4 +493,52 @@ final class PlaywrightDiagnosticsCheckTest extends CheckTestCase
 
         $this->assertFails($this->run_(new PlaywrightDiagnosticsCheck(), $context), 'retain-on-failure trace');
     }
+
+    private const PW_HEALTHY_WORKFLOW = "on: push\njobs:\n  e2e:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: actions/checkout@v4\n      - run: npx playwright test\n      - uses: actions/upload-artifact@v4\n        if: always()\n        with:\n          path: playwright-report/\n";
+
+    private function playwrightRepo(string $configFile, string $config, string $workflow = self::PW_HEALTHY_WORKFLOW): \CiviKitchen\Ckconform\Context
+    {
+        return $this->repo([$configFile => $config, '.github/workflows/e2e.yml' => $workflow], git: true);
+    }
+
+    /** @return array<string, array{0: string, 1: string}> */
+    public static function exportForms(): array
+    {
+        $object = "{ reporter: 'html', use: { trace: 'retain-on-failure' } }";
+        return [
+            'typed constant' => ['playwright.config.ts', "import type { PlaywrightTestConfig } from '@playwright/test';\nconst config: PlaywrightTestConfig = {$object};\nexport default config;\n"],
+            'export without semicolon' => ['playwright.config.ts', "const config = defineConfig({$object})\nexport default config\n"],
+            'CommonJS' => ['playwright.config.js', "const { defineConfig } = require('@playwright/test');\nconst config = defineConfig({$object});\nmodule.exports = config;\n"],
+            'retain-on-failure-and-retries' => ['playwright.config.ts', "export default defineConfig({ reporter: 'html', use: { trace: 'retain-on-failure-and-retries' } });\n"],
+            'retain-on-first-failure' => ['playwright.config.ts', "export default defineConfig({ reporter: 'html', use: { trace: 'retain-on-first-failure' } });\n"],
+        ];
+    }
+
+    /** @dataProvider exportForms */
+    public function testHealthyConfigFormsPass(string $file, string $config): void
+    {
+        $this->assertOk($this->run_(new PlaywrightDiagnosticsCheck(), $this->playwrightRepo($file, $config)), 'playwright records a trace');
+    }
+
+    public function testOnFirstRetryStillFails(): void
+    {
+        $context = $this->playwrightRepo('playwright.config.ts', "export default defineConfig({ reporter: 'html', use: { trace: 'on-first-retry' } });\n");
+        $this->assertFails($this->run_(new PlaywrightDiagnosticsCheck(), $context), 'no retain-on-failure trace');
+    }
+
+    private const PW_SERVICES = "on: push\njobs:\n  e2e:\n    runs-on: ubuntu-24.04\n    services:\n      mysql:\n        image: mysql:8.0\n        ports:\n          - 3306:3306\n    steps:\n      - uses: actions/checkout@v4\n";
+
+    public function testAServicesListBeforeTheStepsIsNoStep(): void
+    {
+        $workflow = self::PW_SERVICES . "      - run: npm ci\n        if: success()\n      - run: npx playwright test\n      - uses: actions/upload-artifact@v4\n        if: always()\n        with:\n          path: playwright-report/\n";
+        $context = $this->playwrightRepo('playwright.config.ts', "export default defineConfig({ reporter: 'html', use: { trace: 'retain-on-failure' } });\n", $workflow);
+        $this->assertOk($this->run_(new PlaywrightDiagnosticsCheck(), $context), 'playwright records a trace');
+    }
+
+    public function testAnEarlierStepsIfDoesNotCoverTheUpload(): void
+    {
+        $workflow = self::PW_SERVICES . "      - run: npx playwright test\n        if: always()\n      - uses: actions/upload-artifact@v4\n        with:\n          path: playwright-report/\n";
+        $context = $this->playwrightRepo('playwright.config.ts', "export default defineConfig({ reporter: 'html', use: { trace: 'retain-on-failure' } });\n", $workflow);
+        $this->assertFails($this->run_(new PlaywrightDiagnosticsCheck(), $context), 'uploads the report without if: always()');
+    }
 }

@@ -8,10 +8,10 @@ declare(strict_types=1);
  * Usage:
  *   php tools/gen-hook-catalog.php <core-dir> [out-file]
  *
- * Reads exactly one source: core `CRM/Utils/Hook.php`, by token scan. Not a
- * regex over `invoke()` string literals — that loses hooks dispatched by another
- * path (post, pre, install, which core assembles dynamically) and invents event
- * prefixes that are not hooks at all (postSave_, queueRun_).
+ * Reads core `CRM/Utils/Hook.php` by token scan, which also catches hooks core
+ * assembles dynamically (post, pre, install), plus the literal hook_civicrm_*
+ * dispatch sites in CRM/, Civi/, ext/ and api/: search_kit, oauth-client and
+ * oembed dispatch theirs outside that class.
  *
  * Deprecation comes from two places, because core marks it inconsistently: the
  * `@deprecated` docblock tag, and a `deprecatedFunctionWarning()`/
@@ -151,6 +151,14 @@ foreach ($methods as $name => $info) {
     }
 }
 
+require_once dirname(__DIR__) . '/src/Autoloader.php';
+CiviKitchen\Ckconform\Autoloader::register();
+foreach (['CRM', 'Civi', 'ext', 'api'] as $directory) {
+    foreach (CiviKitchen\Ckconform\HookSurface::dispatchedSuffixes($coreDir . '/' . $directory) as $suffix) {
+        $live[$suffix] = true;
+    }
+}
+
 ksort($live);
 ksort($deprecated);
 
@@ -210,7 +218,7 @@ final class HookCatalog
     /**
      * The core release this was generated from.
      *
-     * CI reads this to fetch the matching CRM/Utils/Hook.php, so the drift gate
+     * CI reads this to fetch the matching core release, so the drift gate
      * always compares against the exact release rather than a moving branch.
      * Bumping core is therefore deliberate: regenerate, and this moves with it.
      */

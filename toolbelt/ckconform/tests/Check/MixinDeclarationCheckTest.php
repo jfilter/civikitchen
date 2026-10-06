@@ -118,4 +118,15 @@ final class MixinDeclarationCheckTest extends CheckTestCase
         self::assertStringContainsString('mgd-php', $message);
         self::assertStringContainsString('menu-xml', $message);
     }
+
+    /** Test trees ship nothing; their Civi/Api4 paths are fixtures, not entities. */
+    public function testArtefactPathsUnderTestsDoNotCount(): void
+    {
+        $context = $this->repo([
+            'tests/phpunit/Civi/Api4/ContactSaveTest.php' => '<?php',
+            'tests/fixtures/managed/Thing.mgd.php' => '<?php return [];',
+            'tests/fixtures/xml/Menu/myext.xml' => '<menu/>',
+        ], git: true);
+        $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
+    }
 }

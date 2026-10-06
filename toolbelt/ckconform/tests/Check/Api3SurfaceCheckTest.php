@@ -61,4 +61,18 @@ final class Api3SurfaceCheckTest extends CheckTestCase
         ]);
         $this->assertSilent($this->run_(new Api3SurfaceCheck(), $context));
     }
+
+    /** civix-era code guards definitions; the function is global all the same. */
+    public function testAnIfGuardedDefinitionCounts(): void
+    {
+        $context = $this->repo(['api/v3/Widget/Get.php' => "<?php\nif (!function_exists('civicrm_api3_widget_get')) {\n"
+            . "  function civicrm_api3_widget_get(\$params) {}\n}\n"]);
+        $this->assertWarns($this->run_(new Api3SurfaceCheck(), $context), 'civicrm_api3_widget_get()');
+    }
+
+    public function testAMethodOfTheSameNameDoesNotCount(): void
+    {
+        $context = $this->repo(['api/v3/Widget/Get.php' => "<?php\nclass Shim {\n  public function civicrm_api3_widget_get(\$params) {}\n}\n"]);
+        $this->assertSilent($this->run_(new Api3SurfaceCheck(), $context));
+    }
 }

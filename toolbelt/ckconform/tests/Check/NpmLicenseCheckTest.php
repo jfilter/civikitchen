@@ -100,4 +100,25 @@ final class NpmLicenseCheckTest extends CheckTestCase
         ], git: true);
         $this->assertFails($this->run_(new NpmLicenseCheck(), $context), "is 'MIT or Apache-2.0'");
     }
+
+    /** An upstream library carried verbatim keeps its own licence. */
+    public function testAVendoredLibraryManifestIsNotJudged(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "npm_license=UNLICENSED\nvendored_paths=js/vendor/chartjs -- upstream chart.js release\n",
+            'package.json' => '{"name": "myext", "license": "UNLICENSED"}',
+            'js/vendor/chartjs/package.json' => '{"name": "chart.js", "license": "MIT"}',
+        ], git: true);
+        $this->assertSilent($this->run_(new NpmLicenseCheck(), $context));
+    }
+
+    public function testAnUndeclaredNestedManifestIsStillJudged(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "npm_license=UNLICENSED\nvendored_paths=js/vendor/chartjs -- upstream chart.js release\n",
+            'package.json' => '{"name": "myext", "license": "UNLICENSED"}',
+            'js/vendor/chartjs-plugin/package.json' => '{"name": "own-plugin", "license": "MIT"}',
+        ], git: true);
+        $this->assertFails($this->run_(new NpmLicenseCheck(), $context), "js/vendor/chartjs-plugin/package.json license is 'MIT'");
+    }
 }

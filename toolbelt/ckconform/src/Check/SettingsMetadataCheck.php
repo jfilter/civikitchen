@@ -60,7 +60,7 @@ final class SettingsMetadataCheck implements Check
             return;
         }
 
-        ExtensionUtilStub::register();
+        ExtensionUtilStub::register($context);
 
         foreach ($files as $relative) {
             try {

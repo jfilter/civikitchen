@@ -43,6 +43,13 @@ final class PhpVersionCoherenceCheckTest extends CheckTestCase
         $this->assertFails($this->run_(new PhpVersionCoherenceCheck(), $context));
     }
 
+    /** An OR constraint admits its lowest alternative, whichever comes first. */
+    public function testAnOrConstraintComparesItsLowestAlternative(): void
+    {
+        $context = $this->repoWith('^8.2 || ^8.1', "    <ver>8.1</ver>\n    <ver>8.2</ver>\n");
+        $this->assertPasses($this->run_(new PhpVersionCoherenceCheck(), $context));
+    }
+
     /** A patch-level constraint compares on major.minor. */
     public function testPatchLevelConstraintNormalises(): void
     {

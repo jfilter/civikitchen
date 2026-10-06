@@ -28,25 +28,16 @@ final class CiCoverageCheck implements Check
             return;
         }
 
-        $workflows = $context->scopedWorkflows();
-        if ($workflows === []) {
+        $reachable = CiCommands::reachable($context);
+        if ($reachable === '') {
             return;
         }
 
-        // The shared CI runs ckcoverage; a repo that calls it is measured.
-        $ran = $context->scopedJobsCalling(Context::SHARED_CI) !== [] ? 'ckcoverage' : '';
-        foreach ($workflows as $contents) {
-            if ($ran === 'ckcoverage') {
-                break;
-            }
-            if (preg_match('/(^|[^\w-])ckcoverage([^\w-]|$)/', $contents) === 1) {
-                $ran = 'ckcoverage';
-                break;
-            }
-            if (str_contains($contents, '--coverage-')) {
-                $ran = 'report-only';
-            }
-        }
+        $ran = match (true) {
+            CiCommands::runs($reachable, 'ckcoverage') => 'ckcoverage',
+            str_contains($reachable, '--coverage-') => 'report-only',
+            default => '',
+        };
 
         // A declared floor with nothing to enforce it reads like a gate and stops
         // nothing: `phpunit --coverage-text` prints a percentage and always exits 0.

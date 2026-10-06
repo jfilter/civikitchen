@@ -26,7 +26,9 @@ use CiviKitchen\Ckconform\Reporter;
  * A dangling target whose name starts with this extension's own prefix must be
  * shipped here, so it is a failure. A foreign-looking name may legitimately
  * come from another extension, so it is only a warning — with the reminder that
- * info.xml's <requires> then has to cover that extension.
+ * info.xml's <requires> then has to cover that extension. While any managed
+ * file could not be evaluated, the name set is incomplete and every dangling
+ * target is a warning.
  */
 final class ManagedReferenceGraphCheck implements Check
 {
@@ -47,7 +49,16 @@ final class ManagedReferenceGraphCheck implements Check
         /** @var list<array{file: string, label: string, target: string}> $displayRefs */
         $displayRefs = [];
 
-        foreach (ManagedFiles::records($context, $reporter, 'reference graph unchecked') as [$relative, $records]) {
+        $unevaluated = [];
+        $records = ManagedFiles::records(
+            $context,
+            $reporter,
+            'reference graph unchecked',
+            onUnevaluated: static function (string $file) use (&$unevaluated): void {
+                $unevaluated[] = $file;
+            },
+        );
+        foreach ($records as [$relative, $records]) {
             foreach ($records as $index => $record) {
                 if (!is_array($record)) {
                     continue;
@@ -84,6 +95,9 @@ final class ManagedReferenceGraphCheck implements Check
                 }
             }
         }
+
+        // A record in a file that could not be evaluated may be the target.
+        $prefix = $unevaluated === [] ? $prefix : null;
 
         foreach ($displayRefs as $ref) {
             if (in_array($ref['target'], $names['SavedSearch'], true)) {

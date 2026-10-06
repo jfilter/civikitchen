@@ -43,7 +43,7 @@ final class EntityDaoStubCheck implements Check
             return;
         }
 
-        ExtensionUtilStub::register();
+        ExtensionUtilStub::register($context);
 
         $checked = 0;
         foreach ($files as $relative) {

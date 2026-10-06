@@ -6,6 +6,7 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\PhpSource;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -218,27 +219,25 @@ final class TranslationCatalogCheck implements Check
 
         $literals = [];
         $dynamic = 0;
-        $pattern = '/(?<!\w)(?:E|[A-Za-z0-9_]*ExtensionUtil)::ts\s*\(\s*'
-            . '(?:\'((?:[^\'\\\\]|\\\\.)*)\'|"((?:[^"\\\\]|\\\\.)*)"|(\S))/s';
-        if (preg_match_all($pattern, $source, $matches, PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL) === false) {
-            return [[], 0];
-        }
-        foreach ($matches as $match) {
-            if ($match[1] !== null) {
-                $literals[] = str_replace(['\\\'', '\\\\'], ["'", '\\'], $match[1]);
+        $tokens = PhpSource::codeTokens($source);
+        foreach ($tokens as $i => $token) {
+            $class = PhpSource::shortName($token) ?? '';
+            if (($class !== 'E' && !str_ends_with($class, 'ExtensionUtil'))
+                || !($tokens[$i + 1] ?? null)?->is(T_DOUBLE_COLON) || strcasecmp($tokens[$i + 2]->text ?? '', 'ts') !== 0
+                || ($tokens[$i + 3] ?? null)?->text !== '('
+            ) {
                 continue;
             }
-            if ($match[2] !== null) {
-                // "…$name…" is a runtime concatenation wearing a literal's
-                // clothes: gettext looks up the interpolated result.
-                if (str_contains($match[2], '$')) {
-                    ++$dynamic;
-                    continue;
-                }
-                $literals[] = $this->unescape($match[2]);
+            $text = PhpSource::argument(PhpSource::arguments($tokens, $i + 3) ?? [], 0, 'text') ?? [];
+            if (count($text) !== 1 || !$text[0]->is(T_CONSTANT_ENCAPSED_STRING)) {
+                // Interpolated, concatenated or computed: gettext looks up the runtime value.
+                ++$dynamic;
                 continue;
             }
-            ++$dynamic;
+            $body = substr($text[0]->text, 1, -1);
+            $literals[] = $text[0]->text[0] === "'"
+                ? str_replace(['\\\'', '\\\\'], ["'", '\\'], $body)
+                : $this->unescape($body);
         }
 
         // A .mgd.php can carry Smarty message-template bodies as PHP string

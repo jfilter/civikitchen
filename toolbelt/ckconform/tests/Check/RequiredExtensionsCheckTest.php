@@ -14,14 +14,14 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $this->repo([], git: true)));
     }
 
-    public function testFailsWhenManagedShipsSearchKitEntitiesWithoutTheExt(): void
+    public function testFailsWhenManagedShipsASearchDisplayWithoutTheExt(): void
     {
         $context = $this->repo([
-            'managed/MySearch.mgd.php' => "<?php\nreturn [['entity' => 'SavedSearch', 'name' => 'x']];\n",
+            'managed/MySearch.mgd.php' => "<?php\nreturn [['entity' => 'SearchDisplay', 'name' => 'x']];\n",
         ], git: true);
         $this->assertFails(
             $this->run_(new RequiredExtensionsCheck(), $context),
-            'info.xml does not <requires> org.civicrm.search_kit — managed/ ships SavedSearch/SearchDisplay entities',
+            'info.xml does not <requires> org.civicrm.search_kit — ships SearchDisplays (managed/ or an Afform <crm-search-display>)',
         );
     }
 
@@ -37,7 +37,7 @@ final class RequiredExtensionsCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'info.xml' => $this->infoXml(extra: "  <requires>\n    <ext>org.civicrm.search_kit</ext>\n  </requires>"),
-            'managed/MySearch.mgd.php' => "<?php\nreturn [['entity' => 'SavedSearch']];\n",
+            'managed/MySearch.mgd.php' => "<?php\nreturn [['entity' => 'SearchDisplay']];\n",
         ], git: true);
         $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $context));
     }
@@ -162,18 +162,36 @@ PHP,
     public function testAllThreeCanFireTogetherInBashOrder(): void
     {
         $context = $this->repo([
-            'managed/S.mgd.php' => "<?php\nreturn [['entity' => 'SavedSearch']];\n",
+            'managed/S.mgd.php' => "<?php\nreturn [['entity' => 'SearchDisplay']];\n",
             'ang/afform/x.aff.json' => '{}',
             'CRM/T.php' => "<?php\nclass T extends CRM_Civirules_Action {}\n",
         ], git: true);
         $reporter = $this->run_(new RequiredExtensionsCheck(), $context);
         self::assertSame(
             [
-                'info.xml does not <requires> org.civicrm.search_kit — managed/ ships SavedSearch/SearchDisplay entities',
+                'info.xml does not <requires> org.civicrm.search_kit — ships SearchDisplays (managed/ or an Afform <crm-search-display>)',
                 'info.xml does not <requires> org.civicrm.afform — ang/ ships Afforms',
                 'info.xml does not <requires> org.civicoop.civirules — PHP extends CiviRules base classes',
             ],
             $reporter->messages('FAIL'),
         );
+    }
+
+    /** SavedSearch is a core entity; core evaluates the smart groups built from it. */
+    public function testACoreSavedSearchNeedsNoSearchKit(): void
+    {
+        $context = $this->repo([
+            'managed/Group_Donors.mgd.php' => "<?php\nreturn [\n  ['name' => 'SavedSearch_myext_recent_donors', 'entity' => 'SavedSearch', 'params' => ['version' => 4, 'values' => ['name' => 'myext_recent_donors', 'api_entity' => 'Contact']]],\n  ['name' => 'Group_myext_donors', 'entity' => 'Group', 'params' => ['version' => 4, 'values' => ['name' => 'myext_donors', 'saved_search_id.name' => 'myext_recent_donors']]],\n];\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $context));
+    }
+
+    public function testAnAfformSearchDisplayNeedsSearchKit(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(extra: "  <requires>\n    <ext>org.civicrm.afform</ext>\n  </requires>"),
+            'ang/afsearchMyext.aff.html' => '<crm-search-display-table search-name="myext_s" display-name="myext_t"></crm-search-display-table>',
+        ], git: true);
+        $this->assertFails($this->run_(new RequiredExtensionsCheck(), $context), 'org.civicrm.search_kit');
     }
 }

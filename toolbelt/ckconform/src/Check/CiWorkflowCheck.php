@@ -42,13 +42,9 @@ final class CiWorkflowCheck implements Check
 
         // Judged on the jobs that run this extension: a neighbour's lint step
         // says nothing about whether this extension is linted.
-        if ($context->scopedJobsCalling(Context::SHARED_CI) !== []) {
+        $reachable = CiCommands::reachable($context);
+        if (CiCommands::runs($reachable, 'cklint') || CiCommands::runs($reachable, 'phpcs')) {
             return;
-        }
-        foreach ($context->scopedWorkflows() as $body) {
-            if (str_contains($body, 'cklint') || str_contains($body, 'phpcs')) {
-                return;
-            }
         }
 
         $reporter->warn('CI has no lint step (cklint/phpcs)');

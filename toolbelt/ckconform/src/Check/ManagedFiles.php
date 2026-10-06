@@ -25,7 +25,10 @@ final class ManagedFiles
      * A file that does not return an array yields nothing; a check that wants
      * to report that case passes $onNotArray, called with the file path.
      *
+     * A file that throws is reported as a warning and passed to $onUnevaluated.
+     *
      * @param  callable(string): void|null            $onNotArray
+     * @param  callable(string): void|null            $onUnevaluated
      * @return \Generator<array{string, array<mixed>}>
      */
     public static function records(
@@ -33,19 +36,23 @@ final class ManagedFiles
         Reporter $reporter,
         string $subject,
         ?callable $onNotArray = null,
+        ?callable $onUnevaluated = null,
     ): \Generator {
         $files = self::files($context);
         if ($files === []) {
             return;
         }
 
-        ExtensionUtilStub::register();
+        ExtensionUtilStub::register($context);
 
         foreach ($files as $relative) {
             try {
                 $records = require $context->path($relative);
             } catch (\Throwable $e) {
                 $reporter->warn("$relative: could not evaluate managed file outside CiviCRM ({$e->getMessage()}) — $subject");
+                if ($onUnevaluated !== null) {
+                    $onUnevaluated($relative);
+                }
                 continue;
             }
             if (!is_array($records)) {

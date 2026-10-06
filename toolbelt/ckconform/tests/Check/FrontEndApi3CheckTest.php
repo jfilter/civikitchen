@@ -112,4 +112,30 @@ final class FrontEndApi3CheckTest extends CheckTestCase
         file_put_contents($context->path('js/scratch.js'), 'CRM.api3("Contact", "get");');
         $this->assertSilent($this->run_(new FrontEndApi3Check(), $context));
     }
+
+    /** crmApi is core's Angular wrapper around CRM.api3 (ang/crmUtil.js). */
+    public function testTheAngularCrmApiServiceIsApi3(): void
+    {
+        $context = $this->repo(['ang/myext/Ctrl.js' => "crmApi('Contact', 'get', {}).then(done);\n"], git: true);
+        $this->assertFails($this->run_(new FrontEndApi3Check(), $context), 'ang/myext/Ctrl.js calls crmApi');
+    }
+
+    public function testTypescriptAndJsxFilesAreScanned(): void
+    {
+        $context = $this->repo([
+            'src/client.ts' => "CRM.api3('Contact', 'get', {});\n",
+            'src/Widget.jsx' => "CRM.api3('Contact', 'get', {});\n",
+            'src/Panel.tsx' => "CRM.api3('Contact', 'get', {});\n",
+        ], git: true);
+        self::assertCount(3, $this->run_(new FrontEndApi3Check(), $context)->messages('FAIL'));
+    }
+
+    public function testApi4CallsAndLookalikesAreSilent(): void
+    {
+        $context = $this->repo([
+            'ang/myext/Ctrl.js' => "angular.module('myext').controller('Ctrl', function(\$scope, crmApi4) {\n  crmApi4('Contact', 'get', {});\n  myCrmApi('x');\n});\n",
+            'src/client.ts' => "CRM.api4('Contact', 'get', {});\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new FrontEndApi3Check(), $context));
+    }
 }

@@ -94,4 +94,38 @@ final class ComposeFloatingTagCheckTest extends CheckTestCase
         $reporter = $this->run_(new ComposeFloatingTagCheck(), $context);
         $this->assertFails($reporter, '+1 more');
     }
+
+    public function testQuotedLatestTagsFloat(): void
+    {
+        $context = $this->repo([
+            '.docker/compose.yml' => "name: myext\nservices:\n  mail:\n    image: \"maildev/maildev:latest\"\n  app:\n    image: 'ghcr.io/example/app:latest'\n",
+        ], git: true);
+        $reporter = $this->run_(new ComposeFloatingTagCheck(), $context);
+        $this->assertFails($reporter, '.docker/compose.yml:4 maildev/maildev:latest, .docker/compose.yml:6 ghcr.io/example/app:latest');
+    }
+
+    public function testAQuotedPinnedTagIsPinned(): void
+    {
+        $context = $this->repo([
+            '.docker/compose.yml' => "name: myext\nservices:\n  db:\n    image: \"mariadb:11.4\"\n",
+        ], git: true);
+        $this->assertOk($this->run_(new ComposeFloatingTagCheck(), $context), 'every compose image is pinned');
+    }
+
+    /** `image:` beside `build:` names the image compose builds, not one it pulls. */
+    public function testALocalBuildTagIsNoPull(): void
+    {
+        $context = $this->repo([
+            '.docker/compose.yml' => "name: myext\nservices:\n  app:\n    build: .\n    image: myext-app\n  db:\n    image: mariadb:11.4\n",
+        ], git: true);
+        $this->assertOk($this->run_(new ComposeFloatingTagCheck(), $context), 'every compose image is pinned');
+    }
+
+    public function testABuildInOneServiceDoesNotExemptAnotherServicesPull(): void
+    {
+        $context = $this->repo([
+            '.docker/compose.yml' => "name: myext\nservices:\n  app:\n    build: .\n    image: myext-app\n  db:\n    image: mariadb\n",
+        ], git: true);
+        $this->assertFails($this->run_(new ComposeFloatingTagCheck(), $context), '.docker/compose.yml:7 mariadb');
+    }
 }

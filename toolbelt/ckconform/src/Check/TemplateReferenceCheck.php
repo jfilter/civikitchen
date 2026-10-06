@@ -23,7 +23,11 @@ use CiviKitchen\Ckconform\Reporter;
  * that is checked at its own definition), is exempt. So is a class that
  * overrides run() without ever calling parent::run(): the parent's run() is
  * the only path that feeds the derived template to Smarty, so a redirect or
- * JSON endpoint never renders and needs no .tpl.
+ * JSON endpoint never renders and needs no .tpl. Only a declared class that
+ * derives its template is judged: a trait or a static AJAX holder renders
+ * nothing, and a core parent overriding getTemplateFileName() (CRM_Report_Form,
+ * CRM_Import_Form_DataSource) supplies one. Without a core checkout only direct
+ * CRM_Core_Page/CRM_Core_Form children are judged.
  */
 final class TemplateReferenceCheck implements Check
 {
@@ -88,10 +92,9 @@ final class TemplateReferenceCheck implements Check
             // derived template is never handed to Smarty.
             return;
         }
-        if (preg_match('/\bclass\s+[A-Za-z0-9_]+\s+extends\s+([A-Za-z0-9_\\\\]+)/', $source, $match) === 1
-            && ExtensionNamespace::isOwnClass($match[1], $namespaces)
-        ) {
-            // Inherits a template from a sibling class, which is judged there.
+        $parent = $this->parentClass($source);
+        // An own parent is judged at its own definition.
+        if ($parent === null || ExtensionNamespace::isOwnClass($parent, $namespaces) || !$this->derivesTemplate($context, $parent)) {
             return;
         }
 
@@ -99,6 +102,30 @@ final class TemplateReferenceCheck implements Check
         if (!$context->ships($expected)) {
             $reporter->fail("$relative: no template $expected — the page fatals in Smarty when rendered");
         }
+    }
+
+    private function parentClass(string $source): ?string
+    {
+        return preg_match('/^\s*(?:(?:final|abstract|readonly)\s+)*class\s+\w+\s+extends\s+\\\\?(\w+)/m', $source, $match) === 1
+            ? $match[1] : null;
+    }
+
+    /** Does the template still come from the class name, following core parents up to CRM_Core_Page/Form? */
+    private function derivesTemplate(Context $context, string $parent): bool
+    {
+        for ($depth = 0; $depth < 10; $depth++) {
+            if (in_array($parent, ['CRM_Core_Page', 'CRM_Core_Form'], true)) {
+                return true;
+            }
+            $file = $context->coreDir === null ? null : $context->coreDir . '/' . str_replace('_', '/', $parent) . '.php';
+            $source = $file !== null && is_file($file) ? (string) file_get_contents($file) : '';
+            $parent = preg_match('/\bfunction\s+(?:getTemplateFileName|getTemplate)\s*\(/', $source) === 1 ? null : $this->parentClass($source);
+            if ($parent === null) {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -57,4 +57,57 @@ final class Psr0ClassPathCheckTest extends CheckTestCase
         ], git: true);
         $this->assertSilent($this->run_(new Psr0ClassPathCheck(), $context));
     }
+
+    public function testAClassNamedInADocblockIsNotADeclaration(): void
+    {
+        $context = $this->repo([
+            'CRM/Greeter/Page/Main.php' => <<<'PHP'
+                <?php
+                /**
+                 * A listing page like the class CRM_Core_Page_Basic.
+                 */
+                class CRM_Greeter_Page_Main {
+                  public function name() { return CRM_Greeter_Page_Main::class; }
+                }
+                PHP,
+        ], git: true);
+        $this->assertPasses($this->run_(new Psr0ClassPathCheck(), $context));
+    }
+
+    /** The autoloader looks for each class at its own path, not just the first. */
+    /** It loads only after its neighbour, which is a hazard rather than a certain failure. */
+    public function testASecondClassInAShippedFileWarns(): void
+    {
+        $context = $this->repo([
+            'CRM/Greeter/Page/Main.php' => "<?php\nclass CRM_Greeter_Page_Helper {}\nclass CRM_Greeter_Page_Main {}\n",
+        ], git: true);
+        $reporter = $this->run_(new Psr0ClassPathCheck(), $context);
+        $this->assertWarns($reporter, 'CRM_Greeter_Page_Helper beside CRM_Greeter_Page_Main in CRM/Greeter/Page/Main.php');
+        self::assertSame(0, $reporter->failures());
+    }
+
+    public function testAMisfiledClassBesideAnotherStillFails(): void
+    {
+        $context = $this->repo([
+            'CRM/Greeter/Page/Main.php' => "<?php\nclass CRM_Greeter_Page_Mian {}\nclass CRM_Greeter_Page_Helper {}\n",
+        ], git: true);
+        $this->assertFails($this->run_(new Psr0ClassPathCheck(), $context), 'CRM_Greeter_Page_Mian is in CRM/Greeter/Page/Main.php');
+    }
+
+    /** Core's tests/phpunit/CRM/Dedupe/BAO/RuleGroupTest.php declares fixture classes this way. */
+    public function testAFixtureClassBesideATestIsFine(): void
+    {
+        $context = $this->repo([
+            'tests/phpunit/CRM/Fixture/FooTest.php' => "<?php\nclass CRM_Fixture_FooTest {}\nclass CRM_Fixture_DAO_TestEntity {}\n",
+        ], git: true);
+        $this->assertOk($this->run_(new Psr0ClassPathCheck(), $context));
+    }
+
+    public function testAGuardedPolyfillIsNotADeclarationOfThisFile(): void
+    {
+        $context = $this->repo([
+            'CRM/Greeter/Compat.php' => "<?php\nclass CRM_Greeter_Compat {}\nif (!class_exists('CRM_Core_Foo')) {\n  class CRM_Core_Foo {}\n}\n",
+        ], git: true);
+        $this->assertOk($this->run_(new Psr0ClassPathCheck(), $context));
+    }
 }

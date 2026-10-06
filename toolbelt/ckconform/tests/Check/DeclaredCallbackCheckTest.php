@@ -9,6 +9,7 @@ use CiviKitchen\Ckconform\Tests\CheckTestCase;
 
 final class DeclaredCallbackCheckTest extends CheckTestCase
 {
+    use \CiviKitchen\Ckconform\Tests\FakeCoreTrait;
     public function testSilentWithoutMenuXml(): void
     {
         $context = $this->repo(['CRM/Greeter/Page/Foo.php' => "<?php\nclass CRM_Greeter_Page_Foo {}\n"], git: true);
@@ -110,5 +111,47 @@ final class DeclaredCallbackCheckTest extends CheckTestCase
               </item>
             </menu>
             XML;
+    }
+
+    /** PHP method names are case-insensitive, so CiviCRM calls run() for ::Run. */
+    public function testAMethodInAnotherCaseIsFound(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'xml/Menu/greeter.xml' => $this->menu('CRM_Greeter_Page_Foo::Run'),
+            'CRM/Greeter/Page/Foo.php' => "<?php\nclass CRM_Greeter_Page_Foo {\n  public function run() {}\n}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new DeclaredCallbackCheck(), $context));
+    }
+
+    public function testALeadingBackslashOnAnOwnCallbackIsResolved(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'xml/Menu/greeter.xml' => $this->menu('\\CRM_Greeter_Page_Missing'),
+        ], git: true);
+        $this->assertFails($this->run_(new DeclaredCallbackCheck(), $context), 'has no file CRM/Greeter/Page/Missing.php');
+    }
+
+    /** A payment processor in CRM/Core/Payment/ does not make core's CRM_Core_ namespace ours. */
+    public function testACoreClassBesideAShippedCoreDirectoryIsNotJudged(): void
+    {
+        mkdir($this->makeCore() . '/CRM/Core', 0777, true);
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'CRM/Core/Payment/Greeter.php' => "<?php\nclass CRM_Core_Payment_Greeter {}\n",
+            'xml/Menu/greeter.xml' => $this->menu('CRM_Core_Payment::handleIPN'),
+        ], git: true);
+        $this->assertPasses($this->run_(new DeclaredCallbackCheck(), $context));
+    }
+
+    public function testAnOwnMissingClassStillFailsBesideCore(): void
+    {
+        mkdir($this->makeCore() . '/CRM/Core', 0777, true);
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'xml/Menu/greeter.xml' => $this->menu('CRM_Greeter_Page_Gone'),
+        ], git: true);
+        $this->assertFails($this->run_(new DeclaredCallbackCheck(), $context), 'CRM/Greeter/Page/Gone.php');
     }
 }

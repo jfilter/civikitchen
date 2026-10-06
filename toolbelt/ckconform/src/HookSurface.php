@@ -57,6 +57,17 @@ final class HookSurface
     }
 
     /**
+     * Whether a function prefix is one of $expected. Core looks hook
+     * functions up with function_exists(), which ignores case.
+     *
+     * @param list<string> $expected
+     */
+    public static function hasPrefix(string $prefix, array $expected): bool
+    {
+        return in_array(strtolower($prefix), array_map('strtolower', $expected), true);
+    }
+
+    /**
      * Tracked *.php outside tests/ and vendor/. Generated civix glue declares
      * hooks whose prefix civix itself owns, and vendored code is nobody's to
      * rename here.
@@ -112,43 +123,60 @@ final class HookSurface
     }
 
     /**
+     * Does the `{` at $open start the body of an if, elseif or else?
+     *
+     * @param array<int, array{0: int, 1: string, 2: int}|string> $tokens
+     */
+    private static function opensConditional(array $tokens, int $open): bool
+    {
+        $i = $open - 1;
+        while ($i >= 0 && is_array($tokens[$i]) && in_array($tokens[$i][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+            $i--;
+        }
+        if ($i >= 0 && is_array($tokens[$i]) && $tokens[$i][0] === \T_ELSE) {
+            return true;
+        }
+        if ($i < 0 || $tokens[$i] !== ')') {
+            return false;
+        }
+        for ($depth = 0; $i >= 0; $i--) {
+            $depth += $tokens[$i] === ')' ? 1 : ($tokens[$i] === '(' ? -1 : 0);
+            if ($depth === 0) {
+                break;
+            }
+        }
+        do {
+            $i--;
+        } while ($i >= 0 && is_array($tokens[$i]) && in_array($tokens[$i][0], [\T_WHITESPACE, \T_COMMENT], true));
+
+        return $i >= 0 && is_array($tokens[$i]) && in_array($tokens[$i][0], [\T_IF, \T_ELSEIF], true);
+    }
+
+    /**
      * Hook suffixes named at `dispatch(` (first argument) and `invoke(` (last
-     * string argument) call sites of one file.
+     * string argument) call sites of one file. Method names are
+     * case-insensitive, and comments may sit anywhere in the call.
      *
      * @return list<string>
      */
     private static function dispatchSites(string $contents): array
     {
-        $tokens = @token_get_all($contents);
+        $tokens = PhpSource::codeTokens($contents);
         $found = [];
-        for ($i = 0, $n = count($tokens); $i < $n; $i++) {
-            $token = $tokens[$i];
-            if (!is_array($token) || $token[0] !== \T_STRING || !in_array($token[1], ['dispatch', 'invoke'], true)) {
+        foreach ($tokens as $i => $token) {
+            $method = strtolower($token->text);
+            if (!$token->is(T_STRING) || !in_array($method, ['dispatch', 'invoke'], true)
+                || ($tokens[$i + 1] ?? null)?->text !== '('
+            ) {
                 continue;
             }
-            $j = $i + 1;
-            while ($j < $n && is_array($tokens[$j]) && $tokens[$j][0] === \T_WHITESPACE) {
-                $j++;
-            }
-            if ($j >= $n || $tokens[$j] !== '(') {
-                continue;
-            }
-            $depth = 1;
-            $first = null;
-            $last = null;
-            for ($k = $j + 1; $k < $n && $depth > 0; $k++) {
-                $inner = $tokens[$k];
-                if ($inner === '(' || $inner === '[') {
-                    $depth++;
-                } elseif ($inner === ')' || $inner === ']') {
-                    $depth--;
-                } elseif ($depth === 1 && is_array($inner) && $inner[0] === \T_CONSTANT_ENCAPSED_STRING) {
-                    $literal = substr($inner[1], 1, -1);
-                    $first ??= $literal;
-                    $last = $literal;
+            $literals = [];
+            foreach (PhpSource::arguments($tokens, $i + 1) ?? [] as [, $argument]) {
+                if (count($argument) === 1 && $argument[0]->is(T_CONSTANT_ENCAPSED_STRING)) {
+                    $literals[] = substr($argument[0]->text, 1, -1);
                 }
             }
-            $name = $token[1] === 'dispatch' ? $first : $last;
+            $name = $method === 'dispatch' ? ($literals[0] ?? null) : ($literals[count($literals) - 1] ?? null);
             if ($name !== null && preg_match('/^(?:hook_)?civicrm_([a-zA-Z]+)$/', $name, $m) === 1) {
                 $found[] = $m[1];
             }
@@ -171,7 +199,9 @@ final class HookSurface
     public static function globalFunctions(string $contents): array
     {
         $tokens = @token_get_all($contents);
-        $depth = 0;
+        // Open blocks, true for an if/elseif/else body: a function declared
+        // only inside such guards (`if (!function_exists(…))`) is still global.
+        $blocks = [];
         $names = [];
 
         for ($i = 0, $n = count($tokens); $i < $n; $i++) {
@@ -179,19 +209,19 @@ final class HookSurface
 
             if (is_string($token)) {
                 if ($token === '{') {
-                    $depth++;
+                    $blocks[] = self::opensConditional($tokens, $i);
                 } elseif ($token === '}') {
-                    $depth--;
+                    array_pop($blocks);
                 }
                 continue;
             }
 
             if ($token[0] === \T_CURLY_OPEN || $token[0] === \T_DOLLAR_OPEN_CURLY_BRACES) {
-                $depth++;
+                $blocks[] = false;
                 continue;
             }
 
-            if ($token[0] !== \T_FUNCTION || $depth !== 0) {
+            if ($token[0] !== \T_FUNCTION || in_array(false, $blocks, true)) {
                 continue;
             }
 

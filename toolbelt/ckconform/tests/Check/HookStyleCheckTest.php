@@ -149,4 +149,85 @@ final class HookStyleCheckTest extends CheckTestCase
         ]);
         $this->assertSilent($this->run_(new HookStyleCheck(), $context));
     }
+
+    public function testAFullyQualifiedListenerBaseCounts(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "hook_style=listener\n",
+            'Civi/Fixture/Listener.php' => <<<'PHP'
+                <?php
+                namespace Civi\Fixture;
+
+                class Listener extends \Civi\Core\Service\AutoSubscriber {
+                  public static function getSubscribedEvents(): array {
+                    return [];
+                  }
+                }
+                PHP,
+        ]);
+        $this->assertWarns($this->run_(new HookStyleCheck(), $context), 'scan-classes mixin');
+    }
+
+    public function testAClassMerelyNamedLikeAListenerBaseDoesNotCount(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "hook_style=listener\n",
+            'Civi/Fixture/Factory.php' => <<<'PHP'
+                <?php
+                namespace Civi\Fixture;
+
+                class Factory extends \Acme\AutoSubscriberFactory {
+                  const NOTE = 'see \Civi\Core\Service\AutoSubscriber';
+                }
+                PHP,
+        ]);
+        $this->assertSilent($this->run_(new HookStyleCheck(), $context));
+    }
+
+    public function testAClassicOnlyHookInAnotherCaseStaysSilent(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "hook_style=listener\n",
+            'fixture.php' => <<<'PHP'
+                <?php
+                function Fixture_civicrm_Install() {
+                }
+                PHP,
+        ]);
+        $this->assertSilent($this->run_(new HookStyleCheck(), $context));
+    }
+
+    public function testABusinessHookUnderAnotherCasePrefixWarns(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "hook_style=listener\n",
+            'fixture.php' => <<<'PHP'
+                <?php
+                function Fixture_civicrm_post($op, $objectName, $objectId, &$objectRef) {
+                }
+                PHP,
+        ]);
+        $this->assertWarns($this->run_(new HookStyleCheck(), $context), 'Fixture_civicrm_post()');
+    }
+
+    /** A method called hookInterface() is not the HookInterface base. */
+    public function testAMethodNamedLikeAListenerBaseDoesNotCount(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "hook_style=listener\n",
+            'Civi/Fixture/Registry.php' => "<?php\nnamespace Civi\\Fixture;\n\nclass Registry {\n"
+                . "  public function hookInterface(): string { return ''; }\n}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new HookStyleCheck(), $context));
+    }
+
+    public function testAnImportedListenerInterfaceCounts(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "hook_style=listener\n",
+            'Civi/Fixture/Listener.php' => "<?php\nnamespace Civi\\Fixture;\n\nuse Civi\\Core\\HookInterface;\n\n"
+                . "class Listener implements HookInterface {}\n",
+        ], git: true);
+        $this->assertWarns($this->run_(new HookStyleCheck(), $context), 'scan-classes');
+    }
 }

@@ -42,7 +42,13 @@ final class Api4SelfEntityCheck implements Check
     private const EXTENSIONS = ['js', 'jsx', 'ts', 'tsx', 'mjs'];
 
     /** angular.module(...).controller('AcmeCourseList', fn) names what it registers, not an entity. */
-    private const ANGULAR_REGISTRARS = ['controller', 'service', 'factory', 'provider', 'component'];
+    private const ANGULAR_REGISTRARS = [
+        'controller', 'service', 'factory', 'provider', 'component', 'constant', 'value', 'decorator',
+        'directive', 'filter',
+    ];
+
+    /** Web Storage keys are names an app picks, never entities. */
+    private const STORAGE_METHODS = ['getItem', 'setItem', 'removeItem'];
 
     public function name(): string
     {
@@ -57,6 +63,7 @@ final class Api4SelfEntityCheck implements Check
             return;
         }
 
+        $external = CoreApi4::declaredExternal($context);
         $dangling = [];
         $scanned = false;
         foreach ($context->trackedFiles() as $file) {
@@ -69,7 +76,10 @@ final class Api4SelfEntityCheck implements Check
                 continue;
             }
             foreach ($this->candidates($source) as $name) {
-                if ($context->shipsApi4Entity($name) || $this->existsInCore($context, $name)) {
+                if ($context->shipsApi4Entity($name) || in_array($name, $external, true)
+                    || CoreApi4::classFile((string) $context->coreDir, $name) !== null
+                    || CoreApi4::inRequiredExtension($context, $name)
+                ) {
                     continue;
                 }
                 $dangling[$name][$file] = true;
@@ -104,50 +114,22 @@ final class Api4SelfEntityCheck implements Check
      */
     private function candidates(string $source): array
     {
-        // ident, an optional generic (getEntities<Foo>(...)), then the literal.
-        $pattern = '/(\.\s*)?([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:<[^<>()]*>)?\s*\(\s*'
+        // [new] ident, an optional generic (getEntities<Foo>(...)), then the literal.
+        $pattern = '/(\bnew\s+)?(\.\s*)?([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:<[^<>()]*>)?\s*\(\s*'
             . '[\'"]([A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+)[\'"]/';
         preg_match_all($pattern, $source, $matches, PREG_SET_ORDER);
 
         $names = [];
         foreach ($matches as $match) {
-            if ($match[1] !== '' && in_array($match[2], self::ANGULAR_REGISTRARS, true)) {
+            // A constructor's argument (new CustomEvent('FormSaved')) names an instance, not an entity.
+            $member = $match[2] !== '';
+            if ($match[1] !== '' || ($member && in_array($match[3], [...self::ANGULAR_REGISTRARS, ...self::STORAGE_METHODS], true))) {
                 continue;
             }
-            $names[] = $match[3];
+            $names[] = $match[4];
         }
 
         return array_values(array_unique($names));
-    }
-
-    /**
-     * Core proper, then the extensions core bundles — an entity living in
-     * ext/civi_mail is still shipped with core.
-     */
-    private function existsInCore(Context $context, string $entity): bool
-    {
-        $coreDir = (string) $context->coreDir;
-        if (is_file($coreDir . '/Civi/Api4/' . $entity . '.php')) {
-            return true;
-        }
-
-        foreach ([$coreDir . '/ext', dirname($coreDir) . '/ext'] as $extRoot) {
-            if (!is_dir($extRoot)) {
-                continue;
-            }
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($extRoot, \FilesystemIterator::SKIP_DOTS)
-            );
-            foreach ($iterator as $file) {
-                if ($file instanceof \SplFileInfo
-                    && $file->isFile()
-                    && str_ends_with($file->getPathname(), '/Civi/Api4/' . $entity . '.php')) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 
     private function scannable(string $file): bool

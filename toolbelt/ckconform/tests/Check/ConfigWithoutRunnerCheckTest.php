@@ -142,4 +142,74 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         ], git: true);
         $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'playwright.config.ts');
     }
+
+    /** @param array<string, string> $files */
+    private function runnerRepo(string $run, array $files): \CiviKitchen\Ckconform\Context
+    {
+        $files['.github/workflows/ci.yml'] = "jobs:\n  t:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: {$run}\n";
+
+        return $this->repo($files, git: true);
+    }
+
+    private const PHP_CONFIGS = [
+        'phpcs.xml.dist' => '<ruleset/>',
+        'phpstan.neon.dist' => 'parameters:',
+        'phpunit.xml.dist' => '<phpunit/>',
+    ];
+
+    public function testCkCiRunsEveryPhpConfig(): void
+    {
+        $context = $this->runnerRepo('docker compose exec -T app ck ci', self::PHP_CONFIGS);
+        $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+    }
+
+    public function testCkLintAndCkCoverageRunPhpcsAndPhpunit(): void
+    {
+        $context = $this->runnerRepo("ck lint --all && ck coverage tests/phpunit", [
+            'phpcs.xml.dist' => '<ruleset/>',
+            'phpunit.xml.dist' => '<phpunit/>',
+        ]);
+        $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+    }
+
+    public function testACkCiLimitedToLintLeavesPhpstanUnrun(): void
+    {
+        $context = $this->runnerRepo('ck ci --only cklint,ckconform', self::PHP_CONFIGS);
+        $reporter = $this->run_(new ConfigWithoutRunnerCheck(), $context);
+        $this->assertFails($reporter, 'phpstan.neon.dist (no phpstan step), phpunit.xml.dist (no phpunit step)');
+        self::assertStringNotContainsString('phpcs.xml.dist', $reporter->render());
+    }
+
+    public function testADirectoryNamedAfterAToolIsNoRunner(): void
+    {
+        $context = $this->runnerRepo('ls tests/phpunit/', ['phpunit.xml.dist' => '<phpunit/>']);
+        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpunit.xml.dist (no phpunit step)');
+    }
+
+    public function testNpmTestResolvesTheTestScript(): void
+    {
+        $context = $this->runnerRepo('npm test', [
+            'package.json' => '{"scripts": {"test": "vitest run"}}',
+            'vitest.config.ts' => 'export default {};',
+        ]);
+        $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+    }
+
+    public function testNpmTestRunningSomethingElseLeavesVitestUnrun(): void
+    {
+        $context = $this->runnerRepo('npm test', [
+            'package.json' => '{"scripts": {"test": "eslint .", "unit": "vitest run"}}',
+            'vitest.config.ts' => 'export default {};',
+        ]);
+        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'vitest.config.ts');
+    }
+
+    public function testComposerScriptsResolveIncludingReferences(): void
+    {
+        $context = $this->runnerRepo('composer test', [
+            'composer.json' => '{"scripts": {"test": ["@unit"], "unit": "phpunit"}}',
+            'phpunit.xml.dist' => '<phpunit/>',
+        ]);
+        $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+    }
 }

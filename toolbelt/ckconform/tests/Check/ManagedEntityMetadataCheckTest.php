@@ -65,10 +65,9 @@ final class ManagedEntityMetadataCheckTest extends CheckTestCase
             ];
             PHP,
         ]);
-        $this->assertFails(
-            $this->run_(new ManagedEntityMetadataCheck(), $context),
-            "no 'version'",
-        );
+        $reporter = $this->run_(new ManagedEntityMetadataCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'no params.version, which mgd-php defaults to 3');
     }
 
     public function testFailsOnBogusVersion(): void
@@ -262,5 +261,22 @@ final class ManagedEntityMetadataCheckTest extends CheckTestCase
             PHP,
         ]);
         $this->assertSilent($this->run_(new ManagedEntityMetadataCheck(), $context));
+    }
+
+    /** mgd-php@1 and @2 default an empty params.version to 3. */
+    public function testAMissingVersionIsTheApi3Default(): void
+    {
+        $context = $this->repo(['managed/Opt.mgd.php' => "<?php\nreturn [['name' => 'opt', 'entity' => 'OptionValue', 'cleanup' => 'never', 'update' => 'never', 'params' => ['option_group_id' => 'activity_type', 'name' => 'myext_call']]];\n"]);
+        $reporter = $this->run_(new ManagedEntityMetadataCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'managed record uses APIv3 (no params.version, which mgd-php defaults to 3)');
+    }
+
+    public function testAnExplicitVersion3WarnsTheSame(): void
+    {
+        $context = $this->repo(['managed/Opt.mgd.php' => "<?php\nreturn [['name' => 'opt', 'entity' => 'OptionValue', 'cleanup' => 'never', 'update' => 'never', 'params' => ['version' => 3, 'option_group_id' => 'activity_type', 'name' => 'myext_call']]];\n"]);
+        $reporter = $this->run_(new ManagedEntityMetadataCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, 'managed record uses APIv3');
     }
 }

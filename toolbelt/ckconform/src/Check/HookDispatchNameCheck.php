@@ -104,26 +104,29 @@ final class HookDispatchNameCheck implements Check
 
         foreach (HookSurface::candidates($context) as $file) {
             $contents = $context->read($file);
-            if ($contents === null || !str_contains($contents, '_civicrm_')) {
+            if ($contents === null || stripos($contents, '_civicrm_') === false) {
                 continue;
             }
             $suppressions = Suppressions::of($contents);
 
             foreach (HookSurface::globalFunctions($contents) as $function => $line) {
-                if (preg_match('/^([A-Za-z0-9_]+)_civicrm_([a-zA-Z]+)$/', $function, $m) !== 1) {
+                if (preg_match('/^([A-Za-z0-9_]+)_civicrm_([a-zA-Z]+)$/i', $function, $m) !== 1) {
                     continue;
                 }
                 [, $prefix, $suffix] = $m;
 
                 // `civicrm_civicrm_*` is core's own prefix, and the api magic
                 // functions are not hooks at all.
-                if ($prefix === 'civicrm' || str_starts_with($function, 'civicrm_api3_')
-                    || str_contains($function, '_civicrm_api3_')
-                ) {
+                if (strcasecmp($prefix, 'civicrm') === 0 || stripos($function, 'civicrm_api3_') !== false) {
                     continue;
                 }
 
-                if (!in_array($prefix, $expected, true)) {
+                // myext_minimum_civicrm_version() is this extension's own helper, not a hook.
+                if ($this->ownHelper($prefix, $expected)) {
+                    continue;
+                }
+
+                if (!HookSurface::hasPrefix($prefix, $expected)) {
                     $this->emit($reporter, $suppressions, $line, [true, sprintf(
                         '%s: %s() will never fire — the hook prefix of this extension is \'%s\', so the function must be named %s_civicrm_%s()',
                         $file,
@@ -135,6 +138,7 @@ final class HookDispatchNameCheck implements Check
                     continue;
                 }
 
+                $suffix = $this->knownSpelling($suffix, $policyHooks);
                 $verdict = $this->suffixVerdict($file, $function . '()', $suffix, $policyHooks);
                 $this->emit($reporter, $suppressions, $line, $verdict);
             }
@@ -149,6 +153,18 @@ final class HookDispatchNameCheck implements Check
                 $this->emit($reporter, $suppressions, $line, $verdict);
             }
         }
+    }
+
+    /** @param list<string> $expected */
+    private function ownHelper(string $prefix, array $expected): bool
+    {
+        foreach ($expected as $own) {
+            if (stripos($prefix, $own . '_') === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -203,6 +219,30 @@ final class HookDispatchNameCheck implements Check
         }
 
         return null;
+    }
+
+    /**
+     * The catalogued spelling of a function-form suffix (`_civicrm_Tabs()` is
+     * `tabs`); listener forms bind by exact event name and keep theirs.
+     *
+     * @param list<string> $policyHooks
+     */
+    private function knownSpelling(string $suffix, array $policyHooks): string
+    {
+        $known = [
+            ...$policyHooks,
+            ...array_keys(self::REMOVED_HOOKS),
+            ...array_keys(HookCatalog::DEPRECATED),
+            ...array_keys(self::DOCS_DEPRECATED_HOOKS),
+            ...HookCatalog::LIVE,
+        ];
+        foreach ($known as $name) {
+            if (strcasecmp($name, $suffix) === 0) {
+                return $name;
+            }
+        }
+
+        return $suffix;
     }
 
     /**

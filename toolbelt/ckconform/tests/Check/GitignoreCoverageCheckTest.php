@@ -152,4 +152,40 @@ final class GitignoreCoverageCheckTest extends CheckTestCase
         $reporter = $this->run_(new GitignoreCoverageCheck(), $context);
         self::assertSame(0, $reporter->failures());
     }
+
+    public function testAMonorepoRootGitignoreIsJudged(): void
+    {
+        $context = $this->monorepoExtension(
+            ['.gitignore' => "/*/vendor/\nnode_modules/\n.phpunit.result.cache\n"],
+            ['composer.json' => '{}', 'phpunit.xml.dist' => '<phpunit/>', 'package.json' => '{}'],
+        );
+        $this->assertOk($this->run_(new GitignoreCoverageCheck(), $context), '.gitignore covers the artifacts');
+    }
+
+    public function testAMonorepoRootGitignoreMissingAnArtifactFails(): void
+    {
+        $context = $this->monorepoExtension(
+            ['.gitignore' => "/*/vendor/\n"],
+            ['composer.json' => '{}', 'phpunit.xml.dist' => '<phpunit/>'],
+        );
+        $this->assertFails($this->run_(new GitignoreCoverageCheck(), $context), 'produces: .phpunit.result.cache');
+    }
+
+    public function testAConfigThatDisablesTheResultCacheProducesNone(): void
+    {
+        $context = $this->repo([
+            '.gitignore' => "/vendor/\n",
+            'phpunit.xml.dist' => '<phpunit cacheResult="false"/>',
+        ], git: true);
+        $this->assertOk($this->run_(new GitignoreCoverageCheck(), $context), '.gitignore covers the artifacts');
+    }
+
+    public function testAMovedResultCacheIsDemandedWhereItIsWritten(): void
+    {
+        $context = $this->repo([
+            '.gitignore' => ".phpunit.result.cache\n",
+            'phpunit.xml.dist' => '<phpunit cacheResultFile=".cache/phpunit.result"/>',
+        ], git: true);
+        $this->assertFails($this->run_(new GitignoreCoverageCheck(), $context), 'produces: .cache/phpunit.result');
+    }
 }

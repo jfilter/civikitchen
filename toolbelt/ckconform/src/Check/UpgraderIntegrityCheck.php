@@ -6,6 +6,7 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\PhpSource;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
@@ -38,7 +39,6 @@ use CiviKitchen\Ckconform\Reporter;
 final class UpgraderIntegrityCheck implements Check
 {
     /** Filenames civix executes itself; not referenced from PHP by design. */
-    private const SELF_RUN_SQL = ['auto_install.sql', 'auto_uninstall.sql'];
 
     public function name(): string
     {
@@ -157,6 +157,8 @@ final class UpgraderIntegrityCheck implements Check
         if ($source === null) {
             return;
         }
+        // A commented-out step or executeSqlFile() call runs nothing.
+        $source = PhpSource::withoutComments($source);
 
         $pattern = '/(?:^|[\r\n])[ \t]*((?:(?:public|protected|private|static|final|abstract)\s+)*)'
             . 'function\s+(upgrade_(\d+))\s*\(/i';
@@ -274,7 +276,8 @@ final class UpgraderIntegrityCheck implements Check
                 continue;
             }
             $name = basename($file);
-            if (in_array($name, self::SELF_RUN_SQL, true)) {
+            // CRM_Extension_Upgrader_Base runs sql/*_install.sql and sql/*_uninstall.sql itself.
+            if (dirname($file) === 'sql' && preg_match('/_(?:un)?install\.sql$/', $name) === 1) {
                 continue;
             }
             if (!str_contains($php, $name)) {

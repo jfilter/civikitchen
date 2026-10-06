@@ -44,12 +44,12 @@ final class LicenseSkeletonCheck implements Check
         }
     }
 
-    /** First `Package:` line, with the label and its padding stripped. */
+    /** First `Package:` line, with the label, padding and a CRLF's \r stripped. */
     private function packageLine(string $license): string
     {
         foreach (explode("\n", $license) as $line) {
             if (str_starts_with($line, 'Package:')) {
-                return ltrim(substr($line, strlen('Package:')), ' ');
+                return trim(substr($line, strlen('Package:')));
             }
         }
 

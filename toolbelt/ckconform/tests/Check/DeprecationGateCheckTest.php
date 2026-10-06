@@ -132,4 +132,103 @@ final class DeprecationGateCheckTest extends CheckTestCase
         ]);
         $this->assertWarns($this->run_(new DeprecationGateCheck(), $context), 'phpunit.xml does not set');
     }
+
+    public function testFullyQualifiedNamesCount(): void
+    {
+        $context = $this->repo([
+            'phpunit.xml.dist' => self::GOOD_CONFIG,
+            'tests/phpunit/bootstrap.php' => "<?php\n\\error_reporting(\\E_ALL);\n",
+        ]);
+        $this->assertSilent($this->run_(new DeprecationGateCheck(), $context));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function healthyMasks(): iterable
+    {
+        yield 'minus one' => ['-1'];
+        yield 'named argument' => ['error_level: E_ALL'];
+        yield 'xor a notice' => ['E_ALL ^ E_NOTICE'];
+        yield 'parenthesised' => ['(E_ALL | E_STRICT) & ~(E_NOTICE)'];
+        yield 'explicit deprecations' => ['E_DEPRECATED | E_USER_DEPRECATED | E_ERROR'];
+    }
+
+    /** @dataProvider healthyMasks */
+    public function testAMaskKeepingDeprecationsCounts(string $mask): void
+    {
+        $context = $this->repo([
+            'phpunit.xml.dist' => self::GOOD_CONFIG,
+            'tests/phpunit/bootstrap.php' => "<?php\nerror_reporting($mask);\n",
+        ]);
+        $this->assertSilent($this->run_(new DeprecationGateCheck(), $context));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function maskingBootstraps(): iterable
+    {
+        yield 'commented out' => ["// error_reporting(E_ALL);\n"];
+        yield 'deprecations masked' => ["error_reporting(E_ALL & ~E_DEPRECATED);\n"];
+        yield 'a lowercase constant, undefined in PHP 8' => ["error_reporting(e_all);\n"];
+        yield 'digit separators keep their value' => ["error_reporting(32_767 & ~E_DEPRECATED);\n"];
+        yield 'user deprecations xored' => ["error_reporting(E_ALL ^ E_USER_DEPRECATED);\n"];
+        yield 'a read, not a write' => ["\$level = error_reporting();\n"];
+        yield 'a non-constant mask' => ["error_reporting(\$level);\n"];
+        yield 'a method of the same name' => ["\$ini->error_reporting(E_ALL);\n"];
+    }
+
+    /** @dataProvider maskingBootstraps */
+    public function testAMaskWithoutDeprecationsWarns(string $code): void
+    {
+        $context = $this->repo([
+            'phpunit.xml.dist' => self::GOOD_CONFIG,
+            'tests/phpunit/bootstrap.php' => "<?php\n" . $code,
+        ]);
+        $this->assertWarns($this->run_(new DeprecationGateCheck(), $context), 'no error_reporting(E_ALL)');
+    }
+
+    /** @return iterable<string, array{string, bool}> */
+    public static function iniValues(): iterable
+    {
+        yield 'minus one' => ['-1', true];
+        yield 'a constant name PHPUnit resolves' => ['E_ALL', true];
+        yield 'an integer keeping deprecations' => ['32767', true];
+        yield 'zero' => ['0', false];
+        yield 'an expression ini_set reads as 0' => ['E_ALL &amp; ~E_DEPRECATED', false];
+    }
+
+    /** @dataProvider iniValues */
+    public function testTheIniValueIsEvaluated(string $value, bool $widens): void
+    {
+        $context = $this->repo([
+            'phpunit.xml.dist' => '<?xml version="1.0"?><phpunit convertDeprecationsToExceptions="true">'
+                . '<php><ini name="error_reporting" value="' . $value . '"/></php></phpunit>',
+            'tests/phpunit/bootstrap.php' => "<?php\nrequire 'autoload.php';\n",
+        ]);
+        $reporter = $this->run_(new DeprecationGateCheck(), $context);
+        $widens ? $this->assertSilent($reporter) : $this->assertWarns($reporter, 'error_reporting');
+    }
+
+    /** @return iterable<string, array{string, bool}> */
+    public static function iniSetCalls(): iterable
+    {
+        yield 'cast constant' => ["ini_set('error_reporting', (string) E_ALL);\n", true];
+        yield 'numeric string' => ["ini_set('error_reporting', '-1');\n", true];
+        yield 'an integer constant' => ["ini_set('error_reporting', E_ALL);\n", true];
+        yield 'every bit set' => ["error_reporting(PHP_INT_MAX);\n", true];
+        yield 'digit separators' => ["error_reporting(32_767);\n", true];
+        yield 'named value' => ["ini_set(option: 'error_reporting', value: (string) E_ALL);\n", true];
+        yield 'a constant name as a string' => ["ini_set('error_reporting', 'E_ALL');\n", false];
+        yield 'another option' => ["ini_set('display_errors', (string) E_ALL);\n", false];
+        yield 'deprecations masked' => ["ini_set('error_reporting', (string) (E_ALL & ~E_DEPRECATED));\n", false];
+    }
+
+    /** @dataProvider iniSetCalls */
+    public function testIniSetInTheBootstrapIsEvaluated(string $code, bool $widens): void
+    {
+        $context = $this->repo([
+            'phpunit.xml.dist' => self::GOOD_CONFIG,
+            'tests/phpunit/bootstrap.php' => "<?php\n" . $code,
+        ]);
+        $reporter = $this->run_(new DeprecationGateCheck(), $context);
+        $widens ? $this->assertSilent($reporter) : $this->assertWarns($reporter, 'no error_reporting(E_ALL)');
+    }
 }

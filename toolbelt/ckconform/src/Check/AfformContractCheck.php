@@ -29,7 +29,8 @@ use CiviKitchen\Ckconform\Reporter;
  * Field *names* are deliberately not validated: that needs the live schema, and
  * a static guess would either miss custom fields or cry wolf on them. Only the
  * structural contract inside the file is checked — plus an `af-field` sitting
- * outside every fieldset, which has no entity to bind to at all.
+ * outside every fieldset, which has no entity to bind to at all (blocks and
+ * search forms excepted: the embedding form supplies their fieldset).
  */
 final class AfformContractCheck implements Check
 {
@@ -65,7 +66,7 @@ final class AfformContractCheck implements Check
             if ($context->ships($phpMetaFile)) {
                 // The PHP metadata variant is just as valid as .aff.json.
                 // Evaluating it needs the ExtensionUtil stub for E::ts().
-                ExtensionUtilStub::register();
+                ExtensionUtilStub::register($context);
                 try {
                     $meta = require $context->path($phpMetaFile);
                     if (is_array($meta)) {
@@ -106,7 +107,10 @@ final class AfformContractCheck implements Check
                 $this->checkBindings($html, $relative, $aliases, $reporter);
             }
 
-            $this->checkStrayFields($html, $relative, $reporter);
+            // A block's fields bind to the fieldset of the form that embeds it.
+            if ($type === null || !in_array($type, self::ENTITYLESS_TYPES, true)) {
+                $this->checkStrayFields($html, $relative, $reporter);
+            }
         }
     }
 

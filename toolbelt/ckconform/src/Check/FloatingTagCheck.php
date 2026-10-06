@@ -9,12 +9,14 @@ use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
- * ':latest' and 'releases/latest/download' in CI make a green run
+ * ':latest', an untagged image and 'releases/latest/download' in CI make a green run
  * unreproducible and a red one unattributable — the workflow can start
  * building against a different image or binary tomorrow with no diff to
  * point at.
  *
- * Only the first hit per file is reported.
+ * Images are read where GitHub Actions takes them: `container:` (shorthand or
+ * `image:`), a service's `image:` and a `docker://` step. Only the first hit
+ * per file is reported.
  */
 final class FloatingTagCheck implements Check
 {
@@ -36,8 +38,9 @@ final class FloatingTagCheck implements Check
             if ($lines !== [] && $lines[array_key_last($lines)] === '') {
                 array_pop($lines);
             }
+            $parents = [];
             foreach ($lines as $index => $line) {
-                if ($this->isFloating($line)) {
+                if ($this->isFloating($line, $parents)) {
                     $match = $workflow . ':' . ($index + 1) . ':' . $line;
                     $reporter->warn('CI pins nothing (floating :latest): ' . substr($match, 0, 70));
 
@@ -47,8 +50,34 @@ final class FloatingTagCheck implements Check
         }
     }
 
-    private function isFloating(string $line): bool
+    /** @param list<array{0: int, 1: string}> $parents indent and key of the enclosing mappings, kept across lines */
+    private function isFloating(string $line, array &$parents): bool
     {
-        return (bool) preg_match('/image:.*:latest|releases\/latest\/download/', $line);
+        $trimmed = ltrim($line);
+        if ($trimmed === '' || str_starts_with($trimmed, '#')) {
+            return false;
+        }
+        $indent = strlen($line) - strlen($trimmed);
+        while ($parents !== [] && $parents[array_key_last($parents)][0] >= $indent) {
+            array_pop($parents);
+        }
+        $enclosing = array_reverse(array_column($parents, 1));
+        if (preg_match('/^(?:-\s+)?([\w.-]+):(?:\s+(.*))?$/', $trimmed, $key) === 1) {
+            $parents[] = [$indent, $key[1]];
+        }
+        if (preg_match('/image:.*:latest|releases\/latest\/download/', $line) === 1) {
+            return true;
+        }
+        if (preg_match('/^(?:-\s+)?uses:\s*["\']?docker:\/\/([^\s"\']+)/', $trimmed, $docker) === 1) {
+            return ImageReference::floats($docker[1]);
+        }
+        $value = $key[2] ?? '';
+        $isImage = match ($key[1] ?? '') {
+            'container' => true,
+            'image' => ($enclosing[0] ?? '') === 'container' || ($enclosing[1] ?? '') === 'services',
+            default => false,
+        };
+
+        return $isImage && ImageReference::floats($value);
     }
 }

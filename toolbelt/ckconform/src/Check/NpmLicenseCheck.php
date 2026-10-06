@@ -31,7 +31,23 @@ final class NpmLicenseCheck implements Check
             return;
         }
 
-        $manifests = $context->tracked('package.json', Context::outsideNodeModules(...));
+        // Third-party code carried verbatim keeps its upstream licence.
+        $vendored = array_map(
+            static fn (string $entry): string => trim(rtrim(explode(' -- ', $entry, 2)[0]), '/'),
+            $context->policyValues('vendored_paths'),
+        );
+        $manifests = array_filter(
+            $context->tracked('package.json', Context::outsideNodeModules(...)),
+            static function (string $manifest) use ($vendored): bool {
+                foreach ($vendored as $path) {
+                    if ($path !== '' && (str_starts_with($manifest, $path . '/') || fnmatch($path, dirname($manifest)))) {
+                        return false;
+                    }
+                }
+
+                return true;
+            },
+        );
 
         foreach ($manifests as $manifest) {
             $have = $this->license($context, $manifest, $want);

@@ -67,4 +67,25 @@ final class LicenseSkeletonCheckTest extends CheckTestCase
         ]);
         $this->assertSilent($this->run_(new LicenseSkeletonCheck(), $context));
     }
+
+    public function testCrlfLineEndingsAndTrailingSpacesAreNoMismatch(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'org.example.myext'),
+            'LICENSE.txt' => "Package: org.example.myext \r\nCopyright (C) 2026 Example Ltd\r\n",
+        ]);
+        $this->assertSilent($this->run_(new LicenseSkeletonCheck(), $context));
+    }
+
+    public function testACrlfFileNamingAnotherExtensionStillFails(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'org.example.myext'),
+            'LICENSE.txt' => "Package: org.example.other\r\n",
+        ]);
+        $this->assertFails(
+            $this->run_(new LicenseSkeletonCheck(), $context),
+            "says 'Package: org.example.other' but info.xml key is 'org.example.myext'",
+        );
+    }
 }

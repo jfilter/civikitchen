@@ -42,7 +42,8 @@ final class MessageTemplateTokenCheck implements Check
         'participant', 'membership', 'activity', 'case', 'user', 'import',
         'recur', 'contributionRecur', 'contribution_recur', 'pledge', 'grant',
         'petition', 'eventcart', 'financialType', 'lineItem', 'membershipType',
-        'participantRole', 'smarty', 'resourceUrls',
+        'participantRole', 'smarty', 'resourceUrls', 'site', 'group', 'survey',
+        'financial_trxn', 'contribution_product',
     ];
 
     /**
@@ -139,9 +140,10 @@ final class MessageTemplateTokenCheck implements Check
     {
         $needle = strtolower($namespace);
         foreach ($shortnames as $shortname) {
+            // A short namespace ('e') inside the short name ('myext') is chance.
             if ($needle === $shortname
                 || str_contains($needle, $shortname)
-                || str_contains($shortname, $needle)
+                || (strlen($needle) >= 4 && str_contains($shortname, $needle))
             ) {
                 return true;
             }
@@ -230,7 +232,8 @@ final class MessageTemplateTokenCheck implements Check
     {
         $found = [];
         foreach ($files as $file) {
-            $isMsgPath = preg_match('#(^|/)(msg_templates|msg|templates|xml/templates)/#', $file) === 1;
+            // Page templates under templates/ render no message tokens.
+            $isMsgPath = preg_match('#(^|/)(msg_templates|msg|xml/templates)/#', $file) === 1;
             $isMsgDir = preg_match('#(^|/)msg[^/]*/#', $file) === 1;
 
             if (str_ends_with($file, '.mgd.php')) {
@@ -269,7 +272,7 @@ final class MessageTemplateTokenCheck implements Check
     {
         $found = [];
         if (preg_match_all(
-            '/\{([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_:]+)\}/',
+            '/(?<![$\w])\{([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_:]+)\}/',
             $contents,
             $matches,
         ) > 0) {

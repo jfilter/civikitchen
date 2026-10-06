@@ -320,4 +320,71 @@ final class Api4EntityCheckTest extends CheckTestCase
         $reporter = $this->run_(new Api4EntityCheck(), $context);
         self::assertSame([], $reporter->messages('warn'), $reporter->render());
     }
+
+    public function testAGroupUseImportsEachEntity(): void
+    {
+        $this->core(['Contact' => null]);
+        $context = $this->repo([
+            'CRM/X.php' => "<?php\nuse Civi\\Api4\\{Contact, Widgett as W};\n\$x = W::get();\n",
+        ], git: true);
+        $this->assertFails(
+            $this->run_(new Api4EntityCheck(), $context),
+            'APIv4 entities referenced but not found in core or this extension: Widgett'
+        );
+    }
+
+    public function testCommaSeparatedImportsAreEachRead(): void
+    {
+        $this->core(['Contact' => null]);
+        $context = $this->repo([
+            'CRM/X.php' => "<?php\nuse Civi\\Api4\\Contact, Civi\\Api4\\Ghost;\n",
+        ], git: true);
+        $this->assertFails($this->run_(new Api4EntityCheck(), $context), 'Ghost');
+    }
+
+    /** Sub-namespaces of Civi\Api4 hold classes, not entities. */
+    public function testSubNamespaceClassesAreNotEntities(): void
+    {
+        $this->core(['Contact' => null]);
+        $context = $this->repo([
+            'CRM/X.php' => "<?php\nuse Civi\\Api4\\{Contact, Generic\\Result};\n"
+                . "use Civi\\Api4\\Utils\\CoreUtil;\n"
+                . "\$p = \\Civi\\Api4\\Provider\\ActionObjectProvider::class;\n"
+                . "function f(\\Civi\\Api4\\Result\\ReplaceResult \$r): \\Civi\\Api4\\Generic\\Result { return \$r; }\n",
+        ], git: true);
+        $this->assertPasses($this->run_(new Api4EntityCheck(), $context));
+    }
+
+    /** Event is an entity and a sub-namespace at once; the depth tells them apart. */
+    public function testAnEntityThatSharesItsNameWithASubNamespaceIsStillJudged(): void
+    {
+        $this->core(['Contact' => null]);
+        mkdir($this->core . '/Civi/Api4/Event');
+        mkdir($this->core . '/Civi/Api4/Generic');
+        $this->bundle('civi_event', 'Event', '9.1', 'component');
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(compatibility: '6.10'),
+            'CRM/X.php' => "<?php\nuse Civi\\Api4\\Generic;\n\$x = \\Civi\\Api4\\Event::get();\n"
+                . "\$y = \\Civi\\Api4\\Event\\SchemaMapBuildEvent::class;\n",
+        ], git: true);
+        $reporter = $this->run_(new Api4EntityCheck(), $context);
+        $this->assertFails($reporter, 'Event(@since 9.1)');
+        self::assertContains('every referenced APIv4 entity exists', $reporter->messages('ok'));
+    }
+
+    public function testAnImportedNameCoreDoesNotShipAtAllFails(): void
+    {
+        $this->core(['Contact' => null]);
+        $context = $this->repo(['CRM/X.php' => "<?php\nuse Civi\\Api4\\Generik;\n"], git: true);
+        $this->assertFails($this->run_(new Api4EntityCheck(), $context), 'Generik');
+    }
+
+    /** A missing own Action entity is not excused by core's Civi/Api4/Action directory. */
+    public function testAMissingEntityNamedLikeACoreSubNamespaceFails(): void
+    {
+        $this->core(['Contact' => null]);
+        mkdir($this->core . '/Civi/Api4/Action');
+        $context = $this->repo(['CRM/X.php' => "<?php\n\$x = \\Civi\\Api4\\Action::get();\n"], git: true);
+        $this->assertFails($this->run_(new Api4EntityCheck(), $context), 'Action');
+    }
 }

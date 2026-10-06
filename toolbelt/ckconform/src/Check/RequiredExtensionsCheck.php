@@ -37,7 +37,7 @@ final class RequiredExtensionsCheck implements Check
                 $reporter,
                 $required,
                 'org.civicrm.search_kit',
-                'managed/ ships SavedSearch/SearchDisplay entities',
+                'ships SearchDisplays (managed/ or an Afform <crm-search-display>)',
             );
         }
 
@@ -66,17 +66,19 @@ final class RequiredExtensionsCheck implements Check
     }
 
     /**
-     * Managed entities are declared in .mgd.php files, where the entity name is
-     * a single-quoted string. Recursive: repos nest managed/ by entity type.
+     * SearchDisplay is SearchKit's; SavedSearch is a core entity whose smart
+     * groups core evaluates. Managed entity names are single-quoted strings;
+     * recursive, since repos nest managed/ by entity type.
      */
     private function shipsSearchKitEntities(Context $context): bool
     {
         foreach ($context->trackedUnder('managed') as $file) {
-            $contents = $context->read($file);
-            if ($contents === null) {
-                continue;
+            if (str_contains($context->read($file) ?? '', "'SearchDisplay'")) {
+                return true;
             }
-            if (str_contains($contents, "'SavedSearch'") || str_contains($contents, "'SearchDisplay'")) {
+        }
+        foreach ($context->trackedUnder('ang', ['.aff.html']) as $file) {
+            if (preg_match('/<crm-search-display\b/i', $context->read($file) ?? '') === 1) {
                 return true;
             }
         }

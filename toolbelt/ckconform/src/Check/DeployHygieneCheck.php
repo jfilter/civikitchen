@@ -15,16 +15,17 @@ use CiviKitchen\Ckconform\Reporter;
  * and an external review found near-shipped secrets and PII exactly this
  * way. Three classes of file must therefore never be tracked:
  *
- *  - .env / .env.* (credentials; .env.example and .env.dist are templates)
+ *  - .env / .env.* (credentials; ENV_TEMPLATES are templates)
  *  - anything under var/ (local working data)
  *  - documents and binary data files outside docs/, tests/, examples/
  *
  * A repo that genuinely needs to ship such a path declares it in its
- * civikitchen.yaml policy: deploy_hygiene=<path>[,<path>] -- <reason>
+ * civikitchen.yaml policy: deploy_hygiene=<path>[,<path>] -- <reason>; a
+ * directory covers every file below it
  */
 final class DeployHygieneCheck implements Check
 {
-    private const ENV_TEMPLATES = ['.env.example', '.env.dist'];
+    private const ENV_TEMPLATES = ['.env.example', '.env.dist', '.env.sample', '.env.template'];
 
     private const DOCUMENT_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'pptx', 'zip', 'sqlite', 'db', 'csv'];
 
@@ -44,7 +45,7 @@ final class DeployHygieneCheck implements Check
         $allowed = $this->allowedPaths($context);
 
         foreach ($context->trackedFiles() as $file) {
-            if (in_array($file, $allowed, true)) {
+            if ($this->isAllowed($file, $allowed)) {
                 continue;
             }
 
@@ -52,7 +53,7 @@ final class DeployHygieneCheck implements Check
             if (($basename === '.env' || str_starts_with($basename, '.env.'))
                 && !in_array($basename, self::ENV_TEMPLATES, true)
             ) {
-                $reporter->fail("deploy ships {$file} — git archive deploys every tracked file; keep credentials out of git ('.env.example'/'.env.dist' are fine)");
+                $reporter->fail("deploy ships {$file} — git archive deploys every tracked file; keep credentials out of git ('.env.example', '.env.dist', '.env.sample' and '.env.template' are fine)");
                 continue;
             }
 
@@ -65,6 +66,18 @@ final class DeployHygieneCheck implements Check
                 $reporter->fail("deploy ships {$file} — the extension directory under files/ is web-reachable; move documents/data files to docs/ (excluded from deploys)");
             }
         }
+    }
+
+    /** @param list<string> $allowed declared files, or directories covering everything below them */
+    private function isAllowed(string $file, array $allowed): bool
+    {
+        foreach ($allowed as $path) {
+            if ($file === $path || str_starts_with($file, rtrim($path, '/') . '/')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isStrayDocument(string $file): bool

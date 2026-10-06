@@ -55,8 +55,10 @@ final class DeprecatedImagePathCheck implements Check
             if ($contents === null || str_contains($contents, "\0") || preg_match($pattern, $contents) !== 1) {
                 continue;
             }
+            $yaml = preg_match('/\.(?:ya?ml|neon)$/i', $file) === 1;
             foreach (explode("\n", $contents) as $index => $line) {
-                if (preg_match($pattern, $line, $match) !== 1) {
+                $code = $yaml ? (string) preg_replace('/(^|\s)#.*$/', '', $line) : $line;
+                if (preg_match($pattern, $code, $match) !== 1) {
                     continue;
                 }
                 $number = $index + 1;

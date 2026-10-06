@@ -103,4 +103,35 @@ final class CiWorkflowCheckTest extends CheckTestCase
         ]);
         $this->assertWarns($this->run_(new CiWorkflowCheck(), $context), 'no lint step');
     }
+
+    private function workflowRunning(string ...$lines): \CiviKitchen\Ckconform\Context
+    {
+        $body = "jobs:\n  test:\n    runs-on: ubuntu-24.04\n    steps:\n";
+        foreach ($lines as $line) {
+            $body .= str_starts_with($line, '#') ? "      {$line}\n" : "      - run: {$line}\n";
+        }
+
+        return $this->repo(['.github/workflows/ci.yml' => $body], git: true);
+    }
+
+    public function testCkCiCountsAsALintStep(): void
+    {
+        $this->assertOk($this->run_(new CiWorkflowCheck(), $this->workflowRunning('docker compose exec -T app ck ci')), 'CI workflow present');
+    }
+
+    public function testCkLintCountsAsALintStep(): void
+    {
+        $this->assertOk($this->run_(new CiWorkflowCheck(), $this->workflowRunning('ck lint --all')), 'CI workflow present');
+    }
+
+    public function testCkCoverageAloneIsNoLintStep(): void
+    {
+        $this->assertWarns($this->run_(new CiWorkflowCheck(), $this->workflowRunning('ck coverage tests/phpunit')), 'CI has no lint step');
+    }
+
+    public function testACommentNamingCklintIsNoLintStep(): void
+    {
+        $context = $this->workflowRunning('# TODO: switch to ckcoverage once the suite is green; cklint later', 'phpunit');
+        $this->assertWarns($this->run_(new CiWorkflowCheck(), $context), 'CI has no lint step');
+    }
 }

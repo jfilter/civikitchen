@@ -114,6 +114,29 @@ final class HeadlessBuilderAppliedCheck implements Check
                 && strcasecmp(ltrim($tokens[$k + 1]->text, '\\'), 'Civi\\Test') === 0) {
                 $aliases[] = ($tokens[$k + 2] ?? null)?->is(T_AS) && ($tokens[$k + 3] ?? null)?->is(T_STRING)
                     ? strtolower($tokens[$k + 3]->text) : 'test';
+            } elseif ($depth === 0 && $token->is(T_USE) && strcasecmp(ltrim($tokens[$k + 1]->text ?? '', '\\'), 'Civi') === 0
+                && ($tokens[$k + 2] ?? null)?->is(T_NS_SEPARATOR) && ($tokens[$k + 3] ?? null)?->text === '{') {
+                $aliases = [...$aliases, ...$this->groupAliases($tokens, $k + 4)];
+            }
+        }
+
+        return $aliases;
+    }
+
+    /**
+     * Aliases of `Test` inside `use Civi\{Test as T, Api4\Contact};`.
+     *
+     * @param list<PhpToken> $tokens
+     * @return list<string>
+     */
+    private function groupAliases(array $tokens, int $k): array
+    {
+        $aliases = [];
+        for ($n = count($tokens); $k < $n && $tokens[$k]->text !== '}'; $k++) {
+            if ($tokens[$k]->is(T_STRING) && strcasecmp($tokens[$k]->text, 'Test') === 0
+                && in_array($tokens[$k - 1]->text, ['{', ','], true)) {
+                $aliases[] = ($tokens[$k + 1] ?? null)?->is(T_AS) && ($tokens[$k + 2] ?? null)?->is(T_STRING)
+                    ? strtolower($tokens[$k + 2]->text) : 'test';
             }
         }
 

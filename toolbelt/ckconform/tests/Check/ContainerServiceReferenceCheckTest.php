@@ -111,4 +111,27 @@ final class ContainerServiceReferenceCheckTest extends CheckTestCase
         ], git: true);
         $this->assertSilent($this->run_(new ContainerServiceReferenceCheck(), $context));
     }
+
+    private function psr4Greeter(string $expression): \CiviKitchen\Ckconform\Context
+    {
+        return $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter', extra: '<classloader><psr4 prefix="Civi\\Greeter\\" path="src"/></classloader>'),
+            'src/Subscriber.php' => "<?php\nnamespace Civi\\Greeter;\nclass Subscriber {}\n",
+            'greeter.php' => $this->container($expression),
+        ], git: true);
+    }
+
+    /** core's extension loader honours <classloader><psr4>, so src/ holds Civi\Greeter\. */
+    public function testAClassUnderAPsr4ClassloaderPathIsFound(): void
+    {
+        $this->assertSilent($this->run_(new ContainerServiceReferenceCheck(), $this->psr4Greeter("new Definition('Civi\\Greeter\\Subscriber')")));
+    }
+
+    public function testAMissingClassUnderAPsr4PathFails(): void
+    {
+        $this->assertFails(
+            $this->run_(new ContainerServiceReferenceCheck(), $this->psr4Greeter("new Definition('Civi\\Greeter\\Gone')")),
+            'src/Gone.php',
+        );
+    }
 }

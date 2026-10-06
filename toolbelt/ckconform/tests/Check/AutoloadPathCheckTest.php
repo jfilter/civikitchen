@@ -95,4 +95,27 @@ final class AutoloadPathCheckTest extends CheckTestCase
         ], git: true);
         $this->assertFails($this->run_(new AutoloadPathCheck(), $context), '../shared/boot.php');
     }
+
+    public function testDirectoryPathsWithALeadingDotSlashResolve(): void
+    {
+        $context = $this->repo([
+            'composer.json' => json_encode(['autoload' => [
+                'psr-4' => ['Civi\\Myext\\' => './Civi/Myext/'],
+                'psr-0' => ['CRM_' => './'],
+                'classmap' => ['./CRM/'],
+            ]]),
+            'Civi/Myext/Service.php' => '<?php',
+            'CRM/Myext/Page.php' => '<?php',
+        ], git: true);
+        $this->assertOk($this->run_(new AutoloadPathCheck(), $context), 'composer autoload paths exist');
+    }
+
+    public function testADotSlashDirectoryWithTheWrongCaseStillFails(): void
+    {
+        $context = $this->repo([
+            'composer.json' => json_encode(['autoload' => ['psr-4' => ['Civi\\Myext\\' => './Civi/myext/']]]),
+            'Civi/Myext/Service.php' => '<?php',
+        ], git: true);
+        $this->assertFails($this->run_(new AutoloadPathCheck(), $context), 'autoload → Civi/myext');
+    }
 }

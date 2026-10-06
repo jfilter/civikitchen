@@ -122,4 +122,62 @@ final class RawSqlCheckTest extends CheckTestCase
         ]);
         $this->assertSilent($this->run_(new RawSqlCheck(), $context));
     }
+
+    public function testASinkInAnotherCaseIsStillASink(): void
+    {
+        $context = $this->repo(['CRM/Fixture/Query.php' => <<<'PHP'
+            <?php
+            function fixture_fetch($id) {
+              return crm_core_dao::executequery("SELECT * FROM t WHERE id = $id");
+            }
+            PHP,
+        ]);
+        $this->assertWarns($this->run_(new RawSqlCheck(), $context), 'interpolates variables into the SQL string');
+    }
+
+    public function testANamedQueryArgumentIsTheSqlArgument(): void
+    {
+        $context = $this->repo(['CRM/Fixture/Upgrader.php' => <<<'PHP'
+            <?php
+            class CRM_Fixture_Upgrader {
+              public function upgrade_1003(string $table): bool {
+                CRM_Core_DAO::executeQuery(params: [1 => [2, 'Integer']], query: "DELETE FROM $table WHERE id = %1");
+                return TRUE;
+              }
+            }
+            PHP,
+        ]);
+        $this->assertWarns($this->run_(new RawSqlCheck(), $context), 'interpolates variables into the SQL string');
+    }
+
+    /** Near miss: the variable sits in the params, the SQL itself is a constant. */
+    public function testNamedParamsWithAPlainQueryAreNoInterpolation(): void
+    {
+        $context = $this->repo(['CRM/Fixture/Upgrader.php' => <<<'PHP'
+            <?php
+            class CRM_Fixture_Upgrader {
+              public function upgrade_1004(int $id): bool {
+                CRM_Core_DAO::executeQuery(params: [1 => [$id, 'Integer'], 2 => ["x$id", 'String']], query: 'DELETE FROM t WHERE id = %1');
+                return TRUE;
+              }
+            }
+            PHP,
+        ]);
+        $this->assertSilent($this->run_(new RawSqlCheck(), $context));
+    }
+
+    public function testACommentInsideTheCallChangesNothing(): void
+    {
+        $context = $this->repo(['CRM/Fixture/Upgrader.php' => <<<'PHP'
+            <?php
+            class CRM_Fixture_Upgrader {
+              public function upgrade_1005(): bool {
+                CRM_Core_DAO::executeQuery(/* "$x" */ 'SELECT 1', /* , "$y" */ []);
+                return TRUE;
+              }
+            }
+            PHP,
+        ]);
+        $this->assertSilent($this->run_(new RawSqlCheck(), $context));
+    }
 }

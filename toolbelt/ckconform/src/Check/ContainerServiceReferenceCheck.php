@@ -125,7 +125,7 @@ final class ContainerServiceReferenceCheck implements Check
         string $relative,
         string $class,
     ): void {
-        $expected = ExtensionNamespace::ownClassFile($class, $namespaces);
+        $expected = ExtensionNamespace::ownClassFile($context, $class, $namespaces);
         if ($expected === null) {
             return;
         }

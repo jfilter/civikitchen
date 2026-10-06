@@ -162,4 +162,55 @@ final class Api4SelfEntityCheckTest extends CheckTestCase
         ]);
         $this->assertSilent($this->run_(new Api4SelfEntityCheck(), $context));
     }
+
+    /** @return iterable<string, array{string}> */
+    public static function notEntityLiterals(): iterable
+    {
+        yield 'angular constant' => ["angular.module('ledger').constant('LedgerSettings', {});\n"];
+        yield 'angular value' => ["angular.module('ledger').value('DefaultFilters', {});\n"];
+        yield 'angular decorator' => ["app.decorator('LedgerDecorator', fn);\n"];
+        yield 'web storage key' => ["localStorage.getItem('LedgerColumnState');\n"];
+        yield 'DOM event constructor' => ["window.dispatchEvent(new CustomEvent('FormSaved', {}));\n"];
+    }
+
+    /** @dataProvider notEntityLiterals */
+    public function testPascalCaseLiteralsOutsideApiCallsAreNotEntities(string $line): void
+    {
+        $context = $this->ext(['ang/ledger.js' => $line]);
+        $this->assertPasses($this->run_(new Api4SelfEntityCheck(), $context));
+    }
+
+    public function testADeclaredDependencyEntityPasses(): void
+    {
+        $context = $this->ext([
+            '__policy_fixture' => "known_api4_entities=OtherextRecord -- supplied by required otherext\n",
+            'info.xml' => $this->infoXml(extra: '<requires><ext>otherext</ext></requires>'),
+            'ang/ledger.js' => "CRM.api4('OtherextRecord', 'get', {});\n",
+        ]);
+        $this->assertPasses($this->run_(new Api4SelfEntityCheck(), $context));
+    }
+
+    public function testAnEntityOfARequiredExtensionOnDiskPasses(): void
+    {
+        $key = 'otherext' . bin2hex(random_bytes(4));
+        $context = $this->ext([
+            'info.xml' => $this->infoXml(extra: "<requires><ext>{$key}</ext></requires>"),
+            'ang/ledger.js' => "CRM.api4('OtherextRecord', 'get', {});\n",
+        ]);
+        $sibling = dirname($context->root) . '/' . $key;
+        mkdir($sibling . '/Civi/Api4', 0777, true);
+        try {
+            file_put_contents($sibling . '/info.xml', $this->infoXml(key: $key));
+            file_put_contents($sibling . '/Civi/Api4/OtherextRecord.php', "<?php\n");
+            $this->assertPasses($this->run_(new Api4SelfEntityCheck(), $context));
+        } finally {
+            exec('rm -rf ' . escapeshellarg($sibling));
+        }
+    }
+
+    public function testAnUnknownEntityInAnApiCallStillFails(): void
+    {
+        $context = $this->ext(['ang/ledger.js' => "CRM.api4('LedgerAdapter', 'get', {});\n"]);
+        $this->assertFails($this->run_(new Api4SelfEntityCheck(), $context), 'LedgerAdapter');
+    }
 }

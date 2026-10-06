@@ -15,6 +15,14 @@ final class Reporter
 
     private string $rule = 'ckconform';
 
+    private ?Context $context = null;
+
+    /** Lets inline ckconform-ignore markers drop findings tied to a source line. */
+    public function suppressWith(Context $context): void
+    {
+        $this->context = $context;
+    }
+
     public function setRule(string $rule): void
     {
         $this->rule = $rule;
@@ -167,10 +175,27 @@ final class Reporter
     private function add(string $level, string $message, ?string $file = null, ?int $line = null): void
     {
         $result = ['level' => $level, 'message' => $message, 'rule' => $this->rule];
+        if ($file !== null && $line !== null && $this->suppressed($file, $line)) {
+            return;
+        }
         if ($file !== null && $line !== null) {
             $result['location'] = ['file' => $file, 'line' => $line];
         }
         $this->results[] = $result;
+    }
+
+    private function suppressed(string $file, int $line): bool
+    {
+        // The hygiene check reports the markers themselves; they cannot ignore themselves away.
+        $contents = $this->rule === 'suppression-hygiene' ? null : $this->context?->read($file);
+        if ($contents === null || !str_contains($contents, 'ckconform-ignore')) {
+            return false;
+        }
+        $suppressions = preg_match('/\.(?:[cm]?[jt]sx?)$/', $file) === 1
+            ? Suppressions::ofLineComments($contents)
+            : Suppressions::of($contents);
+
+        return $suppressions->suppressed($this->rule, $line);
     }
 
     private function githubEscapeData(string $value): string

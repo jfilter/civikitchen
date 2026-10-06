@@ -66,8 +66,8 @@ final class PlaywrightDiagnosticsCheck implements Check
             $topLevelCode = $this->topLevelObjectCode($code);
             $useCode = $this->topLevelPropertyObject($code, 'use');
             $suppressions = Suppressions::ofLineComments($body);
-            // 'on' records strictly more than retain-on-failure; the *-retry
-            // modes leave the first failing run traceless and don't count.
+            // 'on' and the retain-on-* modes keep the first failing run; the
+            // *-retry modes leave it traceless and don't count.
             if (!$this->traceRecordsOnFailure($this->topLevelPropertyValue($useCode, 'trace'))
                 && !$suppressions->suppressed($this->name(), 1)
             ) {
@@ -264,8 +264,9 @@ final class PlaywrightDiagnosticsCheck implements Check
     }
 
     /**
-     * A job body split into its step blocks — each from a `- ` list item to the
-     * next at the same indent.
+     * A job body split into its step blocks — each from a `- ` list item under
+     * `steps:` to the next at the same indent; lists under `services:` or
+     * `strategy:` are no steps.
      *
      * @return list<string>
      */
@@ -274,7 +275,17 @@ final class PlaywrightDiagnosticsCheck implements Check
         $steps = [];
         $current = null;
         $indent = null;
+        $stepsIndent = null;
         foreach (explode("\n", $jobText) as $line) {
+            $lineIndent = strlen($line) - strlen(ltrim($line));
+            if (preg_match('/^(\s*)steps:\s*$/', $line) === 1) {
+                $stepsIndent = $lineIndent;
+                continue;
+            }
+            if ($stepsIndent === null || (trim($line) !== '' && $lineIndent <= $stepsIndent && !str_starts_with(ltrim($line), '- '))) {
+                $stepsIndent = null;
+                continue;
+            }
             if (preg_match('/^(\s+)-(?:\s|$)/', $line, $match) === 1
                 && ($indent === null || strlen($match[1]) === $indent)) {
                 if ($current !== null) {
@@ -321,11 +332,13 @@ final class PlaywrightDiagnosticsCheck implements Check
         $structure = $this->javascriptStructure($body);
         $pattern = '/(?:\bexport\s+default\b|\bmodule\.exports\s*=)(?:\s+defineConfig\s*\()?\s*\{/m';
         if (preg_match($pattern, $structure, $match, PREG_OFFSET_CAPTURE) !== 1) {
-            if (preg_match('/\bexport\s+default\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*;/m', $structure, $export) !== 1) {
+            $exported = '/(?:\bexport\s+default\s+|\bmodule\.exports\s*=\s*)([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:;|$)/m';
+            if (preg_match($exported, $structure, $export) !== 1) {
                 return '';
             }
             $name = preg_quote($export[1], '/');
-            if (preg_match('/\b(?:const|let|var)\s+' . $name . '\s*=\s*(?:defineConfig\s*\()?\s*\{/m', $structure, $match, PREG_OFFSET_CAPTURE) !== 1) {
+            $declared = '/\b(?:const|let|var)\s+' . $name . '\s*(?::\s*[A-Za-z_$][\w$.<>, ]*)?=\s*(?:defineConfig\s*\()?\s*\{/m';
+            if (preg_match($declared, $structure, $match, PREG_OFFSET_CAPTURE) !== 1) {
                 return '';
             }
         }
@@ -456,7 +469,7 @@ final class PlaywrightDiagnosticsCheck implements Check
 
     private function traceRecordsOnFailure(string $value): bool
     {
-        $accepted = '/^[\'\"](?:retain-on-failure|on)[\'\"]$/';
+        $accepted = '/^[\'\"](?:retain-on-failure|retain-on-failure-and-retries|retain-on-first-failure|on)[\'\"]$/';
         $value = trim($value);
         if (preg_match($accepted, $value) === 1) return true;
         if (str_starts_with($value, '{')) {
