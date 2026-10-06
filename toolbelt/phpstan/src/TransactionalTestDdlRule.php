@@ -202,7 +202,7 @@ final class TransactionalTestDdlRule implements Rule
             return $write;
         }
         if (strcasecmp(str_replace('_', '', $entity), 'CustomGroup') === 0
-            && in_array(strtolower($action), ['update', 'setvalue'], true) && self::namesIsMultiple($expr)) {
+            && in_array(strtolower($action), ['update', 'setvalue'], true) && self::apiSetsIsMultiple($expr, $function, $action)) {
             return [self::error(
                 sprintf("%s('CustomGroup', '%s') setting is_multiple in a transactional test", $function, $action),
                 'ck.test.customFieldInTransaction',
@@ -246,7 +246,7 @@ final class TransactionalTestDdlRule implements Rule
     {
         $method = $expr->name instanceof Node\Identifier ? $expr->name->toLowerString() : '';
 
-        if (in_array($method, ['addvalue', 'setvalues'], true) && self::namesIsMultiple($expr)) {
+        if (in_array($method, ['addvalue', 'setvalues'], true) && self::fluentSetsIsMultiple($expr, $method)) {
             $root = $expr->var;
             while ($root instanceof Node\Expr\MethodCall) {
                 $root = $root->var;
@@ -295,17 +295,52 @@ final class TransactionalTestDdlRule implements Rule
         return [];
     }
 
-    /** The class implements TransactionalInterface, directly or inherited. */
     /** Flipping is_multiple swaps the custom-value table's unique index for a plain one. */
-    private static function namesIsMultiple(Node\Expr\CallLike $call): bool
+    private static function apiSetsIsMultiple(Node\Expr\FuncCall $call, string $function, string $action): bool
     {
-        return (new NodeFinder())->findFirst(
-            $call->getArgs(),
-            static fn (Node $node): bool => $node instanceof Node\Scalar\String_ && $node->value === 'is_multiple',
-        ) !== null;
+        $params = CallArgs::value($call, 2, 'params');
+        $version = self::item($params, 'version');
+        if ($function === 'civicrm_api4' || ($version instanceof Node\Scalar\Int_ && $version->value === 4)) {
+            return self::item(self::item($params, 'values'), 'is_multiple') !== null;
+        }
+        if (strtolower($action) === 'setvalue') {
+            $field = self::item($params, 'field');
+
+            return $field !== null && self::literal($field) === 'is_multiple';
+        }
+
+        return self::item($params, 'is_multiple') !== null;
     }
 
-        private static function isTransactional(ClassReflection $class): bool
+    /** `addValue('is_multiple', …)` or `setValues(['is_multiple' => …])`. */
+    private static function fluentSetsIsMultiple(Node\Expr\MethodCall $call, string $method): bool
+    {
+        if ($method === 'addvalue') {
+            $field = CallArgs::value($call, 0, 'fieldName');
+
+            return $field !== null && self::literal($field) === 'is_multiple';
+        }
+
+        return self::item(CallArgs::value($call, 0, 'values'), 'is_multiple') !== null;
+    }
+
+    /** The value a literal array holds under a literal key. */
+    private static function item(?Node\Expr $array, string $key): ?Node\Expr
+    {
+        if (!$array instanceof Node\Expr\Array_) {
+            return null;
+        }
+        foreach ($array->items as $item) {
+            if ($item->key !== null && self::literal($item->key) === $key) {
+                return $item->value;
+            }
+        }
+
+        return null;
+    }
+
+    /** The class implements TransactionalInterface, directly or inherited. */
+    private static function isTransactional(ClassReflection $class): bool
     {
         foreach ($class->getNativeReflection()->getInterfaceNames() as $interface) {
             if ($interface === self::TRANSACTIONAL_INTERFACE) {

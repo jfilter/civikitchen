@@ -49,6 +49,15 @@ class DummyAction extends AbstractAction
         return $this;
     }
 
+    /**
+     * @param  list<array<int, mixed>> $join
+     * @return $this
+     */
+    public function setJoin(array $join): self
+    {
+        return $this;
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function execute(): array
     {

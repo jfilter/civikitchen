@@ -151,12 +151,50 @@ final class Api4Fluent
      * Aliases the builder bound with an explicit `->addJoin('Entity AS x')`,
      * which shadow an implicit join of the same name.
      *
+     * Null when a join's entity is not a known string.
+     *
      * @param  list<MethodCall> $links
-     * @return list<string>
+     * @return ?list<string>
      */
-    public static function joinAliases(array $links, Scope $scope): array
+    public static function joinAliases(array $links, Scope $scope): ?array
     {
-        return self::linkStrings($links, $scope, ['addjoin', 'setjoin'], self::joinAliasOf(...)) ?? [];
+        $aliases = [];
+        foreach ($links as $link) {
+            $method = $link->name instanceof Identifier ? $link->name->toLowerString() : '';
+            $entities = match ($method) {
+                'addjoin' => [CallArgs::value($link, 0, 'entity')],
+                'setjoin' => self::joinEntities(CallArgs::value($link, 0, 'join')),
+                default => [],
+            };
+            foreach ($entities as $entity) {
+                $strings = $entity === null ? [] : $scope->getType($entity)->getConstantStrings();
+                if ($strings === []) {
+                    return null;
+                }
+                foreach ($strings as $string) {
+                    $aliases[] = self::joinAliasOf($string->getValue());
+                }
+            }
+        }
+
+        return array_values(array_filter($aliases, is_string(...)));
+    }
+
+    /**
+     * The entity of each join in a literal `setJoin([[entity, …], …])`.
+     *
+     * @return list<?Expr>
+     */
+    private static function joinEntities(?Expr $joins): array
+    {
+        if (!$joins instanceof Expr\Array_) {
+            return [null];
+        }
+
+        return array_map(
+            static fn (Node\ArrayItem $join): ?Expr => $join->value instanceof Expr\Array_ ? ($join->value->items[0] ?? null)?->value : null,
+            $joins->items,
+        );
     }
 
     /**

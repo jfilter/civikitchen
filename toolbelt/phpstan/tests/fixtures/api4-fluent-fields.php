@@ -165,4 +165,21 @@ final class AddressExport
         Contact::get(false)->setSelect(array_merge(['contact_type'], $extra))->addOrderBy('merged_total')->execute();
         Contact::get(false)->addSelect(...$extra)->addOrderBy('spread_total')->execute();
     }
+
+    /** Only a join's entity binds a name; its conditions may be anything. */
+    public function joinsWithRuntimeConditions(int $typeId, string $entity): void
+    {
+        Contact::get(false)
+            ->addJoin('Phone AS address_primary', 'LEFT', ['address_primary.phone_type_id', '=', $typeId])
+            ->addSelect('address_primary.phone')
+            ->execute();
+        Contact::get(false)
+            ->setJoin([['Phone AS email_primary', 'LEFT', ['email_primary.phone_type_id', '=', $typeId]]])
+            ->addSelect('email_primary.phone')
+            ->execute();
+        Contact::get(false)
+            ->addJoin($entity, 'LEFT')
+            ->addSelect('address_primary.phone')
+            ->execute();
+    }
 }

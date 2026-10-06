@@ -81,10 +81,10 @@ final class Api4FluentFieldRule implements Rule
 
     /**
      * @param  ?list<string> $aliases
-     * @param  list<string> $shadowed
+     * @param  ?list<string> $shadowed
      * @return list<\PHPStan\Rules\IdentifierRuleError>
      */
-    private function checkLink(string $entity, MethodCall $link, Scope $scope, ?array $aliases, array $shadowed, bool $escapes): array
+    private function checkLink(string $entity, MethodCall $link, Scope $scope, ?array $aliases, ?array $shadowed, bool $escapes): array
     {
         if (!$link->name instanceof Node\Identifier) {
             return [];
@@ -94,7 +94,8 @@ final class Api4FluentFieldRule implements Rule
         if (($escapes || $aliases === null) && in_array($method, self::ALIAS_CLAUSES, true)) {
             return [];
         }
-        $checkJoins = !$escapes && !in_array($method, ['addvalue', 'setvalues'], true);
+        // A join whose entity is not known may rebind any implicit name.
+        $checkJoins = !$escapes && $shadowed !== null && !in_array($method, ['addvalue', 'setvalues'], true);
 
         $errors = [];
         $clause = $link->name->toString() . '()';

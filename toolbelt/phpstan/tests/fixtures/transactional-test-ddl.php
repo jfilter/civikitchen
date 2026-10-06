@@ -143,5 +143,22 @@ final class MultipleFlipTest extends TestCase implements TransactionalInterface
         \Civi\Api4\CustomGroup::update(false)->addValue('is_multiple', true)->addWhere('id', '=', 1)->execute();
         \civicrm_api4('CustomGroup', 'update', ['values' => ['is_multiple' => true], 'where' => [['id', '=', 1]]]);
         \civicrm_api3('CustomGroup', 'setvalue', ['id' => 1, 'field' => 'is_multiple', 'value' => 1]);
+        \Civi\Api4\CustomGroup::update(false)->setValues(['is_multiple' => true])->addWhere('id', '=', 1)->execute();
+        \civicrm_api3('CustomGroup', 'update', ['id' => 1, 'is_multiple' => 1]);
+        \civicrm_api('CustomGroup', 'update', ['version' => 4, 'values' => ['is_multiple' => 1]]);
+    }
+}
+
+/** is_multiple as a filter or as a value of another field changes no schema. */
+final class MultipleFilterTest extends TestCase implements TransactionalInterface
+{
+    public function testFilter(): void
+    {
+        \Civi\Api4\CustomGroup::update(false)->addValue('title', 'is_multiple')->addWhere('is_multiple', '=', true)->execute();
+        \Civi\Api4\CustomGroup::update(false)->setValues(['title' => 'is_multiple'])->execute();
+        \civicrm_api4('CustomGroup', 'update', ['values' => ['title' => 'Renamed'], 'where' => [['is_multiple', '=', 1]]]);
+        \civicrm_api3('CustomGroup', 'setvalue', ['id' => 1, 'field' => 'title', 'value' => 'is_multiple']);
+        \civicrm_api3('CustomGroup', 'update', ['id' => 1, 'title' => 'is_multiple']);
+        \civicrm_api('CustomGroup', 'update', ['version' => 4, 'values' => ['title' => 'x'], 'where' => [['is_multiple', '=', 1]]]);
     }
 }

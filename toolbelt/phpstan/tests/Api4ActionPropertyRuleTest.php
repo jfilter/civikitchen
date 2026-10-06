@@ -104,6 +104,38 @@ final class Api4ActionPropertyRuleTest extends RuleTestCase
                     . 'parameter), or give it a default.',
                     134,
                 ],
+                [
+                    'APIv4 action parameter $readInExit is typed string with no default — a caller that omits it gets '
+                    . '"must not be accessed before initialization" instead of an API validation error, because '
+                    . 'ValidateFieldsSubscriber reads every parameter through its getter before it checks @required.'
+                    . " Declare it untyped with an @var docblock and @required (core's own form for a mandatory "
+                    . 'parameter), or give it a default.',
+                    176,
+                ],
+                [
+                    'APIv4 action parameter $emptyWrongBranch is typed ?string with no default — a caller that omits it gets '
+                    . '"must not be accessed before initialization" instead of an API validation error, because '
+                    . 'ValidateFieldsSubscriber reads every parameter through its getter before it checks @required.'
+                    . " Declare it untyped with an @var docblock and @required (core's own form for a mandatory "
+                    . 'parameter), or give it a default.',
+                    178,
+                ],
+                [
+                    'APIv4 action parameter $elseRead is typed ?string with no default — a caller that omits it gets '
+                    . '"must not be accessed before initialization" instead of an API validation error, because '
+                    . 'ValidateFieldsSubscriber reads every parameter through its getter before it checks @required.'
+                    . " Declare it untyped with an @var docblock and @required (core's own form for a mandatory "
+                    . 'parameter), or give it a default.',
+                    237,
+                ],
+                [
+                    'APIv4 action parameter $trimmed is typed ?string with no default — a caller that omits it gets '
+                    . '"must not be accessed before initialization" instead of an API validation error, because '
+                    . 'ValidateFieldsSubscriber reads every parameter through its getter before it checks @required.'
+                    . " Declare it untyped with an @var docblock and @required (core's own form for a mandatory "
+                    . 'parameter), or give it a default.',
+                    239,
+                ],
             ],
         );
     }

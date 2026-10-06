@@ -140,10 +140,11 @@ final class Api4ArrayToOopRector extends AbstractApiCallAssistRector {
       $cells[] = $cell->value;
     }
     if ($cells !== [] && $cells[0] instanceof String_ && in_array(strtoupper($cells[0]->value), ['AND', 'OR', 'NOT'], TRUE)) {
-      // addClause() wraps a condition whose first item is no array, so only a
+      // addClause() wraps a condition whose item [0] is no array, so only a
       // literal list of clauses keeps its meaning.
       $conditions = $cells[1] ?? NULL;
-      $isClauseList = $conditions instanceof Array_ && ($conditions->items[0] ?? NULL)?->value instanceof Array_;
+      $first = $conditions instanceof Array_ ? $conditions->items[0] ?? NULL : NULL;
+      $isClauseList = $first !== NULL && $first->key === NULL && $first->value instanceof Array_;
       return count($cells) === 2 && in_array($cells[0]->value, ['AND', 'OR', 'NOT'], TRUE) && $isClauseList
         ? ['addClause', [new Arg($cells[0]), new Arg($cells[1])]]
         : NULL;

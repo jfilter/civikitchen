@@ -162,4 +162,122 @@ class GuardedGetterAction extends AbstractAction
 
         return $this->halfLazy;
     }
+
+    protected ?string $emptyTernary;
+
+    protected ?string $notEmpty;
+
+    protected array $emptyLazy;
+
+    protected string $throwing;
+
+    protected string $returning;
+
+    protected string $readInExit;
+
+    protected ?string $emptyWrongBranch;
+
+    public function getEmptyTernary(): ?string
+    {
+        return empty($this->emptyTernary) ? null : $this->emptyTernary;
+    }
+
+    public function getNotEmpty(): ?string
+    {
+        return !empty($this->notEmpty) ? $this->notEmpty : null;
+    }
+
+    public function getEmptyLazy(): array
+    {
+        if (empty($this->emptyLazy)) {
+            $this->emptyLazy = [];
+        }
+
+        return $this->emptyLazy;
+    }
+
+    public function getThrowing(): string
+    {
+        if (!isset($this->throwing)) {
+            throw new \RuntimeException('throwing is not set');
+        }
+
+        return $this->throwing;
+    }
+
+    public function getReturning(): string
+    {
+        if (empty($this->returning)) {
+            return '';
+        }
+
+        return $this->returning;
+    }
+
+    public function getReadInExit(): string
+    {
+        if (!isset($this->readInExit)) {
+            return $this->readInExit;
+        }
+
+        return '';
+    }
+
+    public function getEmptyWrongBranch(): ?string
+    {
+        return empty($this->emptyWrongBranch) ? $this->emptyWrongBranch : null;
+    }
+
+    protected ?string $ifIsset;
+
+    protected ?string $ifNotEmpty;
+
+    protected string $assignThenRead;
+
+    protected ?string $elseRead;
+
+    protected ?string $trimmed;
+
+    public function getIfIsset(): ?string
+    {
+        if (isset($this->ifIsset)) {
+            return $this->ifIsset;
+        }
+
+        return null;
+    }
+
+    public function getIfNotEmpty(): ?string
+    {
+        if (!empty($this->ifNotEmpty)) {
+            return $this->ifNotEmpty;
+        }
+
+        return null;
+    }
+
+    public function getAssignThenRead(): string
+    {
+        if (!isset($this->assignThenRead)) {
+            $this->assignThenRead = 'x';
+
+            return $this->assignThenRead;
+        }
+
+        return $this->assignThenRead;
+    }
+
+    public function getElseRead(): ?string
+    {
+        if (isset($this->elseRead)) {
+            return null;
+        } else {
+            return $this->elseRead;
+        }
+    }
+
+    public function getTrimmed(): ?string
+    {
+        return !empty(trim($this->trimmed)) ? 'y' : null;
+    }
 }

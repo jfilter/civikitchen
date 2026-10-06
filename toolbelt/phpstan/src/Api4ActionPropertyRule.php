@@ -173,8 +173,8 @@ final class Api4ActionPropertyRule implements Rule
     }
 
     /**
-     * A declared `get<Name>()` that reads the property only inside `??`, isset()
-     * or the then-branch of an isset() ternary — reads an uninitialized one survives.
+     * A declared `get<Name>()` that reads the property only inside `??`, isset(), empty()
+     * or the branch of a ternary or if where it is set — reads an uninitialized one survives.
      */
     private static function hasGuardedGetter(Node\Stmt\ClassLike $class, string $name): bool
     {
@@ -188,44 +188,102 @@ final class Api4ActionPropertyRule implements Rule
             && $node->name instanceof Node\Identifier && $node->name->toString() === $name;
         $safe = [];
         foreach ($finder->find($stmts, static fn (Node $node): bool => $node instanceof Node\Expr\Isset_
-            || $node instanceof Node\Expr\BinaryOp\Coalesce || $node instanceof Node\Expr\AssignOp\Coalesce
-            || $node instanceof Node\Expr\Assign || $node instanceof Node\Expr\Ternary) as $guard) {
-            $covered = match (true) {
+            || $node instanceof Node\Expr\Empty_ || $node instanceof Node\Expr\BinaryOp\Coalesce || $node instanceof Node\Expr\AssignOp\Coalesce
+            || $node instanceof Node\Expr\Assign || $node instanceof Node\Expr\Ternary || $node instanceof Node\Stmt\If_) as $guard) {
+            // These read their operand without the uninitialized error, but not its offsets or call arguments.
+            $operands = match (true) {
                 $guard instanceof Node\Expr\Isset_ => $guard->vars,
+                $guard instanceof Node\Expr\Empty_ => [$guard->expr],
                 $guard instanceof Node\Expr\BinaryOp\Coalesce => [$guard->left],
                 // `??=` reads like `??`, and an assignment target is a write.
                 $guard instanceof Node\Expr\AssignOp\Coalesce, $guard instanceof Node\Expr\Assign => [$guard->var],
-                self::issetOf($guard->cond, $isRead) && $guard->if !== null => [$guard->if],
-                $guard->cond instanceof Node\Expr\BooleanNot && self::issetOf($guard->cond->expr, $isRead) => [$guard->else],
+                default => [],
+            };
+            foreach (array_merge(...array_map(self::fetchChain(...), $operands)) as $link) {
+                if ($isRead($link)) {
+                    $safe[spl_object_id($link)] = true;
+                }
+            }
+            $presence = $guard instanceof Node\Expr\Ternary || $guard instanceof Node\Stmt\If_ ? self::presence($guard->cond, $isRead) : null;
+            $covered = match (true) {
+                $guard instanceof Node\Expr\Ternary && $presence === true && $guard->if !== null => [$guard->if],
+                $guard instanceof Node\Expr\Ternary && $presence === false => [$guard->else],
+                $guard instanceof Node\Stmt\If_ && $presence === true => $guard->stmts,
+                $guard instanceof Node\Stmt\If_ && $presence === false && $guard->elseifs === [] => $guard->else->stmts ?? [],
                 default => [],
             };
             foreach ($finder->find($covered, $isRead) as $read) {
                 $safe[spl_object_id($read)] = true;
             }
         }
-        // Once a top-level statement has initialised the property, later reads are safe.
-        $guarded = [];
-        foreach ($stmts as $stmt) {
-            $guarded[] = $stmt;
-            if (self::initialises($stmt, $isRead)) {
-                break;
-            }
-        }
         $reads = $finder->find($stmts, $isRead);
-        $unsafe = array_diff_key(array_flip(array_map(spl_object_id(...), $finder->find($guarded, $isRead))), $safe);
+        $unsafe = array_diff_key(array_flip(array_map(spl_object_id(...), $finder->find(self::untilInitialised($stmts, $isRead), $isRead))), $safe);
 
         return $reads !== [] && $unsafe === [];
     }
 
-    /** @param callable(Node): bool $isRead */
-    private static function issetOf(Node\Expr $expr, callable $isRead): bool
+    /**
+     * The expression and the bases it is fetched from: `$this->x` in `$this->x['k']->y`, not the offset.
+     *
+     * @return list<Node\Expr>
+     */
+    private static function fetchChain(Node\Expr $expr): array
     {
-        return $expr instanceof Node\Expr\Isset_ && array_filter($expr->vars, $isRead) !== [];
+        $chain = [$expr];
+        while ($expr instanceof Node\Expr\ArrayDimFetch || $expr instanceof Node\Expr\PropertyFetch || $expr instanceof Node\Expr\NullsafePropertyFetch) {
+            $expr = $expr->var;
+            $chain[] = $expr;
+        }
+
+        return $chain;
     }
 
     /**
-     * `$this->x ??= …;`, `$this->x = …;`, or `if (!isset($this->x)) { $this->x = …; }`
-     * without else branches.
+     * The statements up to the one that initialises the property — inside an initialising
+     * if, its condition and its body up to the assignment — after which reads are safe.
+     *
+     * @param  array<Node\Stmt>        $stmts
+     * @param  callable(Node): bool     $isRead
+     * @return list<Node>
+     */
+    private static function untilInitialised(array $stmts, callable $isRead): array
+    {
+        $nodes = [];
+        foreach ($stmts as $stmt) {
+            if (!self::initialises($stmt, $isRead)) {
+                $nodes[] = $stmt;
+                continue;
+            }
+            if ($stmt instanceof Node\Stmt\If_) {
+                return [...$nodes, $stmt->cond, ...self::untilInitialised($stmt->stmts, $isRead)];
+            }
+
+            return [...$nodes, $stmt];
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * TRUE for `isset($this->x)` and `!empty($this->x)`, FALSE for their negations, else NULL.
+     *
+     * @param callable(Node): bool $isRead
+     */
+    private static function presence(Node\Expr $expr, callable $isRead): ?bool
+    {
+        $negated = $expr instanceof Node\Expr\BooleanNot;
+        $inner = $negated ? $expr->expr : $expr;
+
+        return match (true) {
+            $inner instanceof Node\Expr\Isset_ && array_filter($inner->vars, $isRead) !== [] => !$negated,
+            $inner instanceof Node\Expr\Empty_ && $isRead($inner->expr) => $negated,
+            default => null,
+        };
+    }
+
+    /**
+     * `$this->x ??= …;`, `$this->x = …;`, or `if (!isset($this->x)) { … }` without else
+     * branches whose body assigns the property or ends in return or throw.
      *
      * @param callable(Node): bool $isRead
      */
@@ -236,9 +294,14 @@ final class Api4ActionPropertyRule implements Rule
                 && $isRead($stmt->expr->var);
         }
 
-        return $stmt instanceof Node\Stmt\If_ && $stmt->else === null && $stmt->elseifs === []
-            && $stmt->cond instanceof Node\Expr\BooleanNot && self::issetOf($stmt->cond->expr, $isRead)
-            && array_filter($stmt->stmts, static fn (Node\Stmt $inner): bool => self::initialises($inner, $isRead)) !== [];
+        if (!$stmt instanceof Node\Stmt\If_ || $stmt->else !== null || $stmt->elseifs !== [] || self::presence($stmt->cond, $isRead) !== false) {
+            return false;
+        }
+        $last = end($stmt->stmts);
+
+        return $last instanceof Node\Stmt\Return_
+            || ($last instanceof Node\Stmt\Expression && $last->expr instanceof Node\Expr\Throw_)
+            || array_filter($stmt->stmts, static fn (Node\Stmt $inner): bool => self::initialises($inner, $isRead)) !== [];
     }
 
     /** null, '', [] and FALSE, which ValidateFieldsSubscriber treats as missing. */

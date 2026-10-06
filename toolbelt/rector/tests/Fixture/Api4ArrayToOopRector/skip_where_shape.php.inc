@@ -7,3 +7,4 @@ civicrm_api4('Activity', 'update', ['where' => [['modified_date', '<', 'created_
 civicrm_api4('Contact', 'get', ['where' => [['modified_date', '<', 'created_date', TRUE]]]);
 civicrm_api4('Contact', 'get', ['where' => [['OR', ['id', '=', 1]]]]);
 civicrm_api4('Contact', 'get', ['where' => [['OR', $clauses]]]);
+civicrm_api4('Contact', 'get', ['where' => [['OR', ['a' => ['id', '=', 1], 'b' => ['id', '=', 2]]]]]);
