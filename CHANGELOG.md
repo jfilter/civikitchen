@@ -52,9 +52,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
   rewriting for 8.1.
 - `ckdeps`' bundled config ignores the PEAR-era classes core hands to an
   extension as a parent class, return value or hook argument
-  (`HTML_QuickForm*`, `HTML_Common`, `PEAR*`, `DB*`, `Mail*`, `Net_SMTP`,
-  `Net_Socket`, `Log*`, `Pager*`, `ezcMail*`, `ezcBase*`, `TCPDF*`,
-  `HTMLPurifier*`) and Smarty 5's `Smarty\`.
+  (`HTML_QuickForm`, `HTML_Common`, `PEAR`, `DB`, `DB_DataObject`, `Mail`,
+  `Mail_mime`, `Net_SMTP`, `Net_Socket`, `Log`, `Pager`, `ezcMail`,
+  `ezcBase`, `TCPDF`, `HTMLPurifier` and their core-shipped subclasses) and
+  Smarty 5's `Smarty\`; the PEAR names match in any letter case, as PHP
+  resolves them. Other PEAR packages under the same prefix, such as
+  `HTML_QuickForm2`, `Mail_Queue` or `DB_Table`, stay reportable.
 - `CiviKitchen.I18n.UseExtensionTs` flags `TS()`/`Ts()` and a `'ts'` callback
   passed to `array_map()`, `call_user_func()`, `usort()` and friends, and no
   longer flags namespaced functions named `ts`.

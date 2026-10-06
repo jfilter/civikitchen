@@ -27,7 +27,9 @@ $configuration = (new Configuration())
     '~^(CRM_|Civi(?:\\\\|$)|CiviCRM|CiviMix\\\\|GuzzleHttp\\\\|Psr\\\\'
     . '|Symfony\\\\Component\\\\(?:Config|DependencyInjection|EventDispatcher|Filesystem|Finder|Process|VarDumper)\\\\'
     . '|Symfony\\\\Contracts\\\\'
-    . '|HTML_(?:Common$|QuickForm)|PEAR(?:_|$)|DB(?:_|$)|Mail(?:_|$)|Net_(?:SMTP|Socket)$|Log(?:_|$)'
+    . '|(?i:HTML_(?:Common|QuickForm)(?:_|$)|PEAR(?:_(?:Error|ErrorStack|Exception))?$'
+    . '|DB(?:_(?:Error|common|result|row|storage|mysqli?|DataObject(?:_(?:Cast|Error|Generator|Links))?))?$'
+    . '|Mail(?:_(?:RFC822|mail|mime|mimeDecode|mimePart|mock|null|sendmail|smtp|smtpmx))?$)|Net_(?:SMTP|Socket)$|Log(?:_|$)'
     . '|Pager(?:_|$)|ezc(?:Base|Mail)|TCPDF|HTMLPurifier(?:_|$)|Smarty\\\\)~',
   )
   ->ignoreUnknownFunctionsRegex('~^(civicrm_|civi|CiviMix\\\\)~')
