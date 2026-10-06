@@ -39,6 +39,12 @@ final class Api4FluentFieldRuleTest extends RuleTestCase
                 ['APIv4 field Address.no_such_field does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — address_primary.no_such_field in addSelect()', 47],
                 ['APIv4 field Email.nope does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — email_primary.nope in addWhere()', 47],
                 ['APIv4 field Contact.street_address does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addSelect()', 83],
+                ['APIv4 field Contact.srot_name does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addOrderBy()', 99],
+                ['APIv4 field Contact.frist_name does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addWhere()', 107],
+                ['APIv4 field Contact.frist_name does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addWhere()', 114],
+                ['APIv4 field Activity.subjcet does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addSelect()', 116],
+                ['APIv4 field Contact.frist_name does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addValue()', 118],
+                ['APIv4 field Group.tags does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — addSelect()', 146],
             ],
         );
     }

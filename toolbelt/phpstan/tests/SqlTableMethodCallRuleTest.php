@@ -23,6 +23,8 @@ final class SqlTableMethodCallRuleTest extends RuleTestCase
             [
                 ["SQL table civicrm_emails does not exist in CiviCRM $version — ->join()", 41],
                 ["SQL table civicrm_widget_rule does not exist in CiviCRM $version — ->query()", 44],
+                ["SQL table civicrm_widget_named does not exist in CiviCRM $version — ->query()", 66],
+                ["SQL table civicrm_emails_named does not exist in CiviCRM $version — ->join()", 68],
             ],
         );
     }

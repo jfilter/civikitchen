@@ -28,6 +28,18 @@ final class SqlTableStaticCallRuleTest extends RuleTestCase
                 ["SQL table civicrm_contakt does not exist in CiviCRM $version — CRM_Core_DAO::singleValueQuery()", 13],
                 ["SQL table civicrm_emails does not exist in CiviCRM $version — CRM_Core_DAO::executeUnbufferedQuery()", 14],
                 ["SQL table civicrm_gadget does not exist in CiviCRM $version — CRM_Utils_SQL_Select::from()", 17],
+                ["SQL table civicrm_widget_named does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 62],
+                ["SQL table civicrm_widget_cased does not exist in CiviCRM $version — crm_core_dao::executeQuery()", 63],
+                ["SQL table civicrm_gadget_cased does not exist in CiviCRM $version — CRM_Utils_SQL_Select::from()", 64],
+                ["SQL table civicrm_myext_thing does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 82],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 83],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 84],
+                ["SQL table civicrm_emial does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 85],
+                ["SQL table civicrm_contact_mirror does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 86],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 87],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 88],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 89],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 90],
             ],
         );
     }
@@ -41,6 +53,17 @@ final class SqlTableStaticCallRuleTest extends RuleTestCase
             [__DIR__ . '/fixtures/sql-tables.php'],
             [
                 ["SQL table civicrm_emails does not exist in CiviCRM $version — CRM_Core_DAO::executeUnbufferedQuery()", 14],
+                ["SQL table civicrm_widget_named does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 62],
+                ["SQL table civicrm_widget_cased does not exist in CiviCRM $version — crm_core_dao::executeQuery()", 63],
+                ["SQL table civicrm_gadget_cased does not exist in CiviCRM $version — CRM_Utils_SQL_Select::from()", 64],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 83],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 84],
+                ["SQL table civicrm_emial does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 85],
+                ["SQL table civicrm_contact_mirror does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 86],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 87],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 88],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 89],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 90],
             ],
         );
     }

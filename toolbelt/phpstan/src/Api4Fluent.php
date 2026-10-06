@@ -4,18 +4,24 @@ declare(strict_types=1);
 
 namespace CiviKitchen\PHPStan;
 
+use PhpParser\Node;
+use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\StaticCall;
+use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
+use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
+use PHPStan\Type\ObjectType;
 
 /**
  * Reading the entity out of a fluent APIv4 chain.
  *
  * `\Civi\Api4\Contact::get()->addWhere(...)->execute()` parses as nested
- * method calls whose innermost node is the static call; both rules that care
- * about the chain start there.
+ * method calls whose innermost node is the static call. The return type does
+ * not name the entity: core returns the generic DAOGetAction for most of them.
  */
 final class Api4Fluent
 {
@@ -29,6 +35,8 @@ final class Api4Fluent
             return null;
         }
         $class = $scope->resolveName($node->class);
+        // Class names resolve case-insensitively; the reflection has the declared spelling.
+        $class = ((new ObjectType($class))->getObjectClassReflections()[0] ?? null)?->getName() ?? $class;
         if (!str_starts_with($class, 'Civi\\Api4\\')) {
             return null;
         }
@@ -41,69 +49,146 @@ final class Api4Fluent
     }
 
     /**
-     * Aliases the chain has already defined: `SUM(line_total) AS total`.
+     * The APIv4 builders a function body holds, each with every link that configures it.
      *
-     * An alias is a legal name in orderBy and groupBy but exists in no
-     * catalog, so the earlier links of the chain have to be read before the
-     * later ones can be judged. Only the links below this node are visible —
-     * a chain that orders before it selects is not resolvable here, and the
-     * expression check then quietly lets the name pass.
+     * A builder is a chain rooted in `\Civi\Api4\X::action()`, or a variable
+     * assigned exactly once from one. Core applies the clauses at execute(),
+     * so an alias selected after an orderBy still binds, and every link of the
+     * builder is read. A variable that leaves the body (an argument, a return,
+     * a closure) may gain links elsewhere; `escapes` says so.
      *
-     * @return list<string>
+     * @param  array<Node>  $body
+     * @param  list<string> $boundOutside variables the body did not assign: parameters, closure uses
+     * @return list<array{entity: string, links: list<MethodCall>, escapes: bool}>
      */
-    public static function aliasesOfChain(MethodCall $node, Scope $scope): array
+    public static function builders(array $body, array $boundOutside, Scope $scope): array
     {
-        return self::chainStrings($node, $scope, ['addselect', 'setselect'], self::aliasOf(...));
+        $captured = [];
+        $own = [];
+        self::ownNodes($body, $own, $captured);
+
+        $writes = array_fill_keys($boundOutside, [null]);
+        $occurrences = [];
+        $inner = [];
+        foreach ($own as $node) {
+            if ($node instanceof Variable && is_string($node->name)) {
+                $occurrences[$node->name] = ($occurrences[$node->name] ?? 0) + 1;
+            } elseif ($node instanceof Assign && $node->var instanceof Variable && is_string($node->var->name)) {
+                $writes[$node->var->name][] = $node->expr;
+            } elseif ($node instanceof MethodCall && $node->var instanceof MethodCall) {
+                $inner[spl_object_id($node->var)] = true;
+            }
+            foreach (self::otherWrites($node) as $name) {
+                $writes[$name][] = null;
+            }
+        }
+
+        // name => entity, for variables written once, from an APIv4 chain.
+        $variables = [];
+        $assignedChain = [];
+        foreach ($writes as $name => $exprs) {
+            $root = count($exprs) === 1 && $exprs[0] !== null ? self::unwind($exprs[0])[0] : null;
+            $entity = $root instanceof StaticCall ? self::builderEntity($root, $scope) : null;
+            if ($entity !== null) {
+                $variables[$name] = $entity;
+                $assignedChain[spl_object_id($exprs[0])] = (string) $name;
+            }
+        }
+
+        $builders = [];
+        $allowed = [];
+        foreach ($own as $node) {
+            if (!$node instanceof MethodCall || isset($inner[spl_object_id($node)])) {
+                continue;
+            }
+            [$root, $links] = self::unwind($node);
+            $name = $assignedChain[spl_object_id($node)]
+                ?? ($root instanceof Variable && is_string($root->name) && isset($variables[$root->name]) ? $root->name : null);
+            if ($name !== null) {
+                $key = '$' . $name;
+                $entity = $variables[$name];
+                $allowed[$name] = ($allowed[$name] ?? 0) + ($root instanceof Variable ? 1 : 0);
+            } else {
+                $key = '#' . spl_object_id($node);
+                $entity = $root instanceof StaticCall ? self::builderEntity($root, $scope) : null;
+            }
+            if ($entity === null) {
+                continue;
+            }
+            $builders[$key]['entity'] = $entity;
+            $builders[$key]['links'] = array_merge($builders[$key]['links'] ?? [], $links);
+            $builders[$key]['escapes'] = false;
+        }
+
+        foreach ($variables as $name => $entity) {
+            $key = '$' . $name;
+            if (isset($builders[$key])) {
+                // The assignment target is the one occurrence besides the chain roots.
+                $builders[$key]['escapes'] = isset($captured[$name])
+                    || ($occurrences[$name] ?? 0) > ($allowed[$name] ?? 0) + 1;
+            }
+        }
+
+        return array_values($builders);
     }
 
     /**
-     * Aliases the chain bound with an explicit `->addJoin('Entity AS x')`.
+     * Aliases the builder's select defines: `SUM(line_total) AS total`.
      *
-     * Such an alias shadows an implicit join of the same name, so the join
-     * map must not be consulted for it. Only the links BELOW this node are
-     * visible; a join added later cannot mislead the caller, because an
-     * alias the map does not know is passed over in silence anyway.
+     * An alias is a legal name in orderBy and groupBy but exists in no catalog.
      *
+     * @param  list<MethodCall> $links
      * @return list<string>
      */
-    public static function joinAliasesOfChain(MethodCall $node, Scope $scope): array
+    public static function aliases(array $links, Scope $scope): array
     {
-        return self::chainStrings($node, $scope, ['addjoin', 'setjoin'], self::joinAliasOf(...));
+        return self::linkStrings($links, $scope, ['addselect', 'setselect'], self::aliasOf(...));
     }
 
     /**
-     * String arguments the earlier links of the chain passed to any of the
-     * named methods, mapped through $map; nulls are dropped. Only the links
-     * below $node are visible, by construction of the AST.
+     * Aliases the builder bound with an explicit `->addJoin('Entity AS x')`,
+     * which shadow an implicit join of the same name.
      *
+     * @param  list<MethodCall> $links
+     * @return list<string>
+     */
+    public static function joinAliases(array $links, Scope $scope): array
+    {
+        return self::linkStrings($links, $scope, ['addjoin', 'setjoin'], self::joinAliasOf(...));
+    }
+
+    /**
+     * String arguments the links passed to any of the named methods, mapped
+     * through $map; nulls are dropped.
+     *
+     * @param  list<MethodCall>              $links
      * @param  list<string>                  $methods lowercased method names
      * @param  callable(string): ?string     $map
      * @return list<string>
      */
-    private static function chainStrings(MethodCall $node, Scope $scope, array $methods, callable $map): array
+    private static function linkStrings(array $links, Scope $scope, array $methods, callable $map): array
     {
         $mapped = [];
-        $expr = $node->var;
-        while ($expr instanceof MethodCall) {
-            if ($expr->name instanceof Identifier && in_array($expr->name->toLowerString(), $methods, true)) {
-                foreach ($expr->getArgs() as $arg) {
-                    $type = $scope->getType($arg->value);
-                    $strings = array_merge(
-                        $type->getConstantStrings(),
-                        ...array_map(
-                            static fn ($array) => $array->getValuesArray()->getConstantStrings(),
-                            $type->getConstantArrays(),
-                        ),
-                    );
-                    foreach ($strings as $string) {
-                        $value = $map($string->getValue());
-                        if ($value !== null) {
-                            $mapped[] = $value;
-                        }
+        foreach ($links as $link) {
+            if (!$link->name instanceof Identifier || !in_array($link->name->toLowerString(), $methods, true)) {
+                continue;
+            }
+            foreach ($link->getArgs() as $arg) {
+                $type = $scope->getType($arg->value);
+                $strings = array_merge(
+                    $type->getConstantStrings(),
+                    ...array_map(
+                        static fn ($value) => $value->getConstantStrings(),
+                        array_merge(...array_map(static fn ($array) => $array->getValueTypes(), $type->getConstantArrays())),
+                    ),
+                );
+                foreach ($strings as $string) {
+                    $value = $map($string->getValue());
+                    if ($value !== null) {
+                        $mapped[] = $value;
                     }
                 }
             }
-            $expr = $expr->var;
         }
 
         return $mapped;
@@ -129,49 +214,89 @@ final class Api4Fluent
         return null;
     }
 
-    /**
-     * The entity of the chain a method call hangs off, if it is a chain
-     * started by an action whose clauses name that entity's fields.
-     */
-    public static function entityOfChain(MethodCall $node, Scope $scope): ?string
+    /** The entity of `\Civi\Api4\X::action()` when the action's clauses name X's fields. */
+    private static function builderEntity(StaticCall $call, Scope $scope): ?string
     {
-        $expr = $node->var;
-        while ($expr instanceof MethodCall) {
-            $expr = $expr->var;
-        }
-        if (!$expr instanceof StaticCall || !$expr->name instanceof Identifier
-            || !Api4Contract::readsEntityFields($expr->name->toString())) {
+        if (!$call->name instanceof Identifier || !Api4Contract::readsEntityFields($call->name->toString())) {
             return null;
         }
 
-        return self::entityFromStaticCall($expr, $scope);
+        return self::entityFromStaticCall($call, $scope);
     }
 
     /**
-     * The entity behind a builder the chain does not start from.
+     * The innermost expression of a method chain and its links, inner first.
      *
-     * `$query = Contact::get(); $query->addSelect(...)` is one statement too
-     * many for the AST walk, but the type is exact: core generates one action
-     * class per entity and action, `Civi\Api4\Action\Contact\Get`. Anything
-     * that resolves to a generic action base names no entity and is passed
-     * over, and so is an action whose clauses do not name entity fields.
-     *
-     * The aliases an earlier link defined are invisible from here, so callers
-     * must only use this where an alias would not be a legal name.
+     * @return array{Expr, list<MethodCall>}
      */
-    public static function entityOfReceiverType(MethodCall $node, Scope $scope): ?string
+    private static function unwind(Expr $expr): array
     {
-        $classes = $scope->getType($node->var)->getObjectClassNames();
-        if (count($classes) !== 1) {
-            return null;
+        $links = [];
+        while ($expr instanceof MethodCall) {
+            array_unshift($links, $expr);
+            $expr = $expr->var;
         }
-        $parts = explode('\\', $classes[0]);
-        if (count($parts) !== 5 || $parts[0] !== 'Civi' || $parts[1] !== 'Api4' || $parts[2] !== 'Action'
-            || !Api4Contract::readsEntityFields($parts[4])) {
-            return null;
-        }
-        $entity = Api4Catalog::CLASS_ALIASES[$parts[3]] ?? $parts[3];
 
-        return Api4Catalog::knowsEntity($entity) ? $entity : null;
+        return [$expr, $links];
+    }
+
+    /**
+     * Every node of the body outside nested functions and classes; the
+     * variable names those nested scopes mention go to $captured.
+     *
+     * @param array<mixed>       $nodes
+     * @param list<Node>         $own
+     * @param array<string, true> $captured
+     */
+    private static function ownNodes(array $nodes, array &$own, array &$captured): void
+    {
+        foreach ($nodes as $node) {
+            if (is_array($node)) {
+                self::ownNodes($node, $own, $captured);
+                continue;
+            }
+            if (!$node instanceof Node) {
+                continue;
+            }
+            if ($node instanceof Node\FunctionLike || $node instanceof Node\Stmt\ClassLike) {
+                foreach ((new NodeFinder())->findInstanceOf($node, Variable::class) as $variable) {
+                    if (is_string($variable->name)) {
+                        $captured[$variable->name] = true;
+                    }
+                }
+                continue;
+            }
+            $own[] = $node;
+            foreach ($node->getSubNodeNames() as $name) {
+                self::ownNodes([$node->$name], $own, $captured);
+            }
+        }
+    }
+
+    /**
+     * Variables a node writes other than by a plain `$x = ...`.
+     *
+     * @return list<string>
+     */
+    private static function otherWrites(Node $node): array
+    {
+        $targets = match (true) {
+            $node instanceof Assign => $node->var instanceof Variable ? [] : [$node->var],
+            $node instanceof Node\Expr\AssignRef, $node instanceof Node\Expr\AssignOp => [$node->var],
+            $node instanceof Node\Stmt\Foreach_ => [$node->keyVar, $node->valueVar],
+            $node instanceof Node\Stmt\Catch_ => [$node->var],
+            $node instanceof Node\Stmt\Global_ => $node->vars,
+            $node instanceof Node\Stmt\StaticVar => [$node->var],
+            $node instanceof Node\Stmt\Unset_ => $node->vars,
+            default => [],
+        };
+        $names = [];
+        foreach ((new NodeFinder())->findInstanceOf(array_filter($targets), Variable::class) as $variable) {
+            if (is_string($variable->name)) {
+                $names[] = $variable->name;
+            }
+        }
+
+        return $names;
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CiviKitchen\PHPStan;
 
 use PhpParser\Node;
+use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\InClassNode;
 use PHPStan\Reflection\ClassReflection;
@@ -16,8 +17,8 @@ use PHPStan\Rules\RuleErrorBuilder;
  *
  * On a subclass of AbstractAction every protected property without a leading
  * underscore IS an API parameter: the generic action reads them, `getFields`
- * publishes them, and a caller may leave any of them unset. A non-nullable
- * typed property without a default therefore does not produce the API
+ * publishes them, and a caller may leave any of them unset. A
+ * property without a default therefore does not produce the API
  * validation error the author expected — it produces PHP's "must not be
  * accessed before initialization" Error, from inside the API kernel, with a
  * stack trace that names no field.
@@ -30,21 +31,20 @@ use PHPStan\Rules\RuleErrorBuilder;
  * dominant form for a mandatory parameter is therefore untyped: a property
  * with no default, an `@var` docblock for the type and `@required`.
  *
- * The mirror image is reported too: `@required` next to a default (or a
- * nullable type) promises a validation that cannot happen, because the
- * parameter is never missing.
+ * The same holds for `?T` and `mixed`: a typed property without a default
+ * starts uninitialized whatever its type. Properties a trait contributes are
+ * parameters too, and one the constructor assigns is initialized. A declared
+ * getter that reads it only through `??` or isset() is what the kernel calls, so
+ * it is safe too.
+ *
+ * The mirror image is reported too: `@required` next to a default the kernel
+ * accepts (anything but null, '', [] or FALSE) promises a validation that
+ * cannot happen, because the parameter is never missing.
  *
  * @implements Rule<InClassNode>
  */
 final class Api4ActionPropertyRule implements Rule
 {
-    private bool $strict;
-
-    public function __construct(bool $strict = false)
-    {
-        $this->strict = $strict;
-    }
-
     public function getNodeType(): string
     {
         return InClassNode::class;
@@ -53,72 +53,167 @@ final class Api4ActionPropertyRule implements Rule
     public function processNode(Node $node, Scope $scope): array
     {
         $classReflection = $node->getClassReflection();
+        $class = $node->getOriginalNode();
         if (!self::isApi4Action($classReflection, $node)) {
             return [];
         }
+        $initialized = self::assignedInConstructor($class);
 
         $errors = [];
-        foreach ($node->getOriginalNode()->stmts as $stmt) {
-            if (!$stmt instanceof Node\Stmt\Property || !$stmt->isProtected() || $stmt->isStatic()) {
+        foreach (self::parameters($class, $classReflection) as [$name, $type, $hasDefault, $emptyDefault, $required, $line]) {
+            if (str_starts_with($name, '_') || isset($initialized[$name]) || self::hasGuardedGetter($class, $name)) {
                 continue;
             }
-            // An untyped property is implicitly null — never uninitialized.
-            if ($stmt->type === null) {
+            // `@required` is deliberately not an escape here: the kernel
+            // reads the parameter before it checks the requirement.
+            if ($type !== null && !$hasDefault) {
+                $errors[] = RuleErrorBuilder::message(sprintf(
+                    'APIv4 action parameter $%s is typed %s with no default — a caller that omits it gets '
+                    . '"must not be accessed before initialization" instead of an API validation error, because '
+                    . 'ValidateFieldsSubscriber reads every parameter through its getter before it checks '
+                    . '@required.%s Declare it untyped with an @var docblock and @required (core\'s own form for a '
+                    . 'mandatory parameter), or give it a default.',
+                    $name,
+                    $type,
+                    $required ? ' @required does not prevent this.' : '',
+                ))->identifier('ck.api4.uninitializedActionParam')->line($line)->build();
+
                 continue;
             }
-            $required = self::hasRequiredTag($stmt);
-            $nullable = self::isNullable($stmt->type);
-
-            foreach ($stmt->props as $property) {
-                $name = $property->name->toString();
-                if (str_starts_with($name, '_')) {
-                    continue;
-                }
-                $default = $property->default !== null;
-
-                // `@required` is deliberately not an escape here: the kernel
-                // reads the parameter before it checks the requirement, so
-                // both spellings fatal the same way.
-                if (!$default && !$nullable) {
-                    $errors[] = RuleErrorBuilder::message(sprintf(
-                        'APIv4 action parameter $%s is typed %s with no default — a caller that omits it gets '
-                        . '"must not be accessed before initialization" instead of an API validation error, because '
-                        . 'ValidateFieldsSubscriber reads every parameter through its getter before it checks '
-                        . '@required.%s Declare it untyped with an @var docblock and @required (core\'s own form for a '
-                        . 'mandatory parameter), or give it a default.',
-                        $name,
-                        self::typeToString($stmt->type),
-                        $required ? ' @required does not prevent this.' : '',
-                    ))->identifier('ck.api4.uninitializedActionParam')->line($stmt->getStartLine())->build();
-
-                    continue;
-                }
-
-                // `?string $x;` with no default is uninitialized until the
-                // kernel fills it — usually intended, occasionally a bug, so
-                // it is a separate identifier a repo turns on for itself.
-                if ($this->strict && !$required && !$default && $nullable) {
-                    $errors[] = RuleErrorBuilder::message(sprintf(
-                        'APIv4 action parameter $%s is nullable with no default, so it is uninitialized rather than null '
-                        . 'until the kernel writes it — give it a default of null to make that explicit.',
-                        $name,
-                    ))->identifier('ck.api4.nullableActionParamWithoutDefault')->line($stmt->getStartLine())->build();
-
-                    continue;
-                }
-
-                if ($required && ($default || $nullable)) {
-                    $errors[] = RuleErrorBuilder::message(sprintf(
-                        'APIv4 action parameter $%s is marked @required but %s, so the kernel never sees it missing '
-                        . 'and the requirement is never enforced.',
-                        $name,
-                        $default ? 'has a default' : 'is nullable',
-                    ))->identifier('ck.api4.requiredActionParamWithDefault')->line($stmt->getStartLine())->build();
-                }
+            if ($required && $hasDefault && !$emptyDefault) {
+                $errors[] = RuleErrorBuilder::message(sprintf(
+                    'APIv4 action parameter $%s is marked @required but has a default, so the kernel never sees '
+                    . 'it missing and the requirement is never enforced.',
+                    $name,
+                ))->identifier('ck.api4.requiredActionParamWithDefault')->line($line)->build();
             }
         }
 
         return $errors;
+    }
+
+    /**
+     * The protected, non-static properties of the class and of its traits:
+     * name, type (null when untyped), default, empty default, @required, line.
+     * A trait's properties are reported on its `use` line.
+     *
+     * @return list<array{string, ?string, bool, bool, bool, int}>
+     */
+    private static function parameters(Node\Stmt\ClassLike $class, ClassReflection $reflection): array
+    {
+        $parameters = [];
+        foreach ($class->stmts as $stmt) {
+            if ($stmt instanceof Node\Stmt\Property && $stmt->isProtected() && !$stmt->isStatic()) {
+                foreach ($stmt->props as $property) {
+                    // An untyped property without a default is implicitly null.
+                    $default = $property->default ?? ($stmt->type === null ? new Node\Expr\ConstFetch(new Node\Name('null')) : null);
+                    $parameters[$property->name->toString()] = [
+                        $property->name->toString(),
+                        $stmt->type === null ? null : self::typeToString($stmt->type),
+                        $default !== null,
+                        $default !== null && self::isEmptyDefault($default),
+                        self::hasRequiredTag($stmt->getDocComment()?->getText()),
+                        $stmt->getStartLine(),
+                    ];
+                }
+            }
+            if (!$stmt instanceof Node\Stmt\TraitUse) {
+                continue;
+            }
+            foreach ($stmt->traits as $traitName) {
+                $trait = self::traitReflection($reflection, $traitName->toString());
+                foreach ($trait?->getNativeReflection()->getProperties() ?? [] as $property) {
+                    if (!$property->isProtected() || $property->isStatic() || isset($parameters[$property->getName()])) {
+                        continue;
+                    }
+                    $parameters[$property->getName()] = [
+                        $property->getName(),
+                        $property->hasType() ? (string) $property->getType() : null,
+                        $property->hasDefaultValue(),
+                        $property->hasDefaultValue() && in_array($property->getDefaultValue(), [null, '', [], false], true),
+                        self::hasRequiredTag($property->getDocComment() ?: null),
+                        $stmt->getStartLine(),
+                    ];
+                }
+            }
+        }
+
+        return array_values($parameters);
+    }
+
+    private static function traitReflection(ClassReflection $class, string $name): ?ClassReflection
+    {
+        foreach ($class->getTraits(true) as $trait) {
+            if (strcasecmp($trait->getName(), $name) === 0) {
+                return $trait;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Properties the constructor assigns through `$this->x = ...`.
+     *
+     * @return array<string, true>
+     */
+    private static function assignedInConstructor(Node\Stmt\ClassLike $class): array
+    {
+        $constructor = $class->getMethod('__construct');
+        $assigned = [];
+        foreach ((new NodeFinder())->findInstanceOf($constructor?->stmts ?? [], Node\Expr\Assign::class) as $assign) {
+            $target = $assign->var;
+            if ($target instanceof Node\Expr\PropertyFetch && $target->var instanceof Node\Expr\Variable
+                && $target->var->name === 'this' && $target->name instanceof Node\Identifier) {
+                $assigned[$target->name->toString()] = true;
+            }
+        }
+
+        return $assigned;
+    }
+
+    /**
+     * A declared `get<Name>()` that reads the property only inside `??`, isset()
+     * or the then-branch of an isset() ternary — reads an uninitialized one survives.
+     */
+    private static function hasGuardedGetter(Node\Stmt\ClassLike $class, string $name): bool
+    {
+        $stmts = $class->getMethod('get' . ucfirst($name))?->stmts;
+        if ($stmts === null) {
+            return false;
+        }
+        $finder = new NodeFinder();
+        $isRead = static fn (Node $node): bool => $node instanceof Node\Expr\PropertyFetch
+            && $node->var instanceof Node\Expr\Variable && $node->var->name === 'this'
+            && $node->name instanceof Node\Identifier && $node->name->toString() === $name;
+        $safe = [];
+        foreach ($finder->find($stmts, static fn (Node $node): bool => $node instanceof Node\Expr\Isset_
+            || $node instanceof Node\Expr\BinaryOp\Coalesce || $node instanceof Node\Expr\Ternary) as $guard) {
+            $covered = match (true) {
+                $guard instanceof Node\Expr\Isset_ => $guard->vars,
+                $guard instanceof Node\Expr\BinaryOp\Coalesce => [$guard->left],
+                $guard->cond instanceof Node\Expr\Isset_ && $guard->if !== null
+                    && array_filter($guard->cond->vars, $isRead) !== [] => [$guard->if],
+                default => [],
+            };
+            foreach ($finder->find($covered, $isRead) as $read) {
+                $safe[spl_object_id($read)] = true;
+            }
+        }
+        $reads = $finder->find($stmts, $isRead);
+
+        return $reads !== [] && array_diff_key(array_flip(array_map(spl_object_id(...), $reads)), $safe) === [];
+    }
+
+    /** null, '', [] and FALSE, which ValidateFieldsSubscriber treats as missing. */
+    private static function isEmptyDefault(Node\Expr $default): bool
+    {
+        if ($default instanceof Node\Expr\ConstFetch) {
+            return in_array($default->name->toLowerString(), ['null', 'false'], true);
+        }
+
+        return ($default instanceof Node\Scalar\String_ && $default->value === '')
+            || ($default instanceof Node\Expr\Array_ && $default->items === []);
     }
 
     /**
@@ -146,28 +241,9 @@ final class Api4ActionPropertyRule implements Rule
             && str_ends_with($parentName, 'Action');
     }
 
-    private static function hasRequiredTag(Node\Stmt\Property $property): bool
+    private static function hasRequiredTag(?string $doc): bool
     {
-        $doc = $property->getDocComment();
-
-        return $doc !== null && preg_match('/@required\b/', $doc->getText()) === 1;
-    }
-
-    private static function isNullable(Node $type): bool
-    {
-        if ($type instanceof Node\NullableType) {
-            return true;
-        }
-        if ($type instanceof Node\UnionType) {
-            foreach ($type->types as $member) {
-                if ($member instanceof Node\Identifier && $member->toLowerString() === 'null') {
-                    return true;
-                }
-            }
-        }
-
-        return $type instanceof Node\Identifier
-            && in_array($type->toLowerString(), ['null', 'mixed'], true);
+        return $doc !== null && preg_match('/@required\b/', $doc) === 1;
     }
 
     private static function typeToString(Node $type): string

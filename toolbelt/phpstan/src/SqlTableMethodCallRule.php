@@ -35,26 +35,30 @@ final class SqlTableMethodCallRule implements Rule
     public function processNode(Node $node, Scope $scope): array
     {
         $method = $node->name instanceof Node\Identifier ? $node->name->toLowerString() : '';
-        $args = $node->getArgs();
-
-        if (Sql::isDatabaseCall($node) && isset($args[0])) {
-            $literal = Sql::literalString($args[0]->value);
+        // CRM_Core_DAO::query($query, $i18nRewrite = TRUE)
+        if (Sql::isDatabaseCall($node)) {
+            $literal = self::literal(CallArgs::value($node, 0, 'query'));
 
             return $literal === null ? [] : $this->schema->checkSql($literal, sprintf('->%s()', $method));
         }
 
-        // ->from('civicrm_contact c'); ->join('e', 'INNER JOIN civicrm_email e ON ...')
-        if ($method === 'from' && isset($args[0])) {
-            $literal = Sql::literalString($args[0]->value);
+        // ->from($from, $options = []); ->join($name, $exprs, $args = NULL)
+        if ($method === 'from') {
+            $literal = self::literal(CallArgs::value($node, 0, 'from'));
 
             return $literal === null ? [] : $this->schema->checkTableClause($literal, '->from()');
         }
-        if ($method === 'join' && isset($args[1])) {
-            $literal = Sql::literalString($args[1]->value);
+        if ($method === 'join') {
+            $literal = self::literal(CallArgs::value($node, 1, 'exprs'));
 
             return $literal === null ? [] : $this->schema->checkSql($literal, '->join()');
         }
 
         return [];
+    }
+
+    private static function literal(?Node\Expr $expr): ?string
+    {
+        return $expr === null ? null : Sql::literalString($expr);
     }
 }

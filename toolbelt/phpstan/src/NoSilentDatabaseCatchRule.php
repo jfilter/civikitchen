@@ -41,7 +41,7 @@ final class NoSilentDatabaseCatchRule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
-        if (!self::containsDatabaseCall($node->stmts)) {
+        if (!self::containsDatabaseCall($node->stmts, $scope)) {
             return [];
         }
 
@@ -66,9 +66,9 @@ final class NoSilentDatabaseCatchRule implements Rule
     /**
      * @param array<Node\Stmt> $stmts
      */
-    private static function containsDatabaseCall(array $stmts): bool
+    private static function containsDatabaseCall(array $stmts, Scope $scope): bool
     {
-        return (new NodeFinder())->findFirst($stmts, static fn (Node $n): bool => Sql::isDatabaseCall($n)) !== null;
+        return (new NodeFinder())->findFirst($stmts, static fn (Node $n): bool => Sql::isDatabaseCall($n, $scope)) !== null;
     }
 
     /** Does the catch body make the failure visible? */
@@ -84,17 +84,19 @@ final class NoSilentDatabaseCatchRule implements Rule
         return $found !== null;
     }
 
-    /** \Civi::log()->error(...) and the levels above it. */
+    /** \Civi::log()->error(...), ->log(LogLevel::ERROR, ...) and the levels above. */
     private static function isLoudLog(Node $node): bool
     {
-        if (!$node instanceof Node\Expr\MethodCall || !$node->name instanceof Node\Identifier) {
+        if (!($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\NullsafeMethodCall)
+            || !$node->name instanceof Node\Identifier) {
             return false;
         }
-        if (!in_array($node->name->toLowerString(), self::LOUD_LEVELS, true)) {
+        $method = $node->name->toLowerString();
+        $level = $method === 'log' ? self::logLevel(CallArgs::value($node, 0, 'level')) : $method;
+        if (!in_array($level, self::LOUD_LEVELS, true)) {
             return false;
         }
-        // ->log(LogLevel::ERROR, …) is not spelled here; the receiver only
-        // has to be something that produces a logger.
+        // The receiver only has to be something that produces a logger.
         $receiver = $node->var;
         if ($receiver instanceof Node\Expr\StaticCall) {
             return $receiver->name instanceof Node\Identifier && $receiver->name->toLowerString() === 'log';
@@ -103,5 +105,17 @@ final class NoSilentDatabaseCatchRule implements Rule
         return $receiver instanceof Node\Expr\Variable
             || $receiver instanceof Node\Expr\PropertyFetch
             || $receiver instanceof Node\Expr\MethodCall;
+    }
+
+    /** The lowercased level of `'error'` or `LogLevel::ERROR`; null when unreadable. */
+    private static function logLevel(?Node\Expr $level): ?string
+    {
+        if ($level instanceof Node\Expr\ClassConstFetch && $level->class instanceof Node\Name
+            && $level->name instanceof Node\Identifier && strcasecmp($level->class->getLast(), 'LogLevel') === 0) {
+            return $level->name->toLowerString();
+        }
+        $literal = $level === null ? null : Sql::literalString($level);
+
+        return $literal === null ? null : strtolower($literal);
     }
 }

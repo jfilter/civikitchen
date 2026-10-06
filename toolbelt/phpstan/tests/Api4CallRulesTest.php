@@ -7,6 +7,7 @@ namespace CiviKitchen\PHPStan\Tests;
 use CiviKitchen\PHPStan\Api4Catalog;
 use CiviKitchen\PHPStan\Api4Contract;
 use CiviKitchen\PHPStan\Api4FunctionCallRule;
+use CiviKitchen\PHPStan\Api4StaticCallableRule;
 use CiviKitchen\PHPStan\Api4StaticCallRule;
 use PHPStan\Rules\Rule;
 use PHPStan\Testing\RuleTestCase;
@@ -28,6 +29,12 @@ final class Api4CallRulesTest extends RuleTestCase
             ['APIv4 field Contact.display_nam does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — select', 13],
             ['APIv4 action Contact::gett does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — civicrm_api4()', 14],
             ['APIv4 field Contact.contact_typ does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — groupBy', 16],
+            ['APIv4 field Contact.display_nam does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — select', 36],
+            ['APIv4 action Contact::gett does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — civicrm_api4()', 37],
+            ['APIv4 field Contact.frist_name does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — select', 52],
+            ['APIv4 field Group.tags does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — select', 55],
+            ['APIv4 entity Contatc does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — did you mean Contact? (civicrm_api4())', 66],
+            ['APIv4 entity contact does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — did you mean Contact? (civicrm_api4())', 67],
         ]);
     }
 
@@ -36,6 +43,15 @@ final class Api4CallRulesTest extends RuleTestCase
         $this->rule = new Api4StaticCallRule($this->contract());
         $this->analyse($this->files(), [
             ['APIv4 action Contact::gett does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — fluent APIv4 call', 15],
+            ['APIv4 action Contact::gett does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — fluent APIv4 call', 45],
+        ]);
+    }
+
+    public function testStaticCallables(): void
+    {
+        $this->rule = new Api4StaticCallableRule($this->contract());
+        $this->analyse($this->files(), [
+            ['APIv4 action Contact::gte does not exist in CiviCRM ' . Api4Catalog::CORE_VERSION . ' — fluent APIv4 call', 73],
         ]);
     }
 

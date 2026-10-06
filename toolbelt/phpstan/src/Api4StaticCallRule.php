@@ -33,16 +33,26 @@ final class Api4StaticCallRule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
+        return self::check($this->contract, $node, $scope);
+    }
+
+    /**
+     * Shared with Api4StaticCallableRule: `Contact::get(...)` is the same call.
+     *
+     * @return list<\PHPStan\Rules\IdentifierRuleError>
+     */
+    public static function check(Api4Contract $contract, StaticCall $node, Scope $scope): array
+    {
         $entity = Api4Fluent::entityFromStaticCall($node, $scope);
         if ($entity === null || !$node->name instanceof Node\Identifier) {
             return [];
         }
 
-        $errors = $this->contract->checkEntity($entity, '\\Civi\\Api4\\' . $entity);
+        $errors = $contract->checkEntity($entity, '\\Civi\\Api4\\' . $entity);
         if ($errors !== []) {
             return $errors;
         }
 
-        return $this->contract->checkAction($entity, $node->name->toString(), 'fluent APIv4 call');
+        return $contract->checkAction($entity, $node->name->toString(), 'fluent APIv4 call');
     }
 }

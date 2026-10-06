@@ -29,6 +29,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   remedy, `phpcs:ignore`, conflicts with zero-suppression policies. A
   `<rule ref>` to it in a project ruleset now fails phpcs: remove it, and drop
   the `phpcs:ignore CiviKitchen.Security.PermissionBypass` comments.
+- **Breaking**: the phpstan parameter `civikitchen.strictActionParams` and
+  the identifier `ck.api4.nullableActionParamWithoutDefault`. Nullable and
+  `mixed` APIv4 action parameters without a default are now always reported
+  as `ck.api4.uninitializedActionParam`; drop the parameter from a repo's
+  `phpstan.neon.dist`.
 
 ### Fixed
 
@@ -86,6 +91,28 @@ except that a break the consumers are adjusted for ships as a minor, marked
   or with `$email`. `PositionalDefaultsToNamedArgsRector` skips callees that
   can be overridden or implemented elsewhere, magic and built-in methods, and
   callees that read `func_get_args()`.
+- The phpstan rules read named arguments by name and stay silent on
+  spreads, and match class names case-insensitively
+  (`crm_core_dao::executeQuery()`). An unknown APIv4 entity is reported as a
+  slip only when it differs from a core entity in letter case or by two
+  swapped neighbouring letters, the same judgement as the oxlint rule.
+- The phpstan APIv4 catalog includes `tags`, `_depth` and `_descendents`
+  wherever core adds them at runtime. Fluent field checks see aliases selected
+  later in the chain or through `setSelect()`, and builders held in variables, and first-class APIv4
+  callables are checked.
+- The phpstan action-parameter checks cover `?T` and `mixed` properties,
+  trait properties, constructor assignments and getters that read the
+  property only through `??` or `isset()`; public properties are no
+  longer treated as API parameters.
+- The phpstan transactional-DDL rule exempts TEMPORARY tables and reports
+  custom-field updates and deletes, BAO writes (but no longer a custom-group
+  update, which alters no table), `self::`/`static::` helpers
+  and `tearDown()`. The silent-catch rule accepts `->log()` at error level and
+  nullsafe calls, and sees `CRM_Utils_SQL_Select::execute()`. The SQL table
+  rule ignores strings, comments, DROP and RENAME (also after a leading
+  comment), and reads INSERT/REPLACE with or without INTO, TRUNCATE with or
+  without TABLE, and comma joins. The GET-mutation rule accepts
+  `validateAjaxRequestMethod()` and reads trait methods.
 - The oxlint rule `civikitchen/api4-contract` no longer reports another
   extension's APIv4 entity whose name is close to a core one (`Contract`,
   `Project`, `Groups`). An unknown entity is reported only when it differs

@@ -33,12 +33,9 @@ final class Api4FunctionCallRule implements Rule
         if (!$node->name instanceof Node\Name || $node->name->toLowerString() !== 'civicrm_api4') {
             return [];
         }
-        $args = $node->getArgs();
-        if (!isset($args[0])) {
-            return [];
-        }
-
-        $entity = $this->contract->literalString($args[0]->value, $scope);
+        // civicrm_api4(string $entity, string $action, array $params = [], $index = NULL)
+        $entityArg = CallArgs::value($node, 0, 'entity');
+        $entity = $entityArg === null ? null : $this->contract->literalString($entityArg, $scope);
         if ($entity === null) {
             return [];
         }
@@ -48,13 +45,15 @@ final class Api4FunctionCallRule implements Rule
             return $errors;
         }
 
-        $action = isset($args[1]) ? $this->contract->literalString($args[1]->value, $scope) : null;
+        $actionArg = CallArgs::value($node, 1, 'action');
+        $action = $actionArg === null ? null : $this->contract->literalString($actionArg, $scope);
         if ($action !== null) {
             $errors = array_merge($errors, $this->contract->checkAction($entity, $action, 'civicrm_api4()'));
         }
 
-        if ($action !== null && Api4Contract::readsEntityFields($action) && isset($args[2])) {
-            foreach ($this->contract->fieldsFromParams($scope->getType($args[2]->value), $scope) as [$field, $clause]) {
+        $params = CallArgs::value($node, 2, 'params');
+        if ($action !== null && Api4Contract::readsEntityFields($action) && $params !== null) {
+            foreach ($this->contract->fieldsFromParams($scope->getType($params), $scope) as [$field, $clause]) {
                 $errors = array_merge($errors, $this->contract->checkField($entity, $field, $clause));
             }
         }

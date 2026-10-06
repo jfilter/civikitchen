@@ -48,7 +48,17 @@ final class GetMutationRuleTest extends RuleTestCase
             [
                 'DELETE in CRM_Core_DAO::executeQuery() writes from CiviKitchen\Fixtures\Routes\WidgetPage::run(), '
                 . 'which is reachable by GET' . self::ADVICE,
-                58,
+                60,
+            ],
+            [
+                'Widget::create() writes from CiviKitchen\\Fixtures\\Routes\\JsonPage::run(), '
+                . 'which is reachable by GET' . self::ADVICE,
+                101,
+            ],
+            [
+                'Widget::create() writes from CiviKitchen\\Fixtures\\Routes\\TraitPage::run(), '
+                . 'which is reachable by GET' . self::ADVICE,
+                109,
             ],
         ]);
     }
@@ -73,9 +83,29 @@ final class GetMutationRuleTest extends RuleTestCase
                 36,
             ],
             [
+                "civicrm_api4('Contact', 'create') writes from CiviKitchen\\Fixtures\\Routes\\GreeterEndpoint::handle(), "
+                . 'which answers GET civicrm/greeter/new' . self::ADVICE,
+                37,
+            ],
+            [
+                'UPDATE in crm_core_dao::executeQuery() writes from CiviKitchen\Fixtures\Routes\GreeterEndpoint::handle(), '
+                . 'which answers GET civicrm/greeter/new' . self::ADVICE,
+                38,
+            ],
+            [
                 'DELETE in CRM_Core_DAO::executeQuery() writes from CiviKitchen\Fixtures\Routes\WidgetPage::run(), '
                 . 'which answers GET civicrm/widget' . self::ADVICE,
-                58,
+                60,
+            ],
+            [
+                'Widget::create() writes from CiviKitchen\\Fixtures\\Routes\\JsonPage::run(), '
+                . 'which is reachable by GET' . self::ADVICE,
+                101,
+            ],
+            [
+                'Widget::create() writes from CiviKitchen\\Fixtures\\Routes\\TraitPage::run(), '
+                . 'which is reachable by GET' . self::ADVICE,
+                109,
             ],
         ];
     }

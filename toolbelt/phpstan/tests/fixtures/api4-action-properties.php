@@ -60,3 +60,68 @@ class PlainService
 {
     protected string $channel;
 }
+
+/** A trait's properties are parameters of every action that uses it. */
+trait FarewellDefaults
+{
+    protected string $fromTrait;
+
+    protected string $tone = 'warm';
+}
+
+class FarewellAction extends AbstractAction
+{
+    use FarewellDefaults;
+
+    protected mixed $any;
+
+    protected ?string $maybe;
+
+    /** @required — null is what the kernel treats as missing. */
+    protected ?string $optionalNull = null;
+
+    /** @required */
+    protected array $ids = [];
+
+    /** Not a parameter: core reads protected properties only. */
+    public string $notAParam = '';
+
+    protected string $mode;
+
+    public function __construct($entityName = '', $actionName = '')
+    {
+        parent::__construct($entityName, $actionName);
+        $this->mode = 'farewell';
+    }
+}
+
+/** Public and uninitialized: property.uninitialized must still see it. */
+class PublicFieldAction extends AbstractAction
+{
+    public string $notAParam;
+}
+
+/** A getter that guards the read: ValidateFieldsSubscriber calls it instead of __call. */
+class GuardedGetterAction extends AbstractAction
+{
+    protected ?string $label;
+
+    protected ?string $note;
+
+    protected string $plain;
+
+    public function getLabel(): ?string
+    {
+        return $this->label ?? null;
+    }
+
+    public function getNote(): ?string
+    {
+        return isset($this->note) ? $this->note : null;
+    }
+
+    public function getPlain(): string
+    {
+        return $this->plain;
+    }
+}

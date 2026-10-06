@@ -132,16 +132,13 @@ up; see
   the read fatals before the check that would have said
   `Parameter "x" is required.`. The form that works is core's own dominant
   one — **untyped property, no default, `@var` docblock for the type,
-  `@required`** — and it is what the rule's message points at. The reverse combination, `@required`
-  next to a default or a nullable type, promises a validation that can never
-  fire (`ck.api4.requiredActionParamWithDefault`). A third, quieter reading —
-  `protected ?string $x;`, nullable with no default, which PHP leaves
-  uninitialized rather than null until the kernel writes it — is usually what
-  the author meant, so it ships **off**: set
-  `parameters.civikitchen.strictActionParams: true` in the repo's
-  `phpstan.neon.dist` to turn on `ck.api4.nullableActionParamWithoutDefault`.
-  The recommendation is `= null`, written out; the separate identifier exists
-  so a repo can adopt or ignore this one without touching the other two. The
+  `@required`** — and it is what the rule's message points at. `?string` and
+  `mixed` do not help: any typed property without a default starts
+  uninitialized, so `protected ?string $x;` fatals the same way unless the
+  constructor assigns it; properties from traits count too. The reverse
+  combination, `@required` next to a default the kernel accepts (anything but
+  `null`, `''`, `[]` or `FALSE`), promises a validation that can never fire
+  (`ck.api4.requiredActionParamWithDefault`). The
   template enables
   `checkUninitializedProperties`; a `ReadWritePropertiesExtension` in the same
   package keeps that usable by declaring action parameters

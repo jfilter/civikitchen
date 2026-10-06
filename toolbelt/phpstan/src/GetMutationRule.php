@@ -6,6 +6,9 @@ namespace CiviKitchen\PHPStan;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
+use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
+use PhpParser\ParserFactory;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\InClassNode;
 use PHPStan\Reflection\ClassReflection;
@@ -67,6 +70,14 @@ final class GetMutationRule implements Rule
                 $methods[$stmt->name->toLowerString()] = $stmt;
             }
         }
+        // A trait's methods are the class's own, unless the class overrides them.
+        $traitFiles = [];
+        foreach (self::traitMethods($node->getClassReflection()) as $name => [$method, $file]) {
+            if (!isset($methods[$name])) {
+                $methods[$name] = $method;
+                $traitFiles[spl_object_id($method)] = $file;
+            }
+        }
 
         $errors = [];
         foreach (self::handlers($methods, $class, $node->getClassReflection(), $this->routes) as $name => $route) {
@@ -80,7 +91,7 @@ final class GetMutationRule implements Rule
                     if ($what === null) {
                         continue;
                     }
-                    $errors[] = RuleErrorBuilder::message(sprintf(
+                    $error = RuleErrorBuilder::message(sprintf(
                         '%s writes from %s, which %s — %s',
                         $what,
                         $class . '::' . $methods[$name]->name->toString() . '()',
@@ -88,8 +99,11 @@ final class GetMutationRule implements Rule
                         self::ADVICE,
                     ))
                         ->identifier('ck.route.mutationOnGet')
-                        ->line($expr->getStartLine())
-                        ->build();
+                        ->line($expr->getStartLine());
+                    if (isset($traitFiles[spl_object_id($method)])) {
+                        $error = $error->file($traitFiles[spl_object_id($method)]);
+                    }
+                    $errors[] = $error->build();
                 }
             }
         }
@@ -122,6 +136,36 @@ final class GetMutationRule implements Rule
         }
 
         return $handlers;
+    }
+
+    /**
+     * Methods of the traits a class uses, lowercase name => [method, file].
+     *
+     * Reflection has no method bodies, so each trait's file is parsed.
+     *
+     * @return array<string, array{Node\Stmt\ClassMethod, string}>
+     */
+    private static function traitMethods(ClassReflection $reflection): array
+    {
+        $found = [];
+        foreach ($reflection->getTraits(true) as $trait) {
+            $file = $trait->getFileName();
+            if ($file === null) {
+                continue;
+            }
+            $ast = (new ParserFactory())->createForHostVersion()->parse((string) file_get_contents($file)) ?? [];
+            $ast = (new NodeTraverser(new NameResolver()))->traverse($ast);
+            foreach ((new NodeFinder())->findInstanceOf($ast, Node\Stmt\Trait_::class) as $declaration) {
+                if (strcasecmp((string) $declaration->namespacedName, $trait->getName()) !== 0) {
+                    continue;
+                }
+                foreach ($declaration->getMethods() as $method) {
+                    $found[$method->name->toLowerString()] ??= [$method, $file];
+                }
+            }
+        }
+
+        return $found;
     }
 
     /** A CRM_Core_Page subclass — its run() IS the route. */
@@ -202,8 +246,9 @@ final class GetMutationRule implements Rule
     /**
      * Does anything on this path look at the request method?
      *
-     * Either the PSR-7 `$request->getMethod()` or the raw
-     * `$_SERVER['REQUEST_METHOD']`. The comparison value is not inspected:
+     * The PSR-7 `$request->getMethod()`, the raw `$_SERVER['REQUEST_METHOD']`,
+     * or core's `CRM_Core_Page_AJAX::validateAjaxRequestMethod()`, which
+     * demands an XMLHttpRequest header no link or prefetch can send. The comparison value is not inspected:
      * a handler that reads the method at all is deciding on it, and second-
      * guessing which verb it allows would only produce noise.
      *
@@ -216,6 +261,11 @@ final class GetMutationRule implements Rule
                 if ($expr instanceof Node\Expr\MethodCall
                     && $expr->name instanceof Node\Identifier
                     && $expr->name->toLowerString() === 'getmethod') {
+                    return true;
+                }
+                if ($expr instanceof Node\Expr\StaticCall && $expr->name instanceof Node\Identifier
+                    && $expr->name->toLowerString() === 'validateajaxrequestmethod'
+                    && in_array(strtolower(ltrim(Sql::staticClassName($expr) ?? '', '\\')), ['crm_core_page_ajax', 'self', 'static', 'parent'], true)) {
                     return true;
                 }
                 if ($expr instanceof Node\Expr\ArrayDimFetch

@@ -92,4 +92,65 @@ final class AddressExport
             ->addWhere('fk_entity', '=', 'Address')
             ->execute();
     }
+
+    /** Core applies the clauses at execute(): an alias selected later still binds. */
+    public function aliasSelectedLater(): void
+    {
+        Contact::get(false)->addOrderBy('cnt')->addOrderBy('srot_name')->addSelect('COUNT(id) AS cnt')->execute();
+    }
+
+    /** Named arguments bind by name. */
+    public function namedArguments(): void
+    {
+        Contact::get(false)->addOrderBy(direction: 'DESC', fieldName: 'sort_name')->execute();
+        Contact::get(false)->addWhere(value: 'Individual', fieldName: 'contact_type', op: '=')->execute();
+        Contact::get(false)->addWhere(value: 'x', fieldName: 'frist_name', op: '=')->execute();
+    }
+
+    /** Builders held in variables, whatever action class core returns. */
+    public function variables(): void
+    {
+        $q = Contact::get(false);
+        $q->addWhere('frist_name', '=', 1);
+        $a = \Civi\Api4\Activity::get(false);
+        $a->addSelect('subjcet');
+        $c = Contact::create(false);
+        $c->addValue('frist_name', 'x');
+        $n = Contact::get(false);
+        $n->addSelect('COUNT(id) AS total');
+        $n->addOrderBy('total');
+    }
+
+    /** Reassigned, or handed to code that may add an alias: not judged. */
+    public function variablesOutOfSight(bool $flag): void
+    {
+        $q = Contact::get(false);
+        if ($flag) {
+            $q = \Civi\Api4\Activity::get(false);
+        }
+        $q->addSelect('subject');
+        $h = Contact::get(false);
+        $this->decorate($h);
+        $h->addOrderBy('added_elsewhere');
+    }
+
+    private function decorate(object $query): void
+    {
+    }
+
+    /** Fields core's spec providers add at runtime. */
+    public function runtimeFields(): void
+    {
+        \Civi\Api4\Activity::get(false)->addWhere('tags', 'IN', [1])->execute();
+        \Civi\Api4\Group::get(false)->addSelect('_depth', '_descendents')->execute();
+        \Civi\Api4\Group::get(false)->addSelect('tags')->execute();
+    }
+
+    /** Aliases defined through setSelect(), literal or from a variable. */
+    public function setSelectAliases(): void
+    {
+        Contact::get(false)->setSelect(['contact_type', 'COUNT(id) AS cnt'])->addOrderBy('cnt')->execute();
+        $select = ['contact_type', 'COUNT(id) AS total'];
+        Contact::get(false)->setSelect($select)->addOrderBy('total')->execute();
+    }
 }

@@ -13,6 +13,8 @@ namespace CiviKitchen\Fixtures\Support;
 abstract class TestCase
 {
     protected function setUp(): void {}
+
+    protected function tearDown(): void {}
 }
 
 class ExtensionManager

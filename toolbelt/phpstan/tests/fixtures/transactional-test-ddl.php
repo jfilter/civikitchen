@@ -47,6 +47,13 @@ final class WidgetTest extends TestCase implements TransactionalInterface
         $this->ensureSchema();
     }
 
+    public function testNamedAndCased(): void
+    {
+        \civicrm_api4(action: 'create', entity: 'CustomGroup', params: []);
+        \civi\api4\customfield::create(false)->execute();
+        \crm_core_dao::executeQuery('TRUNCATE civicrm_widget');
+    }
+
     /** One call away from a test method is still inside the transaction. */
     private function ensureSchema(): void
     {
@@ -61,5 +68,69 @@ final class PlainWidgetTest extends TestCase
     {
         \CRM_Core_DAO::executeQuery('CREATE TABLE civicrm_widget (id INT)');
         CustomField::create(false)->execute();
+    }
+}
+
+final class GadgetTest extends TestCase implements TransactionalInterface
+{
+    /** MySQL runs TEMPORARY table DDL without an implicit commit. */
+    public function testTemporaryTables(): void
+    {
+        \CRM_Core_DAO::executeQuery('CREATE TEMPORARY TABLE foo (id INT)');
+        \CRM_Core_DAO::executeQuery('DROP TEMPORARY TABLE IF EXISTS foo');
+        \CRM_Core_DAO::executeQuery('CREATE TABLE civicrm_tmp_durable (id INT)');
+    }
+
+    public function testCustomWrites(): void
+    {
+        \Civi\Api4\CustomGroup::delete(false)->execute();
+        \Civi\Api4\CustomField::delete(false)->execute();
+        \Civi\Api4\CustomField::update(false)->addValue('label', 'x')->execute();
+        \CRM_Core_BAO_CustomField::create([]);
+        \CRM_Core_BAO_CustomGroup::create([]);
+        CustomField::Create(false)->execute();
+        \civicrm_api4('CustomField', 'Create');
+        \civicrm_api3('custom_field', 'create');
+        CustomField::get(false)->execute();
+        \civicrm_api3('custom_value', 'create', []);
+        \CRM_Core_BAO_CustomField::getField(1);
+    }
+
+    public function testViaStaticHelpers(): void
+    {
+        self::makeGroup();
+        static::makeField();
+    }
+
+    private static function makeGroup(): void
+    {
+        \civicrm_api4('CustomGroup', 'create', []);
+    }
+
+    private static function makeField(): void
+    {
+        CustomField::create(false)->execute();
+    }
+
+    /** Not called from inside the transaction. */
+    private static function unused(): void
+    {
+        CustomField::create(false)->execute();
+    }
+
+    protected function tearDown(): void
+    {
+        \CRM_Core_DAO::executeQuery('DROP TABLE foo');
+    }
+}
+
+/** A CustomGroup update alters no table unless it flips is_multiple or overrides the FK constraint. */
+final class GroupTitleTest extends TestCase implements TransactionalInterface
+{
+    public function testRename(): void
+    {
+        \Civi\Api4\CustomGroup::update(false)->addValue('title', 'Renamed')->addWhere('id', '=', 1)->execute();
+        \civicrm_api4('CustomGroup', 'update', ['values' => ['title' => 'Renamed']]);
+        \civicrm_api3('CustomGroup', 'setvalue', ['id' => 1, 'field' => 'title', 'value' => 'Renamed']);
     }
 }

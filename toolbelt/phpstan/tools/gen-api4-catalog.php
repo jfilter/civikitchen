@@ -489,14 +489,76 @@ foreach ($roots as $root) {
 // the literal `new FieldSpec('x', ...)` names are collectable.
 //
 // Attribution is deliberately cautious in both directions. A provider that
-// names its entity — in applies(), or as the second FieldSpec argument, or
-// through its own class name — contributes to that entity. A provider whose
-// applies() decides at runtime (EntityTagFilterSpecProvider answers for
-// contacts AND for every entity in the `tag_used_for` option group) names no
-// entity a source tree can pin down, so its fields go to every entity. An
+// names its entity — in applies(), or as the second FieldSpec argument, or,
+// without an applies(), through its own class name — contributes to that
+// entity. applies() calls the generator can read (isContact, isType, an
+// option group's seeded values) name entities too. A provider whose applies()
+// decides otherwise names no entity a source tree can pin down, so its fields
+// go to every entity. An
 // extra field name can only silence an error, never invent one; guessing the
 // entity wrong in the other direction would invent one.
 // ---------------------------------------------------------------------------
+
+/**
+ * Entities CoreUtil::isType() matches: the base class's short name and every
+ * trait up the ancestry, as AbstractEntity::getInfo() lists them.
+ *
+ * @return list<string>
+ */
+function entitiesOfType(string $type, array $classes): array
+{
+    $entities = [];
+    foreach ($classes as $name => $class) {
+        if (!$class['isEntity'] || $class['abstract']) {
+            continue;
+        }
+        $types = [$class['parent']];
+        for ($c = $name, $seen = []; $c !== null && isset($classes[$c]) && !isset($seen[$c]); $c = $classes[$c]['parent']) {
+            $seen[$c] = true;
+            $types = array_merge($types, $classes[$c]['uses']);
+        }
+        if (in_array($type, $types, true)) {
+            $entities[] = $class['entity'];
+        }
+    }
+
+    return $entities;
+}
+
+/**
+ * Names of an option group's values: core's sqldata seed plus the managed
+ * records of the bundled extensions.
+ *
+ * @param  list<string> $roots
+ * @return list<string>
+ */
+function optionGroupNames(string $group, array $roots): array
+{
+    $names = [];
+    foreach ($roots as $root) {
+        $seed = $root . '/sql/civicrm_data/civicrm_option_group/' . $group . '.sqldata.php';
+        $source = is_file($seed) ? (string) file_get_contents($seed) : '';
+        if (preg_match('/addValueTable\(\s*\[([^\]]*)\]\s*,\s*\[(.*)\]\s*\)/s', $source, $table) === 1) {
+            preg_match_all("/'(\\w+)'/", $table[1], $header);
+            $column = array_search('name', $header[1], true);
+            preg_match_all('/^\s*\[(.*)\],?\s*$/m', $table[2], $rows);
+            foreach ($column === false ? [] : $rows[1] as $row) {
+                // ts('Label') is one cell; its argument must not shift the columns.
+                preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'/", (string) preg_replace("/ts\\('(?:[^'\\\\]|\\\\.)*'\\)/", "''", $row), $cells);
+                $names[] = $cells[1][$column] ?? '';
+            }
+        }
+        foreach (glob($root . '/managed/*.mgd.php') ?: [] as $file) {
+            $managed = (string) file_get_contents($file);
+            if (preg_match("/'option_group_id(\\.name)?'\\s*=>\\s*'" . preg_quote($group, '/') . "'/", $managed) === 1) {
+                preg_match_all("/'name'\\s*=>\\s*'(\\w+)'/", $managed, $values);
+                $names = array_merge($names, $values[1]);
+            }
+        }
+    }
+
+    return array_values(array_filter(array_unique($names)));
+}
 
 /** @var array<string, list<string>> */
 $specFields = [];
@@ -528,7 +590,7 @@ foreach ($roots as $root) {
         }
         $source = (string) file_get_contents($entry->getPathname());
         $methods = staticMethods($source, false);
-        preg_match_all('/new\s+FieldSpec\s*\(\s*\'([a-z][A-Za-z0-9_]*)\'/', $source, $m);
+        preg_match_all('/new\s+FieldSpec\s*\(\s*\'([a-z_][A-Za-z0-9_]*)\'/', $source, $m);
         $fields = array_values(array_unique($m[1]));
         $buildsNames = preg_match('/new\s+FieldSpec\s*\(\s*\$/', $source) === 1;
         if ($fields === [] && !$buildsNames) {
@@ -554,12 +616,22 @@ foreach ($roots as $root) {
         if (str_contains($methods['applies'] ?? '', 'isContact(')) {
             $targets['Contact'] = true;
         }
-        // The class name is only evidence where applies() did not settle the
-        // question — an applies() that consults the database has an answer
-        // this generator cannot read, and the name of the file must not
-        // pretend otherwise.
+        // `CoreUtil::isType($entity, 'HierarchicalEntity')` reads the entity's
+        // base class and traits; `OptionGroup::values('tag_used_for')` the
+        // option values a default install ships.
+        preg_match_all('/isType\(\s*\$\w+\s*,\s*\'(\w+)\'/', $methods['applies'] ?? '', $types);
+        foreach ($types[1] as $type) {
+            $targets += array_fill_keys(entitiesOfType($type, $classes), true);
+        }
+        preg_match_all('/OptionGroup::values\(\s*\'(\w+)\'/', $methods['applies'] ?? '', $groups);
+        foreach ($groups[1] as $group) {
+            $targets += array_fill_keys(array_filter(optionGroupNames($group, $roots), static fn (string $n): bool => isset($entityNames[$n])), true);
+        }
+        // The class name is only evidence where there is no applies() — one
+        // that consults the database has an answer this generator may not
+        // read, and the name of the file must not pretend otherwise.
         $undecidableApplies = isset($methods['applies']) && $targets === [];
-        if (!$undecidableApplies) {
+        if (!isset($methods['applies'])) {
             $className = basename($entry->getFilename(), '.php');
             $stem = preg_replace('/(Creation|Get|Filter)?SpecProvider$/', '', $className);
             if (isset($entityNames[$stem])) {

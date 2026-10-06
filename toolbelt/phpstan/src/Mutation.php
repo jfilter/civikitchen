@@ -55,7 +55,7 @@ final class Mutation
             return null;
         }
 
-        if (str_starts_with($class, 'Civi\\Api4\\') && self::isApi4WriteAction($method)) {
+        if (stripos($class, 'Civi\\Api4\\') === 0 && self::isApi4WriteAction($method)) {
             return sprintf('%s::%s()', substr($class, strlen('Civi\\Api4\\')), $method);
         }
 
@@ -80,9 +80,7 @@ final class Mutation
         if (!in_array($function, ['civicrm_api4', 'civicrm_api3', 'civicrm_api'], true)) {
             return null;
         }
-        $args = $expr->getArgs();
-        $entity = isset($args[0]) ? Sql::literalString($args[0]->value) : null;
-        $action = isset($args[1]) ? Sql::literalString($args[1]->value) : null;
+        [$entity, $action] = Sql::apiEntityAndAction($expr);
         if ($entity === null || $action === null) {
             return null;
         }

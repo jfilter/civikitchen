@@ -38,10 +38,13 @@ final class Api4ActionPropertiesExtension implements ReadWritePropertiesExtensio
         return self::isApiParameter($property, $propertyName);
     }
 
-    /** A protected property without a leading underscore on an action class. */
+    /**
+     * A protected property without a leading underscore on an action class;
+     * core's getParamInfo() reads IS_PROTECTED only, so a public one is not.
+     */
     private static function isApiParameter(PropertyReflection $property, string $propertyName): bool
     {
-        if (str_starts_with($propertyName, '_') || $property->isPrivate() || $property->isStatic()) {
+        if (str_starts_with($propertyName, '_') || $property->isPrivate() || $property->isPublic() || $property->isStatic()) {
             return false;
         }
 

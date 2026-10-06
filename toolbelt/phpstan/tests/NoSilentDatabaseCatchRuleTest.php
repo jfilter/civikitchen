@@ -26,12 +26,17 @@ final class NoSilentDatabaseCatchRuleTest extends RuleTestCase
             [
                 __DIR__ . '/fixtures/api4-stubs.php',
                 __DIR__ . '/fixtures/generic-stubs.php',
+                __DIR__ . '/fixtures/sql-stubs.php',
                 __DIR__ . '/fixtures/silent-database-catch.php',
             ],
             [
                 [self::SILENT, 16],
                 [self::EMPTY_CATCH, 25],
                 [self::SILENT, 34],
+                [self::EMPTY_CATCH, 65],
+                [self::SILENT, 103],
+                [self::EMPTY_CATCH, 113],
+                [self::EMPTY_CATCH, 118],
             ],
         );
     }

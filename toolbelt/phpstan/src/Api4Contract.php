@@ -201,30 +201,39 @@ final class Api4Contract
     }
 
     /**
-     * The core entity an unknown name is probably a misspelling of.
+     * The core entity an unknown name is a slip of, if any.
      *
-     * Short names are exempt: two edits away from a four-letter entity is
-     * not a typo, it is a different word.
+     * An added, dropped or changed letter makes another extension's entity
+     * (Contract, Groups, Vote); so does a swap in a name under four letters.
      */
     private static function nearestEntity(string $entity): ?string
     {
-        $length = strlen($entity);
-        if ($length < 4) {
+        if (strlen($entity) < 4) {
             return null;
         }
-        $tolerance = $length >= 6 ? 2 : 1;
-
-        $best = null;
-        $bestDistance = PHP_INT_MAX;
         foreach (array_keys(Api4Catalog::ENTITIES) as $known) {
-            $distance = levenshtein(strtolower($entity), strtolower((string) $known));
-            if ($distance < $bestDistance) {
-                $bestDistance = $distance;
-                $best = (string) $known;
+            if (self::isSlipOf($entity, (string) $known)) {
+                return (string) $known;
             }
         }
 
-        return $bestDistance <= $tolerance ? $best : null;
+        return null;
+    }
+
+    /** Equal ignoring case, or but for one swapped pair of neighbouring letters. */
+    private static function isSlipOf(string $typed, string $known): bool
+    {
+        [$a, $b] = [strtolower($typed), strtolower($known)];
+        if (strlen($a) !== strlen($b)) {
+            return false;
+        }
+        $differ = array_keys(array_diff_assoc(str_split($a), str_split($b)));
+        if ($differ === []) {
+            return true;
+        }
+
+        return count($differ) === 2 && $differ[1] === $differ[0] + 1
+            && $a[$differ[0]] === $b[$differ[1]] && $a[$differ[1]] === $b[$differ[0]];
     }
 
     /** Whether the action's clauses name fields of the entity itself. */
@@ -279,7 +288,9 @@ final class Api4Contract
         }
         // Anything the analysis can see a class for: the extension's own
         // entities, and those of the extensions it declares a dependency on.
-        if ($this->reflectionProvider->hasClass('Civi\\Api4\\' . $this->entityClass($entity))) {
+        // Core looks entities up by exact name, so `contact` is not Contact.
+        $class = 'Civi\\Api4\\' . $this->entityClass($entity);
+        if ($this->reflectionProvider->hasClass($class) && $this->reflectionProvider->getClass($class)->getName() === $class) {
             return true;
         }
 

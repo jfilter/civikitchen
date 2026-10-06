@@ -43,8 +43,14 @@ final class SqlSchema
      */
     private const DYNAMIC_PREFIXES = ['civicrm_value_', 'civicrm_tmp_', 'civicrm_temp'];
 
-    /** SQL keywords a table name follows. */
-    private const TABLE_KEYWORDS = 'FROM|JOIN|INTO|UPDATE|TABLE';
+    /** SQL keywords a table name follows; INSERT's INTO and TRUNCATE's TABLE are optional. */
+    private const TABLE_KEYWORDS = 'FROM|JOIN|INTO|UPDATE|TABLE|(?:INSERT|REPLACE)(?:\s+(?:IGNORE|LOW_PRIORITY|DELAYED|HIGH_PRIORITY))*(?:\s+INTO)?|TRUNCATE(?:\s+TABLE)?';
+
+    /** String literals and comments, whose words are not SQL. */
+    private const LITERALS_AND_COMMENTS = '/\'(?:[^\'\\\\]|\\\\.|\'\')*\'|"(?:[^"\\\\]|\\\\.|"")*"|--[^\n]*|#[^\n]*|\/\*.*?\*\//s';
+
+    /** Where the table list of a FROM clause ends. */
+    private const FROM_LIST_END = 'WHERE|GROUP|ORDER|HAVING|LIMIT|UNION|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|NATURAL|STRAIGHT_JOIN|ON|USING|SET|FOR|LOCK|INTO';
 
     private string $extensionDir;
 
@@ -117,17 +123,30 @@ final class SqlSchema
      */
     public static function tablesIn(string $sql): array
     {
-        if (preg_match_all('/\b(?:' . self::TABLE_KEYWORDS . ')\s+`?([A-Za-z0-9_{}$%.\\\\]+)`?/i', $sql, $matches) === 0) {
-            return [];
-        }
-        $tables = [];
-        foreach ($matches[1] as $name) {
-            if (self::isPlainName($name) && !in_array($name, $tables, true)) {
-                $tables[] = $name;
+        $names = [];
+        // A literal becomes an empty one, a comment whitespace, so a leading comment keeps `^DROP` intact.
+        $stripped = (string) preg_replace_callback(
+            self::LITERALS_AND_COMMENTS,
+            static fn (array $m): string => in_array($m[0][0], ["'", '"'], true) ? "''" : ' ',
+            $sql,
+        );
+        foreach (explode(';', $stripped) as $statement) {
+            // A DROP or RENAME names a table that is about to stop existing.
+            if (preg_match('/^\s*(DROP|RENAME)\b|^\s*ALTER\s+TABLE\b.*\bRENAME\b/is', $statement) === 1) {
+                continue;
+            }
+            preg_match_all('/\b(?:' . self::TABLE_KEYWORDS . ')\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?`?([A-Za-z0-9_{}$%.\\\\]+)`?/i', $statement, $matches);
+            $names = array_merge($names, $matches[1]);
+            // `FROM a x, b y`: every item of the list, not just the first.
+            preg_match_all('/\bFROM\s+(.*?)(?=\b(?:' . self::FROM_LIST_END . ')\b|\)|$)/is', $statement, $lists);
+            foreach ($lists[1] as $list) {
+                foreach (array_slice(explode(',', $list), 1) as $item) {
+                    $names[] = trim((string) strtok(trim($item), " \t\n"), '`');
+                }
             }
         }
 
-        return $tables;
+        return array_values(array_unique(array_filter($names, self::isPlainName(...))));
     }
 
     /**
@@ -175,7 +194,7 @@ final class SqlSchema
 
         $tables = [];
         foreach (self::globRecursive($this->extensionDir . '/schema', '.entityType.php') as $file) {
-            if (preg_match("/'table'\\s*=>\\s*'([A-Za-z0-9_]+)'/", (string) file_get_contents($file), $m) === 1) {
+            if (preg_match("/['\"]table['\"]\\s*=>\\s*['\"]([A-Za-z0-9_]+)['\"]/", (string) file_get_contents($file), $m) === 1) {
                 $tables[] = $m[1];
             }
         }

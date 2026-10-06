@@ -8,18 +8,38 @@ namespace Civi\Api4;
  * Just enough of the APIv4 surface for the rule fixtures to resolve.
  *
  * The rules read the AST, not these types, but an unresolvable class turns
- * the fixture into a pile of unrelated phpstan errors — and the one rule
- * path that does read a type needs core's generated class layout,
- * `Civi\Api4\Action\<Entity>\<Action>`.
+ * the fixture into a pile of unrelated phpstan errors. Like core, most
+ * actions return a generic action class that names no entity.
  */
 class Contact
 {
-    public static function get(bool $checkPermissions = true): Action\Contact\Get
+    public static function get(bool $checkPermissions = true): Generic\DummyAction
     {
-        return new Action\Contact\Get();
+        return new Generic\DummyAction();
+    }
+
+    public static function create(bool $checkPermissions = true): Generic\DummyAction
+    {
+        return new Generic\DummyAction();
     }
 
     public static function getFields(bool $checkPermissions = true): Generic\DummyAction
+    {
+        return new Generic\DummyAction();
+    }
+}
+
+class Activity
+{
+    public static function get(bool $checkPermissions = true): Generic\DummyAction
+    {
+        return new Generic\DummyAction();
+    }
+}
+
+class Group
+{
+    public static function get(bool $checkPermissions = true): Generic\DummyAction
     {
         return new Generic\DummyAction();
     }
@@ -31,6 +51,21 @@ class CustomField
     {
         return new Generic\DummyAction();
     }
+
+    public static function update(bool $checkPermissions = true): Generic\DummyAction
+    {
+        return new Generic\DummyAction();
+    }
+
+    public static function delete(bool $checkPermissions = true): Generic\DummyAction
+    {
+        return new Generic\DummyAction();
+    }
+
+    public static function get(bool $checkPermissions = true): Generic\DummyAction
+    {
+        return new Generic\DummyAction();
+    }
 }
 
 class CustomGroup
@@ -39,8 +74,9 @@ class CustomGroup
     {
         return new Generic\DummyAction();
     }
+
+    public static function delete(bool $checkPermissions = true): Generic\DummyAction
+    {
+        return new Generic\DummyAction();
+    }
 }
-
-namespace Civi\Api4\Action\Contact;
-
-class Get extends \Civi\Api4\Generic\DummyAction {}

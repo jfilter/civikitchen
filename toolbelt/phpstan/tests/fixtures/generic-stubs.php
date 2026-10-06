@@ -8,6 +8,10 @@ namespace Civi\Api4\Generic;
 abstract class AbstractAction
 {
     protected bool $checkPermissions = true;
+
+    public function __construct($entityName = '', $actionName = '')
+    {
+    }
 }
 
 abstract class AbstractCreateAction extends AbstractAction {}
@@ -22,19 +26,19 @@ class DummyAction extends AbstractAction
     }
 
     /** @return $this */
-    public function addWhere(string $field, string $op, mixed $value = null): self
+    public function addWhere(string $fieldName, string $op, mixed $value = null): self
     {
         return $this;
     }
 
     /** @return $this */
-    public function addValue(string $field, mixed $value): self
+    public function addValue(string $fieldName, mixed $value): self
     {
         return $this;
     }
 
     /** @return $this */
-    public function addOrderBy(string $field, string $direction = 'ASC'): self
+    public function addOrderBy(string $fieldName, string $direction = 'ASC'): self
     {
         return $this;
     }

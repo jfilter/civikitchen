@@ -34,6 +34,8 @@ final class GreeterEndpoint
     {
         Widget::createDraft(false)->execute();
         \civicrm_api3('Contact', 'delete', ['id' => 1]);
+        \civicrm_api4(action: 'create', entity: 'Contact', params: []);
+        \crm_core_dao::executeQuery('UPDATE civicrm_widget SET id = 2');
 
         return new Response();
     }
@@ -78,4 +80,37 @@ final class InternalService
     {
         Widget::create(false)->execute();
     }
+}
+
+/** core's AJAX guard rejects anything that is not an XMLHttpRequest. */
+final class AjaxPage extends \CRM_Core_Page
+{
+    public function run(): void
+    {
+        \CRM_Core_Page_AJAX::validateAjaxRequestMethod();
+        Widget::update(false)->execute();
+    }
+}
+
+/** Another AJAX helper is no guard. */
+final class JsonPage extends \CRM_Core_Page
+{
+    public function run(): void
+    {
+        \CRM_Core_Page_AJAX::returnJsonResponse([]);
+        Widget::create(false)->execute();
+    }
+}
+
+trait CreatesWidgets
+{
+    public function run(): void
+    {
+        Widget::create(false)->execute();
+    }
+}
+
+final class TraitPage extends \CRM_Core_Page
+{
+    use CreatesWidgets;
 }

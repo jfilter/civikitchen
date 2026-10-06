@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace CiviKitchen\PHPStan;
 
 use PhpParser\Node;
+use PHPStan\Analyser\Scope;
+use PHPStan\Type\ObjectType;
 
 /**
  * Recognising direct database traffic in the AST.
@@ -23,11 +25,18 @@ final class Sql
         'query', 'executeconstantquery',
     ];
 
+    private const SQL_SELECT = 'CRM_Utils_SQL_Select';
+
     /** Statements MySQL commits implicitly, ending any open transaction. */
     private const DDL_KEYWORDS = ['CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'RENAME'];
 
-    /** Does this call reach the database directly, bypassing APIv4? */
-    public static function isDatabaseCall(Node $node): bool
+    /**
+     * Does this call reach the database directly, bypassing APIv4?
+     *
+     * With a scope, `->execute()` on a variable typed as the SQL builder
+     * counts too; without one, only a builder chain in sight does.
+     */
+    public static function isDatabaseCall(Node $node, ?Scope $scope = null): bool
     {
         if ($node instanceof Node\Expr\StaticCall) {
             return self::isDaoClass(self::staticClassName($node))
@@ -35,14 +44,35 @@ final class Sql
                 && in_array($node->name->toLowerString(), self::DAO_QUERY_METHODS, true);
         }
 
-        if ($node instanceof Node\Expr\MethodCall) {
-            // $dao->query(...) / $dao->find(TRUE) on a DAO instance variable.
-            return $node->name instanceof Node\Identifier
-                && in_array($node->name->toLowerString(), ['query', 'find', 'fetch'], true)
-                && self::looksLikeDaoVariable($node->var);
+        if (!$node instanceof Node\Expr\MethodCall || !$node->name instanceof Node\Identifier) {
+            return false;
+        }
+        $method = $node->name->toLowerString();
+        if ($method === 'execute') {
+            return self::isSqlSelect($node->var, $scope);
         }
 
-        return false;
+        // $dao->query(...) / $dao->find(TRUE) on a DAO instance variable.
+        return in_array($method, ['query', 'find', 'fetch'], true) && self::looksLikeDaoVariable($node->var);
+    }
+
+    /** A CRM_Utils_SQL_Select, whose execute() runs CRM_Core_DAO::executeQuery(). */
+    private static function isSqlSelect(Node\Expr $expr, ?Scope $scope): bool
+    {
+        if ($scope !== null && (new ObjectType(self::SQL_SELECT))->isSuperTypeOf($scope->getType($expr))->yes()) {
+            return true;
+        }
+        while ($expr instanceof Node\Expr\MethodCall) {
+            $expr = $expr->var;
+        }
+        $class = null;
+        if ($expr instanceof Node\Expr\StaticCall) {
+            $class = self::staticClassName($expr);
+        } elseif ($expr instanceof Node\Expr\New_ && $expr->class instanceof Node\Name) {
+            $class = $expr->class->toString();
+        }
+
+        return $class !== null && strcasecmp(ltrim($class, '\\'), self::SQL_SELECT) === 0;
     }
 
     /**
@@ -75,10 +105,18 @@ final class Sql
         return null;
     }
 
-    /** A DDL statement that would commit an open test transaction. */
+    /**
+     * A DDL statement that would commit an open test transaction.
+     *
+     * CREATE/DROP TEMPORARY TABLE is the documented exception: MySQL and
+     * MariaDB run it without an implicit commit.
+     */
     public static function isDdlLiteral(string $sql): bool
     {
         $trimmed = ltrim($sql);
+        if (preg_match('/^(CREATE|DROP)\s+TEMPORARY\s/i', $trimmed) === 1) {
+            return false;
+        }
         foreach (self::DDL_KEYWORDS as $keyword) {
             if (preg_match('/^' . $keyword . '\b/i', $trimmed) === 1) {
                 return true;
@@ -88,7 +126,24 @@ final class Sql
         return false;
     }
 
-    /** The resolved class name of a static call, uppercase-insensitive. */
+    /**
+     * Literal entity and action of a civicrm_api/api3/api4() call, each null
+     * when unreadable. All three name their first parameters $entity, $action.
+     *
+     * @return array{?string, ?string}
+     */
+    public static function apiEntityAndAction(Node\Expr\FuncCall $call): array
+    {
+        $entity = CallArgs::value($call, 0, 'entity');
+        $action = CallArgs::value($call, 1, 'action');
+
+        return [
+            $entity === null ? null : self::literalString($entity),
+            $action === null ? null : self::literalString($action),
+        ];
+    }
+
+    /** The resolved class name of a static call, as written. */
     public static function staticClassName(Node\Expr\StaticCall $node): ?string
     {
         return $node->class instanceof Node\Name ? $node->class->toString() : null;
@@ -102,8 +157,8 @@ final class Sql
         }
         $class = ltrim($class, '\\');
 
-        return $class === 'CRM_Core_DAO'
-            || preg_match('/^CRM_[A-Za-z0-9]+_(DAO|BAO)_/', $class) === 1;
+        return strcasecmp($class, 'CRM_Core_DAO') === 0
+            || preg_match('/^CRM_[A-Za-z0-9]+_(DAO|BAO)_/i', $class) === 1;
     }
 
     /**

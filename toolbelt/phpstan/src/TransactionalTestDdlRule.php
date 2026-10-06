@@ -37,10 +37,18 @@ final class TransactionalTestDdlRule implements Rule
 {
     private const TRANSACTIONAL_INTERFACE = 'Civi\\Test\\TransactionalInterface';
 
-    /** Entities whose create/save writes a column, not a row. */
-    private const DDL_ENTITIES = ['CustomField', 'CustomGroup'];
+    /** APIv4 and APIv3 actions that run DDL on each entity above. */
+    private const WRITE_ACTIONS = [
+        'CustomField' => ['create', 'save', 'update', 'delete', 'replace', 'setvalue'],
+        // An update alters the table only when it flips is_multiple or overrides the FK constraint.
+        'CustomGroup' => ['create', 'save', 'delete', 'replace'],
+    ];
 
-    private const WRITE_ACTIONS = ['create', 'save'];
+    /** BAO entry points that create, alter or drop the custom-value table. */
+    private const DDL_BAO_METHODS = [
+        'create', 'writerecord', 'writerecords', 'deleterecord', 'deleterecords',
+        'createtable', 'createfield', 'deletefield', 'deletegroup',
+    ];
 
     private const EXTENSION_ACTIONS = ['install', 'enable', 'disable', 'uninstall'];
 
@@ -76,7 +84,8 @@ final class TransactionalTestDdlRule implements Rule
     }
 
     /**
-     * setUp() and the test methods, plus the own helpers they call.
+     * setUp(), tearDown() and the test methods, plus the own helpers they
+     * call through `$this->`, `self::` or `static::`.
      *
      * setUpHeadless() is deliberately not a root: it runs before the
      * transaction opens, and is where this rule wants the schema work to end
@@ -89,7 +98,7 @@ final class TransactionalTestDdlRule implements Rule
     {
         $queue = [];
         foreach ($methods as $name => $method) {
-            if ($name === 'setup' || str_starts_with($name, 'test')) {
+            if ($name === 'setup' || $name === 'teardown' || str_starts_with($name, 'test')) {
                 $queue[] = $name;
             }
         }
@@ -101,17 +110,25 @@ final class TransactionalTestDdlRule implements Rule
                 continue;
             }
             $seen[$name] = $methods[$name];
-            foreach ((new NodeFinder())->find($methods[$name]->stmts ?? [], static fn (Node $n): bool => $n instanceof Node\Expr\MethodCall) as $call) {
-                if (!$call instanceof Node\Expr\MethodCall || !$call->name instanceof Node\Identifier) {
-                    continue;
-                }
-                if ($call->var instanceof Node\Expr\Variable && $call->var->name === 'this') {
+            foreach ((new NodeFinder())->find($methods[$name]->stmts ?? [], static fn (Node $n): bool => self::isOwnCall($n)) as $call) {
+                if (($call instanceof Node\Expr\MethodCall || $call instanceof Node\Expr\StaticCall) && $call->name instanceof Node\Identifier) {
                     $queue[] = $call->name->toLowerString();
                 }
             }
         }
 
         return array_values($seen);
+    }
+
+    /** `$this->x()`, `self::x()` or `static::x()`. */
+    private static function isOwnCall(Node $node): bool
+    {
+        if ($node instanceof Node\Expr\MethodCall) {
+            return $node->var instanceof Node\Expr\Variable && $node->var->name === 'this';
+        }
+
+        return $node instanceof Node\Expr\StaticCall && $node->class instanceof Node\Name
+            && in_array($node->class->toLowerString(), ['self', 'static'], true);
     }
 
     /**
@@ -141,13 +158,22 @@ final class TransactionalTestDdlRule implements Rule
         $method = $expr->name instanceof Node\Identifier ? $expr->name->toString() : '';
 
         // \Civi\Api4\CustomField::create()
-        if (str_starts_with($class, 'Civi\\Api4\\')) {
+        if (stripos($class, 'Civi\\Api4\\') === 0) {
             $entity = substr($class, strlen('Civi\\Api4\\'));
 
-            return self::customFieldWrite($entity, $method, sprintf('%s::%s()', $entity, $method), $expr);
+            return self::customFieldWrite($entity, $method, '%s::%s()', $expr);
         }
 
-        // CRM_Extension_System::singleton()->getManager()->install(...) starts here.
+        // CRM_Core_BAO_CustomField::create() is what the API runs underneath.
+        if (preg_match('/^CRM_Core_(BAO|DAO)_Custom(Field|Group)$/i', $class) === 1
+            && in_array(strtolower($method), self::DDL_BAO_METHODS, true)) {
+            return [self::error(
+                sprintf('%s::%s() in a transactional test', $class, $method),
+                'ck.test.customFieldInTransaction',
+                $expr,
+            )];
+        }
+
         if (Sql::isDaoClass($class)) {
             return self::checkSqlArguments($expr->getArgs(), $expr);
         }
@@ -167,17 +193,15 @@ final class TransactionalTestDdlRule implements Rule
         if (!in_array($function, ['civicrm_api4', 'civicrm_api3', 'civicrm_api'], true)) {
             return [];
         }
-        $args = $expr->getArgs();
-        $entity = isset($args[0]) ? self::literal($args[0]->value) : null;
-        $action = isset($args[1]) ? self::literal($args[1]->value) : null;
+        [$entity, $action] = Sql::apiEntityAndAction($expr);
         if ($entity === null || $action === null) {
             return [];
         }
-        $write = self::customFieldWrite($entity, $action, sprintf("%s('%s', '%s')", $function, $entity, $action), $expr);
+        $write = self::customFieldWrite($entity, $action, $function . "('%s', '%s')", $expr);
         if ($write !== []) {
             return $write;
         }
-        if ($entity === 'Extension' && in_array($action, self::EXTENSION_ACTIONS, true)) {
+        if (strcasecmp($entity, 'Extension') === 0 && in_array(strtolower($action), self::EXTENSION_ACTIONS, true)) {
             return [self::error(
                 sprintf("%s('Extension', '%s') in a transactional test", $function, $action),
                 'ck.test.extensionInTransaction',
@@ -191,14 +215,17 @@ final class TransactionalTestDdlRule implements Rule
     /**
      * @return list<\PHPStan\Rules\IdentifierRuleError>
      */
-    private static function customFieldWrite(string $entity, string $action, string $call, Node $expr): array
+    private static function customFieldWrite(string $entity, string $action, string $callFormat, Node $expr): array
     {
-        if (!in_array($entity, self::DDL_ENTITIES, true) || !in_array($action, self::WRITE_ACTIONS, true)) {
+        // Names resolve case-insensitively, and APIv3 also takes `custom_field`.
+        $normalised = str_replace('_', '', $entity);
+        $ddlEntity = array_values(array_filter(array_keys(self::WRITE_ACTIONS), static fn (string $e): bool => strcasecmp($e, $normalised) === 0))[0] ?? null;
+        if ($ddlEntity === null || !in_array(strtolower($action), self::WRITE_ACTIONS[$ddlEntity], true)) {
             return [];
         }
 
         return [self::error(
-            $call . ' in a transactional test',
+            sprintf($callFormat, $ddlEntity, $action) . ' in a transactional test',
             'ck.test.customFieldInTransaction',
             $expr,
         )];
