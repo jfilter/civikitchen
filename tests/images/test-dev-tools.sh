@@ -439,10 +439,10 @@ else
     ok "cklint mago stage honors @mago-expect"
 fi
 
-# too-many-methods is path-scoped in the baseline: a signal for production
-# classes, noise for a PHPUnit case. The per-rule `exclude` that does it is the
-# only path-aware setting in the config, so a mago upgrade dropping it is worth
-# catching here.
+# too-many-methods and no-request-variable are path-scoped in the baseline:
+# signals for production code, noise in a PHPUnit case. The per-rule `exclude`
+# is the only path-aware setting in the config, so a mago upgrade dropping it
+# is worth catching here.
 mago_methods_class() {
     { echo "<?php"; echo; echo "declare(strict_types = 1);"; echo;
       echo "class $1 {";
@@ -453,6 +453,9 @@ mkdir -p "${MAGODIR}/tests/phpunit" "${MAGODIR}/Civi"
 rm -f "${MAGODIR}/Mago.php"
 mago_methods_class BigProd "${MAGODIR}/Civi/BigProd.php"
 mago_methods_class BigTest "${MAGODIR}/tests/phpunit/BigTest.php"
+for f in Civi/RequestProd.php tests/phpunit/RequestTest.php; do
+    printf '<?php\n\ndeclare(strict_types = 1);\n\n$_REQUEST = [];\n' > "${MAGODIR}/${f}"
+done
 (cd "${MAGODIR}" && git add -A) >/dev/null 2>&1
 MAGO_OUT3="$( (cd "${MAGODIR}" && cklint --all) 2>&1 || true)"
 # mago prints the rule code and the file path on separate lines, and the phpcs
@@ -468,6 +471,18 @@ if grep -q "BigTest.php" <<<"${TMM_CTX}"; then
     fail "too-many-methods fired under tests/ — the baseline excludes that path"
 else
     ok "cklint mago stage excludes tests/ from too-many-methods"
+fi
+
+NRV_CTX="$(echo "${MAGO_OUT3}" | grep -A3 'no-request-variable' || true)"
+if grep -q "RequestProd.php" <<<"${NRV_CTX}"; then
+    ok "cklint mago stage flags no-request-variable in production code"
+else
+    fail "no-request-variable didn't fire outside tests/ (output: ${MAGO_OUT3:0:300})"
+fi
+if grep -q "RequestTest.php" <<<"${NRV_CTX}"; then
+    fail "no-request-variable fired under tests/ — the baseline excludes that path"
+else
+    ok "cklint mago stage excludes tests/ from no-request-variable"
 fi
 
 # The sniffs' own unit tests ship with the standard (exact codes + line

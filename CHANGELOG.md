@@ -33,6 +33,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Changed
 
+- `cklint`'s mago stage no longer applies `no-request-variable` under
+  `tests/`, like `too-many-methods`: a test that drives a real `preProcess()`
+  has to put the simulated query into `$_REQUEST`, which
+  `CRM_Utils_Request::retrieve()` reads. Production code keeps the rule.
 - `cklint` runs its mago stage at the PHP floor in `composer.json`
   `require.php` instead of the baseline's 8.1, so a repo above 8.1 may use the
   language features of its floor. Rules that only apply from 8.2 on, such as
