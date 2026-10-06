@@ -289,7 +289,7 @@ up; see
   parameter has to be answered as a verdict, not rejected with an exception.
 - Warnings vs errors in the phpcs layer is a real distinction, not decoration:
   a sniff is a warning where the fix needs human judgement (which parameter is
-  that `TRUE`? is this permission bypass the legitimate one?). `cklint` prints
+  that `TRUE`?). `cklint` prints
   them and exits 0 on them — only phpcs *errors* and mago findings fail the
   gate. Ship warnings down over time; don't let them block a release.
 - `cklint` also runs `mago lint` as a second engine: bug-pattern rules the

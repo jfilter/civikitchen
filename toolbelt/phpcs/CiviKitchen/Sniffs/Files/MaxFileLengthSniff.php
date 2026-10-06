@@ -20,7 +20,8 @@ use PHP_CodeSniffer\Sniffs\Sniff;
  *     <properties><property name="maxLines" value="800"/></properties>
  *   </rule>
  *
- * The error is reported on line 1 (the open tag) since it is a whole-file fact.
+ * The error is reported on line 1 since it is a whole-file fact, whatever the
+ * file starts with (`<?php`, `<?=` or inline HTML).
  */
 final class MaxFileLengthSniff implements Sniff {
 
@@ -35,7 +36,7 @@ final class MaxFileLengthSniff implements Sniff {
    * @return array<int, int|string>
    */
   public function register(): array {
-    return [T_OPEN_TAG];
+    return [T_OPEN_TAG, T_OPEN_TAG_WITH_ECHO, T_INLINE_HTML];
   }
 
   /**
@@ -48,15 +49,15 @@ final class MaxFileLengthSniff implements Sniff {
     $max = (int) $this->maxLines;
 
     if ($lines > $max) {
-      $phpcsFile->addError(
+      $phpcsFile->addErrorOnLine(
         'File is %s lines long; the maximum is %s. Split it into focused classes.',
-        $stackPtr,
+        1,
         'TooLong',
         [$lines, $max]
       );
     }
 
-    // A whole-file check: assessed on the first open tag, never re-run.
+    // A whole-file check: assessed on the first registered token, never re-run.
     return $phpcsFile->numTokens;
   }
 

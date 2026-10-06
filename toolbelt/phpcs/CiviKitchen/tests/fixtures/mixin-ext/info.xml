@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<extension key="org.example.acme" type="module">
+  <file>acme</file>
+  <name>Acme</name>
+</extension>

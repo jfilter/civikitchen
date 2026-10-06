@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<ruleset name="CiviKitchenTestExternalActionsFqn">
+  <description>
+    Test ruleset: the @required guard armed with a namespace-qualified entry,
+    which matches only the class in that namespace.
+  </description>
+  <rule ref="../../Sniffs/Api/NoRequiredOnExternalActionSniff.php">
+    <properties>
+      <property name="externalActions" type="array">
+        <element value="\Acme\Api\RequiredOnIntake"/>
+      </property>
+    </properties>
+  </rule>
+</ruleset>

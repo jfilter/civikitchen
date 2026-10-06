@@ -6,6 +6,8 @@ namespace CiviKitchen\Sniffs\Api;
 
 use PHP_CodeSniffer\Files\File;
 use PHP_CodeSniffer\Sniffs\Sniff;
+use PHPCSUtils\Utils\Conditions;
+use PHPCSUtils\Utils\Namespaces;
 
 /**
  * Forbids the `@required` APIv4 annotation on externally reachable actions.
@@ -20,12 +22,18 @@ use PHP_CodeSniffer\Sniffs\Sniff;
  * NOT a blanket ban: the consuming ruleset lists exactly the external action
  * classes via <property name="externalActions">. With an empty list the sniff
  * is inert — it never guesses which actions are external.
+ *
+ * The sniff checks the class whose body holds the docblock, and only sees
+ * declarations in that class body: a `@required` property inherited from a
+ * trait or a parent class is not reported.
  */
 final class NoRequiredOnExternalActionSniff implements Sniff {
 
   /**
-   * Unqualified class names of the externally reachable actions to guard
-   * (e.g. Intake, Confirm). Set per project in the ruleset; empty = inert.
+   * The externally reachable actions to guard. An entry with a `\` is matched
+   * against the namespace-qualified class name (`Civi\Api4\Action\Intake`),
+   * one without against the short name only (`Intake`, in any namespace).
+   * Case-insensitive, like PHP class names. Set per project; empty = inert.
    *
    * @var array<int, string>
    */
@@ -50,12 +58,9 @@ final class NoRequiredOnExternalActionSniff implements Sniff {
       return;
     }
 
-    $classPtr = $phpcsFile->findNext([T_CLASS], 0);
-    if ($classPtr === FALSE) {
-      return;
-    }
-    $className = $phpcsFile->getDeclarationName($classPtr);
-    if ($className === NULL || !in_array($className, $this->externalActions, TRUE)) {
+    $classPtr = Conditions::getLastCondition($phpcsFile, $stackPtr, [T_CLASS]);
+    $className = $classPtr === FALSE ? NULL : $phpcsFile->getDeclarationName($classPtr);
+    if ($className === NULL || !$this->isExternal($phpcsFile, $classPtr, $className)) {
       return;
     }
 
@@ -65,6 +70,18 @@ final class NoRequiredOnExternalActionSniff implements Sniff {
       'RequiredOnExternalAction',
       [$className]
     );
+  }
+
+  private function isExternal(File $phpcsFile, int $classPtr, string $className): bool {
+    $qualified = ltrim(Namespaces::determineNamespace($phpcsFile, $classPtr) . '\\' . $className, '\\');
+    foreach ($this->externalActions as $entry) {
+      $entry = ltrim(trim($entry), '\\');
+      if (strcasecmp($entry, str_contains($entry, '\\') ? $qualified : $className) === 0) {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
   }
 
 }

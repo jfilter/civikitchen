@@ -17,7 +17,20 @@ function civikitchen_fixture_clean($arr, $obj) {
   $f = $obj->ts('a method named ts is fine');
   $g = $obj->value('a method named value is fine');
   $h = $obj->civicrm_api3 ?? NULL;
-  return [$a, $b, $c, $d, $e, $f, $g, $h];
+  // Namespaced functions named ts, a nullsafe method, and 'ts' as data, not
+  // as a callback: none of them is core's ts('x').
+  $i = \Some\Ns\ts('another function');
+  $j = Ns\ts('relative');
+  $k = namespace\ts('current namespace');
+  $l = $obj?->ts('nullsafe');
+  $m = array_map('ts' . 'x', $arr);
+  $n = in_array('ts', $arr, TRUE);
+  $o = $obj->array_map('ts', $arr);
+  $p = \Some\Ns\array_map('ts', $arr);
+  $q = array_filter('ts', $arr);
+  $r = array_map(fn ($s) => E::ts($s), ['ts']);
+  $s = "ts('in a string')";
+  return [$a, $b, $c, $d, $e, $f, $g, $h, $i, $j, $k, $l, $m, $n, $o, $p, $q, $r, $s];
 }
 
 /**

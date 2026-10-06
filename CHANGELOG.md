@@ -21,6 +21,15 @@ except that a break the consumers are adjusted for ships as a minor, marked
   language features of its floor. Rules that only apply from 8.2 on, such as
   `sensitive-parameter`, start reporting in those repos.
 
+### Removed
+
+- **Breaking**: the phpcs sniff `CiviKitchen.Security.PermissionBypass`.
+  `Entity::get(FALSE)` is the modern idiom for legitimate system-context
+  calls, and the sniff cannot tell those from a dangerous bypass; its only
+  remedy, `phpcs:ignore`, conflicts with zero-suppression policies. A
+  `<rule ref>` to it in a project ruleset now fails phpcs: remove it, and drop
+  the `phpcs:ignore CiviKitchen.Security.PermissionBypass` comments.
+
 ### Fixed
 
 - The oxfmt toolchain lifts tinypool to 2.1.2 (CVE-2026-104848,
@@ -31,6 +40,36 @@ except that a break the consumers are adjusted for ships as a minor, marked
   (`^8.2 || ^8.1` is 8.1) instead of the first one it names. `ckmodernize`
   stops on a floor without a rector migration set, such as `>=7.4`, instead of
   rewriting for 8.1.
+- `CiviKitchen.I18n.UseExtensionTs` flags `TS()`/`Ts()` and a `'ts'` callback
+  passed to `array_map()`, `call_user_func()`, `usort()` and friends, and no
+  longer flags namespaced functions named `ts`.
+- `CiviKitchen.Security.NoUnsafeUnserialize` requires an `allowed_classes` key
+  in an options array literal, reads trailing commas, comments, named and
+  `match` arguments correctly, flags `'unserialize'` callbacks, and no longer
+  flags namespaced functions.
+- `CiviKitchen.Tests.NoTautologicalAssertion` also catches
+  `assertTrue(TRUE, 'message')`, `\TRUE`, named, nullsafe and `!`-negated
+  forms, `assertNull(NULL)`, `assertEmpty([])` and `assertSame`/`assertEquals`
+  on two identical literals.
+- `CiviKitchen.Extension.UseMixinsForStandardHooks` matches hooks by the
+  info.xml `<file>` prefix, checks `function_exists()`-guarded functions,
+  ignores namespaced functions, which core never calls,
+  covers xmlMenu, caseTypes, themes and alterSettingsFolders, points
+  navigationMenu to managed Navigation records, and no longer flags
+  `alterSettingsMetaData`, which no mixin replaces.
+- `CiviKitchen.Api.NoGenericVarOnActionParam` mirrors core's runtime type
+  check (`int[]`, `?string`, `integer`, `object`, pseudo types), checks only
+  protected, non-static, non-`_` params, accepts `array{…}` shapes, and
+  recognises actions by a core action parent or a `_run(Result $result)`
+  method.
+- `CiviKitchen.Api.NoRequiredOnExternalAction` checks the class enclosing the
+  docblock and accepts namespace-qualified `externalActions` entries.
+- `CiviKitchen.Modern.NameBooleanArguments` flags `\TRUE`, matches
+  `ignoreCalls` case-insensitively and ignores value positions of
+  `array_push`, `addWhere`, `addHaving`, `addValue`, `set`, `assertSame` and
+  similar.
+- `CiviKitchen.Files.MaxFileLength` measures files that start with `<?=` or
+  HTML and reports on line 1.
 
 ## [1.31.0] - 2026-10-05
 

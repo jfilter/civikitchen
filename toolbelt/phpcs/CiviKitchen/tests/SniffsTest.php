@@ -11,11 +11,9 @@ use PHPUnit\Framework\TestCase;
  * modern-counterpart fixture must produce zero findings — every line in it
  * is a near-miss a sloppy token matcher would flag.
  *
- * Runs anywhere phpcs + the CiviKitchen standard are available:
- *   - inside a civikitchen image:  phpunit /opt/civikitchen/toolbelt/phpcs/CiviKitchen/tests
- *   - from a repo checkout:        phpunit toolbelt/phpcs/CiviKitchen/tests
- *     (the standard is resolved via --runtime-set installed_paths below,
- *      so the repo copy needs no prior phpcs --config-set)
+ * Runs inside a civikitchen image (phpunit /opt/civikitchen/toolbelt/phpcs/CiviKitchen/tests),
+ * which registers the standard and PHPCSUtils. The CiviKitchen\Util helpers
+ * autoload from the registered standard path, also under the fixture rulesets.
  */
 final class SniffsTest extends TestCase {
 
@@ -23,7 +21,6 @@ final class SniffsTest extends TestCase {
     . 'CiviKitchen.Api.NoRequiredOnExternalAction,'
     . 'CiviKitchen.Api.NoGenericVarOnActionParam,'
     . 'CiviKitchen.Security.NoUnsafeUnserialize,'
-    . 'CiviKitchen.Security.PermissionBypass,'
     . 'CiviKitchen.Tests.NoTautologicalAssertion,'
     . 'CiviKitchen.Extension.UseMixinsForStandardHooks,'
     . 'CiviKitchen.Files.MaxFileLength';
@@ -77,70 +74,79 @@ final class SniffsTest extends TestCase {
     return $byLine;
   }
 
-  public function testUseExtensionTsFlagsBareAndFullyQualifiedTs(): void {
-    $findings = $this->phpcs('BareTs.php');
-
-    $expected = [
-      7 => ['CiviKitchen.I18n.UseExtensionTs.BareTs'],
-      8 => ['CiviKitchen.I18n.UseExtensionTs.BareTs'],
-    ];
-    self::assertSame($expected, $findings);
+  /**
+   * @param list<int> $lines
+   *
+   * @return array<int, list<string>>
+   */
+  private static function on(array $lines, string $code): array {
+    return array_fill_keys($lines, [$code]);
   }
 
-  public function testUseMixinsForStandardHooksFlagsLegacyMixinHooks(): void {
-    $findings = $this->phpcs('LegacyMixinHooks.php');
-
-    $expected = [
-      6 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
-      9 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
-      12 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
-      15 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
-      18 => ['CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'],
-    ];
-    self::assertSame($expected, $findings);
+  public function testUseExtensionTsFlagsGlobalTsCallsAndCallbacks(): void {
+    // Every case spelling, comments before the parenthesis, the first-class
+    // callable, and 'ts' as the whole callback argument (positional or named).
+    self::assertSame(
+      self::on(range(8, 25), 'CiviKitchen.I18n.UseExtensionTs.BareTs'),
+      $this->phpcs('BareTs.php')
+    );
   }
 
-  public function testNoGenericVarOnActionParamFlagsRuntimeParsedGenerics(): void {
-    $findings = $this->phpcs('GenericActionVar.php');
-
-    // Flags: generic @var on params of Civi\Api4 classes extending *Action
-    // (lines 12 + 33). Not flagged: plain @var with @phpstan-var, inline
-    // @var inside a method body, non-Action base class.
-    $expected = [
-      12 => ['CiviKitchen.Api.NoGenericVarOnActionParam.GenericActionVar'],
-      33 => ['CiviKitchen.Api.NoGenericVarOnActionParam.GenericActionVar'],
-    ];
-    self::assertSame($expected, $findings);
+  public function testUseMixinsForStandardHooksFallsBackToSuffixWithoutInfoXml(): void {
+    // No info.xml above the fixture: any _<hook> suffix counts, the helper on
+    // line 34 included. alterSettingsMetaData (line 13) is a runtime hook.
+    self::assertSame(
+      self::on([7, 10, 16, 19, 22, 25, 28, 31, 34], 'CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'),
+      $this->phpcs('LegacyMixinHooks.php')
+    );
   }
 
-  public function testNoUnsafeUnserializeFlagsOnlySingleArgumentCalls(): void {
-    $findings = $this->phpcs('UnsafeUnserialize.php');
-
-    // Flagged: the three one-argument calls (a comma inside a nested call
-    // argument must not read as a second argument, line 13). Not flagged:
-    // calls passing an options array, ->unserialize()/::unserialize() method
-    // calls, and the method declaration itself.
-    $expected = [
-      12 => ['CiviKitchen.Security.NoUnsafeUnserialize.UnsafeUnserialize'],
-      13 => ['CiviKitchen.Security.NoUnsafeUnserialize.UnsafeUnserialize'],
-      14 => ['CiviKitchen.Security.NoUnsafeUnserialize.UnsafeUnserialize'],
-    ];
-    self::assertSame($expected, $findings);
+  public function testUseMixinsForStandardHooksMatchesTheInfoXmlPrefix(): void {
+    // acme_civicrm_<hook> in any case, also inside the function_exists() guard
+    // (line 24). Not: other prefixes, helpers, nested functions and methods.
+    self::assertSame(
+      self::on([6, 11, 14, 17, 20, 24], 'CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'),
+      $this->phpcs('mixin-ext/acme.php')
+    );
   }
 
-  public function testNoTautologicalAssertionFlagsOnlyBareMatchingLiterals(): void {
-    $findings = $this->phpcs('TautologicalAssertion.php');
+  public function testUseMixinsForStandardHooksJudgesOnlyGlobalFunctions(): void {
+    self::assertSame(
+      self::on([13], 'CiviKitchen.Extension.UseMixinsForStandardHooks.LegacyHook'),
+      $this->phpcs('mixin-ext/namespaced.php')
+    );
+  }
 
-    // Flagged: the four assertions on a bare literal that matches them. Not
-    // flagged: assertions on expressions, assertTrue(FALSE) (a deliberate
-    // failure, not a tautology), assertSame, and a bare function call.
-    $expected = [
-      12 => ['CiviKitchen.Tests.NoTautologicalAssertion.TautologicalAssertion'],
-      13 => ['CiviKitchen.Tests.NoTautologicalAssertion.TautologicalAssertion'],
-      14 => ['CiviKitchen.Tests.NoTautologicalAssertion.TautologicalAssertion'],
-      15 => ['CiviKitchen.Tests.NoTautologicalAssertion.TautologicalAssertion'],
-    ];
-    self::assertSame($expected, $findings);
+  public function testNoGenericVarOnActionParamMirrorsCoresTypeCheck(): void {
+    // Flagged: generics, int[], pseudo types, ?string, aliases and object on
+    // protected params of classes detected as actions by parent FQN (lines
+    // 13-45), namespace + *Action parent (113), a Civi\Api4 parent outside
+    // Civi\Api4 (126) and _run() (135). Not flagged: accepted types, shapes,
+    // `<` in the description, private/public/_/version, CiviRules actions.
+    self::assertSame(
+      self::on([13, 18, 23, 28, 33, 38, 113, 126, 135], 'CiviKitchen.Api.NoGenericVarOnActionParam.GenericActionVar'),
+      $this->phpcs('GenericActionVar.php')
+    );
+  }
+
+  public function testNoUnsafeUnserializeRequiresAnAllowedClassesDecision(): void {
+    // Flagged (lines 11-27): no options, an empty or allowed_classes-less
+    // literal, trailing comma, comment, match body, spread, string callables.
+    // Not flagged: allowed_classes given, non-literal options, methods,
+    // namespaced functions and 'unserialize' that is not the whole callback.
+    self::assertSame(
+      self::on(range(11, 27), 'CiviKitchen.Security.NoUnsafeUnserialize.UnsafeUnserialize'),
+      $this->phpcs('UnsafeUnserialize.php')
+    );
+  }
+
+  public function testNoTautologicalAssertionFlagsLiteralOutcomes(): void {
+    // Line 23 opens the multi-line static::assertTrue( call.
+    $lines = array_merge(range(12, 23), range(26, 35));
+    self::assertSame(
+      self::on($lines, 'CiviKitchen.Tests.NoTautologicalAssertion.TautologicalAssertion'),
+      $this->phpcs('TautologicalAssertion.php')
+    );
   }
 
   public function testModernCounterpartsProduceZeroFindings(): void {
@@ -171,13 +177,10 @@ final class SniffsTest extends TestCase {
     // (ignoreCalls), an already-named argument, a variable, a comparison that
     // merely contains TRUE, an assignment, an array element, a setter's sole
     // argument, and the parameter default in the declaration.
-    $expected = [
-      9 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
-      10 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
-      18 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
-      19 => ['CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'],
-    ];
-    self::assertSame($expected, $findings);
+    // Lines 32-34: a method, a constructor and `\TRUE`. Not flagged below
+    // them: ignoreCalls in any case, and the value positions of variadics,
+    // APIv4 setters, settings and PHPUnit's expected values.
+    self::assertSame(self::on([9, 10, 18, 19, 32, 33, 34], 'CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean'), $findings);
   }
 
   public function testMaxFileLengthFlagsOnlyFilesOverTheConfiguredCap(): void {
@@ -185,34 +188,14 @@ final class SniffsTest extends TestCase {
     self::assertSame([], $this->phpcs('LongFile.php'),
       'a short file is well within the default cap');
 
-    // Armed with a low cap (maxLines=10), the same file trips on line 1 — the
-    // over-length is a whole-file fact, reported at the open tag.
+    // Armed with a low cap (maxLines=10), every over-long file trips on line
+    // 1 — a whole-file fact — whatever its first token is.
     $armed = __DIR__ . '/fixtures/max-file-length-ruleset.xml';
-    self::assertSame(
-      [1 => ['CiviKitchen.Files.MaxFileLength.TooLong']],
-      $this->phpcs('LongFile.php', $armed),
-      'a file over the configured cap is flagged on line 1'
-    );
-  }
-
-  public function testPermissionBypassWarnsOnlyOnTheTwoLiteralForms(): void {
-    // The standard excludes tests/, and the fixture lives there — so the
-    // sniff has to be armed by path to see it at all. That the plain standard
-    // stays silent on the very same file IS the exclusion test below.
-    $armed = __DIR__ . '/fixtures/permission-bypass-ruleset.xml';
-
-    $expected = [
-      15 => ['CiviKitchen.Security.PermissionBypass.PermissionBypass'],
-      16 => ['CiviKitchen.Security.PermissionBypass.PermissionBypass'],
-      17 => ['CiviKitchen.Security.PermissionBypass.PermissionBypass'],
-      20 => ['CiviKitchen.Security.PermissionBypass.PermissionBypass'],
-    ];
-    self::assertSame($expected, $this->phpcs('PermissionBypass.php', $armed));
-  }
-
-  public function testPermissionBypassIsSilentUnderTests(): void {
-    self::assertSame([], $this->phpcs('PermissionBypass.php'),
-      'the standard excludes tests/, where running as nobody is the norm');
+    $line1 = [1 => ['CiviKitchen.Files.MaxFileLength.TooLong']];
+    self::assertSame($line1, $this->phpcs('LongFile.php', $armed));
+    self::assertSame($line1, $this->phpcs('ShortPhp.php', $armed), 'eleven <?php lines');
+    self::assertSame($line1, $this->phpcs('TemplateEcho.php', $armed), 'a template opening with <?=');
+    self::assertSame($line1, $this->phpcs('TemplateHtml.php', $armed), 'HTML first, <?php on line 15');
   }
 
   public function testRequiredGuardIsInertWithoutConfiguredExternalActions(): void {
@@ -234,6 +217,23 @@ final class SniffsTest extends TestCase {
 
     self::assertSame([], $this->phpcs('RequiredOnImporter.php', $armed),
       'an action outside the externalActions list keeps its legitimate @required');
+
+    // The enclosing class decides, not the first class in the file; the
+    // trait's @required (line 19) is outside the class body and not seen.
+    self::assertSame(
+      [31 => ['CiviKitchen.Api.NoRequiredOnExternalAction.RequiredOnExternalAction']],
+      $this->phpcs('RequiredOnSecondClass.php', $armed)
+    );
+  }
+
+  public function testRequiredGuardMatchesQualifiedEntriesByNamespace(): void {
+    $armed = __DIR__ . '/fixtures/external-actions-fqn-ruleset.xml';
+
+    self::assertSame(
+      [26 => ['CiviKitchen.Api.NoRequiredOnExternalAction.RequiredOnExternalAction']],
+      $this->phpcs('RequiredNamespaced.php', $armed),
+      'only Acme\\Api\\RequiredOnIntake is guarded, not Other\\RequiredOnIntake'
+    );
   }
 
 }

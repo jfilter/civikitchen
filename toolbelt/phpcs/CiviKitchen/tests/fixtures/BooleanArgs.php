@@ -27,3 +27,26 @@ function civikitchen_save($obj, bool $checkPermissions = TRUE, ?string $label = 
 function civikitchen_settle(bool $now) {
   return $now;
 }
+
+function civikitchen_fixture_bool_values($obj, $list, $x) {
+  $a = $obj->run(TRUE);
+  $b = new \ArrayObject(TRUE);
+  $c = $obj->run(\TRUE);
+  $d = IN_ARRAY($x, $list, TRUE);
+  $e = array_push($list, TRUE);
+  $f = $obj->addWhere('is_active', '=', TRUE);
+  $g = $obj->addValue('is_active', TRUE);
+  $h = \Civi::settings()->set('flag', TRUE);
+  $i = $obj->assertSame(TRUE, $x);
+  $j = $obj->ADDWHERE('is_active', '=', \FALSE);
+  $k = \in_array($x, $list, \TRUE);
+  $l = array_unshift($list, FALSE);
+  $m = array_fill(0, 2, TRUE);
+  $n = array_fill_keys($list, FALSE);
+  $o = array_pad($list, 2, TRUE);
+  $p = $obj->assertEquals(FALSE, $x);
+  $q = $obj->assertNotSame(TRUE, $x);
+  $r = $obj->assertNotEquals(FALSE, $x);
+  $s = $obj->addHaving('total', '=', TRUE);
+  return [$a, $b, $c, $d, $e, $f, $g, $h, $i, $j, $k, $l, $m, $n, $o, $p, $q, $r, $s];
+}

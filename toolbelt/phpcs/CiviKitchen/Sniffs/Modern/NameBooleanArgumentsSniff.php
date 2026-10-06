@@ -18,7 +18,11 @@ use PHP_CodeSniffer\Util\Tokens;
  * default) automatically; this one needs a human to pick the parameter.
  *
  * `ignoreCalls` exempts callees whose bool is idiomatic (in_array's strict
- * flag) — extend it via ruleset <property> rather than editing the sniff.
+ * flag) or a value rather than a flag: variadics that cannot take a name
+ * (array_push), APIv4 field values (addWhere, addHaving, addValue), setting values (set)
+ * and PHPUnit's expected values (assertSame). Names match case-insensitively,
+ * for functions and methods alike — extend the list via ruleset <property>
+ * rather than editing the sniff. `\TRUE` counts as the literal.
  * A setter's sole argument is exempt too: `setUseTrash(FALSE)` names it, and
  * APIv4's magic setters (__call) cannot take a named argument.
  */
@@ -35,6 +39,19 @@ final class NameBooleanArgumentsSniff implements Sniff {
     'array_keys',
     'json_decode',
     'define',
+    'array_push',
+    'array_unshift',
+    'array_fill',
+    'array_fill_keys',
+    'array_pad',
+    'addWhere',
+    'addHaving',
+    'addValue',
+    'set',
+    'assertSame',
+    'assertEquals',
+    'assertNotSame',
+    'assertNotEquals',
   ];
 
   /**
@@ -69,7 +86,7 @@ final class NameBooleanArgumentsSniff implements Sniff {
     if ($this->isDeclaration($phpcsFile, $callee)) {
       return;
     }
-    if (in_array($tokens[$callee]['content'], $this->ignoreCalls, TRUE)) {
+    if (in_array(strtolower($tokens[$callee]['content']), array_map('strtolower', $this->ignoreCalls), TRUE)) {
       return;
     }
     if ($this->isSoleSetterArgument($phpcsFile, $stackPtr, $opener, $tokens[$callee]['content'])) {
@@ -90,7 +107,7 @@ final class NameBooleanArgumentsSniff implements Sniff {
    */
   private function isArgumentOfCall(File $phpcsFile, int $stackPtr, int $opener): bool {
     $tokens = $phpcsFile->getTokens();
-    $prev = $phpcsFile->findPrevious(Tokens::$emptyTokens, $stackPtr - 1, NULL, TRUE);
+    $prev = $this->previousBeforeLiteral($phpcsFile, $stackPtr);
     $next = $phpcsFile->findNext(Tokens::$emptyTokens, $stackPtr + 1, NULL, TRUE);
     if ($prev === FALSE || $next === FALSE) {
       return FALSE;
@@ -111,10 +128,24 @@ final class NameBooleanArgumentsSniff implements Sniff {
       return FALSE;
     }
     $tokens = $phpcsFile->getTokens();
-    $prev = $phpcsFile->findPrevious(Tokens::$emptyTokens, $stackPtr - 1, NULL, TRUE);
+    $prev = $this->previousBeforeLiteral($phpcsFile, $stackPtr);
     $next = $phpcsFile->findNext(Tokens::$emptyTokens, $stackPtr + 1, NULL, TRUE);
 
     return $prev === $opener && $next !== FALSE && $tokens[$next]['code'] === T_CLOSE_PARENTHESIS;
+  }
+
+  /**
+   * The token before the literal, stepping over the `\` of `\TRUE`.
+   *
+   * @return int|false
+   */
+  private function previousBeforeLiteral(File $phpcsFile, int $stackPtr) {
+    $prev = $phpcsFile->findPrevious(Tokens::$emptyTokens, $stackPtr - 1, NULL, TRUE);
+    if ($prev !== FALSE && $phpcsFile->getTokens()[$prev]['code'] === T_NS_SEPARATOR) {
+      return $phpcsFile->findPrevious(Tokens::$emptyTokens, $prev - 1, NULL, TRUE);
+    }
+
+    return $prev;
   }
 
   private function isDeclaration(File $phpcsFile, int $callee): bool {

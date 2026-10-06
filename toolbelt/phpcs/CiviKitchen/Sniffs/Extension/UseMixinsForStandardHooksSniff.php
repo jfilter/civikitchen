@@ -6,6 +6,7 @@ namespace CiviKitchen\Sniffs\Extension;
 
 use PHP_CodeSniffer\Files\File;
 use PHP_CodeSniffer\Sniffs\Sniff;
+use PHPCSUtils\Utils\Namespaces;
 
 /**
  * Bans legacy hook implementations where CiviCRM has standard mixins.
@@ -15,14 +16,20 @@ use PHP_CodeSniffer\Sniffs\Sniff;
  * civix a stable upgrade target and avoids custom hook boilerplate drifting
  * out of date.
  *
- * This intentionally only checks global extension hook functions. It does not
- * ban ordinary runtime hooks such as buildForm/post/pre because those remain
- * normal extension integration points.
+ * A function is a hook implementation when its name is `<file>_<hook>`
+ * (case-insensitive), `<file>` taken from the nearest info.xml above the
+ * linted file. Without an info.xml (or its `<file>`) any function name ending
+ * in `_<hook>` counts. Global functions and functions declared inside an `if`
+ * (the function_exists() guard) are checked; methods and closures are not.
+ *
+ * This intentionally only covers hooks a mixin replaces. Ordinary runtime
+ * hooks such as buildForm/post/pre or alterSettingsMetaData remain normal
+ * extension integration points.
  */
 final class UseMixinsForStandardHooksSniff implements Sniff {
 
   /**
-   * Legacy hook suffix => guidance shown in the message.
+   * Legacy hook => guidance shown in the message.
    *
    * The function name includes the extension prefix, e.g.
    * myext_civicrm_managed(). This map stores only the hook part.
@@ -31,11 +38,21 @@ final class UseMixinsForStandardHooksSniff implements Sniff {
    */
   public $legacyHooks = [
     'civicrm_managed' => 'move managed entity definitions to managed/*.mgd.php and enable the mgd-php mixin',
-    'civicrm_navigationMenu' => 'move menu entries to xml/Menu/*.xml and enable the menu-xml mixin',
-    'civicrm_alterSettingsMetaData' => 'move setting metadata to settings/*.setting.php and enable the setting-php mixin',
+    'civicrm_navigationMenu' => 'declare menu entries as managed Navigation records in managed/*.mgd.php and enable the mgd-php mixin',
+    'civicrm_xmlMenu' => 'move routes to xml/Menu/*.xml and enable the menu-xml mixin',
+    'civicrm_caseTypes' => 'move case types to xml/case/*.xml and enable the case-xml mixin',
+    'civicrm_themes' => 'move theme definitions to *.theme.php and enable the theme-php mixin',
+    'civicrm_alterSettingsFolders' => 'move setting metadata to settings/*.setting.php and enable the setting-php mixin',
     'civicrm_entityTypes' => 'move entity type definitions to *.entityType.php and enable entity-types-php@2.0.0',
     'civicrm_angularModules' => 'move Angular module metadata to ang/*.ang.php and enable the ang-php mixin',
   ];
+
+  /**
+   * Directory => the `<file>` of the nearest info.xml at or above it (NULL: none).
+   *
+   * @var array<string, string|null>
+   */
+  private static array $prefixByDir = [];
 
   /**
    * @return array<int, int|string>
@@ -49,10 +66,13 @@ final class UseMixinsForStandardHooksSniff implements Sniff {
    */
   public function process(File $phpcsFile, $stackPtr): void {
     $tokens = $phpcsFile->getTokens();
-
-    // Only global extension hook functions are in scope. Class methods,
-    // closures and anonymous functions are not hook implementations.
-    if ($tokens[$stackPtr]['conditions'] !== []) {
+    foreach ($tokens[$stackPtr]['conditions'] as $condition) {
+      if ($condition !== T_IF && $condition !== T_NAMESPACE) {
+        return;
+      }
+    }
+    // Core calls only the global function.
+    if (Namespaces::determineNamespace($phpcsFile, $stackPtr) !== '') {
       return;
     }
 
@@ -61,8 +81,12 @@ final class UseMixinsForStandardHooksSniff implements Sniff {
       return;
     }
 
+    $prefix = self::extensionPrefix(dirname($phpcsFile->getFilename()));
     foreach ($this->legacyHooks as $hook => $guidance) {
-      if (!$this->endsWith($functionName, '_' . $hook)) {
+      $matches = $prefix === NULL
+        ? strcasecmp(substr($functionName, -strlen($hook) - 1), '_' . $hook) === 0
+        : strcasecmp($functionName, $prefix . '_' . $hook) === 0;
+      if (!$matches) {
         continue;
       }
 
@@ -76,12 +100,24 @@ final class UseMixinsForStandardHooksSniff implements Sniff {
     }
   }
 
-  private function endsWith(string $value, string $suffix): bool {
-    $length = strlen($suffix);
-    if ($length === 0) {
-      return TRUE;
+  private static function extensionPrefix(string $dir): ?string {
+    if (array_key_exists($dir, self::$prefixByDir)) {
+      return self::$prefixByDir[$dir];
     }
-    return strcasecmp(substr($value, -$length), $suffix) === 0;
+    $prefix = NULL;
+    if (is_file($dir . '/info.xml')) {
+      $internalErrors = libxml_use_internal_errors(TRUE);
+      $xml = simplexml_load_file($dir . '/info.xml', 'SimpleXMLElement', LIBXML_NONET);
+      libxml_clear_errors();
+      libxml_use_internal_errors($internalErrors);
+      $file = $xml === FALSE ? '' : trim((string) $xml->file);
+      $prefix = $file === '' ? NULL : $file;
+    }
+    elseif (dirname($dir) !== $dir) {
+      $prefix = self::extensionPrefix(dirname($dir));
+    }
+
+    return self::$prefixByDir[$dir] = $prefix;
   }
 
 }
