@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CiviKitchen\Toolbelt\Cli;
 
 use CiviKitchen\Toolbelt\Process\Runner;
+use CiviKitchen\Toolbelt\Repository\PhpFloor;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -49,12 +50,11 @@ final class CompatibilityCommand implements Command
             }
         }
         if ($testVersion === '') {
-            $composer = is_file('composer.json') ? json_decode((string) file_get_contents('composer.json'), true) : null;
-            $requirement = is_array($composer) ? ($composer['require']['php'] ?? '') : '';
-            if (!is_string($requirement) || preg_match('/(\d+)\.(\d+)/', $requirement, $matches) !== 1) {
+            $floor = PhpFloor::ofComposerJson('.');
+            if ($floor === null) {
                 return $this->error('no PHP floor in composer.json require.php - declare one, or pass --php');
             }
-            $testVersion = $matches[0] . '-';
+            $testVersion = $floor . '-';
         }
         if ($paths === []) {
             foreach (['Civi', 'CRM', 'api', 'managed'] as $directory) {

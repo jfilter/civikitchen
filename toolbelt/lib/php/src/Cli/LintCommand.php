@@ -6,6 +6,7 @@ namespace CiviKitchen\Toolbelt\Cli;
 
 use CiviKitchen\Toolbelt\Process\Runner;
 use CiviKitchen\Toolbelt\Repository\Files;
+use CiviKitchen\Toolbelt\Repository\PhpFloor;
 
 final class LintCommand implements Command
 {
@@ -95,7 +96,7 @@ final class LintCommand implements Command
             } else {
                 $magoArguments = [...$magoArguments, '--config', $this->checkoutRoot . '/toolbelt/mago/mago.toml'];
                 // The baseline's 8.1 is the fleet floor; a repo declaring a higher one may use its features.
-                $floor = $this->phpFloor();
+                $floor = PhpFloor::ofComposerJson('.');
                 if ($floor !== null) {
                     $magoArguments = [...$magoArguments, '--php-version', $floor];
                 }
@@ -109,13 +110,6 @@ final class LintCommand implements Command
             }
         }
         return $failed ? 1 : 0;
-    }
-
-    private function phpFloor(): ?string
-    {
-        $composer = is_file('composer.json') ? json_decode((string) file_get_contents('composer.json'), true) : null;
-        $requirement = is_array($composer) ? ($composer['require']['php'] ?? '') : '';
-        return is_string($requirement) && preg_match('/\d+\.\d+/', $requirement, $matches) === 1 ? $matches[0] : null;
     }
 
     private function findExecutable(string $name): ?string

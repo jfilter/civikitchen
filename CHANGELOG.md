@@ -26,6 +26,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - The oxfmt toolchain lifts tinypool to 2.1.2 (CVE-2026-104848,
   CVE-2026-104849), which oxfmt 0.61.0 locks to 2.1.0 and which failed the
   image vulnerability scan.
+- `ckmodernize`, `cklint`, `ckcompat` and ckconform's `php-version-coherence`
+  take the lowest PHP version `composer.json` `require.php` admits
+  (`^8.2 || ^8.1` is 8.1) instead of the first one it names. `ckmodernize`
+  stops on a floor without a rector migration set, such as `>=7.4`, instead of
+  rewriting for 8.1.
 
 ## [1.31.0] - 2026-10-05
 

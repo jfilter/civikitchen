@@ -12,6 +12,7 @@ use CiviKitchen\Toolbelt\Cli\ReleaseCommand;
 use CiviKitchen\Toolbelt\JavaScript\Api4CatalogExport;
 use CiviKitchen\Toolbelt\Process\Runner;
 use CiviKitchen\Toolbelt\Repository\Files;
+use CiviKitchen\Toolbelt\Repository\PhpFloor;
 use CiviKitchen\Toolbelt\Runtime\ExtensionInspector;
 use CiviKitchen\Toolbelt\Runtime\ExtensionArchiveInstaller;
 use CiviKitchen\Toolbelt\Runtime\ProfileData;
@@ -185,6 +186,23 @@ final class SharedPhpTest extends TestCase
         $second = $this->profile('second.json', ['apiUsers' => [['username' => 'same', 'role' => 'b']]]);
         $this->expectException(RuntimeException::class);
         (new ProfileData())->merge($this->temporary . '/merged.json', '', [$first, $second]);
+    }
+
+    public function testPhpFloorIsTheLowestVersionTheConstraintAdmits(): void
+    {
+        $cases = [
+            '>=8.3' => '8.3', '8.3.2' => '8.3', '^8.1' => '8.1', '~8.2.1' => '8.2', '8.*' => '8.0', '^8' => '8.0',
+            '^8.2 || ^8.1' => '8.1', '^8.2 | ^8.1' => '8.1', '>=8.1 <8.5' => '8.1', '>=8.1,<8.5' => '8.1',
+            '>=8.1 >=8.2' => '8.2', '8.1 - 8.3' => '8.1', '>=7.4' => '7.4', '>=8.1 !=8.2.0' => '8.1',
+            '>= 8.1 < 8.4' => '8.1', '>=8.1 != 8.2' => '8.1', '^ 8.2 || ~ 8.1' => '8.1',
+            '*' => null, '<8.4' => null, '^8.2 || *' => null, '' => null,
+        ];
+        foreach ($cases as $constraint => $floor) {
+            self::assertSame($floor, PhpFloor::of((string) $constraint), "require.php \"{$constraint}\"");
+        }
+        file_put_contents($this->temporary . '/composer.json', '{"require": {"php": "^8.3 || ^8.2"}}');
+        self::assertSame('8.2', PhpFloor::ofComposerJson($this->temporary));
+        self::assertNull(PhpFloor::ofComposerJson($this->temporary . '/missing'));
     }
 
     public function testExtensionInspectorReadsSafeMetadata(): void

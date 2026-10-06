@@ -8,6 +8,7 @@ use CiviKitchen\Rector\Rules\Api4ArrayToOopRector;
 use CiviKitchen\Rector\Rules\CrmCoreErrorFatalToExceptionRector;
 use CiviKitchen\Rector\Rules\CrmUtilsArrayValueToCoalesceRector;
 use CiviKitchen\Rector\Rules\PositionalDefaultsToNamedArgsRector;
+use CiviKitchen\Toolbelt\Repository\PhpFloor;
 use Rector\Config\RectorConfig;
 use Rector\Set\ValueObject\SetList;
 use Rector\ValueObject\PhpVersion;
@@ -20,25 +21,23 @@ use Rector\ValueObject\PhpVersion;
  *   - CiviKitchen's own CiviCRM footgun rules (the deprecations cklint bans).
  *
  * Target PHP for the upgrade sets: CK_PHP_VERSION, else the extension's OWN
- * floor from composer.json require.php, else 8.1 (the CiviCRM floor). Rewriting
+ * floor (the lowest version composer.json require.php admits), else 8.1 (the
+ * CiviCRM floor); a target without a migration set stops the run. Rewriting
  * to a PHP the extension does not promise to install on is a broken release,
  * and that promise is composer's — ckconform keeps it aligned with info.xml.
  */
 
-// The lowest MAJOR.MINOR in the extension's composer require.php, if any.
-$composerFloor = static function (): ?string {
-  $composer = @file_get_contents(getcwd() . '/composer.json');
-  $constraint = $composer === FALSE ? NULL : (json_decode($composer, TRUE)['require']['php'] ?? NULL);
+require_once __DIR__ . '/../lib/php/bootstrap.php';
 
-  return is_string($constraint) && preg_match('/(\d+)\.(\d+)/', $constraint, $m) === 1 ? $m[1] . '.' . $m[2] : NULL;
-};
-$target = getenv('CK_PHP_VERSION') ?: $composerFloor() ?? '8.1';
+$target = getenv('CK_PHP_VERSION') ?: PhpFloor::ofComposerJson((string) getcwd()) ?? '8.1';
 [$phpVersion, $phpSetFlag] = match ($target) {
   '8.0' => [PhpVersion::PHP_80, 'php80'],
+  '8.1' => [PhpVersion::PHP_81, 'php81'],
   '8.2' => [PhpVersion::PHP_82, 'php82'],
   '8.3' => [PhpVersion::PHP_83, 'php83'],
   '8.4' => [PhpVersion::PHP_84, 'php84'],
-  default => [PhpVersion::PHP_81, 'php81'],
+  '8.5' => [PhpVersion::PHP_85, 'php85'],
+  default => throw new RuntimeException("ckmodernize: no PHP migration set for target {$target}; declare an 8.x floor in composer.json require.php or pass --php"),
 };
 
 $rules = [
