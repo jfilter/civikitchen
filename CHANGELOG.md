@@ -45,6 +45,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   (`^8.2 || ^8.1` is 8.1) instead of the first one it names. `ckmodernize`
   stops on a floor without a rector migration set, such as `>=7.4`, instead of
   rewriting for 8.1.
+- `ckdeps`' bundled config ignores the PEAR-era classes core hands to an
+  extension as a parent class, return value or hook argument
+  (`HTML_QuickForm*`, `HTML_Common`, `PEAR*`, `DB*`, `Mail*`, `Net_SMTP`,
+  `Net_Socket`, `Log*`, `Pager*`, `ezcMail*`, `ezcBase*`, `TCPDF*`,
+  `HTMLPurifier*`) and Smarty 5's `Smarty\`.
 - `CiviKitchen.I18n.UseExtensionTs` flags `TS()`/`Ts()` and a `'ts'` callback
   passed to `array_map()`, `call_user_func()`, `usort()` and friends, and no
   longer flags namespaced functions named `ts`.

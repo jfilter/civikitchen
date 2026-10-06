@@ -82,11 +82,40 @@ $expected = [
   'Symfony\Component\EventDispatcher\EventDispatcher' => 1,
   'Symfony\Component\Config\FileLocator' => 1,
   'Symfony\Contracts\EventDispatcher\Event' => 1,
+  // Libraries core hands to an extension as a parent class, return value or
+  // hook argument: CRM_Core_Form extends HTML_QuickForm_Page, createMailer()
+  // returns a Mail, hook_civicrm_emailProcessor passes an ezcMail.
+  'HTML_QuickForm_select' => 1,
+  'HTML_Common' => 1,
+  'PEAR' => 1,
+  'PEAR_Error' => 1,
+  'DB_DataObject' => 1,
+  'Mail' => 1,
+  'Mail_mime' => 1,
+  'Net_SMTP' => 1,
+  'Log' => 1,
+  'Log_file' => 1,
+  'Pager_Sliding' => 1,
+  'HTMLPurifier_Config' => 1,
+  'ezcMailComposer' => 1,
+  'TCPDF' => 1,
+  'Smarty\Template' => 1,
   // Core does NOT ship these, so an extension that uses one has to declare it
   // and the analyser has to keep saying so.
   'Symfony\Component\Serializer\Serializer' => 0,
   'Symfony\Component\Mailer\Mailer' => 0,
   'Sentry\Client' => 0,
+  'Smarty_Internal_Template' => 0,
+  'HTML_Table' => 0,
+  'Net_IMAP' => 0,
+  'DateTimeHelper' => 0,
+  'Logger' => 0,
+  // Core loads these but never hands them out; an extension that uses one
+  // declares it.
+  'HTML_Template_ITX' => 0,
+  'Date_Calc' => 0,
+  'Validate_Finance' => 0,
+  'Auth_SASL' => 0,
   'League\Csv\Reader' => 0,
 ];
 
