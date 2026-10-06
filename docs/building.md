@@ -100,6 +100,9 @@ time is not the image anyone reviewed.
 
 oxlint and oxfmt are pinned the same way by the `package.json` +
 `package-lock.json` pairs in `toolbelt/oxlint` and `toolbelt/oxfmt`.
+An `overrides` entry in such a `package.json` lifts a transitive dependency
+the tool locks to a vulnerable version; it goes once the tool's own pin moves
+past the fix.
 
 What neither composer nor npm installs stays in `toolbelt/install-dev-tools.sh`
 and stays overridable per `--build-arg`: the civix and phpunit phars and the

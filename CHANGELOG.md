@@ -21,6 +21,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
   language features of its floor. Rules that only apply from 8.2 on, such as
   `sensitive-parameter`, start reporting in those repos.
 
+### Fixed
+
+- The oxfmt toolchain lifts tinypool to 2.1.2 (CVE-2026-104848,
+  CVE-2026-104849), which oxfmt 0.61.0 locks to 2.1.0 and which failed the
+  image vulnerability scan.
+
 ## [1.31.0] - 2026-10-05
 
 ### Added

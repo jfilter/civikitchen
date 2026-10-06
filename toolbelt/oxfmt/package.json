@@ -4,5 +4,8 @@
   "description": "Pinned oxfmt toolchain for ckfmt. Installed into /opt/civikitchen/toolbelt/oxfmt at image build time; never installed into a consuming extension.",
   "dependencies": {
     "oxfmt": "0.61.0"
+  },
+  "overrides": {
+    "tinypool": "2.1.2"
   }
 }
