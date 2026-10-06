@@ -90,6 +90,19 @@ expect_log 'ext:enable org.example.beta;ext:enable downloaded;ext:enable alpha;'
 CK_MOUNTINFO="$work/none" ck_enable_extensions
 expect_log '' 'nothing to enable'
 
+# An extension attached via CIVIKITCHEN_EXTENSION_PATH (a CI job that runs
+# inside the image has no bind mount) is enabled like a mount.
+mkdir -p "$work/src/attached"
+write_info "$work/src/attached" org.example.attached
+: > "$CV_LOG"
+(
+  export CIVIKITCHEN_EXTENSION_PATH="$work/src/attached" CIVIKITCHEN_EXTENSION_KEY=org.example.attached
+  ck_attach_scenario_extension
+  CK_MOUNTINFO="$work/none" ck_enable_extensions
+)
+/bin/rm "$work/ext/org.example.attached"
+expect_log 'ext:enable org.example.attached;' 'attached extension'
+
 # A bare key in CIVIKITCHEN_EXTRA_EXTENSIONS takes a mounted extension's pin;
 # an explicit key@URL and an unpinned key pass through.
 mkdir -p "$work/archive/de.example.opt"

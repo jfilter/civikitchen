@@ -482,17 +482,25 @@ ck_extra_extensions() {
 
 # Directories bind-mounted directly into the ext dir, one per line — the
 # extensions a developer put there, as opposed to downloaded ones. Read from
-# the mount table (field 5 is the mount point), so nothing has to be declared.
+# the mount table (field 5 is the mount point), so nothing has to be declared;
+# the extension ck_attach_scenario_extension linked in counts as mounted too.
 ck_mounted_extension_dirs() {
-    [[ -n "${CK_EXT_DIR}" && -r "${CK_MOUNTINFO}" ]] || return 0
+    [[ -n "${CK_EXT_DIR}" ]] || return 0
     local mount_point
-    while read -r _ _ _ _ mount_point _; do
-        # Mount points escape space, tab and newline as \040 \011 \012.
-        mount_point="$(printf '%b' "${mount_point}")"
-        if [[ "${mount_point}" == "${CK_EXT_DIR}"/* && "${mount_point#"${CK_EXT_DIR}"/}" != */* ]]; then
-            echo "${mount_point}"
+    {
+        if [[ -r "${CK_MOUNTINFO}" ]]; then
+            while read -r _ _ _ _ mount_point _; do
+                # Mount points escape space, tab and newline as \040 \011 \012.
+                mount_point="$(printf '%b' "${mount_point}")"
+                if [[ "${mount_point}" == "${CK_EXT_DIR}"/* && "${mount_point#"${CK_EXT_DIR}"/}" != */* ]]; then
+                    echo "${mount_point}"
+                fi
+            done < "${CK_MOUNTINFO}"
         fi
-    done < "${CK_MOUNTINFO}" | sort -u
+        if [[ -n "${CIVIKITCHEN_EXTENSION_PATH:-}" && -L "${CK_EXT_DIR}/${CIVIKITCHEN_EXTENSION_KEY:-}" ]]; then
+            echo "${CK_EXT_DIR}/${CIVIKITCHEN_EXTENSION_KEY}"
+        fi
+    } | sort -u
 }
 
 # The extension key an info.xml declares, or nothing when it cannot be read.

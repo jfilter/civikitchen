@@ -49,6 +49,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- An extension attached through `CIVIKITCHEN_EXTENSION_PATH` counts as mounted,
+  so provisioning installs its `<requires>` and declared dependency sources.
 - `ckconform`'s `mixin-declaration` no longer warns about settings or menu
   files an extension loads through its own `hook_civicrm_alterSettingsFolders`
   or `hook_civicrm_xmlMenu` implementation.
