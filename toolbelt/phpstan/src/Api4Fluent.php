@@ -136,11 +136,13 @@ final class Api4Fluent
      * Aliases the builder's select defines: `SUM(line_total) AS total`.
      *
      * An alias is a legal name in orderBy and groupBy but exists in no catalog.
+     * Null when a select argument is not fully known (spread, merged or
+     * computed lists), so any alias may exist.
      *
      * @param  list<MethodCall> $links
-     * @return list<string>
+     * @return ?list<string>
      */
-    public static function aliases(array $links, Scope $scope): array
+    public static function aliases(array $links, Scope $scope): ?array
     {
         return self::linkStrings($links, $scope, ['addselect', 'setselect'], self::aliasOf(...));
     }
@@ -154,19 +156,20 @@ final class Api4Fluent
      */
     public static function joinAliases(array $links, Scope $scope): array
     {
-        return self::linkStrings($links, $scope, ['addjoin', 'setjoin'], self::joinAliasOf(...));
+        return self::linkStrings($links, $scope, ['addjoin', 'setjoin'], self::joinAliasOf(...)) ?? [];
     }
 
     /**
      * String arguments the links passed to any of the named methods, mapped
-     * through $map; nulls are dropped.
+     * through $map; nulls are dropped. Null when an argument is not a known
+     * string or a list of known strings.
      *
      * @param  list<MethodCall>              $links
      * @param  list<string>                  $methods lowercased method names
      * @param  callable(string): ?string     $map
-     * @return list<string>
+     * @return ?list<string>
      */
-    private static function linkStrings(array $links, Scope $scope, array $methods, callable $map): array
+    private static function linkStrings(array $links, Scope $scope, array $methods, callable $map): ?array
     {
         $mapped = [];
         foreach ($links as $link) {
@@ -175,14 +178,13 @@ final class Api4Fluent
             }
             foreach ($link->getArgs() as $arg) {
                 $type = $scope->getType($arg->value);
-                $strings = array_merge(
-                    $type->getConstantStrings(),
-                    ...array_map(
-                        static fn ($value) => $value->getConstantStrings(),
-                        array_merge(...array_map(static fn ($array) => $array->getValueTypes(), $type->getConstantArrays())),
-                    ),
-                );
-                foreach ($strings as $string) {
+                // The iterable value type also covers entries added under a condition.
+                $values = $type->isArray()->yes() ? $type->getIterableValueType() : $type;
+                $known = $type->isIterableAtLeastOnce()->no() || $values->isConstantScalarValue()->yes();
+                if ($arg->unpack || !$known) {
+                    return null;
+                }
+                foreach ($values->getConstantStrings() as $string) {
                     $value = $map($string->getValue());
                     if ($value !== null) {
                         $mapped[] = $value;

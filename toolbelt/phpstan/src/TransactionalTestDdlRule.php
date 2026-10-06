@@ -40,7 +40,7 @@ final class TransactionalTestDdlRule implements Rule
     /** APIv4 and APIv3 actions that run DDL on each entity above. */
     private const WRITE_ACTIONS = [
         'CustomField' => ['create', 'save', 'update', 'delete', 'replace', 'setvalue'],
-        // An update alters the table only when it flips is_multiple or overrides the FK constraint.
+        // An update alters the table only when it flips is_multiple, see namesIsMultiple().
         'CustomGroup' => ['create', 'save', 'delete', 'replace'],
     ];
 
@@ -201,6 +201,14 @@ final class TransactionalTestDdlRule implements Rule
         if ($write !== []) {
             return $write;
         }
+        if (strcasecmp(str_replace('_', '', $entity), 'CustomGroup') === 0
+            && in_array(strtolower($action), ['update', 'setvalue'], true) && self::namesIsMultiple($expr)) {
+            return [self::error(
+                sprintf("%s('CustomGroup', '%s') setting is_multiple in a transactional test", $function, $action),
+                'ck.test.customFieldInTransaction',
+                $expr,
+            )];
+        }
         if (strcasecmp($entity, 'Extension') === 0 && in_array(strtolower($action), self::EXTENSION_ACTIONS, true)) {
             return [self::error(
                 sprintf("%s('Extension', '%s') in a transactional test", $function, $action),
@@ -237,6 +245,18 @@ final class TransactionalTestDdlRule implements Rule
     private static function checkMethodCall(Node\Expr\MethodCall $expr): array
     {
         $method = $expr->name instanceof Node\Identifier ? $expr->name->toLowerString() : '';
+
+        if (in_array($method, ['addvalue', 'setvalues'], true) && self::namesIsMultiple($expr)) {
+            $root = $expr->var;
+            while ($root instanceof Node\Expr\MethodCall) {
+                $root = $root->var;
+            }
+            if ($root instanceof Node\Expr\StaticCall && $root->name instanceof Node\Identifier
+                && strcasecmp(ltrim(Sql::staticClassName($root) ?? '', '\\'), 'Civi\\Api4\\CustomGroup') === 0
+                && $root->name->toLowerString() === 'update') {
+                return [self::error('CustomGroup::update() setting is_multiple in a transactional test', 'ck.test.customFieldInTransaction', $expr)];
+            }
+        }
 
         // An extension manager is the only thing in a test whose install()
         // means "run this extension's SQL"; the receiver has to say so.
@@ -276,7 +296,16 @@ final class TransactionalTestDdlRule implements Rule
     }
 
     /** The class implements TransactionalInterface, directly or inherited. */
-    private static function isTransactional(ClassReflection $class): bool
+    /** Flipping is_multiple swaps the custom-value table's unique index for a plain one. */
+    private static function namesIsMultiple(Node\Expr\CallLike $call): bool
+    {
+        return (new NodeFinder())->findFirst(
+            $call->getArgs(),
+            static fn (Node $node): bool => $node instanceof Node\Scalar\String_ && $node->value === 'is_multiple',
+        ) !== null;
+    }
+
+        private static function isTransactional(ClassReflection $class): bool
     {
         foreach ($class->getNativeReflection()->getInterfaceNames() as $interface) {
             if ($interface === self::TRANSACTIONAL_INTERFACE) {

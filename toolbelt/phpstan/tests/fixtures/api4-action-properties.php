@@ -124,4 +124,42 @@ class GuardedGetterAction extends AbstractAction
     {
         return $this->plain;
     }
+
+    protected string $initialised;
+
+    protected array $lazy;
+
+    protected ?string $negated;
+
+    protected array $halfLazy;
+
+    public function getInitialised(): string
+    {
+        $this->initialised ??= '';
+
+        return $this->initialised;
+    }
+
+    public function getLazy(): array
+    {
+        if (!isset($this->lazy)) {
+            $this->lazy = [];
+        }
+
+        return $this->lazy;
+    }
+
+    public function getNegated(): ?string
+    {
+        return !isset($this->negated) ? null : $this->negated;
+    }
+
+    public function getHalfLazy(): array
+    {
+        if (!isset($this->halfLazy)) {
+            $this->negated = null;
+        }
+
+        return $this->halfLazy;
+    }
 }

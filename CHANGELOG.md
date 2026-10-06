@@ -165,7 +165,7 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `mixin-declaration` ignores files under `tests/`.
 - The rector rules map named arguments by name and skip calls they cannot
   map (spread, unknown name). `Api4ArrayToOopRector` maps AND/OR/NOT where
-  groups to `addClause()` and skips where rows with an `isExpression` flag
+  groups holding a literal list of clauses to `addClause()` and skips where rows with an `isExpression` flag
   (only `DAOGetAction::addWhere()` takes one), calls with an `$index` argument, entities
   without their own `Civi\Api4` class (`Custom_*`, `CustomValue`) and magic
   actions with a non-literal `checkPermissions`. The Api3ToApi4 rectors skip
@@ -186,18 +186,22 @@ except that a break the consumers are adjusted for ships as a minor, marked
   swapped neighbouring letters, the same judgement as the oxlint rule.
 - The phpstan APIv4 catalog includes `tags`, `_depth` and `_descendents`
   wherever core adds them at runtime. Fluent field checks see aliases selected
-  later in the chain or through `setSelect()`, and builders held in variables, and first-class APIv4
-  callables are checked.
+  later in the chain or through `setSelect()`, and builders held in variables,
+  and skip orderBy and groupBy names when a select is not fully known
+  (spread, merged or conditional lists); first-class APIv4 callables are
+  checked.
 - The phpstan action-parameter checks cover `?T` and `mixed` properties,
   trait properties, constructor assignments and getters that read the
-  property only through `??` or `isset()`; public properties are no
+  property only through `??`, `??=` or `isset()` or initialise it first;
+  public properties are no
   longer treated as API parameters.
 - The phpstan transactional-DDL rule exempts TEMPORARY tables and reports
-  custom-field updates and deletes, BAO writes (but no longer a custom-group
-  update, which alters no table), `self::`/`static::` helpers
+  custom-field updates and deletes, BAO writes (a custom-group update only when it
+  sets `is_multiple`), `self::`/`static::` helpers
   and `tearDown()`. The silent-catch rule accepts `->log()` at error level and
   nullsafe calls, and sees `CRM_Utils_SQL_Select::execute()`. The SQL table
-  rule ignores strings, comments, DROP and RENAME (also after a leading
+  rule ignores strings, comments (`--` only before whitespace, as MySQL
+  reads it), DROP and RENAME (also after a leading
   comment), and reads INSERT/REPLACE with or without INTO, TRUNCATE with or
   without TABLE, and comma joins. The GET-mutation rule accepts
   `validateAjaxRequestMethod()` and reads trait methods.

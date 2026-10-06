@@ -153,4 +153,16 @@ final class AddressExport
         $select = ['contact_type', 'COUNT(id) AS total'];
         Contact::get(false)->setSelect($select)->addOrderBy('total')->execute();
     }
+
+    /** Selects only partly known: optional entries, merged or spread lists. */
+    public function partlyKnownSelects(bool $flag, array $extra): void
+    {
+        $select = ['contact_type'];
+        if ($flag) {
+            $select[] = 'COUNT(id) AS optional_total';
+        }
+        Contact::get(false)->setSelect($select)->addOrderBy('optional_total')->execute();
+        Contact::get(false)->setSelect(array_merge(['contact_type'], $extra))->addOrderBy('merged_total')->execute();
+        Contact::get(false)->addSelect(...$extra)->addOrderBy('spread_total')->execute();
+    }
 }

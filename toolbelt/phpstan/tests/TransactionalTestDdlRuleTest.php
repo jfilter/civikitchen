@@ -48,6 +48,9 @@ final class TransactionalTestDdlRuleTest extends RuleTestCase
                 ["civicrm_api4('CustomGroup', 'create') in a transactional test" . self::ADVICE, 107],
                 ['CustomField::create() in a transactional test' . self::ADVICE, 112],
                 ['DROP statement in a transactional test' . self::ADVICE, 123],
+                ['CustomGroup::update() setting is_multiple in a transactional test' . self::ADVICE, 143],
+                ["civicrm_api4('CustomGroup', 'update') setting is_multiple in a transactional test" . self::ADVICE, 144],
+                ["civicrm_api3('CustomGroup', 'setvalue') setting is_multiple in a transactional test" . self::ADVICE, 145],
             ],
         );
     }

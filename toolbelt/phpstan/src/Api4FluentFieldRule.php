@@ -80,25 +80,25 @@ final class Api4FluentFieldRule implements Rule
     }
 
     /**
-     * @param  list<string> $aliases
+     * @param  ?list<string> $aliases
      * @param  list<string> $shadowed
      * @return list<\PHPStan\Rules\IdentifierRuleError>
      */
-    private function checkLink(string $entity, MethodCall $link, Scope $scope, array $aliases, array $shadowed, bool $escapes): array
+    private function checkLink(string $entity, MethodCall $link, Scope $scope, ?array $aliases, array $shadowed, bool $escapes): array
     {
         if (!$link->name instanceof Node\Identifier) {
             return [];
         }
         $method = $link->name->toLowerString();
-        // A builder handed elsewhere may gain an alias or a join out of sight.
-        if ($escapes && in_array($method, self::ALIAS_CLAUSES, true)) {
+        // A builder handed elsewhere, or a select not fully known, may hold any alias.
+        if (($escapes || $aliases === null) && in_array($method, self::ALIAS_CLAUSES, true)) {
             return [];
         }
         $checkJoins = !$escapes && !in_array($method, ['addvalue', 'setvalues'], true);
 
         $errors = [];
         $clause = $link->name->toString() . '()';
-        foreach (array_diff($this->fieldsOf($method, $link, $scope), $aliases) as $field) {
+        foreach (array_diff($this->fieldsOf($method, $link, $scope), $aliases ?? []) as $field) {
             if (str_contains($field, '.')) {
                 if ($checkJoins) {
                     $errors = array_merge($errors, $this->contract->checkJoinField($entity, $field, $clause, $shadowed));

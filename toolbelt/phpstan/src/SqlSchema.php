@@ -46,8 +46,8 @@ final class SqlSchema
     /** SQL keywords a table name follows; INSERT's INTO and TRUNCATE's TABLE are optional. */
     private const TABLE_KEYWORDS = 'FROM|JOIN|INTO|UPDATE|TABLE|(?:INSERT|REPLACE)(?:\s+(?:IGNORE|LOW_PRIORITY|DELAYED|HIGH_PRIORITY))*(?:\s+INTO)?|TRUNCATE(?:\s+TABLE)?';
 
-    /** String literals and comments, whose words are not SQL. */
-    private const LITERALS_AND_COMMENTS = '/\'(?:[^\'\\\\]|\\\\.|\'\')*\'|"(?:[^"\\\\]|\\\\.|"")*"|--[^\n]*|#[^\n]*|\/\*.*?\*\//s';
+    /** String literals and comments, whose words are not SQL; `--` opens a comment only before whitespace. */
+    private const LITERALS_AND_COMMENTS = '/\'(?:[^\'\\\\]|\\\\.|\'\')*\'|"(?:[^"\\\\]|\\\\.|"")*"|--(?=\s|$)[^\n]*|#[^\n]*|\/\*.*?\*\//s';
 
     /** Where the table list of a FROM clause ends. */
     private const FROM_LIST_END = 'WHERE|GROUP|ORDER|HAVING|LIMIT|UNION|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|NATURAL|STRAIGHT_JOIN|ON|USING|SET|FOR|LOCK|INTO';

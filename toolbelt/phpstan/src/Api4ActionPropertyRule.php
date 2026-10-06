@@ -188,21 +188,57 @@ final class Api4ActionPropertyRule implements Rule
             && $node->name instanceof Node\Identifier && $node->name->toString() === $name;
         $safe = [];
         foreach ($finder->find($stmts, static fn (Node $node): bool => $node instanceof Node\Expr\Isset_
-            || $node instanceof Node\Expr\BinaryOp\Coalesce || $node instanceof Node\Expr\Ternary) as $guard) {
+            || $node instanceof Node\Expr\BinaryOp\Coalesce || $node instanceof Node\Expr\AssignOp\Coalesce
+            || $node instanceof Node\Expr\Assign || $node instanceof Node\Expr\Ternary) as $guard) {
             $covered = match (true) {
                 $guard instanceof Node\Expr\Isset_ => $guard->vars,
                 $guard instanceof Node\Expr\BinaryOp\Coalesce => [$guard->left],
-                $guard->cond instanceof Node\Expr\Isset_ && $guard->if !== null
-                    && array_filter($guard->cond->vars, $isRead) !== [] => [$guard->if],
+                // `??=` reads like `??`, and an assignment target is a write.
+                $guard instanceof Node\Expr\AssignOp\Coalesce, $guard instanceof Node\Expr\Assign => [$guard->var],
+                self::issetOf($guard->cond, $isRead) && $guard->if !== null => [$guard->if],
+                $guard->cond instanceof Node\Expr\BooleanNot && self::issetOf($guard->cond->expr, $isRead) => [$guard->else],
                 default => [],
             };
             foreach ($finder->find($covered, $isRead) as $read) {
                 $safe[spl_object_id($read)] = true;
             }
         }
+        // Once a top-level statement has initialised the property, later reads are safe.
+        $guarded = [];
+        foreach ($stmts as $stmt) {
+            $guarded[] = $stmt;
+            if (self::initialises($stmt, $isRead)) {
+                break;
+            }
+        }
         $reads = $finder->find($stmts, $isRead);
+        $unsafe = array_diff_key(array_flip(array_map(spl_object_id(...), $finder->find($guarded, $isRead))), $safe);
 
-        return $reads !== [] && array_diff_key(array_flip(array_map(spl_object_id(...), $reads)), $safe) === [];
+        return $reads !== [] && $unsafe === [];
+    }
+
+    /** @param callable(Node): bool $isRead */
+    private static function issetOf(Node\Expr $expr, callable $isRead): bool
+    {
+        return $expr instanceof Node\Expr\Isset_ && array_filter($expr->vars, $isRead) !== [];
+    }
+
+    /**
+     * `$this->x ??= …;`, `$this->x = …;`, or `if (!isset($this->x)) { $this->x = …; }`
+     * without else branches.
+     *
+     * @param callable(Node): bool $isRead
+     */
+    private static function initialises(Node\Stmt $stmt, callable $isRead): bool
+    {
+        if ($stmt instanceof Node\Stmt\Expression) {
+            return ($stmt->expr instanceof Node\Expr\Assign || $stmt->expr instanceof Node\Expr\AssignOp\Coalesce)
+                && $isRead($stmt->expr->var);
+        }
+
+        return $stmt instanceof Node\Stmt\If_ && $stmt->else === null && $stmt->elseifs === []
+            && $stmt->cond instanceof Node\Expr\BooleanNot && self::issetOf($stmt->cond->expr, $isRead)
+            && array_filter($stmt->stmts, static fn (Node\Stmt $inner): bool => self::initialises($inner, $isRead)) !== [];
     }
 
     /** null, '', [] and FALSE, which ValidateFieldsSubscriber treats as missing. */

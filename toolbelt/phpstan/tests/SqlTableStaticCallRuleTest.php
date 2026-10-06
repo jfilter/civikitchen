@@ -40,6 +40,7 @@ final class SqlTableStaticCallRuleTest extends RuleTestCase
                 ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 88],
                 ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 89],
                 ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 90],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 93],
             ],
         );
     }
@@ -64,6 +65,7 @@ final class SqlTableStaticCallRuleTest extends RuleTestCase
                 ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 88],
                 ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 89],
                 ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 90],
+                ["SQL table civicrm_contcat does not exist in CiviCRM $version — CRM_Core_DAO::executeQuery()", 93],
             ],
         );
     }

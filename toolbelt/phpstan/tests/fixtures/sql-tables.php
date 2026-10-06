@@ -90,5 +90,6 @@ final class WidgetQueries
         \CRM_Core_DAO::executeQuery('INSERT IGNORE INTO civicrm_contcat (x) VALUES (1)');
         \CRM_Core_DAO::executeQuery("-- remove legacy\nDROP TABLE civicrm_myext_legacy_log");
         \CRM_Core_DAO::executeQuery('/* 1.2 */ RENAME TABLE civicrm_myext_old TO civicrm_myext_thing');
+        \CRM_Core_DAO::executeQuery('SELECT id--1 AS prev FROM civicrm_contcat');
     }
 }

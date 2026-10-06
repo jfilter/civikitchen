@@ -96,6 +96,14 @@ final class Api4ActionPropertyRuleTest extends RuleTestCase
                     . 'parameter), or give it a default.',
                     111,
                 ],
+                [
+                    'APIv4 action parameter $halfLazy is typed array with no default — a caller that omits it gets '
+                    . '"must not be accessed before initialization" instead of an API validation error, because '
+                    . 'ValidateFieldsSubscriber reads every parameter through its getter before it checks @required.'
+                    . " Declare it untyped with an @var docblock and @required (core's own form for a mandatory "
+                    . 'parameter), or give it a default.',
+                    134,
+                ],
             ],
         );
     }

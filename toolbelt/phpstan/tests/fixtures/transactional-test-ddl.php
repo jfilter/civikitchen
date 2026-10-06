@@ -134,3 +134,14 @@ final class GroupTitleTest extends TestCase implements TransactionalInterface
         \civicrm_api3('CustomGroup', 'setvalue', ['id' => 1, 'field' => 'title', 'value' => 'Renamed']);
     }
 }
+
+/** Flipping is_multiple swaps the value table's unique index for a plain one. */
+final class MultipleFlipTest extends TestCase implements TransactionalInterface
+{
+    public function testFlip(): void
+    {
+        \Civi\Api4\CustomGroup::update(false)->addValue('is_multiple', true)->addWhere('id', '=', 1)->execute();
+        \civicrm_api4('CustomGroup', 'update', ['values' => ['is_multiple' => true], 'where' => [['id', '=', 1]]]);
+        \civicrm_api3('CustomGroup', 'setvalue', ['id' => 1, 'field' => 'is_multiple', 'value' => 1]);
+    }
+}

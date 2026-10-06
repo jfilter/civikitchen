@@ -156,6 +156,9 @@ test-phpstan: $(PHPUNIT) $(CORE) ## The phpstan extension's rule tests + catalog
 	composer install --no-interaction --no-progress --working-dir=toolbelt/phpstan
 	CIVICRM_CORE_DIR=$(abspath $(CORE)) \
 	  php $(PHPUNIT) -c toolbelt/phpstan/phpunit.xml.dist
+	# Without fiber scopes a rule sees body variables as mixed; both paths must agree.
+	PHPSTAN_FNSR=0 CIVICRM_CORE_DIR=$(abspath $(CORE)) \
+	  php $(PHPUNIT) -c toolbelt/phpstan/phpunit.xml.dist
 
 # ckmodernize writes these rewrites into extension code, so each rule's
 # fixtures pin both the rewrite and the calls it must leave alone.
