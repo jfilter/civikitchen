@@ -14,6 +14,21 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- CI on GitLab: `ci/gitlab/extension-ci.yml` runs `ck ci`, `cklifecycle` and,
+  with a `playwright.config.ts` or `.js`, the `test:e2e` npm script inside the
+  image, with the database as a service. `ci: gitlab` in `civikitchen.yaml` makes `ckinit` write
+  a managed `.gitlab-ci.yml` that includes it, instead of the GitHub callers and
+  `renovate.json`; release archives leave the file out. Inside the image the
+  managed `tests/e2e/lib.sh` calls `cv` directly.
+- `ckboot` (standalone image) provisions the site inside a CI job container
+  with the current directory attached as the extension, starts Apache and
+  prints the extension's directory.
+- `ckconform` accepts a `.gitlab-ci.yml` that includes the shared pipeline as
+  the repository's CI in `ci-workflow`, `ci-coverage`, `config-without-runner`
+  and `npm-install`.
+
 ### Changed
 
 - `cklint` runs its mago stage at the PHP floor in `composer.json`

@@ -51,9 +51,9 @@ for bin in composer node npm civix phpunit phpstan phpcs phpcbf cv infection; do
 done
 
 # Every toolbelt tool is on PATH as a link into /opt/civikitchen/toolbelt, the
-# two standalone-only helpers only there, and the deprecated v1 paths resolve.
+# standalone-only helpers only there, and the deprecated v1 paths resolve.
 TOOLBELT_BIN=/opt/civikitchen/toolbelt/bin
-for expected in cktestreset ckcoretest; do
+for expected in cktestreset ckcoretest ckboot; do
     if [ "${CIVICRM_UF:-}" = "Standalone" ] && [ ! -x "${TOOLBELT_BIN}/${expected}" ]; then
         fail "${expected} ships on standalone"
     elif [ "${CIVICRM_UF:-}" != "Standalone" ] && [ -e "${TOOLBELT_BIN}/${expected}" ]; then

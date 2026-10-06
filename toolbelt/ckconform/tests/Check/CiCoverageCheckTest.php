@@ -92,6 +92,16 @@ final class CiCoverageCheckTest extends CheckTestCase
         $this->assertPasses($this->run_(new CiCoverageCheck(), $context));
     }
 
+    public function testIncludingTheSharedGitlabCiCountsAsRunningCkcoverage(): void
+    {
+        $context = $this->repo([
+            '__policy_fixture' => "min_coverage=54\n",
+            'tests/phpunit/SomeTest.php' => '<?php',
+            '.gitlab-ci.yml' => "include:\n  - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml\n",
+        ]);
+        $this->assertPasses($this->run_(new CiCoverageCheck(), $context));
+    }
+
     /** Delegating to the shared CI runs ckcoverage, though the token is not local. */
     public function testCallingTheSharedCiCountsAsRunningCkcoverage(): void
     {

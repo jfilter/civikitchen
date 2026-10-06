@@ -25,7 +25,7 @@ final class NpmInstallCheck implements Check
             return;
         }
 
-        foreach ($context->scopedWorkflows() as $contents) {
+        foreach ($context->ciTexts() as $contents) {
             if (preg_match('/(^|\s)npm install(\s|$)/m', $contents)) {
                 $reporter->warn("CI runs 'npm install' — use 'npm ci' so the lockfile is binding");
 

@@ -62,6 +62,7 @@ final class DistPaths
         '.gitignore',
         '.editorconfig',
         'civikitchen.yaml',
+        '.gitlab-ci.yml',
         'renovate.json',
         '.phpunit.result.cache',
         'phpcs.xml',

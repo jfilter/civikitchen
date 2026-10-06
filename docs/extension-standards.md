@@ -440,6 +440,48 @@ up; see
   a lint job does not need to be able to push. Set it per job where a step
   genuinely writes (`packages: write` to push an image).
 
+### CI on GitLab
+
+A repository hosted on GitLab declares `ci: gitlab` under `policy:` in
+`civikitchen.yaml`. `ckinit` then writes a managed `.gitlab-ci.yml` instead of
+the GitHub callers and `renovate.json`. The file includes civikitchen's
+`ci/gitlab/extension-ci.yml` at `v1`:
+
+```yaml
+include:
+  - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml
+```
+
+The jobs run inside the civikitchen image, with the database as a GitLab
+service, so a plain docker executor is enough. `ckboot` provisions the site in
+the job container with the checkout attached as the extension, running the
+repository's `.docker/init.d` hooks as the CI compose stack does. The gates
+then run as the web user:
+
+- `civikitchen-ci` runs `ck ci`, then `cklifecycle`.
+- `civikitchen-e2e` runs `npm run test:e2e` when the repository has a
+  `playwright.config.ts` or `.js`, against a site with the `admin`/`admin`
+  login the GitHub job also creates. `CK_IN_IMAGE=1` is set, and the managed
+  `tests/e2e/lib.sh` then calls `cv` directly instead of through compose; a
+  repository's own helpers check the same variable.
+
+Variables below the managed block override the defaults:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `CK_IMAGE` | `ghcr.io/jfilter/civikitchen:v1` | the job image |
+| `CK_DB_IMAGE` | `mariadb:10.11` | keep it equal to the database of `.docker/docker-compose.ci.yml` |
+| `CK_LIFECYCLE` | `"1"` | `"0"` skips `cklifecycle` |
+| `CK_NPM_CI` | `"0"` | `"1"` installs `node_modules` before the gates |
+| `CK_JS_TESTS` | `"0"` | `"1"` also runs `npm test` |
+
+Dependencies install with `npm ci --ignore-scripts`, as on GitHub; the image
+has no Bun. The web user writes into the checkout, which relies on the docker
+executor's default umask, so `FF_DISABLE_UMASK_FOR_DOCKER_EXECUTOR` stays off.
+GitLab has no shared release pipeline, so such a repository declares
+`release: none` with its reason. The mode covers a repository with one
+extension at its root; `ckinit` refuses it anywhere else.
+
 ### Several extensions in one repository
 
 A repository whose root carries no `info.xml` and whose direct subdirectories

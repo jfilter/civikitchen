@@ -97,10 +97,12 @@ ARG INFECTION_VERSION
 # install` in install-dev-tools.sh reads exactly these two files.
 COPY toolbelt/phpcs-root /opt/composer
 # The toolbelt, laid out as in a checkout, as in the standalone image — minus
-# the two standalone-only helpers: cktestreset reseeds the standalone scratch
-# DB, ckcoretest runs core suites against its dist core.
+# the standalone-only helpers: cktestreset reseeds the standalone scratch DB,
+# ckcoretest runs core suites against its dist core, ckboot provisions the
+# standalone site inside a CI job container.
 COPY toolbelt /opt/civikitchen/toolbelt
 RUN rm /opt/civikitchen/toolbelt/bin/cktestreset /opt/civikitchen/toolbelt/bin/ckcoretest \
+        /opt/civikitchen/toolbelt/bin/ckboot \
     && CODER_REF="${CODER_REF}" \
         CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
         PHPUNIT_VERSION="${PHPUNIT_VERSION}" PHPUNIT_SHA256="${PHPUNIT_SHA256}" \

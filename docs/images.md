@@ -34,7 +34,9 @@ toolchain added:
 - **standalone only**: `cktestreset`, which rebuilds the headless test database
   ([Headless tests](extension-development.md#headless-tests)), and
   `ckcoretest`, which runs core's own suites
-  ([CiviCRM core development](#civicrm-core-development))
+  ([CiviCRM core development](#civicrm-core-development)), and `ckboot`, which
+  provisions the site inside a GitLab CI job
+  ([CI on GitLab](extension-standards.md#ci-on-gitlab))
 
 **Core patches.** The image carries fixes for core bugs a dev stack must not
 reproduce, until a release contains them: one file per bug in

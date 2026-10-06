@@ -16,7 +16,31 @@ final class CiWorkflowCheckTest extends CheckTestCase
     public function testFailsWithoutAnyWorkflow(): void
     {
         $reporter = $this->run_(new CiWorkflowCheck(), $this->repo([]));
-        $this->assertFails($reporter, 'no CI workflow (.github/workflows/)');
+        $this->assertFails($reporter, 'no CI workflow (.github/workflows/ or .gitlab-ci.yml)');
+    }
+
+    /** GitLab's three include forms all reach the shared pipeline. */
+    public function testAGitlabPipelineIncludingTheSharedCiPasses(): void
+    {
+        foreach ([
+            "include:\n  - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml\n",
+            "include: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml\n",
+            "include:\n  project: mirrors/civikitchen\n  ref: v1\n  file: /ci/gitlab/extension-ci.yml\n",
+            "include:\n  - project: mirrors/civikitchen\n    file: [ci/gitlab/extension-ci.yml]\n",
+            // GitLab's !reference below the include must not hide it.
+            "include:\n  - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml\n"
+                . ".setup:\n  script: [echo hi]\nextra:\n  script:\n    - !reference [.setup, script]\n",
+        ] as $pipeline) {
+            $reporter = $this->run_(new CiWorkflowCheck(), $this->repo(['.gitlab-ci.yml' => $pipeline]));
+            self::assertSame(['CI workflow present'], $reporter->messages('ok'), $pipeline);
+            self::assertSame([], $reporter->messages('warn'), $pipeline);
+        }
+    }
+
+    public function testAGitlabPipelineWithoutLintWarns(): void
+    {
+        $context = $this->repo(['.gitlab-ci.yml' => "test:\n  script:\n    - echo hi\n"]);
+        $this->assertWarns($this->run_(new CiWorkflowCheck(), $context), 'CI has no lint step (cklint/phpcs)');
     }
 
     public function testOkWithNoWarnWhenAWorkflowRunsPhpcs(): void

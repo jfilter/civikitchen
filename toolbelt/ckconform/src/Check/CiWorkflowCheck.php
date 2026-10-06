@@ -21,9 +21,8 @@ final class CiWorkflowCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        $workflows = $context->workflows();
-        if ($workflows === []) {
-            $reporter->fail('no CI workflow (.github/workflows/)');
+        if ($context->workflows() === [] && $context->gitlabPipeline() === null) {
+            $reporter->fail('no CI workflow (.github/workflows/ or .gitlab-ci.yml)');
 
             return;
         }

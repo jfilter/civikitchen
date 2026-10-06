@@ -23,6 +23,7 @@ if (!is_file($yamlAutoload)) {
 const MANAGED_FILES = [
   '.gitattributes',
   '.github/workflows/ci.yml',
+  '.gitlab-ci.yml',
   '.github/workflows/release.yml',
   '.docker/docker-compose.ci.yml',
   '.docker/init.d/README.md',
@@ -74,7 +75,18 @@ const OPTIONAL_FILES = [
 const ROOT_ONLY_FILES = [
   '.github/workflows/ci.yml',
   '.github/workflows/release.yml',
+  '.gitlab-ci.yml',
   'renovate.json',
+];
+
+/** The files only one CI host reads; policy.ci picks the set (absent: GitHub). */
+const GITHUB_FILES = [
+  '.github/workflows/ci.yml',
+  '.github/workflows/release.yml',
+  'renovate.json',
+];
+const GITLAB_FILES = [
+  '.gitlab-ci.yml',
 ];
 
 /** The managed release caller and the reusable workflow it calls. */
@@ -109,6 +121,10 @@ recursively; __EXTKEY__ is replaced with info.xml's <file> value,
 __VENDOR__ with the vendor segment of the extension key, __RENOVATE_PRESET__
 with the renovate_preset policy key (default config:recommended) and
 __LICENSE__ with info.xml's <license>.
+
+With `ci: gitlab` under policy in civikitchen.yaml, a single-extension
+repository gets a managed .gitlab-ci.yml instead of the GitHub callers and
+renovate.json.
 
 Seeding preserves existing files unless --force is given. --update rewrites
 only the MANAGED files (CI caller, test bootstraps, CI compose stack — the
@@ -248,9 +264,11 @@ if (is_file($legacyPolicy)) {
 }
 $policyRaw = is_file($target . '/civikitchen.yaml') ? file_get_contents($target . '/civikitchen.yaml') : FALSE;
 $releasesNothing = FALSE;
+$onGitlab = FALSE;
 if (is_string($policyRaw)) {
   // A repo that declares release: none has no caller to keep in line.
   $releasesNothing = str_starts_with(\CiviKitchen\Ckconform\Policy::parse($policyRaw)['release'][0] ?? '', 'none');
+  $onGitlab = (\CiviKitchen\Ckconform\Policy::parse($policyRaw)['ci'][0] ?? '') === 'gitlab';
   $declared = \CiviKitchen\Ckconform\Policy::parse($policyRaw)['template_custom'] ?? [];
   // First occurrence wins; ckconform's policy-key check reports a second line
   // that would silently do nothing.
@@ -273,6 +291,12 @@ if (is_string($policyRaw)) {
       $custom[$item] = TRUE;
     }
   }
+}
+
+// The root pass writes one GitHub caller for all extensions; nothing does that for GitLab yet.
+if ($onGitlab && $belowRoot) {
+  fwrite(STDERR, "ckinit: ci: gitlab supports a repository holding one extension at its root, not {$target}\n");
+  exit(2);
 }
 
 // The Renovate preset the managed renovate.json extends. An organisation
@@ -300,7 +324,8 @@ foreach ($iterator as $item) {
     exit(1);
   }
   $inventory[] = $relative;
-  if (($belowRoot && in_array($relative, ROOT_ONLY_FILES, TRUE)) || ($releasesNothing && $relative === RELEASE_CALLER)) {
+  if (($belowRoot && in_array($relative, ROOT_ONLY_FILES, TRUE)) || ($releasesNothing && $relative === RELEASE_CALLER)
+    || in_array($relative, $onGitlab ? GITHUB_FILES : GITLAB_FILES, TRUE)) {
     continue;
   }
   $rendered = str_replace(
@@ -828,7 +853,12 @@ function runRootPass(string $root, string $mode, bool $force, string $yamlAutolo
   require_once $yamlAutoload;
   require_once dirname(__DIR__) . '/toolbelt/ckconform/src/Policy.php';
   $policyFile = $root . '/civikitchen.yaml';
-  $preset = renovatePreset(is_file($policyFile) ? (string) file_get_contents($policyFile) : NULL);
+  $rootPolicy = is_file($policyFile) ? (string) file_get_contents($policyFile) : NULL;
+  if ($rootPolicy !== NULL && (\CiviKitchen\Ckconform\Policy::parse($rootPolicy)['ci'][0] ?? '') === 'gitlab') {
+    fwrite(STDERR, "ckinit: ci: gitlab supports a repository holding one extension at its root, not {$root}\n");
+    return 2;
+  }
+  $preset = renovatePreset($rootPolicy);
 
   $needs = releaseNeeds($root, $extensions);
   if ($needs === NULL) {

@@ -817,5 +817,52 @@ if awk '/^ *volumes: *$/ { v=1; next } v && !/^ *(- |#)/ { bad=1 } { v=0 } END {
   exit 1
 fi
 
+# ci: gitlab swaps the GitHub callers and renovate.json for a managed
+# .gitlab-ci.yml; without the key no GitLab file appears.
+test ! -e "$work/clean/.gitlab-ci.yml"
+make_extension "$work/gitlab"
+printf '%s\n' 'version: 1' 'policy:' '  ci: gitlab' '  release:' '    mode: none' "    reason: 'tagged on GitLab'" > "$work/gitlab/civikitchen.yaml"
+out=$("$root/scaffold/ckinit.php" --update "$work/gitlab")
+grep -q 'created   .gitlab-ci.yml' <<<"$out"
+grep -q 'remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml' "$work/gitlab/.gitlab-ci.yml"
+for stray in renovate.json .github/workflows/ci.yml .github/workflows/release.yml; do
+  if [ -e "$work/gitlab/$stray" ]; then
+    echo "ci: gitlab still seeded a GitHub file: $stray" >&2
+    exit 1
+  fi
+done
+"$root/scaffold/ckinit.php" --check "$work/gitlab" >/dev/null
+# Variables below the managed block are the repository's; the include is not.
+printf '%s\n' 'variables:' '  CK_LIFECYCLE: "0"' >> "$work/gitlab/.gitlab-ci.yml"
+"$root/scaffold/ckinit.php" --check "$work/gitlab" >/dev/null
+rewrite_with_sed 's|civikitchen/v1/|civikitchen/v0/|' "$work/gitlab/.gitlab-ci.yml"
+out=$("$root/scaffold/ckinit.php" --check "$work/gitlab" 2>&1 || true)
+grep -q 'drifted   .gitlab-ci.yml' <<<"$out" || { echo "a drifted GitLab caller was not reported: $out" >&2; exit 1; }
+"$root/scaffold/ckinit.php" --update "$work/gitlab" >/dev/null
+grep -q 'civikitchen/v1/' "$work/gitlab/.gitlab-ci.yml"
+grep -q 'CK_LIFECYCLE: "0"' "$work/gitlab/.gitlab-ci.yml"
+# Inside the image (GitLab jobs) the e2e helpers call cv directly, not via compose.
+mkdir -p "$work/fakebin"
+printf '%s\n' '#!/bin/sh' 'echo "direct:$*"' > "$work/fakebin/cv"
+chmod +x "$work/fakebin/cv"
+out=$(PATH="$work/fakebin:$PATH" CK_IN_IMAGE=1 bash -c '. "$1"; cv ext:list' _ "$work/gitlab/tests/e2e/lib.sh")
+[ "$out" = 'direct:ext:list' ] || { echo "lib.sh ignored CK_IN_IMAGE: $out" >&2; exit 1; }
+# The root pass writes GitHub callers only, so an extension below a root refuses.
+git init -q "$work/gitlab-mono"
+cp -R "$work/gitlab" "$work/gitlab-mono/ext"
+/bin/rm "$work/gitlab-mono/ext/.gitlab-ci.yml"
+if out=$("$root/scaffold/ckinit.php" --update "$work/gitlab-mono/ext" 2>&1); then
+  echo "ci: gitlab was accepted below a repository root" >&2
+  exit 1
+fi
+grep -q 'ci: gitlab supports a repository holding one extension' <<<"$out"
+cp "$work/gitlab/civikitchen.yaml" "$work/gitlab-mono/civikitchen.yaml"
+if out=$("$root/scaffold/ckinit.php" --update "$work/gitlab-mono" 2>&1); then
+  echo "ci: gitlab was accepted at a monorepo root" >&2
+  exit 1
+fi
+grep -q 'ci: gitlab supports a repository holding one extension' <<<"$out"
+test ! -e "$work/gitlab-mono/.github/workflows/ci.yml"
+
 "$root/scaffold/ckinit.php" --help >/dev/null
 echo "ckinit integration checks passed"

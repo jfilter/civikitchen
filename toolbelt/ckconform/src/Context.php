@@ -429,6 +429,15 @@ final class Context
     public const SHARED_CI = 'extension-ci.yml';
 
     /**
+     * The shared GitLab pipeline a `.gitlab-ci.yml` includes — the GitLab
+     * counterpart to SHARED_CI, run inside the image instead of a compose stack.
+     */
+    public const SHARED_GITLAB_CI = 'ci/gitlab/extension-ci.yml';
+
+    /** The GitLab pipeline file; GitLab reads it from the repository root only. */
+    public const GITLAB_PIPELINE = '.gitlab-ci.yml';
+
+    /**
      * The shared reusable release workflow, by the filename repos name in
      * `uses:` — the release-side counterpart to SHARED_CI.
      */
@@ -960,6 +969,76 @@ final class Context
         }
 
         return $this->workflowScope = $scope;
+    }
+
+    /**
+     * The repository's GitLab pipeline, when it ships one and the extension is
+     * the repository root — a monorepo's GitLab pipeline is not supported.
+     */
+    public function gitlabPipeline(): ?string
+    {
+        if ($this->isMonorepo() || !$this->ships(self::GITLAB_PIPELINE)) {
+            return null;
+        }
+
+        return $this->read(self::GITLAB_PIPELINE);
+    }
+
+    /**
+     * Whether the GitLab pipeline includes the shared civikitchen pipeline, in
+     * any of GitLab's include forms (string, `remote:`, `project:` + `file:`).
+     */
+    public function includesSharedGitlabCi(): bool
+    {
+        $body = $this->gitlabPipeline();
+        if ($body === null) {
+            return false;
+        }
+        // GitLab's own tags (!reference) parse as tagged values, not as errors.
+        $parsed = Policy::parseYaml($body, $error, customTags: true);
+        $includes = is_array($parsed) ? ($parsed['include'] ?? []) : [];
+        if (!is_array($includes) || !array_is_list($includes)) {
+            $includes = [$includes];
+        }
+        foreach ($includes as $include) {
+            $targets = is_array($include)
+                ? [$include['remote'] ?? null, $include['local'] ?? null, ...(array) ($include['file'] ?? [])]
+                : [$include];
+            foreach ($targets as $target) {
+                if (is_string($target) && str_ends_with('/' . ltrim($target, '/'), '/' . self::SHARED_GITLAB_CI)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether this extension's CI delegates to a shared civikitchen pipeline,
+     * GitHub's reusable workflow or the GitLab include — and so runs cklint,
+     * ckconform, phpstan and phpunit under ckcoverage.
+     */
+    public function runsSharedCi(): bool
+    {
+        return $this->scopedJobsCalling(self::SHARED_CI) !== [] || $this->includesSharedGitlabCi();
+    }
+
+    /**
+     * Every CI definition text that judges this extension: the scoped GitHub
+     * workflows plus the GitLab pipeline, label => text.
+     *
+     * @return array<string, string>
+     */
+    public function ciTexts(): array
+    {
+        $texts = $this->scopedWorkflows();
+        $gitlab = $this->gitlabPipeline();
+        if ($gitlab !== null) {
+            $texts[self::GITLAB_PIPELINE] = $gitlab;
+        }
+
+        return $texts;
     }
 
     /**

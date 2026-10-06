@@ -7,8 +7,8 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 
 /**
- * What the CI jobs judging this extension actually run: their workflow text
- * without comments, the gates behind `ck` subcommands and the shared CI, and
+ * What the CI jobs judging this extension actually run: their workflow and
+ * GitLab pipeline text without comments, the gates behind `ck` subcommands and the shared CI, and
  * the npm and composer scripts they invoke by name, followed transitively.
  */
 final class CiCommands
@@ -40,14 +40,18 @@ final class CiCommands
     public static function reachable(Context $context): string
     {
         $text = '';
-        foreach ($context->scopedWorkflows() as $body) {
+        foreach ($context->ciTexts() as $body) {
             $text .= self::withoutComments($body) . "\n";
         }
         if ($text === '') {
             return '';
         }
-        if ($context->scopedJobsCalling(Context::SHARED_CI) !== []) {
+        if ($context->runsSharedCi()) {
             $text .= implode(' ', self::CI_GATES) . "\n";
+        }
+        // The shared GitLab pipeline's e2e job (ci/gitlab/extension-ci.yml), run when a playwright config exists.
+        if ($context->includesSharedGitlabCi()) {
+            $text .= "npm run test:e2e\n";
         }
 
         return self::expandCk(self::withScripts($context, $text));

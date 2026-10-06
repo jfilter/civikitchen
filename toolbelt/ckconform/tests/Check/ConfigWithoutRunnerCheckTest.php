@@ -306,4 +306,29 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         ], git: true);
         $this->assertPasses($this->run_(new ConfigWithoutRunnerCheck(), $named));
     }
+
+    /** The shared GitLab pipeline runs the PHP gates, and playwright through the test:e2e script. */
+    public function testTheSharedGitlabCiCoversPlaywrightAndThePhpTools(): void
+    {
+        $context = $this->repo([
+            'playwright.config.ts' => 'export default {}',
+            'package.json' => '{"scripts": {"test:e2e": "playwright test"}}',
+            'phpstan.neon.dist' => 'parameters:',
+            '.gitlab-ci.yml' => self::GITLAB_CALLER,
+        ], git: true);
+        $this->assertPasses($this->run_(new ConfigWithoutRunnerCheck(), $context));
+    }
+
+    /** Without a test:e2e script the shared e2e job runs nothing. */
+    public function testTheSharedGitlabCiLeavesPlaywrightUnrunWithoutTheScript(): void
+    {
+        $context = $this->repo([
+            'playwright.config.ts' => 'export default {}',
+            'package.json' => '{"scripts": {"test": "vitest run"}}',
+            '.gitlab-ci.yml' => self::GITLAB_CALLER,
+        ], git: true);
+        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'playwright.config.ts');
+    }
+
+    private const GITLAB_CALLER = "include:\n  - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml\n";
 }

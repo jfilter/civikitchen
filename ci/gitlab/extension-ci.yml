@@ -1,0 +1,89 @@
+# Shared GitLab pipeline for a CiviCRM extension: the counterpart of the
+# reusable GitHub workflow .github/workflows/extension-ci.yml, for repositories
+# hosted on GitLab. The repository's .gitlab-ci.yml includes it (ckinit writes
+# that caller when civikitchen.yaml declares `ci: gitlab`):
+#
+#   include:
+#     - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml
+#
+# The jobs run inside the civikitchen image with the database as a service, so
+# a docker executor is enough; nothing needs a privileged runner. ckboot
+# provisions the site in the job container, then the gates run as the web user,
+# the same `ck ci` a developer runs in the dev stack. The @v1 ref and CK_IMAGE
+# move together, like the GitHub caller and its image (docs/releases.md).
+#
+# A repository may override CK_IMAGE, CK_DB_IMAGE (keep it equal to the db of
+# .docker/docker-compose.ci.yml), CK_LIFECYCLE ("0" skips cklifecycle), and opt
+# in like the GitHub inputs: CK_NPM_CI="1" installs node_modules before the
+# gates, CK_JS_TESTS="1" also runs `npm test`. npm only; the image has no Bun.
+# The web user writes into the checkout, which relies on the docker executor's
+# default umask 0000 (FF_DISABLE_UMASK_FOR_DOCKER_EXECUTOR must stay off).
+# Jobs set CK_IN_IMAGE=1: e2e helpers call cv directly instead of through
+# compose (the managed tests/e2e/lib.sh does).
+
+variables:
+  CK_IMAGE: ghcr.io/jfilter/civikitchen:v1
+  CK_DB_IMAGE: mariadb:10.11
+  CK_LIFECYCLE: "1"
+  CK_NPM_CI: "0"
+  CK_JS_TESTS: "0"
+
+.civikitchen:
+  image:
+    name: $CK_IMAGE
+    # ckboot runs the image entrypoint itself, after the checkout exists.
+    entrypoint: [""]
+  services:
+    - name: $CK_DB_IMAGE
+      alias: db
+      # Civi\Test's schema rebuild creates triggers as the app user; with binary
+      # logging the server refuses that unless it trusts non-SUPER creators.
+      command: ["--log-bin-trust-function-creators=1"]
+  variables:
+    MYSQL_ROOT_PASSWORD: root
+    MYSQL_DATABASE: civicrm
+    MYSQL_USER: civicrm
+    MYSQL_PASSWORD: civicrm
+    CIVIKITCHEN_SITE_URL: http://localhost:8080
+    CK_IN_IMAGE: "1"
+    npm_config_cache: /tmp/npm-cache
+  before_script:
+    # Before provisioning, as on GitHub: enabling the extension may read the
+    # bundle. Install hooks never run; the web user owns the tree.
+    - if [ "$CK_NPM_CI" = "1" ] || [ "$CK_JS_TESTS" = "1" ] || [ -n "${CK_E2E:-}" ]; then runuser -u www-data -- npm ci --ignore-scripts; fi
+    - ext_dir=$(ckboot)
+    - cd "$ext_dir"
+
+civikitchen-ci:
+  extends: .civikitchen
+  script:
+    - runuser -u www-data -- ck ci
+    - if [ "$CK_JS_TESTS" = "1" ]; then runuser -u www-data -- npm test; fi
+    - if [ "$CK_LIFECYCLE" = "1" ]; then runuser -u www-data -- cklifecycle; fi
+
+civikitchen-e2e:
+  extends: .civikitchen
+  rules:
+    - exists:
+        - playwright.config.ts
+        - playwright.config.js
+  variables:
+    CK_E2E: "1"
+    # Browsers and system packages install as root; the suite runs as the web
+    # user so its cv calls leave no root-owned caches in the site.
+    PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
+    # The image creates this login only when asked; the suite reads it back.
+    CIVIKITCHEN_DEMO_USER: admin
+    CIVIKITCHEN_DEMO_PASS: admin
+    DEMO_USER: admin
+    DEMO_PASS: admin
+    CIVICRM_BASE_URL: http://localhost:8080
+  script:
+    - npx playwright install --with-deps
+    - runuser -u www-data -- npm run test:e2e
+  artifacts:
+    when: always
+    expire_in: 2 weeks
+    paths:
+      - playwright-report/
+      - test-results/

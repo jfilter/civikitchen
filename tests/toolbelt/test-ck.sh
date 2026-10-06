@@ -46,7 +46,7 @@ deps_help=$("${root}/toolbelt/bin/ckdeps" --help)
 grep -q 'ck dependencies' <<<"${deps_help}"
 # The tools outside the PHP dispatcher answer --help too, without doing their job.
 "${root}/toolbelt/bin/ckconform" --help | grep -q '^ckconform - ' || { echo "ckconform --help printed no usage" >&2; exit 1; }
-for tool in ckcoretest cktestreset; do
+for tool in ckboot ckcoretest cktestreset; do
   bash "${root}/toolbelt/bin/${tool}" --help | grep -q "^${tool} - " || { echo "${tool} --help printed no usage" >&2; exit 1; }
 done
 for alias in ckcivix ckcompat ckconform ckcoverage ckdeps ckeslint ckfmt cklifecycle cklint ckmutate ckphpunit ckprofile ckrelease ckscenario ckschemadiff cksmarty; do

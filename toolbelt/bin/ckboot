@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+#
+# ckboot — provision the CiviCRM site inside THIS container, with the extension
+# in the current directory attached, and start Apache.
+#
+# For CI systems that run a job inside the image with the database as a service
+# (GitLab's docker executor) instead of starting the compose stack. The image
+# entrypoint does the work, exactly as on a compose boot; the extension is
+# attached through CIVIKITCHEN_EXTENSION_PATH because the job has no bind mount.
+#
+# Usage (as root, from the extension root):  ext_dir=$(ckboot) && cd "$ext_dir"
+set -euo pipefail
+
+# shellcheck source=../lib/ckcommon.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ckcommon.sh"
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  cat <<'USAGE'
+ckboot - provision the CiviCRM site in this container with the extension in the
+current directory attached, start Apache, and print the extension's directory
+under the ext dir. Run as root from the extension root; the database must be
+reachable as CIVICRM_DB_HOST (default db). Logs go to stderr.
+USAGE
+  exit 0
+fi
+
+ck_require_extension_root
+[ "$(id -u)" = 0 ] || ck_die "must run as root: the image entrypoint provisions the site"
+
+key="$(ck_xml_field info.xml key)"
+[ -n "${key}" ] || ck_die "info.xml declares no extension key"
+export CIVIKITCHEN_EXTENSION_PATH="${PWD}" CIVIKITCHEN_EXTENSION_KEY="${key}"
+export CIVICRM_AUTO_INSTALL="${CIVICRM_AUTO_INSTALL:-1}"
+# The repo's first-boot hooks, which the CI compose stack mounts at the default path.
+if [ -d .docker/init.d ]; then
+  export CK_INIT_D="${PWD}/.docker/init.d"
+fi
+site_url="${CIVIKITCHEN_SITE_URL:-http://localhost:8080}"
+
+# cv finds the CMS from the web root; the entrypoint provisions before it runs
+# its command, so `true` returns once the site is ready.
+(cd /var/www/html && civikitchen-entrypoint true) >&2
+apache2ctl start >&2
+
+for _ in $(seq 60); do
+  if curl -fsS -o /dev/null "${site_url}/civicrm/login"; then
+    echo "[ckboot] ${site_url} is up, ${key} attached" >&2
+    echo "/var/www/html/ext/${key}"
+    exit 0
+  fi
+  sleep 1
+done
+ck_die "${site_url} did not answer within 60s"
