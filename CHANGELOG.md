@@ -46,6 +46,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- `ckconform`'s `hook-dispatch-name` no longer reports a correctly named
+  `<prefix>_civicrm_postSave_<table>()` or `<prefix>_civicrm_queueRun_<runner>()`
+  as never firing; core appends the table or runner to these hook names. A
+  bare `<prefix>_civicrm_postSave()` or `_queueRun()` now fails: core never
+  dispatches it.
 - The oxfmt toolchain lifts tinypool to 2.1.2 (CVE-2026-104848,
   CVE-2026-104849), which oxfmt 0.61.0 locks to 2.1.0 and which failed the
   image vulnerability scan.

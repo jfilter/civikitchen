@@ -31,6 +31,50 @@ final class HookDispatchNameCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
     }
 
+    /** postSave_<table> and queueRun_<runner> carry an argument after the hook name. */
+    public function testPassesOnParameterisedHooks(): void
+    {
+        $context = $this->repo(['fixture.php' => <<<'PHP'
+            <?php
+            function fixture_civicrm_postSave_civicrm_campaign($dao) {
+            }
+
+            function fixture_civicrm_queueRun_task($queue, $items, &$outcomes) {
+            }
+            PHP,
+        ]);
+        $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+    }
+
+    public function testFailsOnAParameterisedHookUnderAForeignPrefix(): void
+    {
+        $context = $this->repo(['fixture.php' => "<?php\nfunction otherext_civicrm_postSave_civicrm_campaign(\$dao) {\n}\n"]);
+        $this->assertFails(
+            $this->run_(new HookDispatchNameCheck(), $context),
+            "fixture.php: otherext_civicrm_postSave_civicrm_campaign() will never fire — the hook prefix of this extension is 'fixture', so the function must be named fixture_civicrm_postSave_civicrm_campaign()",
+        );
+    }
+
+    /** Core never dispatches the bare name: the table or runner is always appended. */
+    public function testFailsOnABareParameterisedHook(): void
+    {
+        $context = $this->repo(['fixture.php' => "<?php\nfunction fixture_civicrm_postSave(\$dao) {\n}\n"]);
+        $this->assertFails(
+            $this->run_(new HookDispatchNameCheck(), $context),
+            'fixture.php: fixture_civicrm_postSave() will never fire — core dispatches postSave with the table or runner appended: fixture_civicrm_postSave_<name>()',
+        );
+    }
+
+    /** Hook names match case-insensitively, as function_exists() does. */
+    public function testFailsOnABareParameterisedHookInAnyCase(): void
+    {
+        $context = $this->repo(['fixture.php' => "<?php\nfunction fixture_civicrm_queuerun(\$queue) {\n}\n"]);
+        $this->assertFails(
+            $this->run_(new HookDispatchNameCheck(), $context),
+            'fixture.php: fixture_civicrm_queuerun() will never fire — core dispatches queuerun with the table or runner appended: fixture_civicrm_queuerun_<name>()',
+        );
+    }
+
     /**
      * The shared CI checks a sibling extension out into .civikitchen-siblings/;
      * its hooks carry ITS prefix and must never be judged as this repo's —

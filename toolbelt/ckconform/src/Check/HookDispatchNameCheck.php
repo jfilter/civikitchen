@@ -79,6 +79,12 @@ final class HookDispatchNameCheck implements Check
         'contactListQuery' => 'deprecated in favour of hook_civicrm_apiWrappers',
     ];
 
+    /**
+     * Hooks core names at dispatch time, `civicrm_<hook>_<argument>`
+     * (CRM_Utils_Hook::postSave() appends the table, ::queueRun() the runner).
+     */
+    private const PARAMETERISED_HOOKS = ['postSave', 'queueRun'];
+
     public function name(): string
     {
         return 'hook-dispatch-name';
@@ -110,7 +116,9 @@ final class HookDispatchNameCheck implements Check
             $suppressions = Suppressions::of($contents);
 
             foreach (HookSurface::globalFunctions($contents) as $function => $line) {
-                if (preg_match('/^([A-Za-z0-9_]+)_civicrm_([a-zA-Z]+)$/i', $function, $m) !== 1) {
+                $parameterised = sprintf('/^([A-Za-z0-9_]+?)_civicrm_(%s)_[A-Za-z0-9_]+$/i', implode('|', self::PARAMETERISED_HOOKS));
+                $isParameterised = preg_match($parameterised, $function, $m) === 1;
+                if (!$isParameterised && preg_match('/^([A-Za-z0-9_]+)_civicrm_([a-zA-Z]+)$/i', $function, $m) !== 1) {
                     continue;
                 }
                 [, $prefix, $suffix] = $m;
@@ -128,11 +136,23 @@ final class HookDispatchNameCheck implements Check
 
                 if (!HookSurface::hasPrefix($prefix, $expected)) {
                     $this->emit($reporter, $suppressions, $line, [true, sprintf(
-                        '%s: %s() will never fire — the hook prefix of this extension is \'%s\', so the function must be named %s_civicrm_%s()',
+                        '%s: %s() will never fire — the hook prefix of this extension is \'%s\', so the function must be named %s%s()',
                         $file,
                         $function,
                         $expected[0],
                         $expected[0],
+                        substr($function, strlen($prefix)),
+                    )]);
+                    continue;
+                }
+
+                if (!$isParameterised && preg_match(sprintf('/^(%s)$/i', implode('|', self::PARAMETERISED_HOOKS)), $suffix) === 1) {
+                    $this->emit($reporter, $suppressions, $line, [true, sprintf(
+                        '%s: %s() will never fire — core dispatches %s with the table or runner appended: %s_civicrm_%s_<name>()',
+                        $file,
+                        $function,
+                        $suffix,
+                        $prefix,
                         $suffix,
                     )]);
                     continue;
