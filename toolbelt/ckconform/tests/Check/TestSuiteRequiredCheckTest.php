@@ -61,11 +61,19 @@ final class TestSuiteRequiredCheckTest extends CheckTestCase
             'fixture.civix.php' => '<?php // generated',
             'phpstanBootstrap.php' => '<?php',
             'CRM/Fixture/DAO/Thing.php' => '<?php class Thing {}',
-            'CRM/Fixture/BAO/Thing.php' => '<?php class Thing {}',
             'Civi/Api4/Thing.php' => '<?php class Thing {}',
         ], git: true);
         $reporter = $this->run_(new TestSuiteRequiredCheck(), $context);
         $this->assertFails($reporter, 'but 1 PHP source file(s)');
+    }
+
+    /** civix seeds BAO/ once; what grows in it is hand-written domain logic. */
+    public function testBaoClassesCountAsSource(): void
+    {
+        $context = $this->repo([
+            'CRM/Fixture/BAO/Thing.php' => '<?php class Thing { public function sync() {} }',
+        ], git: true);
+        $this->assertFails($this->run_(new TestSuiteRequiredCheck(), $context), 'but 1 PHP source file(s)');
     }
 
     public function testPassesWhenThereIsNoPhpSourceAtAll(): void

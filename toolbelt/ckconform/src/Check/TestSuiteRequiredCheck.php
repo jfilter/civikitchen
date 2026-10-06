@@ -15,15 +15,15 @@ use CiviKitchen\Ckconform\Reporter;
  * The source count must include the extension's own root .php file, which is
  * exactly where a config-only extension keeps whatever logic it has. Counted are
  * all .php under Civi/ and CRM/ plus the .php directly in the repo root;
- * generated and machine-owned files (.civix.php, DAO/, BAO/,
- * phpstanBootstrap.php) do not count as surface anyone is asked to test.
+ * generated and machine-owned files (.civix.php, DAO/, phpstanBootstrap.php)
+ * do not count as surface anyone is asked to test. BAO/ does: civix only seeds
+ * the class, the business logic in it is the repo's own.
  */
 final class TestSuiteRequiredCheck implements Check
 {
     private const EXCLUDED = [
         '.civix.php',
         '/DAO/',
-        '/BAO/',
         'phpstanBootstrap.php',
     ];
 

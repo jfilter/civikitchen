@@ -25,6 +25,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `phpunit.xml(.dist)`. A repo with that config needs a step that names it
   (`phpunit -c`, `ckcoverage -c`, `ck ci --extra-phpunit-config`), or
   `extra_phpunit_config` on the shared CI workflow.
+- The template's `phpstan.neon.dist` analyses `CRM/*/BAO/*`, and `ckconform`'s
+  `test-suite-required` counts BAO classes as source: civix only seeds them,
+  the logic in them is the extension's own. A seeded config keeps its old
+  exclude; remove that line by hand to have phpstan analyse the BAO classes.
 
 ### Removed
 

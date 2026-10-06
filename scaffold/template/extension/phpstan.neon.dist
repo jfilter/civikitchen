@@ -26,9 +26,8 @@ parameters:
 		- .
 	excludePaths:
 		analyse:
-			# civix-generated stubs; the DAO base class is created at runtime
+			# civix-generated; BAO/ is not — civix only seeds it, the logic is the repo's
 			- CRM/*/DAO/*
-			- CRM/*/BAO/*
 			- __EXTKEY__.civix.php
 			- mixin (?)
 			# phpstan-tests.neon.dist analyses the suite in a second pass

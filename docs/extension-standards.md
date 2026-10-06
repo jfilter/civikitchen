@@ -704,7 +704,7 @@ in the history is not.
   declared opt-out as nothing to measure rather than demanding the config be
   deleted.
 - `phpunit.xml.dist` must declare a `<coverage>` section scoped to real
-  extension code (exclude the civix shim and DAO/BAO boilerplate). Without it
+  extension code (exclude the civix shim and DAO boilerplate). Without it
   `--coverage-text` measures nothing while still looking like a passing gate.
 - **Runtime deprecations are test failures.** CiviCRM announces them at
   runtime via `CRM_Core_Error::deprecatedWarning()` /
