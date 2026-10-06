@@ -23,8 +23,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `renovate.json`; release archives leave the file out. Inside the image the
   managed `tests/e2e/lib.sh` calls `cv` directly.
 - `ckboot` (standalone image) provisions the site inside a CI job container
-  with the current directory attached as the extension, starts Apache and
-  prints the extension's directory.
+  with the current directory attached as the extension, under info.xml's
+  `<file>` like the compose stacks mount it, starts Apache and prints the
+  extension's directory. `CIVIKITCHEN_EXTENSION_DIR` names that directory for
+  any attached extension; the default stays the key.
 - `ckconform` accepts a `.gitlab-ci.yml` that includes the shared pipeline as
   the repository's CI in `ci-workflow`, `ci-coverage`, `config-without-runner`
   and `npm-install`.

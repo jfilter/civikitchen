@@ -29,7 +29,10 @@ ck_require_extension_root
 
 key="$(ck_xml_field info.xml key)"
 [ -n "${key}" ] || ck_die "info.xml declares no extension key"
-export CIVIKITCHEN_EXTENSION_PATH="${PWD}" CIVIKITCHEN_EXTENSION_KEY="${key}"
+# The directory the compose stacks mount the extension at, so paths agree.
+dir="$(ck_xml_field info.xml file)"
+[ -n "${dir}" ] || ck_die "info.xml declares no <file>"
+export CIVIKITCHEN_EXTENSION_PATH="${PWD}" CIVIKITCHEN_EXTENSION_KEY="${key}" CIVIKITCHEN_EXTENSION_DIR="${dir}"
 export CIVICRM_AUTO_INSTALL="${CIVICRM_AUTO_INSTALL:-1}"
 # The repo's first-boot hooks, which the CI compose stack mounts at the default path.
 if [ -d .docker/init.d ]; then
@@ -45,7 +48,7 @@ apache2ctl start >&2
 for _ in $(seq 60); do
   if curl -fsS -o /dev/null "${site_url}/civicrm/login"; then
     echo "[ckboot] ${site_url} is up, ${key} attached" >&2
-    echo "/var/www/html/ext/${key}"
+    echo "/var/www/html/ext/${dir}"
     exit 0
   fi
   sleep 1

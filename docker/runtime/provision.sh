@@ -67,6 +67,12 @@ ck_runtime_cli() {
 # discovered/configured by the current image. This keeps generated scenarios
 # portable across Standalone, Drupal, WordPress and Joomla layouts without
 # teaching the generator each CMS's internal paths.
+# CIVIKITCHEN_EXTENSION_DIR names the link (default: the key); ckboot uses
+# info.xml's <file>, where the compose stacks mount the extension.
+ck_attached_extension_link() {
+    echo "${CK_EXT_DIR}/${CIVIKITCHEN_EXTENSION_DIR:-${CIVIKITCHEN_EXTENSION_KEY:-}}"
+}
+
 ck_attach_scenario_extension() {
     [[ -n "${CIVIKITCHEN_EXTENSION_PATH:-}" ]] || return 0
     local source="${CIVIKITCHEN_EXTENSION_PATH}" key="${CIVIKITCHEN_EXTENSION_KEY:-}"
@@ -81,7 +87,7 @@ ck_attach_scenario_extension() {
         return 1
     }
     mkdir -p "${CK_EXT_DIR}"
-    target="${CK_EXT_DIR}/${key}"
+    target="$(ck_attached_extension_link)"
     if [[ -L "${target}" ]]; then
         existing="$(readlink "${target}")"
         [[ "${existing}" == "${source}" ]] || {
@@ -497,8 +503,8 @@ ck_mounted_extension_dirs() {
                 fi
             done < "${CK_MOUNTINFO}"
         fi
-        if [[ -n "${CIVIKITCHEN_EXTENSION_PATH:-}" && -L "${CK_EXT_DIR}/${CIVIKITCHEN_EXTENSION_KEY:-}" ]]; then
-            echo "${CK_EXT_DIR}/${CIVIKITCHEN_EXTENSION_KEY}"
+        if [[ -n "${CIVIKITCHEN_EXTENSION_PATH:-}" && -L "$(ck_attached_extension_link)" ]]; then
+            ck_attached_extension_link
         fi
     } | sort -u
 }

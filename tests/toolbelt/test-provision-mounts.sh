@@ -94,14 +94,20 @@ expect_log '' 'nothing to enable'
 # inside the image has no bind mount) is enabled like a mount.
 mkdir -p "$work/src/attached"
 write_info "$work/src/attached" org.example.attached
-: > "$CV_LOG"
-(
-  export CIVIKITCHEN_EXTENSION_PATH="$work/src/attached" CIVIKITCHEN_EXTENSION_KEY=org.example.attached
+attach_and_enable() {
   ck_attach_scenario_extension
   CK_MOUNTINFO="$work/none" ck_enable_extensions
-)
+}
+: > "$CV_LOG"
+CIVIKITCHEN_EXTENSION_PATH="$work/src/attached" CIVIKITCHEN_EXTENSION_KEY=org.example.attached attach_and_enable
 /bin/rm "$work/ext/org.example.attached"
 expect_log 'ext:enable org.example.attached;' 'attached extension'
+# ckboot attaches it under info.xml's <file>, where the compose stacks mount it.
+: > "$CV_LOG"
+CIVIKITCHEN_EXTENSION_PATH="$work/src/attached" CIVIKITCHEN_EXTENSION_KEY=org.example.attached CIVIKITCHEN_EXTENSION_DIR=attached attach_and_enable
+[ -L "$work/ext/attached" ] || { echo "FAIL: not linked under its <file> name" >&2; exit 1; }
+/bin/rm "$work/ext/attached"
+expect_log 'ext:enable org.example.attached;' 'attached extension under its file name'
 
 # A bare key in CIVIKITCHEN_EXTRA_EXTENSIONS takes a mounted extension's pin;
 # an explicit key@URL and an unpinned key pass through.
