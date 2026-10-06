@@ -15,7 +15,8 @@ path builds the artifact on a laptop and in Actions.
 Three things, in this order:
 
 1. **A commit** that bumps `info.xml` `<version>` (and `composer.json`, and
-   `CHANGELOG.md` if the repo keeps one). A human writes and reviews it.
+   `CHANGELOG.md` if the repo keeps one; `ckrelease check` fails when the two
+   version numbers disagree). A human writes and reviews it.
 2. **A tag**, `v<version>`, which is the statement that the commit is ready.
 3. **Everything after that**, which is mechanical and therefore automated: the
    consistency check, the distribution archive, an install into a real CiviCRM,

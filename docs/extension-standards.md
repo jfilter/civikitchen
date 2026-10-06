@@ -4,18 +4,9 @@ The checklist the civikitchen tooling (cklint / CiviKitchen phpcs standard,
 ckmodernize, phpstan, the extension template) enforces or expects. Use it for
 audits and as the target state when modernizing an existing extension.
 
-For a new extension, run `/path/to/civikitchen/scaffold/ckcreate <key>` to
-generate the civix scaffold and apply the versioned
-`scaffold/template/extension/` tooling layer in one atomic operation. For an
-existing civix extension, `ckinit <extension-directory>` applies that layer;
-existing files remain untouched unless `--force` is explicitly supplied. Afterwards,
-`ckinit --check` reports where template-managed files have drifted and
-`ckinit --update` refreshes them (seeded files like `composer.json` and
-`phpstan.neon.dist` stay the repo's own after the first copy;
-[ADR-0013](adr/0013-managed-and-seeded-template-files.md)) — see
-[extension-development.md](extension-development.md#civix-workflow). Use the
-`ckinit` from the civikitchen checkout at the version the repo pins;
-[releases.md](releases.md) explains what a version covers.
+`ckcreate` and `ckinit` apply the extension template that sets most of this
+up; see
+[Creating an extension](extension-development.md#creating-an-extension).
 
 ## UI: declarative before imperative
 
@@ -54,7 +45,9 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   by phpstan, not phpcs: the bans live in
   `/opt/civikitchen/toolbelt/phpstan-config/civicrm-disallowed.neon`
   (spaze/phpstan-disallowed-calls) and the template's `phpstan.neon.dist`
-  includes it. Because phpstan resolves types, an indirect `$class::value()`
+  includes it. The same file bans removed or deprecated core helpers
+  (`CRM_Utils_Array::value()`, `CRM_Core_Error::fatal()`, the
+  `CRM_Core_Error::debug_*()` family). Because phpstan resolves types, an indirect `$class::value()`
   is caught too. An exception is an `allowIn`/`allowInMethods` entry in the
   repo's own `phpstan.neon.dist`, with the reason next to it. phpstan reads PHP
   only, so `ckconform` additionally rejects `CRM.api3` in JS/Smarty; annotate a
@@ -287,7 +280,13 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
 ## Tooling every repo must have
 
 - `phpcs.xml.dist` referencing `<rule ref="CiviKitchen"/>` (project layer on
-  top is yours) — `cklint` picks it up automatically.
+  top is yours) — `cklint` picks it up automatically. The standard is the
+  Drupal base minus the doc-comment sniffs that fight PHPStan array-shape
+  PHPDocs (`Drupal.Commenting.FunctionComment` and siblings), plus the
+  CiviKitchen sniffs. One of them is opt-in per repo:
+  `CiviKitchen.Api.NoRequiredOnExternalAction` forbids `@required` on the
+  APIv4 actions the ruleset lists in `externalActions`, because there an empty
+  parameter has to be answered as a verdict, not rejected with an exception.
 - Warnings vs errors in the phpcs layer is a real distinction, not decoration:
   a sniff is a warning where the fix needs human judgement (which parameter is
   that `TRUE`? is this permission bypass the legitimate one?). `cklint` prints
@@ -300,7 +299,8 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   (phpcs/Slevomat/Rector/cktaint/spaze) and minus the CiviCRM house idiom
   (`isset()`/`empty()` on API arrays). A deliberate single deviation is a
   `// @mago-expect lint:<rule>` line in the code, visible in the diff; a
-  committed `mago.toml` replaces the baseline outright.
+  committed `mago.toml` replaces the baseline outright. With the baseline, mago
+  lints at the floor in `composer.json` `require.php`.
 - `phpunit.xml.dist` + headless tests per the template
   (`scaffold/template/extension/`), incl. the `TEST_DB_DSN` bootstrap guard.
 - `phpstan.neon.dist` (level 10, no baseline, `phpVersion` at the declared
@@ -379,61 +379,30 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   (`phpstan-strict-rules`) is installed but left out of the auto-registration
   so a repo opts in with one `includes:` line when it is ready.
 - CI per `scaffold/template/extension/.github/workflows/ci.yml` — a thin caller of the
-  reusable `extension-ci.yml` in civikitchen (compose stack → cklint +
-  ckconform + ckcivix --check → ckfmt --check → phpunit under ckcoverage → the
-  extra PHPUnit suite when configured → phpstan → phpstan over
-  the tests when the repo opted in → ckcompat →
-  ckdeps → cktaint → cksmarty → ckeslint → template-drift check →
-  lockfile vulnerability scan → repository secret scan, plus the opt-in
-  schema-parity job), so
-  the pipeline is defined once instead of copy-pasted per repo. The in-container
-  gates of that list are `ck ci`, which a developer runs unchanged in the local
-  stack ([Running the CI gates locally](extension-development.md#running-the-ci-gates-locally)). The caller pins
-  the released major (`@v1`) and the CI stack the matching `:v1` image —
-  workflow, template, tools and images are one versioned contract, so they move
-  together and deliberately ([releases.md](releases.md)). One canary repo
-  tracks `@main` and declares that in its `civikitchen.yaml`.
-- Releases through the shared `extension-release.yml` — a tag push builds the
-  installable zip (dev/CI files excluded), installs it into a fresh CiviCRM and
-  publishes the GitHub release. The version lives in `info.xml` and
-  `composer.json` and they are bumped together; `ckrelease check` is what says
-  so out loud. See [Releasing an extension](extension-releases.md). The caller
-  `.github/workflows/release.yml` is a template-managed file, so `ckinit
-  --update` adopts it. `ckconform`'s `release-workflow` fails when no workflow
-  calls `extension-release.yml`; the only opt-out is `policy.release.mode:
-  none` with a reason. In a repository of several extensions each extension's
-  job must run `stage: build`, need the build jobs of the same-repository
-  extensions it requires, and be needed by a `stage: publish` job.
+  reusable `extension-ci.yml` in civikitchen, so the pipeline is defined once
+  instead of copy-pasted per repo. Its in-container gates are `ck ci`
+  (`ck ci --help` lists them), which a developer runs unchanged in the local
+  stack ([Running the CI gates locally](extension-development.md#running-the-ci-gates-locally)
+  names what runs on the runner instead). A stack whose image predates `ck ci`
+  fails the gate step with an error saying so. The caller pins `@v1` and the CI stack
+  the matching `:v1` image ([releases.md](releases.md)).
+- Releases through the shared `extension-release.yml`
+  ([Releasing an extension](extension-releases.md)). `ckconform`'s
+  `release-workflow` fails when no workflow calls it; the only opt-out is
+  `policy.release.mode: none` with a reason.
 - `info.xml` `<version>` is `X.Y.Z` or `X.Y.Z-<pre-release>`: SemVer 2.0
   without build metadata, no leading zeros. `ckconform`'s `version-format`
   fails on anything else — `2.2.7.1`, `1.0`, `1.3.0+build.5` — because the
   release workflow accepts no other tag, so such a version can never be
   released.
-- Every version the repo has moved past carries its `v<version>` tag.
-  `ckconform`'s `release-tags` reads the `<version>` history of `info.xml` and
-  the repo's tags: a number that was bumped through and never tagged is a
-  release nothing can install, and it fails. The current version is left to
-  `release-tag-coherence`, so the window between the bump commit and the tag
-  push is not a finding twice. On a shallow clone the rule reports itself
-  unevaluated rather than clean — the shared CI checks out with
-  `fetch-depth: 0` and `fetch-tags: true` for exactly this. A repo that
-  deliberately cuts no releases declares `policy.release: none` with its
-  reason; a single number that was bumped through and then re-scoped is listed
-  under `policy.untagged_versions` with the reason it stays untagged. A listed
-  version that is tagged after all, that `info.xml` carries right now, or that
-  `info.xml` never carried is reported as a stale entry, and so is a list
-  declared next to `policy.release: none`. The version is the bare `info.xml` value —
-  `release-tags` prefixes the `v` itself — and it is quoted, because a
-  two-component number like `1.0` is a YAML float unquoted:
-
-  ```yaml
-  policy:
-    untagged_versions:
-      - version: "1.2.0"
-        reason: bump re-scoped into 1.3.0 before anything shipped
-  ```
-
-  See [Releasing an extension](extension-releases.md).
+- Every version the repo has moved past carries its `v<version>` tag
+  (`ckconform`'s `release-tags`; a re-scoped number goes under
+  `policy.untagged_versions`, see
+  [Releasing an extension](extension-releases.md#a-version-that-will-never-be-released)). The
+  current version is left to `release-tag-coherence`, so the window between the
+  bump commit and the tag push is not a finding twice. On a shallow clone the
+  rule reports itself unevaluated rather than clean — the shared CI checks out
+  with `fetch-depth: 0` and `fetch-tags: true` for exactly this.
 - `info.xml` `<version>` sits exactly at or just ahead of the tags.
   `ckconform`'s `release-tag-coherence` fails when the version is ahead of the
   newest tag (the bump was committed, the tag never cut) and when it is below
@@ -461,46 +430,6 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   commit what pins it.
 - `info.xml` `<requires>` naming every extension actually used (SearchKit,
   Afform, CiviRules …) — a missing `<ext>` only surfaces on a fresh site.
-- **Several extensions in one repository** — a repository whose root carries no
-  `info.xml` and whose direct subdirectories are extensions. `ckconform` detects
-  that layout from the filesystem; nothing is declared in `civikitchen.yaml`.
-  What changes there, and only there:
-  - The workflow-reading checks (`ci-coverage`, `npm-install`,
-    `playwright-diagnostics`, `config-without-runner`, and `ci-workflow`'s lint
-    step) judge
-    the job that runs *this* extension — the caller job whose
-    `with.working_directory`, or the steps job whose
-    `defaults.run.working-directory`, names its directory. A neighbour's job says
-    nothing about this extension, so `ci-workflow` fails when no job names this
-    directory at all; the alternative is five checks calling an extension that
-    nothing builds clean. `floating-tag` and `workflow-permissions` keep judging
-    the whole file.
-  - `monorepo-requires-mounted`: a `<requires>` key that is another extension of
-    the same repository must be bind-mounted at `/var/www/html/ext/<key>` into the
-    `app` service of the CI compose file — the `compose_file` the scoped job
-    passes to `extension-ci.yml`, else its default `.docker/docker-compose.ci.yml`;
-    a mount in the dev compose file alone does not count, because CI never boots
-    it, and a `compose_file` given as an expression is reported not evaluated.
-    The `app` service is the one the site runs in, so a mount into another
-    service does not count either — and under the
-    dependency's **key**, not its
-    `<file>`: that is where the template's `phpstanBootstrap.php` resolves a
-    `<requires>` and where the shared CI mounts a sibling, so a dotted key like
-    `de.civico.ckmonobase` is mounted at `ext/de.civico.ckmonobase` even though
-    its own stack mounts it as `ckmonobase`. A mount whose source compose
-    interpolates (`${VAR}`) is not guessed: the rule warns "not evaluated". That
-    volume line is the one
-    mechanism that works for a local `docker compose up` and in CI alike, and
-    without it the stack boots without the dependency and the enable fails late.
-    Only the mount is checked — the entrypoint enables every directory mounted
-    under the extension directory and resolves each one's `<requires>` first, so
-    the order of the volume lines does not matter.
-  - `monorepo-version-lockstep`: every `info.xml` of the repository carries the
-    same `<version>` and `<releaseDate>`. One `vX.Y.Z` tag releases all of them,
-    which keeps `release-tags`, `release-tag-coherence` and the Latest
-    computation correct — but only while the numbers move together.
-  - The release checks read the extension's own directory: a commit touching
-    only a neighbour is no unreleased change to this extension.
 - Dev stack: `.docker/docker-compose.yml` on a civikitchen image. **Every image
   in it is pinned** — a bare `image: mariadb` is `:latest` spelled shorter.
   Floating tags in a workflow make a run unattributable; floating tags in the
@@ -513,6 +442,50 @@ existing files remain untouched unless `--force` is explicitly supplied. Afterwa
   inherits the repository default, which on older repos and orgs is write-all —
   a lint job does not need to be able to push. Set it per job where a step
   genuinely writes (`packages: write` to push an image).
+
+### Several extensions in one repository
+
+A repository whose root carries no `info.xml` and whose direct subdirectories
+are extensions ([layout](extension-development.md#several-extensions-in-one-repository)).
+`ckconform` detects that layout from the filesystem; nothing is declared in
+`civikitchen.yaml`. What changes there, and only there:
+
+- The workflow-reading checks (`ci-coverage`, `npm-install`,
+  `playwright-diagnostics`, `config-without-runner`, and `ci-workflow`'s lint
+  step) judge
+  the job that runs *this* extension — the caller job whose
+  `with.working_directory`, or the steps job whose
+  `defaults.run.working-directory`, names its directory. A neighbour's job says
+  nothing about this extension, so `ci-workflow` fails when no job names this
+  directory at all; the alternative is five checks calling an extension that
+  nothing builds clean. `floating-tag` and `workflow-permissions` keep judging
+  the whole file.
+- `monorepo-requires-mounted`: a `<requires>` key that is another extension of
+  the same repository must be bind-mounted at `/var/www/html/ext/<key>` into the
+  `app` service of the CI compose file — the `compose_file` the scoped job
+  passes to `extension-ci.yml`, else its default `.docker/docker-compose.ci.yml`;
+  a mount in the dev compose file alone does not count, because CI never boots
+  it, and a `compose_file` given as an expression is reported not evaluated.
+  The `app` service is the one the site runs in, so a mount into another
+  service does not count either — and under the
+  dependency's **key**, not its
+  `<file>`: that is where the template's `phpstanBootstrap.php` resolves a
+  `<requires>` and where the shared CI mounts a sibling, so a dotted key like
+  `de.civico.ckmonobase` is mounted at `ext/de.civico.ckmonobase` even though
+  its own stack mounts it as `ckmonobase`. A mount whose source compose
+  interpolates (`${VAR}`) is not guessed: the rule warns "not evaluated". That
+  volume line is the one
+  mechanism that works for a local `docker compose up` and in CI alike, and
+  without it the stack boots without the dependency and the enable fails late.
+  Only the mount is checked — the entrypoint enables every directory mounted
+  under the extension directory and resolves each one's `<requires>` first, so
+  the order of the volume lines does not matter.
+- `monorepo-version-lockstep`: every `info.xml` of the repository carries the
+  same `<version>` and `<releaseDate>`. One `vX.Y.Z` tag releases all of them,
+  which keeps `release-tags`, `release-tag-coherence` and the Latest
+  computation correct — but only while the numbers move together.
+- The release checks read the extension's own directory: a commit touching
+  only a neighbour is no unreleased change to this extension.
 
 ### Third-party source a repo carries verbatim
 
@@ -748,16 +721,13 @@ in the history is not.
   call into a deprecated code path is green and the notice lands in a PHP log
   nobody reads; `ckconform` (`deprecation-gate`) warns when a repo drops either.
 - **A transactional test that lost its transaction is a failure, not a
-  surprise.** `Civi\Test\TransactionalInterface` wraps a test in a transaction
-  that is rolled back afterwards — but MySQL COMMITs implicitly on DDL, so one
-  `CREATE TABLE`, one `CustomField.create`, one schema rebuild in `setUp()` and
-  the rollback rolls back nothing. The fixtures leak into every later test and
-  the suite stays green until an unrelated test fails somewhere the order
-  differs. `ckphpunit` runs the suite with a listener that writes a marker
-  inside the transaction and looks for it over a second connection after the
-  rollback; a marker that survived can only have been committed. The fix it
-  names is the right one: move schema work into `setUpHeadless()`, where the
-  `CiviEnvBuilder` runs before the transaction opens.
+  surprise.** The phpstan rules under [Code](#code) catch the DDL they can see
+  in a transactional test; `ckphpunit` catches the rest at runtime. It runs the
+  suite with a listener that writes a marker inside the transaction and looks
+  for it over a second connection after the rollback; a marker that survived
+  can only have been committed, and the fixtures would leak into every later
+  test. The fix it names is the same: move schema work into `setUpHeadless()`,
+  where the `CiviEnvBuilder` runs before the transaction opens.
 - **An unapplied headless builder installs nothing.** `CiviTestListener`
   discards `setUpHeadless()`'s return value, so `return ck_headless();` builds
   a `CiviEnvBuilder` that never runs; in a single-extension repo provisioning
@@ -798,6 +768,8 @@ in the history is not.
   refactors that changed no behaviour; as a push gate that is a slow, flappy
   build.
 
+## Repository policy: `civikitchen.yaml`
+
 Licence declarations (`info.xml`, `composer.json`, every `package.json`) must
 agree with each other. *Which* licence is your policy, not this standard's, so
 pin the expected values in an optional `civikitchen.yaml` in the extension root and
@@ -828,22 +800,10 @@ policy:
 version must satisfy it; the SHA-256 pin still identifies the exact tested
 bytes.
 
-A dependency in a private repository has no URL that a container can fetch, so
-it names the release instead of a location — same digest, same constraint:
-
-```yaml
-    - key: org.example.dep
-      version: ^1.2
-      release:
-        repository: example-org/dep
-        tag: v1.2.0
-        asset: dep-1.2.0.zip
-      reason: Private repository, no registry serves it
-```
-
-Whoever holds the credential downloads the asset and hands the archive in
-through `CK_DEP_ARCHIVE_DIR`; the entrypoint verifies it against the pin. An
-entry carries a `url` or a `release`, never both and never neither.
+A dependency in a private repository has no URL that a container can fetch,
+so it names a `release` (repository, tag, asset) instead of a `url`; see
+[A dependency only a credential can reach](extension-releases.md#a-dependency-only-a-credential-can-reach).
+An entry carries a `url` or a `release`, never both and never neither.
 
 Values shared across an organisation's repos can sit once in a file of the same
 format named by `CK_DEFAULT_CONFIG`; a repo's own `civikitchen.yaml` overrides per
@@ -863,21 +823,20 @@ the tag, so `ckconform` fails when the two disagree. A closed-source package als
 wants `"private": true` in `package.json`: `UNLICENSED` states intent, `private`
 is what makes `npm publish` refuse.
 
-The tooling section is machine-checked by `ckconform` (run from the extension
-root) — CI should run it alongside cklint.
-
 ## Taint analysis: `cktaint`
 
 `cktaint` runs Psalm — and Psalm *only* as a taint engine, never as a second
 phpstan — over the extension, asking one question: **does request input reach a
 dangerous sink without being escaped on the way?** It ships in the image and
-needs no per-repo config. Since the fleet-wide clean run the gate **blocks** on
+needs no per-repo config. The gate **blocks** on
 the classes where a true positive is an outright vulnerability — `TaintedSql`,
 `TaintedShell`, `TaintedInclude`, `TaintedUnserialize`, `TaintedSSRF`. The
 noisier classes (file paths, headers, cookies, callables, eval, LDAP, secrets)
 are `errorLevel="info"` in the bundled config: printed in the report, never
-part of the exit code. CI runs it as one of the `ck ci` gates; on an image
-from before `ck ci` existed, the gate step fails with a message naming that.
+part of the exit code (visible via `--show-info`). CI runs it as one of the
+`ck ci` gates. A repo that wants its own rules ships a
+`psalm.xml`/`psalm.xml.dist`; `cktaint` uses it instead of the bundled config,
+same as `phpcs.xml` for `cklint`.
 
 ```
 cktaint                 # whole extension
@@ -972,18 +931,6 @@ fixture pairs in `tests/images/test-dev-tools.sh` — for every modelled
 source/sink combination one file where the flow must be reported and one with
 the escape in between that must stay silent — so a weakened stub shows up as a
 red image test, not as a quieter report.
-
-### How it became blocking
-
-The gate started as an advisory pilot so the signal could be measured before it
-cost anyone a red build. The switch happened after a fleet-wide run came back
-clean: the blocking five moved to `errorLevel="error"` in the bundled
-`psalm-taint.xml.dist`, everything else to `errorLevel="info"` (visible via
-`--show-info`, exit-code-neutral), and the CI step dropped
-`continue-on-error`.
-
-A repo that wants its own rules ships a `psalm.xml`/`psalm.xml.dist`; `cktaint`
-uses it instead of the bundled config, same as `phpcs.xml` for `cklint`.
 
 ## Frontend: JS dependencies, JS tests and browser tests
 
@@ -1198,14 +1145,10 @@ like `composer_app_repositories` — and enables the siblings **left to right**
 before this extension, so a sibling that another sibling requires has to be
 listed before it. The mount target is each sibling's **extension
 key**, read from its `info.xml` — not its repo name, which is free to differ
-and is not what CiviCRM registers it under. That is the directory the managed
-`phpstanBootstrap.php` autoloads it from, provided the sibling is also in
-`info.xml` `<requires>` — the bootstrap reads the requires list and registers
-every required extension present under the ext dir, so no `scanDirectories`
-entry is needed for it. The phpat boundary rule reads the same list and finds
-the sibling under `.civikitchen-siblings/<key>` on the runner, so using the
-sibling's classes directly is allowed rather than reported as reaching into
-another extension's internals.
+and is not what CiviCRM registers it under. List the sibling in `info.xml`
+`<requires>` as well: that is what the managed `phpstanBootstrap.php` autoloads
+and what the boundary rule accepts as own code (see
+[Tooling](#tooling-every-repo-must-have)).
 
 An entry may pin the checkout: `owner/repo@ref`, where `ref` is a tag, a
 branch or a full 40-character commit. Without it the sibling's default branch
@@ -1326,10 +1269,8 @@ Pick the ends of your claimed range, not everything in between: the oldest
 minor you support and current stable. The image tags are `:standalone-<minor>`
 (e.g. `:standalone-6.16`) and the moving `:standalone`; see
 [images.md](images.md#tags--versions). A `<minor>` tag keeps being rebuilt
-(newest patch, current `ck*` tooling) only while it is on the supported list —
-`CK_STANDALONE_EXTRA_MINORS` in `toolbelt/versions.env`. If your matrix pins a
-minor, make sure it is listed there; a one-off rebuild of anything else is
-*Build Dev Images* → `workflow_dispatch` → `extra_standalone_minors`.
+only while it is on the supported list there, so a minor your matrix or
+`core_upgrade_from` pins has to be on it.
 
 The matrix jobs run the **suite**, not the full `ci` pass: `cklint`,
 `ckconform`, `phpstan` and the coverage floor are enforced by the tools inside
@@ -1416,11 +1357,13 @@ whitespace and blank lines, and nothing else. The trade is that this compares DD
 semantically empty difference is possible; the fix when it happens is one more
 normalisation rule there.
 
+`ckschemadiff` carries the steps as subcommands (`tables`, `dump`, `diff`,
+`normalize`) for reproducing a finding by hand inside the app container.
+
 The job skips itself, with a log line, when the extension declares no tables of
 its own or nothing has been released yet — unlike `upgrade_from_last_release`,
 where a missing tag means you switched on a check you cannot satisfy, both of
-these are ordinary states for a perfectly healthy extension. Two stack boots on
-one runner, so: scheduled caller, not the push run.
+these are ordinary states for a perfectly healthy extension.
 
 ### Core upgrade: what an existing site goes through
 
@@ -1490,19 +1433,18 @@ Without the two files the job still boots the old core, upgrades it and runs
 the four asserts above — worth having, and the honest limit is that it says
 nothing about your own data. The log says as much when it finds no fixtures.
 
-Two things to know before you rely on it:
+It is the **slowest single check** in the pipeline: two boots plus a full core
+schema upgrade. Like the browser job, it runs once, on `image`; it is not
+multiplied by `matrix_images`. A multi-hop upgrade matrix is a separate
+feature, not a flag.
 
-- It is the **slowest single check** in the pipeline: two boots plus a full core
-  schema upgrade. Scheduled caller only.
-- A `:standalone-<minor>` tag off the supported list freezes with the tooling
-  it was last built with, so a from→to pair is only meaningful while both tags
-  exist — the same caveat the matrix carries. And like the browser job, this one runs once, on `image`;
-  it is not multiplied by `matrix_images`. A multi-hop upgrade matrix is a
-  separate feature, not a flag.
+### The scheduled caller
 
-Each entry costs a full stack boot, so **do not put the matrix in the push
-run**. Keep `ci.yml` fast (it is what a PR waits on and what automerge gates
-on) and add a second, thin caller for the slow checks — one file, one schedule:
+`lifecycle` runs inside the push run's stack. The matrix, upgrade, schema-parity
+and core-upgrade jobs each cost at least one more full stack boot, so **none of
+them belongs in the push run**. Keep `ci.yml` fast (it is what a PR waits on and
+what automerge gates on) and add a second, thin caller for the slow checks —
+one file, one schedule:
 
 ```yaml
 # .github/workflows/compat.yml
@@ -1554,9 +1496,3 @@ release.
 
 `compat.yml` is **not** template-managed: which versions you claim is your
 policy, so `ckinit` neither stamps nor checks this file.
-
-## Workflow
-
-`cklint` → `phpstan` → `CIVICRM_UF=UnitTests phpunit` locally and in CI;
-`ckmodernize` for mechanical migrations. See
-[extension-development.md](extension-development.md).

@@ -9,27 +9,32 @@ understands, see the
 
 CiviCRM Standalone, installed from the release tarball onto a `php:apache`
 base (the base mirrors what the official `civicrm/civicrm` image provided,
-without depending on its Docker Hub publishing), with dev tools added:
-- **composer** — most modern extensions ship vendor deps
-- **node + npm** — for extensions with Angular/JS assets. Node 24 (current LTS) with a pinned npm 12 installed over the distro package's. npm 12 does not run a dependency's install scripts unless the project approved them; the images turn that back on globally, because CiviCRM core, civicrm-buildkit and most frontend toolchains still depend on postinstall doing real work. See the reasoning at `NPM_VERSION` in `toolbelt/install-dev-tools.sh`.
-- **pcov** — fast code coverage (always on)
-- **xdebug** — step debugging, opt-in via `XDEBUG_MODE` (see [IDE step debugging](extension-development.md#ide-step-debugging))
-- **civix** — scaffolding/build tool for extensions
-- **phpunit 9** — pinned for CiviCRM compatibility
-- **phpstan** — static analysis
-- **phpcs + civicrm/coder** — the de-facto CiviCRM style guide (relaxed Drupal CS)
-- **cklint + the `CiviKitchen` phpcs standard** — opinionated extension linting. The standard is the Drupal base minus the doc-comment sniffs that fight PHPStan array-shape PHPDocs, plus CiviCRM footgun sniffs: bans APIv3 calls and removed/deprecated core helpers (`CRM_Utils_Array::value`, `CRM_Core_Error::fatal|debug_*`); flags bare `ts()` — extensions must use `E::ts()` for their own translation domain; flags legacy managed/menu/settings/entity/angular hook implementations where standard mixins should be used; guards `@required` on externally reachable APIv4 actions; and caps per-file length (`MaxFileLength`, default 1000 lines, configurable) so a runaway class gets split. A second engine, `mago lint`, adds the bug-pattern rules the phpcs standard does not carry — loose `==` comparisons, empty catch blocks, the `@` error-control operator, complexity ceilings — with everything that would overlap another gate or fight the CiviCRM house idiom (`isset()`/`empty()` on API arrays) disabled in the bundled `mago.toml`; suppress a single finding with a `// @mago-expect lint:<rule>` line. `cklint` lints your uncommitted changes by default (`--all`, `--fix`, explicit paths supported) and always defers to a project's own `phpcs.xml(.dist)` and `mago.toml`. phpcs warnings are reported but do not fail the run — the standard uses the warning tier for call sites only a human can judge; phpcs errors and every mago finding fail it.
-- **ckmodernize + rector** — opt-in code modernization for extension repos: previews by default, applies with `--fix`, and includes CiviKitchen rules for the same CiviCRM footguns `cklint` flags.
-- **cktaint + psalm** — taint analysis only (never a second phpstan): does request input reach a query, shell command, file path or redirect unescaped? Runs against CiviKitchen's CiviCRM source/sink/escape stubs; the SQL/shell/include/unserialize/SSRF classes **block** in CI, the noisier classes are advisory — see [extension-standards.md](extension-standards.md#taint-analysis-cktaint)
-- **ckconform** — repo-structure conformance checks against the extension template (see [extension-standards.md](extension-standards.md))
-- **ckcoverage** — runs phpunit with line coverage and enforces the `policy.coverage.minimum` floor from `civikitchen.yaml`
-- **ckmutate** — mutation testing (infection) against the `policy.mutation.minimum_msi` floor from `civikitchen.yaml`; a no-op without that key, and a scheduled job rather than a push gate
-- **cksmarty** — compiles every `.tpl` the extension ships, plus the bodies of the managed MessageTemplates it installed, with the real `CRM_Core_Smarty` in the booted site. Compiles, never renders: whether a template compiles depends on the Smarty major core ships, on the prefilters `CRM_Core_Smarty` installs and on which `{crm*}` plugins are registered — none of which a file-based check can know. Message-template bodies are the blind spot it exists for: they are Smarty strings in the database, first compiled when the workflow fires.
-- **ckeslint + the CiviKitchen oxlint baseline** — JS/TS linting with a toolchain pinned in the image, so no extension needs a linter devDependency block of its own. The engine is oxlint (plus `oxlint-tsgolint` for the type-aware half). The baseline is oxlint's `correctness`, `suspicious` and `perf` categories plus its `promise` plugin (real mistakes, no style rules), Mozilla's `eslint-plugin-no-unsanitized` (`innerHTML` and friends — an XSS in an extension is an XSS on every site that installs it), and the type-aware TypeScript rules *when the repo has a `tsconfig.json`*, which is what brings `no-floating-promises` / `no-misused-promises`. Type-aware rules apply to `.ts`/`.tsx`; plain `.js` gets the syntactic rules and `no-unsanitized`. The CiviKitchen rule `civikitchen/api4-contract` checks entity, action and field names in `CRM.api4()` / `crmApi4()` literals against the phpstan extension's `Api4Catalog`, with the same judgement as its PHP rules. CiviCRM's globals (`CRM`, `cj`, `ts`, `_`, `angular`) are declared; `dist/`, `vendor/`, `node_modules/`, vendored asset dirs and `*.min.js` are ignored. A repo's own `.oxlintrc.json` wins outright (and then supplies its own `jsPlugins`); a repo that ships only an `eslint.config.*` fails the gate with a pointer, since ESLint is no longer in the image. No JS in the repo is a pass with a log line. With `policy.javascript.type_check: true` in `civikitchen.yaml` it also reports TypeScript's compiler diagnostics for the repo's JavaScript — through the repo's `tsconfig.json`, or over a copy of the tracked source beside a CiviKitchen tsconfig (`allowJs`/`checkJs`). `ckeslint --core [dir]` type-checks CiviCRM core's own JavaScript instead (default `$CIVICRM_CORE_DIR`, then `/var/www/html/core`): it copies core's first-party `.js` — no vendored trees, minified bundles or tests — beside a `tsconfig.json` with `allowJs`/`checkJs` and a declaration file for the globals core's pages load by script tag, and runs oxlint with `--type-check` (TypeScript's compiler diagnostics), the correctness category and the APIv4 contract rule. It is an analysis tool for upstream bug reports, not a gate.
-- **ckfmt + mago + oxfmt** — code formatting: [mago](https://mago.carthage.software/) for PHP with a bundled baseline (`preset = "drupal"` + declare spacing) whose output is verified clean under the bundled phpcs standard (which excludes the layout sniffs the formatter contradicts — see [Known formatter/phpcs stand-offs](extension-standards.md#known-formatterphpcs-stand-offs)), [oxfmt](https://oxc.rs/) at its defaults for JS/TS. `ckfmt` formats in place, `ckfmt --check` is the hard CI gate. Vendored, minified and civix/DAO-generated files are excluded; a committed `mago.toml` / `.oxfmtrc.*` wins over the baseline for its half. No files of a kind is a pass with a log line.
-- **ckschemadiff** — `install()`-vs-upgrader schema parity over the extension's own tables (`ckschemadiff tables|dump|diff`). Used by the shared CI's `schema_parity` job; see [extension-standards.md](extension-standards.md#compatibility-test-the-range-you-claim).
-- **cktestreset** — drops + reseeds the isolated `<db>_test` scratch DB and clears stale cached containers (standalone only; civibuild manages the buildkit test DBs)
-- **ckcoretest** — runs CiviCRM *core* phpunit suites against the installed core (standalone only). The composer dist export-ignores `**/tests/**`, `phpunit.xml.dist` and the `sql/test_data*.mysql` seed files; on first use this fetches exactly those for the installed version (sparse blob-filtered checkout of the matching tag, cached in the container) — including the per-extension suites under `ext/*/tests` — then execs `CIVICRM_UF=UnitTests phpunit <args>` from the core dir (`--ext <name>` runs from a core extension's dir instead). Refuses to run without a provisioned `TEST_DB_DSN`. Covers the headless PHP suites (`api`, `CRM`, `Civi`, ext). `ckcoretest --e2e` runs `@group e2e` tests instead, against the dev site rather than the test DB: they install the extensions they need into it (`cv ext:disable` them afterwards) and log in as `ADMIN_USER`, which provisioning writes to `~/.cv.json` from `CIVIKITCHEN_DEMO_USER`. Browser tests (`Civi\Test\MinkBase`) also need the compose stack's `browser` service (`docker compose --profile browser up -d`), a headless Chrome sharing the app's network; tests that read `DEMO_USER`, a second user without admin rights, still fail, since the image creates only the admin. Upgrade and the karma/qunit JS tests need a buildkit/civibuild environment — an accepted gap, since civicrm.org's Jenkins runs the full matrix on every core PR anyway. This is for the local loop: run the suites your patch touches, let Jenkins do the rest. Useful for verifying core patches/backports in a kitchen: patch the file under `/var/www/html/core`, then `ckcoretest tests/phpunit/api/v4/Query`.
+without depending on its Docker Hub publishing), with the development
+toolchain added:
+
+- **cv, civix, composer**
+- **node + npm**: Node 24 (current LTS) with a pinned npm 12 installed over the
+  distro package's. npm 12 does not run a dependency's install scripts unless
+  the project approved them; the images turn that back on globally, because
+  CiviCRM core, civicrm-buildkit and most frontend toolchains still depend on
+  postinstall doing real work. The reasoning sits at `NPM_VERSION` in
+  `toolbelt/install-dev-tools.sh`.
+- **phpunit 9** (pinned for CiviCRM compatibility), **pcov** (always on) and
+  **xdebug** (off until `XDEBUG_MODE` is set, see
+  [IDE step debugging](extension-development.md#ide-step-debugging))
+- **phpstan, phpcs with civicrm/coder, psalm, rector, mago, oxlint, oxfmt**,
+  each pinned ([Bumping a dev tool](building.md#bumping-a-dev-tool))
+- **the `ck*` tools**: the CI gates `ck ci` runs
+  ([Extension standards](extension-standards.md#tooling-every-repo-must-have)),
+  `ckmodernize` ([Modernizing](extension-development.md#modernizing)), the
+  compatibility jobs' `cklifecycle` and `ckschemadiff`
+  ([Compatibility](extension-standards.md#compatibility-test-the-range-you-claim)),
+  the scheduled `ckmutate` ([Tests and coverage](extension-standards.md#tests-and-coverage)),
+  and `ckrelease` ([Releasing an extension](extension-releases.md))
+- **standalone only**: `cktestreset`, which rebuilds the headless test database
+  ([Headless tests](extension-development.md#headless-tests)), and
+  `ckcoretest`, which runs core's own suites
+  ([CiviCRM core development](#civicrm-core-development))
 
 **Core patches.** The image carries fixes for core bugs a dev stack must not
 reproduce, until a release contains them: one file per bug in
@@ -60,9 +65,22 @@ services:
 
 Ready-to-run: [`examples/standalone/`](../examples/standalone/)
 
-## Drupal 10 (dev)
+## Buildkit flavors (dev)
 
-CiviCRM on Drupal 10 via [civicrm-buildkit](https://github.com/civicrm/civicrm-buildkit). Site is built on first container start using `civibuild` (~60s). Requires an external MariaDB.
+`:drupal10`, `:drupal11`, `:wordpress` and `:joomla` run CiviCRM on a CMS via
+[civicrm-buildkit](https://github.com/civicrm/civicrm-buildkit). All four are
+built from the same Dockerfile (`docker/buildkit/`); only the default civibuild
+site type differs (`drupal10-demo`, `drupal11-demo`, `wp-demo`, `joomla-demo`,
+overridable with `CIVICRM_SITE_TYPE`). The site is built on first container
+start with `civibuild` (~60s), against an external MariaDB.
+
+They carry the standalone image's tools except the two standalone-only ones,
+and share [`docker/runtime/provision.sh`](../docker/runtime/provision.sh) with
+it, so the first-boot knobs marked *all* in the
+[configuration reference](configuration.md) work the same. The standalone
+install knobs (*standalone* there) do not apply: civibuild builds the
+site and provides the admin users, components and an isolated `sitetest_*` test
+database itself. Use these flavors to test CMS-specific behaviour.
 
 ```yaml
 services:
@@ -72,15 +90,13 @@ services:
     environment:
       CIVICRM_DB_HOST: db
       CIVICRM_DB_ROOT_PASSWORD: root
-      CIVIKITCHEN_SITE_URL: http://localhost:8080   # must match the port mapping
+      CIVIKITCHEN_SITE_URL: http://localhost:8080   # must match the port mapping, or assets 404
     depends_on: [db]
   db:
     image: mariadb:10.11
     environment:
       MYSQL_ROOT_PASSWORD: root
 ```
-
-> **`CIVIKITCHEN_SITE_URL` matters.** CiviCRM uses it for all asset paths (JS, CSS, fonts). If the port mapping differs from the URL the user opens, assets 404. Default is `http://localhost` (port 80).
 
 > **Recreated containers don't eat your data.** The site build lives in the app
 > container, the databases on the DB volume. When a *fresh* app container (image
@@ -89,42 +105,26 @@ services:
 > Opt in explicitly with `CIVIKITCHEN_REINSTALL=1`, or start clean with
 > `docker compose down -v`.
 
-Ready-to-run: [`examples/drupal10/`](../examples/drupal10/)
+Ready-to-run: [`examples/drupal10/`](../examples/drupal10/),
+[`examples/drupal11/`](../examples/drupal11/),
+[`examples/wordpress/`](../examples/wordpress/),
+[`examples/joomla/`](../examples/joomla/). The compose files show each CMS's
+extension mount path.
 
-## Drupal 11 (dev)
+### Drupal 11
 
-CiviCRM on Drupal 11 via buildkit. Same runtime model as Drupal 10, for
-extension compatibility checks on current Drupal; requires an external
-MariaDB. civibuild itself ships no `drupal11-demo` site type, so CiviKitchen
-vendors one:
+civibuild itself ships no `drupal11-demo` site type, so CiviKitchen vendors one:
 [`docker/buildkit/site-types/drupal11-demo/`](../docker/buildkit/site-types/drupal11-demo/)
 — `drupal10-demo`'s recipe adapted for Drupal 11.4 (content types now come
 from core recipes, Navigation replaced Toolbar; details in the file headers).
 `bake.sh` installs it into the buildkit clone, so Drupal 11 gets the same demo
 data, admin users, and profile support as the other flavors.
 
-Ready-to-run: [`examples/drupal11/`](../examples/drupal11/)
+### Joomla
 
-## WordPress (dev)
-
-CiviCRM on WordPress via buildkit. Same pattern and env vars as Drupal 10. The
-`:wordpress`, `:drupal10`, `:drupal11`, and `:joomla` tags are built from the
-same Dockerfile (`docker/buildkit/`) — only the default civibuild site type
-differs (`wp-demo`, `drupal10-demo`, `drupal11-demo`, or `joomla-demo`). All
-buildkit dev images carry the same dev tools as the standalone image (composer,
-node/npm, phpunit, phpstan, phpcs+coder, cklint, ckconform, ckcoverage, ckmutate,
-ckmodernize, cktaint, cksmarty, ckeslint, ckfmt, ckschemadiff, civix, pcov, xdebug) —
-except `cktestreset` and `ckcoretest`, which are
-standalone-only (civibuild manages the buildkit flavors' `sitetest_*` DBs).
-
-Ready-to-run: [`examples/wordpress/`](../examples/wordpress/)
-
-## Joomla (dev)
-
-CiviCRM on Joomla via buildkit, using civicrm-buildkit's `joomla-demo` site
-type. This is the Joomla compatibility target for extension development and
-requires an external MariaDB. Buildkit's `joomla5-empty` template is a CMS-only
-site, so CiviKitchen does not publish it as a CiviCRM flavor.
+The image uses civicrm-buildkit's `joomla-demo` site type. Buildkit's
+`joomla5-empty` template is a CMS-only site, so CiviKitchen does not publish it
+as a CiviCRM flavor.
 
 civibuild's `joomla-demo` install is deliberately incomplete (it leaves
 CiviCRM's Joomla component registration as a `#fixme`). On first boot the dev
@@ -133,24 +133,13 @@ same finish the demo image bakes in — registering CiviCRM's Joomla
 component/plugins, enabling the standard component extensions, and the
 `ckjoomlaidentity` identity shim (see
 [`joomla-finish.sh`](../docker/buildkit/joomla-finish.sh)). So `option=com_civicrm`
-(the admin UI and the api_key API) and the demo profiles behave the same as on
-the other dev flavors.
+(the admin UI and the api_key API) and the profiles behave the same as on
+the other flavors.
 
-Ready-to-run: [`examples/joomla/`](../examples/joomla/)
-
-> **Scope note.** The buildkit images (`:drupal10`, `:drupal11`, `:wordpress`,
-> `:joomla`) share
-> [`docker/runtime/provision.sh`](../docker/runtime/provision.sh) with standalone, so the
-> same first-boot knobs work: `CIVIKITCHEN_AUTO_COMPOSER`,
-> `CIVIKITCHEN_SMTP_HOST`, `CIVIKITCHEN_LOCALES`, `CIVIKITCHEN_EXTRA_EXTENSIONS` /
-> `CIVIKITCHEN_ENABLE_EXTENSIONS`, and `/civikitchen-init.d` hooks (marked
-> *all* in the [env-var table](configuration.md)). Only the CMS-less standalone
-> install knobs differ
-> — `CIVICRM_AUTO_INSTALL`, the `CIVICRM_DB_NAME`/`_USER`/`_PASSWORD` app-user
-> vars, `CIVIKITCHEN_TEST_DB`, and the `CIVIKITCHEN_DEMO_*` /
-> `CIVIKITCHEN_COMPONENTS` knobs don't apply: civibuild builds the site, so it
-> provides the equivalent admin users, components, and an isolated
-> `sitetest_*` test DB itself. Use buildkit to test CMS-specific behaviour.
+civibuild registers no `com_civicrm` ACL asset, so the build creates one and
+grants each role its permissions on it, the same least-privilege model as the
+other CMSs. `ckjoomlaidentity` loads the matching Joomla identity for headless
+requests, so both api_key reads and writes enforce those permissions.
 
 ## Demo images
 
@@ -169,33 +158,30 @@ docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:drupal10-demo
 # then open http://localhost  —  login: admin / admin
 ```
 
-All five support the demo profiles below (`CIVIKITCHEN_PROFILE`). On Joomla the
-image build finishes civibuild's deliberately incomplete `joomla-demo` install
-(see [Joomla (dev)](#joomla-dev) above), so the demo behaves like the others —
-with **one** difference: authx's password/basic-auth flow doesn't work on
-Joomla, so API access there uses the **api_key** credential
-(`X-Civi-Auth: Bearer …`), not HTTP basic auth.
+The site is baked at `http://localhost`, so either map port **80**
+(`-p 80:80`) or set `CIVIKITCHEN_SITE_URL` to the URL you actually open —
+the entrypoint then rewrites the baked base URL at boot (settings files plus,
+on WordPress, the `siteurl`/`home` options), e.g.
+`-p 8080:80 -e CIVIKITCHEN_SITE_URL=http://localhost:8080`.
 
-> The site is baked at `http://localhost`, so either map port **80**
-> (`-p 80:80`) or set `CIVIKITCHEN_SITE_URL` to the URL you actually open —
-> the entrypoint then rewrites the baked base URL at boot, e.g.
-> `-p 8080:80 -e CIVIKITCHEN_SITE_URL=http://localhost:8080`.
+On Joomla the build finishes civibuild's `joomla-demo` install (see
+[Joomla](#joomla)), so the demo behaves like the others with **one**
+difference: authx's password/basic-auth flow doesn't work on Joomla, so API
+access there uses the **api_key** credential (`X-Civi-Auth: Bearer …`), not HTTP
+basic auth.
 
-### Profiles (`CIVIKITCHEN_PROFILE`)
+## Profiles (`CIVIKITCHEN_PROFILE`)
 
 A profile layers a curated extension stack + seed data + API users on top of
-the base site at **first boot**. Profiles work on every flavor, demo and dev
-images alike. API users are created
-through each CMS's native API — `cv` boots CiviCRM *and* the host CMS, so the
-driver uses the Drupal entity API / WordPress users+roles / Standalone APIv4 /
-Joomla users+usergroups directly, with no drush or wp-cli. On Joomla each role
-gets exactly its permissions (the same least-privilege model as the other CMSs):
-civibuild registers no `com_civicrm` ACL asset, so the build creates one and
-grants per-role on it, and a small bundled extension (`ckjoomlaidentity`) loads
-the matching Joomla identity for headless requests so both api_key reads and
-writes enforce those permissions. They live in
-[`docker/profiles/`](../docker/profiles/) (one dir per profile: `profile.json` +
-`seeds/*.php`, applied by the shared driver):
+the base site at **first boot**, on every flavor, demo and dev images alike. On
+the `:standalone` dev image the profile needs an admin user to seed as, so
+combine it with `CIVICRM_AUTO_INSTALL=1` and `CIVIKITCHEN_DEMO_USER=admin`.
+
+API users are created through each CMS's native API — `cv` boots CiviCRM *and*
+the host CMS, so the driver uses the Drupal entity API / WordPress users+roles /
+Standalone APIv4 / Joomla users+usergroups directly, with no drush or wp-cli.
+The profiles live in [`docker/profiles/`](../docker/profiles/) (one dir per
+profile: `profile.json` + `seeds/*.php`, applied by the shared driver):
 
 | Profile | Extensions | Seed data | API users |
 |---|---|---|---|
@@ -205,7 +191,9 @@ writes enforce those permissions. They live in
 | `mailing` | Mosaico (+ core FlexMailer) | 3 segmented mailing lists, 30 subscribers, a draft newsletter | readonly, mailer |
 
 RemoteEvent is skipped on Standalone and ContactLayout on Standalone and
-Joomla; each `profile.json` gives the reason (`skipUf`).
+Joomla. A dependency declares that in `profile.json` with
+`"skipUf": ["Standalone", ...]` plus `"skipUfReason"`; it is then neither
+fetched nor enabled on that framework.
 
 ```bash
 # German Verein showcase: Drupal 10 + DACH extension stack + seed data + API users
@@ -227,19 +215,11 @@ fails before the first profile changes the site.
 The profile applies once, on first boot — it clones the extensions from
 GitHub, so it **needs network access and takes a few minutes** (watch
 `docker logs -f civicrm`; the container turns healthy when done). The
-generated API-user credentials stay out of the logs by default and are kept in
-a mode-`0600` container file:
-`docker exec civicrm cat /home/buildkit/api-credentials.txt` (the default path
-— overridable via `CK_CREDENTIALS_FILE`). Set `CK_CREDENTIALS_OUTPUT=log` or
-`both` only when the container log is an intentional secret destination;
-`none` disables both disclosure channels and removes a stale credentials file
-before accounts are rotated.
-
-Profiles also work on the dev images (`:standalone`, `:drupal10`, `:drupal11`,
-`:wordpress`, `:joomla`) — set the same env var in your compose file to develop
-against a realistic stack. On the `:standalone` dev image the profile needs an
-admin user to seed as, so combine it with `CIVICRM_AUTO_INSTALL=1` and
-`CIVIKITCHEN_DEMO_USER=admin`.
+generated API-user credentials stay out of the logs and are kept in a
+mode-`0600` container file, by default
+`docker exec civicrm cat /home/buildkit/api-credentials.txt`.
+`CK_CREDENTIALS_FILE` and `CK_CREDENTIALS_OUTPUT` move or redirect them
+([configuration](configuration.md)).
 
 Profiles can live outside the image. Mount a root read-only, point
 `CIVIKITCHEN_PROFILE_PATH` at it, and select its directory name normally:
@@ -280,17 +260,6 @@ about every file that still names one, with the replacement.
 
 ## Tags & versions
 
-### Database compatibility
-
-The standalone candidate is promotion-gated against `mariadb:10.11`, the
-recommended `mariadb:11.4`, `mariadb:12.2` and `mysql:8.0`. Each leg performs a real install,
-mounted-extension provisioning, locale rendering, and a boot through the
-isolated `CIVICRM_UF=UnitTests` scratch database. The examples keep MariaDB
-10.11 as their conservative default. The gate asserts `SELECT DATABASE()` is
-`civicrm_test` and writes a canary that must remain absent from `civicrm`, not
-merely that a UnitTests process can boot. Changing the default still requires
-passing this matrix; automated database-image PRs are not compatibility proof.
-
 All images rebuild **daily** (and on pushes that touch the image inputs, `docker/**` and `toolbelt/**` among them) against the
 current CiviCRM stable release, resolved from
 [latest.civicrm.org](https://latest.civicrm.org/stable.php) at build time. The
@@ -300,52 +269,62 @@ until the breakage is fixed. The cron run builds with the layer cache disabled,
 so `apt-get upgrade` in the Dockerfiles actually re-runs and Debian security
 updates reach the images within a day of their release.
 
-Two axes cross here. The **moving** tags below track current CiviCRM and move
-whenever a build passes its gate — the right choice for local development and
-for the canary repo. The **release** tags (`:v1`, `:v1.2.3`, and their
-per-flavor spellings) mark a deliberate release of the whole CiviKitchen
-contract — workflow, template, `ck*` tools and images together — and are what
-extension repos pin. See [Releases](releases.md).
+These **moving** tags track current CiviCRM and are the right choice for local
+development and for the canary repo:
 
 | Tag | What it points at |
 |-----|-------------------|
-| `:standalone` | The most recent CiviCRM `latest` build. |
-| `:standalone-latest` | Same as `:standalone`. |
-| `:standalone-<minor>` | Latest patch of that minor (e.g. `:standalone-6.16`). The current stable minor always gets one; older minors keep being rebuilt (newest patch, current tooling) as long as they are listed in `CK_STANDALONE_EXTRA_MINORS` in `toolbelt/versions.env` — the supported-versions list. A minor dropped from the list freezes at its last built patch. |
+| `:standalone`, `:standalone-latest` | The most recent CiviCRM `latest` build. |
+| `:standalone-<minor>` | Latest patch of that minor (e.g. `:standalone-6.16`). The current stable minor always gets one; older minors keep being rebuilt (newest patch, current tooling) as long as they are listed in `CK_STANDALONE_EXTRA_MINORS` in `toolbelt/versions.env` — the supported-versions list. A minor dropped from the list freezes at its last built patch; a one-off rebuild of another minor is *Build Dev Images* → `workflow_dispatch` → `extra_standalone_minors`. |
 | `:drupal10`, `:drupal11`, `:wordpress`, `:joomla`, `:*-demo` | Bake the current stable at image-build time. Check what a pulled image contains without booting it: `docker inspect <image> --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`. |
 | `:<flavor>-php<version>` | The buildkit dev flavors also publish a PHP-suffixed tag (e.g. `:drupal10-php8.3`) — same image, explicit about the PHP it carries. |
-| `:v1` | **Release tag.** The standalone image of the newest `v1.x.y` release — the contract image the extension template's compose stacks use. Moves only when a release is cut. |
-| `:v1.2.3` | The same, frozen: a released patch tag never moves to another digest. |
-| `:standalone-v1`, `:drupal10-v1`, `:joomla-demo-v1`, … | Every published flavor carries the release tags too, with the flavor spelled out (`:standalone-v1` is the same digest as `:v1`), each also with the full `-v1.2.3` version. |
+
+The **release** tags (`:v1`, `:v1.2.3` and their per-flavor spellings such as
+`:standalone-v1` or `:drupal10-v1.2.3`) mark a deliberate release of the whole
+CiviKitchen contract — workflow, template, `ck*` tools and images together —
+and are what extension repos pin. They move only when a release is cut; see
+[Releases](releases.md#what-a-version-names).
 
 Need a minor pinned longer than that — or a version the published images don't
 offer at all? Build your own: see
-[Custom or older CiviCRM versions](#custom-or-older-civicrm-versions) below.
+[Custom or older CiviCRM versions](#custom-or-older-civicrm-versions).
+
+### Database compatibility
+
+The standalone candidate is promotion-gated against `mariadb:10.11`, the
+recommended `mariadb:11.4`, `mariadb:12.2` and `mysql:8.0`. Each leg performs a real install,
+mounted-extension provisioning, locale rendering, and a boot through the
+isolated `CIVICRM_UF=UnitTests` scratch database. The gate asserts
+`SELECT DATABASE()` is `civicrm_test` and writes a canary that must remain
+absent from `civicrm`, not merely that a UnitTests process can boot. The
+examples keep MariaDB 10.11 as their conservative default; changing it still
+requires passing this matrix, and automated database-image PRs are not
+compatibility proof.
 
 ## Custom or older CiviCRM versions
 
-The published tags track **current** CiviCRM. To run an older or arbitrary
-version — e.g. to mirror a production server — build the image yourself with
-`--build-arg CIVICRM_VERSION=<tag/branch>`. **Which flavor you can build
-matters:**
+To run an older or arbitrary version — e.g. to mirror a production server —
+build the image yourself with `--build-arg CIVICRM_VERSION=<tag/branch>`. Which
+flavor reaches which version:
 
 - **Standalone** (`docker/standalone/`) installs the
   `civicrm-<version>-standalone.tar.gz` release tarball, so it reaches any
   release download.civicrm.org has one for — Standalone itself exists from
-  ~5.69. The version must be EXACT (`6.15.1`, not `6.15`): it names a tarball.
+  ~5.69 — provided the image's core patches (see
+  [Standalone (dev)](#standalone-dev)) apply to it or it already contains
+  them; otherwise the build fails. The version must be EXACT (`6.15.1`, not `6.15`): it names a tarball.
   With `--build-arg CIVICRM_SOURCE=git`, `CIVICRM_VERSION` is a civicrm-core
   branch or tag instead (`master`, `6.19`), built from git into the same
   layout — see [Standalone on an unreleased branch](#standalone-on-an-unreleased-branch).
-- **Buildkit** (`:drupal10` / `:drupal11` / `:wordpress` / `:joomla`,
-  `docker/buildkit/`) bakes the site
-  with `civibuild create --civi-ver <version>`, which fetches **any** civicrm
-  tag/branch. The Drupal 10 site type is the right path for modern older
-  versions such as CiviCRM 5.78.x; for pre-Drupal-10 versions, switch the
-  civibuild site type to Drupal 9 / 7. A Drupal target also mirrors a real
+- **Buildkit** (`docker/buildkit/`) bakes the site with
+  `civibuild create --civi-ver <version>`, which fetches **any** civicrm
+  tag/branch. The Drupal 10 site type covers modern older versions such as
+  CiviCRM 5.78.x; for versions older than ~5.47 switch `DEFAULT_SITE_TYPE` to a
+  Drupal 9 / 7 civibuild site type. A Drupal target also mirrors a real
   Drupal server's CMS, not just its CiviCRM version.
 
-So: **for an older/custom version, build the buildkit (Drupal) flavor**, not
-standalone.
+So: Standalone for current releases; buildkit (Drupal) for older ones, or to
+mirror a Drupal site.
 
 ```bash
 docker build -f docker/buildkit/Dockerfile \
@@ -357,10 +336,51 @@ docker build -f docker/buildkit/Dockerfile \
 
 Or let compose build it on demand (no prebuilt image needed) — ready-to-run:
 [`examples/custom-version/`](../examples/custom-version/), parameterized by
-`CIVICRM_VERSION` / `PHP_VERSION`. For CiviCRM older than ~5.47 (pre-Drupal-10),
-switch `DEFAULT_SITE_TYPE` to a Drupal 9 / 7 civibuild site type.
+`CIVICRM_VERSION` / `PHP_VERSION`. More build arguments:
+[Building locally](building.md).
 
-## Standalone on an unreleased branch
+## CiviCRM core development
+
+### Core test suites: `ckcoretest`
+
+`ckcoretest` runs CiviCRM *core* phpunit suites against the installed core
+(standalone only). The composer dist export-ignores `**/tests/**`,
+`phpunit.xml.dist` and the `sql/test_data*.mysql` seed files; on first use it
+fetches exactly those for the installed version (sparse blob-filtered checkout
+of the matching tag, cached in the container) — including the per-extension
+suites under `ext/*/tests` — then execs `CIVICRM_UF=UnitTests phpunit <args>`
+from the core dir (`--ext <name>` runs from a core extension's dir instead). It
+refuses to run without a provisioned `TEST_DB_DSN`, and covers the headless PHP
+suites (`api`, `CRM`, `Civi`, ext).
+
+`ckcoretest --e2e` runs `@group e2e` tests instead, against the dev site rather
+than the test DB: they install the extensions they need into it (`cv
+ext:disable` them afterwards) and log in as `ADMIN_USER`, which provisioning
+writes to `~/.cv.json` from `CIVIKITCHEN_DEMO_USER`. Browser tests
+(`Civi\Test\MinkBase`) also need the compose stack's `browser` service
+(`docker compose --profile browser up -d`), a headless Chrome sharing the app's
+network; tests that read `DEMO_USER`, a second user without admin rights, still
+fail, since the image creates only the admin.
+
+Upgrade tests and the karma/qunit JS tests need a buildkit/civibuild
+environment — an accepted gap, since civicrm.org's Jenkins runs the full matrix
+on every core PR anyway. This is for the local loop: run the suites your patch
+touches, let Jenkins do the rest. To verify a core patch or backport, patch the
+file under `/var/www/html/core`, then `ckcoretest tests/phpunit/api/v4/Query`.
+
+`ckeslint --core [dir]` type-checks CiviCRM core's own JavaScript (default
+`$CIVICRM_CORE_DIR`, then `/var/www/html/core`): it copies core's first-party
+`.js` — no vendored trees, minified bundles or tests — beside a `tsconfig.json`
+with `allowJs`/`checkJs` and a declaration file for the globals core's pages
+load by script tag, and runs oxlint with `--type-check`, the correctness
+category and the APIv4 contract rule. It is an analysis tool for upstream bug
+reports, not a gate.
+
+A buildkit image built with `--build-arg KEEP_GIT=1` keeps the git history of
+the civibuild site
+([Building locally](building.md#keeping-the-civicrm-git-history-keep_git1)).
+
+### Standalone on an unreleased branch
 
 To test against core `master` (or a release branch before its tarball exists),
 build Standalone from git:

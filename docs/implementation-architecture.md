@@ -52,7 +52,7 @@ they are test inputs, not duplicated product logic.
 
 ## Runtime layout
 
-The image copies `toolbelt/lib` as one unit. `docker/runtime/provision.sh`
+The image copies `toolbelt/` whole ([Toolbelt layout](images.md#toolbelt-layout)). `docker/runtime/provision.sh`
 retains orchestration that must run as shell, while `ck internal` exposes the
 shared PHP operations it needs. Internal commands are not public extension
 toolbelt API; their PHP classes are the testable implementation boundary.

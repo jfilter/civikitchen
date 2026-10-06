@@ -21,29 +21,18 @@ materialized Composer dependencies, optional sibling checkouts, and container.
 
 Every one of these workflows, `extension-ci.yml` included, takes a
 `working_directory` input. It defaults to `.`, the repository root, except in
-`playwright-e2e.yml`, where it is `tests/e2e`. Each job runs there. In
-`extension-ci.yml` and `extension-release.yml` it is the extension's directory
-in a repository that holds several of them, and `compose_file`, the lockfile
-the dependency cache keys on, artifact paths and scan targets are named
-relative to it. In `frontend-ci.yml` and `playwright-e2e.yml`,
-`cache_dependency_path` and `artifact_paths` stay relative to the repository
-root. In `extension-ci.yml` the container paths follow from it too —
-everything that boots CiviCRM runs at `/var/www/html/ext/<file>` (info.xml
-`<file>`), the git-reading gates of `ck ci` (`cklint`, `ckconform`, `ckcivix`, `ckfmt`,
-`ckcompat`, `cktaint`, `ckeslint`) at the same directory inside the checkout,
-which the CI compose file mounts at `/civikitchen-repo`. Its template drift check covers that
-directory, plus the repository's own managed files when the extension sits in a
-direct subdirectory of the root — the layout `ckinit` manages a root for.
-Concurrency groups carry the directory and compose project names the extension
-key, so one job per extension in the same caller does not cancel or tear down
-its neighbour. The value must be a plain relative path inside the repository.
-In `extension-release.yml` it selects the extension to build; there the
-`stage` input splits one release into a `build` job per extension and a single
-`publish` job, artifacts are named `ckrelease-dist-<key>`, and `dry_run` builds
-without a tag and publishes nothing. The same-repository extensions a build
-job's smoke test installs are the directories next to `working_directory`,
-wherever it sits. The layout itself — root
-workflow, same-repository dependencies, versions — is described in
+`playwright-e2e.yml`, where it is `tests/e2e`. Each job runs there, and the
+value must be a plain relative path inside the repository. In
+`frontend-ci.yml` and `playwright-e2e.yml`, `cache_dependency_path` and
+`artifact_paths` stay relative to the repository root. In `extension-ci.yml`
+and `extension-release.yml` it is the extension's directory in a repository
+that holds several of them: `compose_file`, the lockfile the dependency cache
+keys on, artifact paths and scan targets are named relative to it, and
+concurrency groups carry the directory and compose project names the extension
+key, so one
+job per extension in the same caller does not cancel or tear down its
+neighbour. Where each part of the run happens in that layout, and how the
+release splits into `build` and `publish` stages, is in
 [Several extensions in one repository](extension-development.md#several-extensions-in-one-repository).
 
 All jobs resolve their runner in the same order:

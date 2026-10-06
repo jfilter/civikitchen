@@ -1,17 +1,22 @@
 # Building locally
 
 `make help` lists everything below as a target. The fast loop needs no Docker
-at all:
+daemon:
 
 ```bash
-make test     # ckconform's fixtures, the phpstan extension's rule tests, ckinit
-make lint     # shell portability, shellcheck, actionlint, zizmor, PHP and JSON
-make build    # the standalone image, as civikitchen:standalone
+make test                  # ckconform's fixtures, the phpstan extension's rule tests, ckinit
+make lint                  # all static checks, see below
+make test-compose-config   # the compose files; needs the docker CLI, not a daemon
 ```
 
-These are the same commands `.github/workflows/lint.yml` runs — the workflow
-consists of `make lint` and `make test`, so what runs in CI and what runs on a
-laptop cannot drift. `make` fetches the pinned tools (phpunit phar, actionlint,
+`make lint` runs strict shellcheck (style level, see `.shellcheckrc` for the two
+disabled false-positive classes) over all shell scripts, a portability check
+that rejects BSD-only `sed -i ''`, actionlint and zizmor over the workflows,
+`php -l` over every PHP file, the profile and scenario schemas against their
+metaschema and every repository-owned instance against its schema, and the
+`CHANGELOG.md` grammar. The `Lint` workflow, on pushes to main and on pull
+requests, consists of `make lint`, `make test` and `make test-compose-config`,
+so what runs in CI and what runs on a laptop cannot drift. `make` fetches the pinned tools (phpunit phar, actionlint,
 shellcheck) and the CiviCRM source tree the catalog drift gates need into
 `.cache/` on first use; `make clean` removes it.
 
@@ -21,7 +26,8 @@ strict-shell flags), a `bash` on PATH, `php` with a coverage driver (phpdbg,
 PCOV or Xdebug), `composer` (the YAML parser and the phpstan rule package),
 `npm` (the pinned oxlint), and `uvx` or `pipx` (zizmor and the schema check).
 Everything else is fetched pinned; `make doctor` reports what is missing. The
-slow loop (`make build`, `make test-images`, `make e2e`, `make e2e-ckcreate`)
+slow loop (`make build` for the standalone image as `civikitchen:standalone`,
+`make test-images`, `make e2e`, `make e2e-ckcreate`)
 additionally needs Docker. `make e2e-ckcreate IMAGE=civikitchen:standalone`
 creates an extension with real civix and runs `ck ci` on it in the template's
 dev stack, the same check the image workflow runs before promoting.
@@ -38,11 +44,9 @@ docker build -f docker/standalone/Dockerfile \
     --build-arg CIVICRM_VERSION=6.15.1 \
     -t civikitchen:standalone-6.15.1 .
 
-# Buildkit-based images. The :drupal10, :drupal11, :wordpress, and :joomla
-# tags are built from the same Dockerfile (docker/buildkit/) —
-# DEFAULT_SITE_TYPE picks which civibuild site type the entrypoint creates
-# on first run. CIVICRM_VERSION pins the baked CiviCRM (any civicrm-core
-# tag/branch civibuild can fetch). CIVICRM_BUILD_VERSION can override only
+# Buildkit-based images: DEFAULT_SITE_TYPE picks which civibuild site type
+# the entrypoint creates on first run. CIVICRM_VERSION pins the baked CiviCRM
+# (any civicrm-core tag/branch civibuild can fetch). CIVICRM_BUILD_VERSION can override only
 # the civibuild input; CI uses it to pass the stable minor branch (e.g.
 # 6.15) while keeping the resolved patch version in the image metadata.
 docker build -f docker/buildkit/Dockerfile \
@@ -94,10 +98,15 @@ rebuild cannot move a gate under a repo that did not change. There is no
 `--build-arg` for these — an image whose tool tree was resolved fresh at build
 time is not the image anyone reviewed.
 
-What composer cannot install stays in `toolbelt/install-dev-tools.sh` and stays
-overridable per `--build-arg`: the civix and phpunit phars and the mago binary
-(each with a checksum — overriding a `*_VERSION` means overriding its `*_SHA256`
-too), npm, and the `civicrm/coder` commit ref. infection is the one composer
+oxlint and oxfmt are pinned the same way by the `package.json` +
+`package-lock.json` pairs in `toolbelt/oxlint` and `toolbelt/oxfmt`.
+
+What neither composer nor npm installs stays in `toolbelt/install-dev-tools.sh`
+and stays overridable per `--build-arg`: the civix and phpunit phars and the
+mago binary (each with a checksum — overriding a `*_VERSION` means overriding
+its `*_SHA256` too), npm, and the `civicrm/coder` commit ref. The phpunit pin
+itself sits in `toolbelt/versions.env`, because the Makefile runs the tool
+test suites on the same phar. infection is the one composer
 tool still pinned there, because it is applied as a ceiling: images for older
 CiviCRM lines run on PHP 8.1/8.2, and composer picks the newest release that
 PHP accepts.
@@ -146,18 +155,4 @@ docker run --rm -v "$(pwd)/tests/images:/civikitchen-test:ro" \
     --entrypoint='' \
     ghcr.io/jfilter/civikitchen:standalone \
     bash /civikitchen-test/test-dev-tools.sh
-```
-
-## Linting
-
-The `Lint` workflow runs on pushes to main and on pull requests: strict
-shellcheck (style level, see `.shellcheckrc` for the two disabled
-false-positive classes) over all shell scripts, a portability check that
-rejects BSD-only `sed -i ''`, actionlint over the workflows, `php -l` over the
-seed/profile scripts, and a shape check on the `profile.json` files. It then
-runs `make test` and `make test-compose-config`. Locally:
-
-```bash
-make lint                  # all static checks
-make test-compose-config   # needs the docker CLI, not a daemon
 ```

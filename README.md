@@ -67,14 +67,11 @@ docker compose exec -e CIVICRM_UF=UnitTests app \
     bash -c "cd /var/www/html/ext/myextension && phpunit"
 ```
 
-They run against a separate `civicrm_test` database, not the dev site. If a
-suite leaves that database broken, `docker compose exec app cktestreset`
-rebuilds it.
+They run against a separate `civicrm_test` database, not the dev site
+([Headless tests](docs/extension-development.md#headless-tests)).
 
 The image includes cv, civix, composer, node/npm, phpunit, phpstan, phpcs,
-pcov, and xdebug (off until `XDEBUG_MODE` is set). Tool versions are pinned in
-`toolbelt/versions.env`, `toolbelt/install-dev-tools.sh` and the composer roots
-under `toolbelt/`.
+pcov, xdebug and the `ck*` tools; see [Images](docs/images.md#standalone-dev).
 
 The `:drupal10`, `:drupal11`, `:wordpress` and `:joomla` images work the same
 way, but the extension directory differs per CMS. The compose files in
@@ -118,7 +115,8 @@ phpunit, with a commented-out matrix job for the CMS flavors.
 ## Coding standards in CI
 
 `ck ci` runs these gates in order and prints a summary table. The shared
-workflow calls the same command.
+workflow calls the same command
+([Running the CI gates locally](docs/extension-development.md#running-the-ci-gates-locally)).
 
 | Gate | What it checks |
 |------|----------------|
@@ -164,40 +162,16 @@ docker compose exec app ckcoretest tests/phpunit/api/v4/Query
 docker compose exec app ckcoretest --ext search_kit
 ```
 
-The first run fetches the tests, phpunit config and seed SQL for the installed
-version. It covers the headless PHP suites, and `--e2e` runs `@group e2e`
-tests against the dev site. Upgrade tests and the karma/qunit JS tests need a
-civibuild environment.
-
-To test against `master` or an unreleased branch, build Standalone from git in
-a checkout of this repository:
-
-```bash
-make build CIVICRM_SOURCE=git CIVICRM_VERSION=master   # tags civikitchen:standalone-master
-```
-
-Then mount the directory you are changing from your civicrm-core checkout over
-the image's copy, and run `cv flush` after each change:
-
-```yaml
-services:
-  app:
-    image: civikitchen:standalone-master
-    volumes:
-      - ../civicrm-core/ext/afform:/var/www/html/core/ext/afform
-```
-
-`ckeslint --core` type-checks core's own JavaScript. A buildkit image built
-with `--build-arg KEEP_GIT=1` keeps the git history of the civibuild site
-([Building locally](docs/building.md#keeping-the-civicrm-git-history-keep_git1)).
-The core fixes the standalone image applies until a release contains them are
-in `docker/standalone/core-patches/`, one file per upstream issue.
+What it covers, building Standalone from core `master` or an unreleased
+branch, mounting a civicrm-core checkout over the image's copy, and
+type-checking core's JavaScript are described in
+[CiviCRM core development](docs/images.md#civicrm-core-development).
 
 ## Demo instances
 
 The `-demo` images from the quickstart keep their database inside the
-container; it goes away with it. To use another host port, set the site URL to
-match: `-p 8080:80 -e CIVIKITCHEN_SITE_URL=http://localhost:8080`.
+container; it goes away with it. To use another host port, set
+`CIVIKITCHEN_SITE_URL` to the URL you open ([Demo images](docs/images.md#demo-images)).
 
 A profile adds an extension stack, seed data and API users on first boot:
 
@@ -209,13 +183,9 @@ docker logs -f civicrm
 docker exec civicrm cat /home/buildkit/api-credentials.txt
 ```
 
-The bundled profiles are `verein`, `fundraising`, `events` and `mailing`, in
-`docker/profiles/`. A comma-separated list applies several in order. The first
-boot clones extensions from GitHub, so it needs network access and takes a few
-minutes. Profiles also work on the dev images.
-
-Your own profiles are mounted with `CIVIKITCHEN_PROFILE_PATH` and
-`CIVIKITCHEN_TRUST_EXTERNAL_PROFILES=1`; they run with admin rights.
+The bundled profiles are `verein`, `fundraising`, `events` and `mailing`;
+[Profiles](docs/images.md#profiles-civikitchen_profile) covers combining them,
+the dev images and your own profiles.
 
 For a CiviCRM version the published tags do not cover, for example to mirror
 a production server, `examples/custom-version/` builds a Drupal 10 image for
@@ -240,9 +210,8 @@ after their tests pass; extension repositories pin the `:v1` release tags. See
 - Using the images: Docker with the compose plugin.
 - Scaffolding (`ckcreate`, `ckinit`, `ckup`, `ckx`): bash and Docker; everything
   else runs in the image.
-- Working on civikitchen: GNU Make 3.82+, bash, git, curl, php, composer, pipx.
-  `make doctor` reports what is missing. `make lint` and `make test` need no
-  Docker; `make build` and `make test-images` do.
+- Working on civikitchen: see [Building locally](docs/building.md);
+  `make doctor` reports what is missing.
 
 ## Documentation
 
