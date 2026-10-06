@@ -151,13 +151,6 @@ except that a break the consumers are adjusted for ships as a minor, marked
   managed file could not be evaluated; `managed-entity-metadata` treats a
   missing `params.version` as the APIv3 default mgd-php applies and warns
   instead of failing.
-- ckconform's `required-extensions` demands search_kit only for
-  SearchDisplays, not for core SavedSearches; `message-template-token` scans
-  only message templates, ignores JavaScript `${…}` interpolations, no longer
-  ignores Angular `{{…}}`, treats only the short name and a `<shortname>_`
-  prefix as the extension's own namespace, and knows the site, group, survey,
-  financial_trxn, contribution_product, welcome, subscribe, unsubscribe and
-  resubscribe namespaces;
 - ckconform's `container-service-reference` no longer fails core classes
   under civix's `Civi\` classloader and tries every PSR-4 path and prefix that
   matches; `config-without-runner` counts a phpunit step that names
@@ -167,6 +160,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `ck ci --only` lists and count `ck phpunit`/`ckphpunit` as phpunit;
   `floating-tag` ignores trailing comments and `container:` keys outside a
   job.
+- ckconform's `required-extensions` demands search_kit only for
+  SearchDisplays, not for core SavedSearches; `message-template-token` scans
+  only message templates, ignores JavaScript `${…}` interpolations and
+  Angular `{{…}}`, treats only the short name and a `<shortname>_` prefix as
+  the extension's own namespace, and knows the site, group, survey,
+  financial_trxn, contribution_product, welcome, subscribe, unsubscribe and
+  resubscribe namespaces;
   `mixin-declaration` ignores files under `tests/`.
 - The rector rules map named arguments by name and skip calls they cannot
   map (spread, unknown name). `Api4ArrayToOopRector` maps AND/OR/NOT where
