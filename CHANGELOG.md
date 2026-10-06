@@ -43,9 +43,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `sensitive-parameter`, start reporting in those repos.
 - ckconform's `config-without-runner` no longer counts `ck coverage` as the
   runner of `phpunit-unit.xml.dist`, because ckcoverage runs only
-  `phpunit.xml(.dist)`. A repo with that config needs a step that names it
-  (`phpunit -c`, `ckcoverage -c`, `ck ci --extra-phpunit-config`), or
-  `extra_phpunit_config` on the shared CI workflow.
+  `phpunit.xml(.dist)`. Unless its test directories lie inside the main
+  suite's, a repo with that config needs a step that names it (`phpunit -c`,
+  `ckcoverage -c`, `ck ci --extra-phpunit-config`), or `extra_phpunit_config`
+  on the shared CI workflow.
 - The template's `phpstan.neon.dist` analyses `CRM/*/BAO/*`, and `ckconform`'s
   `test-suite-required` counts BAO classes as source: civix only seeds them,
   the logic in them is the extension's own. A seeded config keeps its old

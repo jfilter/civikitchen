@@ -102,6 +102,30 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpunit-unit.xml.dist');
     }
 
+    /** A second suite inside the main suite's directories runs with it, unless the main suite excludes it. */
+    public function testASecondConfigInsideTheMainSuiteRunsWithIt(): void
+    {
+        $main = static fn (string $exclude): string => '<phpunit><testsuites><testsuite name="all">'
+            . '<directory>./tests/phpunit</directory>' . $exclude . '</testsuite></testsuites></phpunit>';
+        $unit = static fn (string $directory): string => '<phpunit><testsuites><testsuite name="unit">'
+            . "<directory>{$directory}</directory></testsuite></testsuites></phpunit>";
+        $cases = [
+            [$main(''), $unit('./tests/phpunit/Unit'), true],
+            [$main(''), $unit('tests/phpunit/'), true],
+            [$main(''), $unit('./tests/unit'), false],
+            [$main('<exclude>./tests/phpunit/Unit</exclude>'), $unit('./tests/phpunit/Unit'), false],
+        ];
+        foreach ($cases as [$mainXml, $unitXml, $runs]) {
+            $context = $this->repo([
+                'phpunit.xml.dist' => $mainXml,
+                'phpunit-unit.xml.dist' => $unitXml,
+                '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: ck ci\n",
+            ], git: true);
+            $result = $this->run_(new ConfigWithoutRunnerCheck(), $context);
+            $runs ? $this->assertPasses($result) : $this->assertFails($result, 'phpunit-unit.xml.dist');
+        }
+    }
+
     /** `ck ci --extra-phpunit-config` and `ckcoverage -c` run the named config; a skipped gate does not. */
     public function testTheSecondConfigRunsThroughCkCiOrCkcoverage(): void
     {
