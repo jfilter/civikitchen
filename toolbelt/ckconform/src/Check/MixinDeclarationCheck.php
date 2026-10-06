@@ -6,6 +6,7 @@ namespace CiviKitchen\Ckconform\Check;
 
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
+use CiviKitchen\Ckconform\HookSurface;
 use CiviKitchen\Ckconform\Reporter;
 use CiviKitchen\Ckconform\Suppressions;
 
@@ -43,13 +44,21 @@ final class MixinDeclarationCheck implements Check
      * without recursing, so Civi/Api4/Action/* is not an entity class and is no
      * evidence of a missing mixin.
      *
-     * @var array<string, array{dir: string, suffix: string, label: string, direct?: bool}>
+     * 'hook' names the hook older civix loaded the family through. It serves only
+     * that purpose, so the extension implementing it loads the files anyway.
+     *
+     * @var array<string, array{dir: string, suffix: string, label: string, direct?: bool, hook?: string}>
      */
     private const REQUIREMENTS = [
         'mgd-php' => ['dir' => 'managed/', 'suffix' => '.mgd.php', 'label' => 'managed records (managed/*.mgd.php)'],
         'entity-types-php' => ['dir' => '', 'suffix' => '.entityType.php', 'label' => 'entity schemas (*.entityType.php)'],
-        'menu-xml' => ['dir' => 'xml/Menu/', 'suffix' => '.xml', 'label' => 'menu routes (xml/Menu/*.xml)'],
-        'setting-php' => ['dir' => '', 'suffix' => '.setting.php', 'label' => 'settings (*.setting.php)'],
+        'menu-xml' => ['dir' => 'xml/Menu/', 'suffix' => '.xml', 'label' => 'menu routes (xml/Menu/*.xml)', 'hook' => 'xmlMenu'],
+        'setting-php' => [
+            'dir' => '',
+            'suffix' => '.setting.php',
+            'label' => 'settings (*.setting.php)',
+            'hook' => 'alterSettingsFolders',
+        ],
         'ang-php' => ['dir' => 'ang/', 'suffix' => '.ang.php', 'label' => 'Angular modules (ang/*.ang.php)'],
         'scan-classes' => [
             'dir' => 'Civi/Api4/',
@@ -74,7 +83,7 @@ final class MixinDeclarationCheck implements Check
         $missing = [];
         $enable = [];
         foreach (self::REQUIREMENTS as $mixin => $spec) {
-            if (in_array($mixin, $declared, true)) {
+            if (in_array($mixin, $declared, true) || $this->implementsHook($context, $spec['hook'] ?? null)) {
                 continue;
             }
             if ($this->hasArtefact($context, $spec['dir'], $spec['suffix'], $spec['direct'] ?? false)) {
@@ -104,6 +113,22 @@ final class MixinDeclarationCheck implements Check
             static fn (string $mixin): string => explode('@', $mixin)[0],
             $context->declaredMixins(),
         );
+    }
+
+    /** Whether the extension's own source defines <prefix>_civicrm_<hook>(). */
+    private function implementsHook(Context $context, ?string $hook): bool
+    {
+        if ($hook === null) {
+            return false;
+        }
+        $names = array_map(static fn (string $p): string => $p . '_civicrm_' . $hook, HookSurface::expectedPrefixes($context));
+        foreach (HookSurface::candidates($context) as $file) {
+            if (array_intersect($names, array_keys(HookSurface::globalFunctions((string) $context->read($file)))) !== []) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function hasArtefact(Context $context, string $dir, string $suffix, bool $direct = false): bool

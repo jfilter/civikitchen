@@ -46,6 +46,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- `ckconform`'s `mixin-declaration` no longer warns about settings or menu
+  files an extension loads through its own `hook_civicrm_alterSettingsFolders`
+  or `hook_civicrm_xmlMenu` implementation.
 - `ckconform`'s `hook-dispatch-name` no longer reports a correctly named
   `<prefix>_civicrm_postSave_<table>()` or `<prefix>_civicrm_queueRun_<runner>()`
   as never firing; core appends the table or runner to these hook names. A

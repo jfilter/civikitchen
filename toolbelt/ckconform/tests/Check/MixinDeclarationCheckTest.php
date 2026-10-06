@@ -59,6 +59,42 @@ final class MixinDeclarationCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
     }
 
+    /** Older civix loaded settings through the hook; that extension is not broken. */
+    public function testSettingsLoadedThroughTheHookPass(): void
+    {
+        $context = $this->repo([
+            'info.xml' => str_replace('key="ext"', 'key="org.example.ext"', $this->info('')),
+            'ext.php' => "<?php\nfunction ext_civicrm_alterSettingsFolders(&\$folders) {\n  \$folders[] = __DIR__ . '/settings';\n}\n",
+            'ext.civix.php' => "<?php\n",
+            'settings/ext.setting.php' => "<?php\nreturn [];\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
+    }
+
+    public function testMenusLoadedThroughTheHookPass(): void
+    {
+        $context = $this->repo([
+            'info.xml' => str_replace('key="ext"', 'key="org.example.ext"', $this->info('')),
+            'ext.php' => "<?php\nfunction ext_civicrm_xmlMenu(&\$files) {\n  \$files[] = __DIR__ . '/xml/Menu/ext.xml';\n}\n",
+            'ext.civix.php' => "<?php\n",
+            'xml/Menu/ext.xml' => "<menu></menu>\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
+    }
+
+    /** A hook named only in a comment, or under a foreign prefix, loads nothing. */
+    public function testSettingsWithoutTheRealHookStillWarn(): void
+    {
+        $context = $this->repo([
+            'info.xml' => str_replace('key="ext"', 'key="org.example.ext"', $this->info('')),
+            'ext.php' => "<?php\n// function ext_civicrm_alterSettingsFolders() was removed\n"
+                . "function other_civicrm_alterSettingsFolders(&\$folders) {}\n",
+            'ext.civix.php' => "<?php\n",
+            'settings/ext.setting.php' => "<?php\nreturn [];\n",
+        ], git: true);
+        $this->assertWarns($this->run_(new MixinDeclarationCheck(), $context), 'setting-php');
+    }
+
     public function testAnEntitySchemaWithoutItsMixinWarns(): void
     {
         $context = $this->repo([
