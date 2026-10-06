@@ -18,7 +18,7 @@ fail() { echo "ckinit wrapper: $*" >&2; exit 1; }
 mono="$work/mono"
 mkdir -p "$mono/ext"
 git -C "$mono" init -q
-printf '%s\n' '<extension key="org.acme.ext" type="module"><file>ext</file></extension>' > "$mono/ext/info.xml"
+printf '%s\n' '<extension key="org.acme.ext" type="module"><file>ext</file><license>AGPL-3.0</license></extension>' > "$mono/ext/info.xml"
 "$root/scaffold/ckinit" "$mono/ext" >/dev/null
 grep -qF -- "-v $mono:/repo" "$FAKE_DOCKER_LOG" || fail "git root not mounted"
 grep -qF -- " /repo/ext" "$FAKE_DOCKER_LOG" || fail "target not passed below /repo"
@@ -28,7 +28,7 @@ grep -rq -- '- \.\./\.\.:/civikitchen-repo' "$mono/ext/.docker/" || fail "reposi
 # The org policy file is mounted and named inside the container.
 org="$work/org"
 mkdir -p "$org"
-printf '%s\n' '<extension key="org.acme.org" type="module"><file>org</file></extension>' > "$org/info.xml"
+printf '%s\n' '<extension key="org.acme.org" type="module"><file>org</file><license>AGPL-3.0</license></extension>' > "$org/info.xml"
 printf '%s\n' 'version: 1' 'policy:' '  renovate_preset: github>org/renovate' > "$work/org-policy"
 CK_DEFAULT_CONFIG="$work/org-policy" "$root/scaffold/ckinit" "$org" >/dev/null
 grep -q '"extends": \["github>org/renovate"\]' "$org/renovate.json" || fail "CK_DEFAULT_CONFIG not applied"

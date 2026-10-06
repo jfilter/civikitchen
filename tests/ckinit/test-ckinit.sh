@@ -8,7 +8,7 @@ trap 'rm -rf "$work"' EXIT
 make_extension() {
   local target="$1"
   mkdir -p "$target"
-  printf '%s\n' '<extension key="org.acme.example_ext" type="module"><file>example_ext</file></extension>' > "$target/info.xml"
+  printf '%s\n' '<extension key="org.acme.example_ext" type="module"><file>example_ext</file><license>AGPL-3.0</license></extension>' > "$target/info.xml"
 }
 
 # POSIX sed has no portable in-place flag: GNU and BSD sed interpret `-i`
@@ -28,6 +28,24 @@ rewrite_with_sed() {
 make_extension "$work/clean"
 "$root/scaffold/ckinit.php" "$work/clean" >/dev/null
 grep -q 'acme/example_ext' "$work/clean/composer.json"
+# composer.json declares info.xml's licence, `proprietary` in composer's spelling.
+grep -q '"license": "AGPL-3.0",' "$work/clean/composer.json"
+mkdir -p "$work/closed"
+printf '%s\n' '<extension key="org.acme.closed" type="module"><file>closed</file><license>Proprietary</license></extension>' > "$work/closed/info.xml"
+"$root/scaffold/ckinit.php" "$work/closed" >/dev/null
+grep -q '"license": "proprietary",' "$work/closed/composer.json"
+mkdir -p "$work/unlicensed"
+printf '%s\n' '<extension key="org.acme.unlicensed" type="module"><file>unlicensed</file></extension>' > "$work/unlicensed/info.xml"
+if out=$("$root/scaffold/ckinit.php" "$work/unlicensed" 2>&1); then
+  echo "FAIL: ckinit seeded an extension whose info.xml has no <license>" >&2
+  exit 1
+fi
+grep -q 'info.xml has no <license>' <<<"$out"
+[ ! -e "$work/unlicensed/composer.json" ]
+# An existing repo whose composer.json is already seeded is checked without one.
+cp -R "$work/clean" "$work/unlicensed-seeded"
+printf '%s\n' '<extension key="org.acme.example_ext" type="module"><file>example_ext</file></extension>' > "$work/unlicensed-seeded/info.xml"
+"$root/scaffold/ckinit.php" --check "$work/unlicensed-seeded" >/dev/null
 grep -q '"extends": \["config:recommended"\]' "$work/clean/renovate.json"
 # The monorepo example's dev compose file, and the CI one's header above its
 # managed blocks, are what ckinit stamps at that depth.
@@ -56,7 +74,7 @@ if grep -R -q '__EXTKEY__\|__EXTENSION_KEY__\|__SCENARIO_NAME__\|__VENDOR__\|__R
 fi
 
 mkdir -p "$work/nokey"
-printf '%s\n' '<extension><file>example_ext</file></extension>' > "$work/nokey/info.xml"
+printf '%s\n' '<extension><file>example_ext</file><license>AGPL-3.0</license></extension>' > "$work/nokey/info.xml"
 "$root/scaffold/ckinit.php" "$work/nokey" >/dev/null
 grep -q 'example/example_ext' "$work/nokey/composer.json"
 
@@ -457,7 +475,7 @@ make_keyed_extension() {
     element="<requires><ext>$requires</ext></requires>"
   fi
   mkdir -p "$target"
-  printf '%s\n' "<extension key=\"$key\" type=\"module\"><file>$file</file>$element</extension>" > "$target/info.xml"
+  printf '%s\n' "<extension key=\"$key\" type=\"module\"><file>$file</file><license>AGPL-3.0</license>$element</extension>" > "$target/info.xml"
 }
 
 # A single-extension repository: `../..` there is the parent of the repository,

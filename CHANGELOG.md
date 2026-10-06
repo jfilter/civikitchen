@@ -29,6 +29,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `test-suite-required` counts BAO classes as source: civix only seeds them,
   the logic in them is the extension's own. A seeded config keeps its old
   exclude; remove that line by hand to have phpstan analyse the BAO classes.
+- `ckinit` seeds `composer.json` with the licence from `info.xml` (`Proprietary`
+  as composer's `proprietary`) instead of a fixed `AGPL-3.0-or-later`, and stops
+  with exit 2 when `info.xml` declares no `<license>`.
 
 ### Removed
 

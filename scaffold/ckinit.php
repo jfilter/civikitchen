@@ -106,8 +106,9 @@ subdirectories are extensions — then ckinit manages the root files
 release caller with one build job per releasing extension plus the job that
 publishes them together) and runs the same pass for every extension directory. Files from scaffold/template/extension are copied
 recursively; __EXTKEY__ is replaced with info.xml's <file> value,
-__VENDOR__ with the vendor segment of the extension key and __RENOVATE_PRESET__
-with the renovate_preset policy key (default config:recommended).
+__VENDOR__ with the vendor segment of the extension key, __RENOVATE_PRESET__
+with the renovate_preset policy key (default config:recommended) and
+__LICENSE__ with info.xml's <license>.
 
 Seeding preserves existing files unless --force is given. --update rewrites
 only the MANAGED files (CI caller, test bootstraps, CI compose stack — the
@@ -206,6 +207,16 @@ if ($extensionFile === '' || preg_match('/^[a-zA-Z][a-zA-Z0-9_]*$/', $extensionF
 $scenarioName = strtolower((string) preg_replace('/[^a-zA-Z0-9_-]+/', '-', $extensionFile));
 if (preg_match('/^[a-z]/', $scenarioName) !== 1) $scenarioName = 'extension-' . $scenarioName;
 
+// composer.json declares the licence info.xml does (ckconform license-coherence);
+// composer spells the closed-source case `proprietary`.
+$license = trim((string) $xml->license);
+// Only a composer.json about to be written needs it; --check/--update leave a seeded one alone.
+if ($license === '' && ($mode === 'seed' || !is_file($target . '/composer.json'))) {
+  fwrite(STDERR, "ckinit: info.xml has no <license>; composer.json has to declare the same one\n");
+  exit(2);
+}
+$composerLicense = json_encode(strcasecmp($license, 'Proprietary') === 0 ? 'proprietary' : $license, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+
 // Composer vendor from the reverse-domain key: `org.example.myext` -> `example`.
 $keySegments = explode('.', trim((string) $xml['key']));
 $vendor = count($keySegments) >= 3 ? $keySegments[count($keySegments) - 2] : '';
@@ -293,8 +304,8 @@ foreach ($iterator as $item) {
     continue;
   }
   $rendered = str_replace(
-      ['__EXTKEY__', '__EXTENSION_KEY__', '__SCENARIO_NAME__', '__VENDOR__', '__RENOVATE_PRESET__'],
-      [$extensionFile, trim((string) $xml['key']), $scenarioName, $vendor, $renovatePreset],
+      ['__EXTKEY__', '__EXTENSION_KEY__', '__SCENARIO_NAME__', '__VENDOR__', '__RENOVATE_PRESET__', '"__LICENSE__"'],
+      [$extensionFile, trim((string) $xml['key']), $scenarioName, $vendor, $renovatePreset, $composerLicense],
       $content,
     );
   if ($belowRoot && in_array($relative, COMPOSE_FILES, TRUE)) {

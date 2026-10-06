@@ -19,7 +19,7 @@ export PATH="$work/bin:$PATH" DOCKER_LOG="$work/docker.log"
 ext() {
   mkdir -p "$1/.docker" "$1/tests/phpunit"
   touch "$1/.docker/docker-compose.yml"
-  printf '<extension key="org.example.%s"><file>%s</file></extension>\n' "$2" "$2" > "$1/info.xml"
+  printf '<extension key="org.example.%s"><file>%s</file><license>AGPL-3.0</license></extension>\n' "$2" "$2" > "$1/info.xml"
 }
 
 ext "$work/single" single
