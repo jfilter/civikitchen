@@ -24,9 +24,9 @@ use CiviKitchen\Ckconform\Reporter;
  *    fix is an own namespace (`{myext.rufname}`), and there is no runtime signal
  *    that you need it.
  *
- * Deliberately conservative: a token whose namespace does not resemble the
- * extension only warns, because a template may legitimately reference a
- * namespace a dependency provides. Filter syntax (`{contact.x|boolean}`) is
+ * Deliberately conservative: a namespace other than the short name or a
+ * `<shortname>_` prefix only warns, because a template may legitimately
+ * reference a namespace a dependency provides. Filter syntax (`{contact.x|boolean}`) is
  * normal and never reported.
  */
 final class MessageTemplateTokenCheck implements Check
@@ -43,7 +43,8 @@ final class MessageTemplateTokenCheck implements Check
         'recur', 'contributionRecur', 'contribution_recur', 'pledge', 'grant',
         'petition', 'eventcart', 'financialType', 'lineItem', 'membershipType',
         'participantRole', 'smarty', 'resourceUrls', 'site', 'group', 'survey',
-        'financial_trxn', 'contribution_product',
+        'financial_trxn', 'contribution_product', 'welcome', 'subscribe',
+        'unsubscribe', 'resubscribe',
     ];
 
     /**
@@ -140,11 +141,7 @@ final class MessageTemplateTokenCheck implements Check
     {
         $needle = strtolower($namespace);
         foreach ($shortnames as $shortname) {
-            // A short namespace ('e') inside the short name ('myext') is chance.
-            if ($needle === $shortname
-                || str_contains($needle, $shortname)
-                || (strlen($needle) >= 4 && str_contains($shortname, $needle))
-            ) {
+            if ($needle === $shortname || str_starts_with($needle, $shortname . '_')) {
                 return true;
             }
         }
@@ -264,7 +261,8 @@ final class MessageTemplateTokenCheck implements Check
     /**
      * Distinct namespaces of `{ns.token}` occurrences. Smarty control tags
      * ({if …}, {foreach …}) never match, because the pattern demands
-     * exactly one dot-separated identifier pair and no whitespace.
+     * exactly one dot-separated identifier pair and no whitespace; Angular's
+     * `{{row.name}}` is excluded by the lookbehind.
      *
      * @return list<string>
      */
@@ -272,7 +270,7 @@ final class MessageTemplateTokenCheck implements Check
     {
         $found = [];
         if (preg_match_all(
-            '/(?<![$\w])\{([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_:]+)\}/',
+            '/(?<![$\w{])\{([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_:]+)\}/',
             $contents,
             $matches,
         ) > 0) {

@@ -180,6 +180,22 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         self::assertStringNotContainsString('phpcs.xml.dist', $reporter->render());
     }
 
+    /** `ck ci` unites repeated --only lists before it subtracts --skip. */
+    public function testRepeatedOnlyListsAddUp(): void
+    {
+        $context = $this->runnerRepo('ck ci --only=cklint --only=ckcoverage,phpstan', self::PHP_CONFIGS);
+        $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+    }
+
+    /** `ck phpunit` and the ckphpunit binary are `ck test`. */
+    public function testCkPhpunitAndCkphpunitRunPhpunit(): void
+    {
+        foreach (['ck phpunit', 'ckphpunit --group headless'] as $step) {
+            $context = $this->runnerRepo($step, ['phpunit.xml.dist' => '<phpunit/>']);
+            $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+        }
+    }
+
     public function testADirectoryNamedAfterAToolIsNoRunner(): void
     {
         $context = $this->runnerRepo('ls tests/phpunit/', ['phpunit.xml.dist' => '<phpunit/>']);
@@ -211,5 +227,27 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
             'phpunit.xml.dist' => '<phpunit/>',
         ]);
         $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+    }
+
+    /** A second phpunit config runs where a phpunit step names it. */
+    public function testAPhpunitStepNamingTheSecondConfigRunsIt(): void
+    {
+        foreach (['vendor/bin/phpunit -c phpunit-unit.xml.dist', 'phpunit --configuration=phpunit-unit.xml.dist'] as $step) {
+            $context = $this->repo([
+                'phpunit-unit.xml.dist' => '<phpunit/>',
+                '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: $step\n",
+            ], git: true);
+            $this->assertPasses($this->run_(new ConfigWithoutRunnerCheck(), $context));
+        }
+    }
+
+    public function testAPhpunitStepNotNamingTheSecondConfigLeavesItUnrun(): void
+    {
+        $context = $this->repo([
+            'phpunit.xml.dist' => '<phpunit/>',
+            'phpunit-unit.xml.dist' => '<phpunit/>',
+            '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: vendor/bin/phpunit\n",
+        ], git: true);
+        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpunit-unit.xml.dist');
     }
 }

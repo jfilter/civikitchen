@@ -62,6 +62,9 @@ function declaredPermissions(string $file, string $pattern): array
         }
         for ($j = $i + 2; $j < $n && !$tokens[$j]->is(['{', ';']); $j++);
         $braces = 0;
+        // `$actions = ['add' => …]; foreach ($actions as $action => …) $permissions[$action . ' x'] = …`
+        $arrayKeys = [];
+        $loopKeys = [];
         // One entry per open bracket: true when it holds a permission's own
         // definition, whose keys (label, implies) are not permissions.
         $values = [];
@@ -70,6 +73,19 @@ function declaredPermissions(string $file, string $pattern): array
             $braces += $text === '{' ? 1 : ($text === '}' ? -1 : 0);
             if ($braces === 0) {
                 break;
+            }
+            if ($tokens[$j]->is(T_VARIABLE) && $tokens[$j + 1]->text === '=' && $tokens[$j + 2]->text === '[') {
+                $arrayKeys[$text] = literalKeys($tokens, $j + 2);
+            }
+            if ($tokens[$j]->is(T_FOREACH) && $tokens[$j + 3]->is(T_AS) && $tokens[$j + 5]->is(T_DOUBLE_ARROW)) {
+                $loopKeys[$tokens[$j + 4]->text] = $arrayKeys[$tokens[$j + 2]->text] ?? [];
+            }
+            if ($text === '$permissions' && $tokens[$j + 1]->text === '[' && $tokens[$j + 3]->text === '.'
+                && $tokens[$j + 4]->is(T_CONSTANT_ENCAPSED_STRING) && $tokens[$j + 5]->text === ']'
+            ) {
+                foreach ($loopKeys[$tokens[$j + 2]->text] ?? [] as $key) {
+                    $found[] = $key . unquote($tokens[$j + 4]->text);
+                }
             }
             if (in_array($text, ['[', '('], true)) {
                 $before = $tokens[$j - 1]->is(T_ARRAY) ? $j - 2 : $j - 1;
@@ -91,6 +107,28 @@ function declaredPermissions(string $file, string $pattern): array
     }
 
     return $found;
+}
+
+/**
+ * The string keys at the top level of the array literal opening at $open.
+ *
+ * @param  list<PhpToken> $tokens
+ * @return list<string>
+ */
+function literalKeys(array $tokens, int $open): array
+{
+    $keys = [];
+    for ($depth = 0, $k = $open, $n = count($tokens); $k < $n; $k++) {
+        $depth += in_array($tokens[$k]->text, ['[', '('], true) ? 1 : (in_array($tokens[$k]->text, [']', ')'], true) ? -1 : 0);
+        if ($depth === 0) {
+            break;
+        }
+        if ($depth === 1 && $tokens[$k]->is(T_CONSTANT_ENCAPSED_STRING) && $tokens[$k + 1]->is(T_DOUBLE_ARROW)) {
+            $keys[] = unquote($tokens[$k]->text);
+        }
+    }
+
+    return $keys;
 }
 
 $permissions = [

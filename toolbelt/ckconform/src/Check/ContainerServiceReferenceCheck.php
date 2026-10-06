@@ -125,15 +125,13 @@ final class ContainerServiceReferenceCheck implements Check
         string $relative,
         string $class,
     ): void {
-        $expected = ExtensionNamespace::ownClassFile($context, $class, $namespaces);
-        if ($expected === null) {
+        $expected = ExtensionNamespace::ownClassFiles($context, $class, $namespaces);
+        if ($expected === [] || array_filter($expected, $context->ships(...)) !== []) {
             return;
         }
-        if (!$context->ships($expected)) {
-            $reporter->fail(
-                "$relative: service class " . ltrim(str_replace('\\\\', '\\', $class), '\\')
-                . " has no file $expected — the container rebuild throws and the whole site is down"
-            );
-        }
+        $reporter->fail(
+            "$relative: service class " . ltrim(str_replace('\\\\', '\\', $class), '\\')
+            . ' has no file ' . implode(' or ', $expected) . ' — the container rebuild throws and the whole site is down'
+        );
     }
 }

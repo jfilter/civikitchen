@@ -151,12 +151,20 @@ final class LockfileCheck implements Check
             }
             $negated = str_starts_with($pattern, '!');
             $glob = rtrim(preg_replace('#^(\./)+#', '', ltrim($pattern, '!')) ?? '', '/');
-            if (fnmatch($glob, substr($directory, strlen($root)))) {
+            if (self::globMatches($glob, substr($directory, strlen($root)))) {
                 $member = !$negated;
             }
         }
 
         return $member;
+    }
+
+    /** Workspace globs: `*` and `?` stay within one path segment, `**` spans any number. */
+    private static function globMatches(string $glob, string $path): bool
+    {
+        $regex = strtr(preg_quote($glob, '#'), ['\\*\\*' => '.*', '\\*' => '[^/]*', '\\?' => '[^/]']);
+
+        return preg_match('#^' . $regex . '$#', $path) === 1;
     }
 
     private function hasLockfile(Context $context, string $manifest): bool

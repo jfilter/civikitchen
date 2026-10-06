@@ -31,7 +31,7 @@ final class CiCommands
     ];
 
     /** Tools a `ck <subcommand>` runs beyond its own `ck<subcommand>` binary. */
-    private const CK_EXTRAS = ['lint' => 'phpcs', 'coverage' => 'phpunit', 'test' => 'ckphpunit phpunit'];
+    private const CK_EXTRAS = ['lint' => 'phpcs', 'coverage' => 'phpunit', 'test' => 'ckphpunit phpunit', 'phpunit' => 'ckphpunit phpunit'];
 
     /** Package-manager flags that take the next word as their value. */
     private const VALUE_FLAGS = ['--prefix', '-C', '--cwd', '--dir', '-w', '--workspace', '--filter', '-d', '--working-dir'];
@@ -80,6 +80,9 @@ final class CiCommands
     /** `ck ci` becomes the gates it runs (its --only/--skip lists dropped), `ck <x>` gains `ck<x>`. */
     private static function expandCk(string $text): string
     {
+        // The ckphpunit binary is `ck test`.
+        $text = preg_replace('/(?<![\w.\/-])ckphpunit(?![\w-])/', 'ckphpunit phpunit', $text) ?? $text;
+
         return preg_replace_callback(
             '/(?<![\w.-])ck[ \t]+([a-z][\w-]*)([^\n;&|]*)/',
             static fn (array $call): string => $call[1] === 'ci'
@@ -92,14 +95,15 @@ final class CiCommands
     /** @return array<string, string> the gates `ck ci <arguments>` runs after --only/--skip */
     private static function selectedGates(string $arguments): array
     {
-        $gates = self::CI_GATES;
+        // As CiCommand: the union of every --only list (all gates without one), minus every --skip.
+        $lists = ['only' => [], 'skip' => []];
         preg_match_all('/--(only|skip)(?:=|[ \t]+)["\']?([\w,-]+)/', $arguments, $options, PREG_SET_ORDER);
         foreach ($options as [, $option, $list]) {
-            $names = array_flip(explode(',', $list));
-            $gates = $option === 'only' ? array_intersect_key($gates, $names) : array_diff_key($gates, $names);
+            $lists[$option] += array_flip(explode(',', $list));
         }
+        $gates = $lists['only'] === [] ? self::CI_GATES : array_intersect_key(self::CI_GATES, $lists['only']);
 
-        return $gates;
+        return array_diff_key($gates, $lists['skip']);
     }
 
     private static function withScripts(Context $context, string $text): string

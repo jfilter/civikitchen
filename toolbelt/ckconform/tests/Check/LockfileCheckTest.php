@@ -211,6 +211,21 @@ final class LockfileCheckTest extends CheckTestCase
         );
     }
 
+    /** `*` stays within one directory level; `**` crosses them. */
+    public function testAWorkspaceStarMatchesOneLevelOnly(): void
+    {
+        $context = $this->repo([
+            'package.json' => '{"workspaces": ["packages/*", "apps/**"]}',
+            'package-lock.json' => '{}',
+            'packages/ui/nested/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'apps/web/site/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+        ], git: true);
+        self::assertSame(
+            ['packages/ui/nested/package.json has no tracked lockfile (builds are unreproducible)'],
+            $this->run_(new LockfileCheck(), $context)->messages('FAIL'),
+        );
+    }
+
     public function testAManifestWithoutDependenciesNeedsNoLockfile(): void
     {
         $context = $this->repo(['ang/package.json' => '{"type": "module"}'], git: true);

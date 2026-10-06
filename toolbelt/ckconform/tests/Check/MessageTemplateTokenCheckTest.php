@@ -175,4 +175,39 @@ final class MessageTemplateTokenCheckTest extends CheckTestCase
         $this->assertPasses($reporter);
         $this->assertWarns($reporter, "token namespace 'e.'");
     }
+
+    /** Ownership is the short name itself or its `<shortname>_` prefix, never a substring. */
+    public function testANamespaceMerelyContainingTheShortNameIsForeign(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'myext'),
+            'msg_templates/myext_note.html' => '<p>{notmyext.amount}</p>',
+        ], git: true);
+        $reporter = $this->run_(new MessageTemplateTokenCheck(), $context);
+        $this->assertPasses($reporter);
+        $this->assertWarns($reporter, "token namespace 'notmyext.'");
+
+        $prefixed = $this->repo([
+            'info.xml' => $this->infoXml(key: 'myext'),
+            'msg_templates/myext_note.html' => '<p>{myext_receipt.amount}</p>',
+        ], git: true);
+        $this->assertFails($this->run_(new MessageTemplateTokenCheck(), $prefixed), "'myext_receipt.' is this extension's own namespace");
+    }
+
+    /** CRM_Utils_Token's mailing-group namespaces. */
+    public function testCoreSubscriptionTokensAreCore(): void
+    {
+        $context = $this->myextRepo([
+            'msg_templates/welcome_html.tpl' => '{welcome.group} {subscribe.group} {unsubscribe.group} {resubscribe.group}',
+        ]);
+        $this->assertSilent($this->run_(new MessageTemplateTokenCheck(), $context));
+    }
+
+    public function testAngularInterpolationIsNoToken(): void
+    {
+        $context = $this->myextRepo([
+            'msg_templates/preview.html' => '<td>{{row.name}}</td><td>{{ myext.amount }}</td>',
+        ]);
+        $this->assertSilent($this->run_(new MessageTemplateTokenCheck(), $context));
+    }
 }

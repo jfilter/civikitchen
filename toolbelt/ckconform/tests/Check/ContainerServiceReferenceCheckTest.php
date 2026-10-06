@@ -134,4 +134,35 @@ final class ContainerServiceReferenceCheckTest extends CheckTestCase
             'src/Gone.php',
         );
     }
+
+    /** civix's own classloader maps all of `Civi\`, core's classes included. */
+    public function testACoreClassUnderTheCivixClassloaderIsNotJudged(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter', extra: '<classloader><psr4 prefix="Civi\\" path="Civi"/></classloader>'),
+            'greeter.php' => $this->container("new Definition(\\Civi\\Token\\TokenProcessor::class)"),
+        ], git: true);
+        $this->assertSilent($this->run_(new ContainerServiceReferenceCheck(), $context));
+    }
+
+    public function testAMissingOwnClassUnderTheCivixClassloaderFails(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter', extra: '<classloader><psr4 prefix="Civi\\" path="Civi"/></classloader>'),
+            'greeter.php' => $this->container("new Definition('Civi\\Greeter\\Gone')"),
+        ], git: true);
+        $this->assertFails($this->run_(new ContainerServiceReferenceCheck(), $context), 'Civi/Greeter/Gone.php');
+    }
+
+    /** Composer tries every path of a prefix and every prefix that matches. */
+    public function testAClassInASecondComposerPathIsFound(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'composer.json' => '{"autoload": {"psr-4": {"Civi\\\\Greeter\\\\": ["src", "lib"]}}}',
+            'lib/Subscriber.php' => "<?php\nnamespace Civi\\Greeter;\nclass Subscriber {}\n",
+            'greeter.php' => $this->container("new Definition('Civi\\Greeter\\Subscriber')"),
+        ], git: true);
+        $this->assertSilent($this->run_(new ContainerServiceReferenceCheck(), $context));
+    }
 }

@@ -32,12 +32,15 @@ final class ConfigWithoutRunnerCheck implements Check
         'phpstan.neon.dist' => [['phpstan'], 'phpstan'],
         'phpstan.neon' => [['phpstan'], 'phpstan'],
         'phpunit.xml.dist' => [['phpunit', 'ckcoverage'], 'phpunit'],
-        'phpunit-unit.xml.dist' => [['phpunit-unit', 'ckcoverage'], 'phpunit'],
+        'phpunit-unit.xml.dist' => [['ckcoverage'], 'phpunit'],
         'playwright.config.ts' => [['playwright', 'npx playwright'], 'playwright'],
         'playwright.config.js' => [['playwright', 'npx playwright'], 'playwright'],
         'vitest.config.ts' => [['vitest'], 'vitest'],
         'vitest.config.js' => [['vitest'], 'vitest'],
     ];
+
+    /** A second config of a runner counts where a step of that runner names it. */
+    private const NAMED_CONFIGS = ['phpunit-unit.xml.dist' => 'phpunit'];
 
     public function name(): string
     {
@@ -60,7 +63,9 @@ final class ConfigWithoutRunnerCheck implements Check
             if (!$context->isTracked($config)) {
                 continue;
             }
-            $found = false;
+            $runner = self::NAMED_CONFIGS[$config] ?? null;
+            $found = $runner !== null && CiCommands::runs($reachable, $runner)
+                && str_contains($reachable, substr($config, 0, -strlen('.dist')));
             foreach ($tokens as $token) {
                 if (CiCommands::runs($reachable, $token)) {
                     $found = true;

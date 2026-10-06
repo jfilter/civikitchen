@@ -171,7 +171,8 @@ silently narrow nothing.
 Inline markers act on every finding a check ties to a source line (those
 printed as `file:line:`), whichever check reports it; a finding about the
 repository as a whole has no line to sit on and is silenced only through
-`ignore_checks`.
+`ignore_checks`. Markers are read from PHP and JavaScript/TypeScript comments
+only; a finding in YAML, XML or any other file takes `ignore_checks` too.
 
 Playwright configs may use the file form as a standalone `//` comment too. The
 narrow legitimate case is a manual live-provider suite with reusable

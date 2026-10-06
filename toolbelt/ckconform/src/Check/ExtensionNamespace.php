@@ -60,21 +60,21 @@ final class ExtensionNamespace
     }
 
     /**
-     * PSR-4 prefixes (`Civi\Myext\` => `src`) from the info.xml classloader,
+     * PSR-4 prefixes (`Civi\Myext\` => [`src`]) from the info.xml classloader,
      * which core honours, and from composer.json's autoload section.
      *
-     * @return array<string, string>
+     * @return array<string, list<string>>
      */
     private static function psr4(Context $context): array
     {
         $map = [];
         foreach ($context->infoXml()?->xpath('//classloader/psr4') ?: [] as $entry) {
-            $map[trim((string) $entry['prefix'], '\\') . '\\'] = trim((string) $entry['path'], '/');
+            $map[trim((string) $entry['prefix'], '\\') . '\\'][] = trim((string) $entry['path'], '/');
         }
         $composer = json_decode($context->read('composer.json') ?? '', true);
         foreach ((array) ($composer['autoload']['psr-4'] ?? []) as $prefix => $paths) {
             foreach ((array) $paths as $path) {
-                $map[trim((string) $prefix, '\\') . '\\'] ??= trim((string) $path, '/');
+                $map[trim((string) $prefix, '\\') . '\\'][] = trim((string) $path, '/');
             }
         }
         unset($map['\\']);
@@ -97,30 +97,43 @@ final class ExtensionNamespace
     }
 
     /**
-     * The PSR-0/PSR-4 file that must ship a class of this extension, or null for
-     * a foreign class.
+     * The PSR-0/PSR-4 files one of which must ship a class of this extension,
+     * or [] for a foreign class.
      *
-     * @param list<string> $namespaces
+     * @param  list<string> $namespaces
+     * @return list<string>
      */
-    public static function ownClassFile(Context $context, string $class, array $namespaces): ?string
+    public static function ownClassFiles(Context $context, string $class, array $namespaces): array
     {
         $class = ltrim(str_replace('\\\\', '\\', $class), '\\');
 
-        foreach (self::psr4($context) as $prefix => $path) {
-            if (str_starts_with($class, $prefix)) {
-                return ltrim($path . '/', '/') . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+        $files = [];
+        foreach (self::psr4($context) as $prefix => $paths) {
+            if (!str_starts_with($class, $prefix)) {
+                continue;
             }
+            $rest = substr($class, strlen($prefix));
+            // A bare `Civi\` (civix's classloader) maps core's classes too; only an own sub-namespace is ours.
+            if (substr_count($prefix, '\\') === 1 && !in_array(strtolower(strtok($rest, '\\')), $namespaces, true)) {
+                continue;
+            }
+            foreach ($paths as $path) {
+                $files[] = ltrim($path . '/', '/') . str_replace('\\', '/', $rest) . '.php';
+            }
+        }
+        if ($files !== []) {
+            return array_values(array_unique($files));
         }
 
         if (self::isOwnClass($class, $namespaces)) {
-            return str_replace('_', '/', $class) . '.php';
+            return [str_replace('_', '/', $class) . '.php'];
         }
         if (preg_match('#^Civi\\\\([A-Za-z0-9]+)\\\\#', $class, $match) === 1
             && in_array(strtolower($match[1]), $namespaces, true)
         ) {
-            return str_replace('\\', '/', $class) . '.php';
+            return [str_replace('\\', '/', $class) . '.php'];
         }
 
-        return null;
+        return [];
     }
 }

@@ -86,4 +86,15 @@ final class FloatingTagCheckTest extends CheckTestCase
         );
         $this->assertSilent($this->run_(new FloatingTagCheck(), $context));
     }
+
+    /** `container:` is a job's container only directly under a job; a comment names no image. */
+    public function testContainerKeysOutsideAJobAndCommentsAreSilent(): void
+    {
+        $context = $this->workflow(
+            "    strategy:\n      matrix:\n        include:\n          - container: civicrm\n"
+            . "    services:\n      db:\n        image: mariadb:11.4 # not :latest\n"
+            . "    steps:\n      - uses: example/deploy@v1\n        with:\n          container: web\n",
+        );
+        $this->assertSilent($this->run_(new FloatingTagCheck(), $context));
+    }
 }

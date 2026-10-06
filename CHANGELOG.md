@@ -149,8 +149,19 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - ckconform's `required-extensions` demands search_kit only for
   SearchDisplays, not for core SavedSearches; `message-template-token` scans
   only message templates, ignores JavaScript `${…}` interpolations, no longer
-  treats short namespaces as the extension's own by substring, and knows the
-  site, group, survey, financial_trxn and contribution_product namespaces;
+  ignores Angular `{{…}}`, treats only the short name and a `<shortname>_`
+  prefix as the extension's own namespace, and knows the site, group, survey,
+  financial_trxn, contribution_product, welcome, subscribe, unsubscribe and
+  resubscribe namespaces;
+- ckconform's `container-service-reference` no longer fails core classes
+  under civix's `Civi\` classloader and tries every PSR-4 path and prefix that
+  matches; `config-without-runner` counts a phpunit step that names
+  `phpunit-unit.xml.dist`; `permission-closure` knows the loop-built
+  `… contributions of all types` permissions; `lockfile` workspace globs keep
+  `*` within one directory level. The CI checks run the union of repeated
+  `ck ci --only` lists and count `ck phpunit`/`ckphpunit` as phpunit;
+  `floating-tag` ignores trailing comments and `container:` keys outside a
+  job.
   `mixin-declaration` ignores files under `tests/`.
 - The rector rules map named arguments by name and skip calls they cannot
   map (spread, unknown name). `Api4ArrayToOopRector` maps AND/OR/NOT where

@@ -157,6 +157,15 @@ final class PermissionClosureCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
     }
 
+    /** financialacls builds its names in a loop: `$action . ' contributions of all types'`. */
+    public function testLoopBuiltCorePermissionsAreKnown(): void
+    {
+        $context = $this->repo([
+            'CRM/Foo/Page.php' => "<?php\nCRM_Core_Permission::check('view contributions of all types');\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new PermissionClosureCheck(), $context));
+    }
+
     /**
      * Core writes OR groups as nested lists; every leaf counts, including
      * those after the first inner list closes.

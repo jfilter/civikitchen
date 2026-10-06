@@ -65,7 +65,7 @@ final class FloatingTagCheck implements Check
         if (preg_match('/^(?:-\s+)?([\w.-]+):(?:\s+(.*))?$/', $trimmed, $key) === 1) {
             $parents[] = [$indent, $key[1]];
         }
-        if (preg_match('/image:.*:latest|releases\/latest\/download/', $line) === 1) {
+        if (preg_match('/image:.*:latest|releases\/latest\/download/', preg_replace('/\s+#.*$/', '', $line) ?? $line) === 1) {
             return true;
         }
         if (preg_match('/^(?:-\s+)?uses:\s*["\']?docker:\/\/([^\s"\']+)/', $trimmed, $docker) === 1) {
@@ -73,7 +73,7 @@ final class FloatingTagCheck implements Check
         }
         $value = $key[2] ?? '';
         $isImage = match ($key[1] ?? '') {
-            'container' => true,
+            'container' => ($enclosing[1] ?? '') === 'jobs',
             'image' => ($enclosing[0] ?? '') === 'container' || ($enclosing[1] ?? '') === 'services',
             default => false,
         };
