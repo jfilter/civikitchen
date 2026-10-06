@@ -34,4 +34,5 @@ toolbelt/phpstan-root/vendor
 toolbelt/phpcs-root/vendor
 toolbelt/ckconform/.phpunit.result.cache
 toolbelt/phpstan/.phpunit.result.cache
+toolbelt/rector/.phpunit.result.cache
 node_modules

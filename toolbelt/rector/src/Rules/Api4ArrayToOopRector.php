@@ -8,9 +8,8 @@ use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr\Array_;
+use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\MethodCall;
-use PhpParser\Node\Expr\StaticCall;
-use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Scalar\String_;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -23,12 +22,14 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *   -> \Civi\Api4\Contact::get()->addWhere('x', '=', 1)->addSelect('id')->setLimit(5)->execute()
  *
  * checkPermissions becomes the action() argument (api4 defaults TRUE in both
- * forms, so an absent value maps to no argument). Bails on anything it doesn't
- * model yet (join/having/chain/groupBy-with-keys, non-literal entity/action/params).
+ * forms, so an absent value maps to no argument). AND/OR/NOT where rows become
+ * addClause(). Bails on anything it doesn't model yet (join/having/chain/
+ * groupBy-with-keys, non-literal entity/action/params, the $index argument, an
+ * entity without its own Civi\Api4 class).
  */
 final class Api4ArrayToOopRector extends AbstractApiCallAssistRector {
 
-  public function refactor(Node $node): ?Node {
+  protected function refactorCall(FuncCall $node): ?Node {
     $match = $this->matchLiteralApiCall($node, 'civicrm_api4');
     if ($match === NULL) {
       return NULL;
@@ -58,17 +59,11 @@ final class Api4ArrayToOopRector extends AbstractApiCallAssistRector {
             if (!$row instanceof ArrayItem || $row->key !== NULL || !$row->value instanceof Array_) {
               return NULL;
             }
-            $cellArgs = [];
-            foreach ($row->value->items as $cell) {
-              if (!$cell instanceof ArrayItem || $cell->key !== NULL) {
-                return NULL;
-              }
-              $cellArgs[] = new Arg($cell->value);
-            }
-            if (count($cellArgs) < 2) {
+            $whereCall = self::whereCall($row->value);
+            if ($whereCall === NULL) {
               return NULL;
             }
-            $methods[] = ['addWhere', $cellArgs];
+            $methods[] = $whereCall;
           }
           break;
 
@@ -118,16 +113,42 @@ final class Api4ArrayToOopRector extends AbstractApiCallAssistRector {
       }
     }
 
-    $expr = new StaticCall(
-      new FullyQualified('Civi\\Api4\\' . $entity->value),
-      $action->value,
-      $permArg !== NULL ? [new Arg($permArg)] : []
-    );
+    $expr = $this->api4ActionCall($entity->value, $action->value, $permArg);
+    if ($expr === NULL) {
+      return NULL;
+    }
     foreach ($methods as [$name, $methodArgs]) {
       $expr = new MethodCall($expr, $name, $methodArgs);
     }
 
     return new MethodCall($expr, 'execute');
+  }
+
+  /**
+   * One where row as a builder call: `['OR', [...]]` (also AND/NOT) is
+   * addClause(), `[field, 'op', value?]` is addWhere(). A fourth isExpression cell
+   * bails: only DAOGetAction::addWhere() takes it, other actions drop it silently.
+   *
+   * @return array{string, list<Arg>}|null
+   */
+  private static function whereCall(Array_ $row): ?array {
+    $cells = [];
+    foreach ($row->items as $cell) {
+      if (!$cell instanceof ArrayItem || $cell->key !== NULL || $cell->unpack) {
+        return NULL;
+      }
+      $cells[] = $cell->value;
+    }
+    if ($cells !== [] && $cells[0] instanceof String_ && in_array(strtoupper($cells[0]->value), ['AND', 'OR', 'NOT'], TRUE)) {
+      return count($cells) === 2 && in_array($cells[0]->value, ['AND', 'OR', 'NOT'], TRUE)
+        ? ['addClause', [new Arg($cells[0]), new Arg($cells[1])]]
+        : NULL;
+    }
+    if (count($cells) < 2 || count($cells) > 3 || !$cells[1] instanceof String_) {
+      return NULL;
+    }
+
+    return ['addWhere', array_map(static fn (Node\Expr $cell): Arg => new Arg($cell), $cells)];
   }
 
   public function getRuleDefinition(): RuleDefinition {

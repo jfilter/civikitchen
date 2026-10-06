@@ -11,11 +11,16 @@ use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
+use PhpParser\Node\Name;
 use PhpParser\Node\Scalar;
+use PhpParser\NodeFinder;
+use PHPStan\Reflection\ExtendedMethodReflection;
 use PHPStan\Reflection\FunctionReflection;
+use PHPStan\Reflection\MethodReflection;
 use PHPStan\Type\ConstantScalarType;
 use PHPStan\Type\NullType;
 use Rector\Contract\Rector\ConfigurableRectorInterface;
+use Rector\PhpParser\AstResolver;
 use Rector\PhpParser\Node\Value\ValueResolver;
 use Rector\Rector\AbstractRector;
 use Rector\Reflection\ReflectionResolver;
@@ -35,6 +40,11 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  * extension's own code) and otherwise from the SIGNATURES map below — an
  * extension's rector run has no CiviCRM core on its autoloader, so the core
  * offenders have to be declared. Extend it per project via configure().
+ *
+ * Named arguments and omitted defaults bind to the callee that runs, so a
+ * reflected callee must be the only one that can: a user function, or a
+ * declared method that no subclass or implementation can replace. Callees
+ * that read func_get_args()/func_num_args() see the dropped arguments.
  */
 final class PositionalDefaultsToNamedArgsRector extends AbstractRector implements ConfigurableRectorInterface, MinPhpVersionInterface {
 
@@ -63,6 +73,7 @@ final class PositionalDefaultsToNamedArgsRector extends AbstractRector implement
   public function __construct(
     private readonly ValueResolver $valueResolver,
     private readonly ReflectionResolver $reflectionResolver,
+    private readonly AstResolver $astResolver,
   ) {}
 
   /**
@@ -145,8 +156,7 @@ final class PositionalDefaultsToNamedArgsRector extends AbstractRector implement
    */
   private function reflectParameters(StaticCall|MethodCall|FuncCall $node): ?array {
     $reflection = $this->reflectionResolver->resolveFunctionLikeReflectionFromCall($node);
-    // Parameter names of internal functions are not ours to bet on.
-    if ($reflection === NULL || ($reflection instanceof FunctionReflection && $reflection->isBuiltin())) {
+    if ($reflection === NULL || !$this->bindsStatically($node, $reflection) || $this->readsArgumentList($reflection)) {
       return NULL;
     }
     $variants = $reflection->getVariants();
@@ -170,6 +180,48 @@ final class PositionalDefaultsToNamedArgsRector extends AbstractRector implement
       }
     }
     return $parameters;
+  }
+
+  /**
+   * The resolved callee is the one that runs. Internal callees are out: their
+   * parameter names are not ours to bet on.
+   */
+  private function bindsStatically(StaticCall|MethodCall|FuncCall $node, FunctionReflection|MethodReflection $reflection): bool {
+    if ($reflection instanceof FunctionReflection) {
+      return !$reflection->isBuiltin();
+    }
+    $class = $reflection->getDeclaringClass();
+    // A method served by __call/__callStatic (@method) has no parameters to name.
+    if (!$reflection instanceof ExtendedMethodReflection || $class->isBuiltin()
+      || !$class->getNativeReflection()->hasMethod($reflection->getName())) {
+      return FALSE;
+    }
+    if ($reflection->isPrivate() || $reflection->isFinalByKeyword()->yes() || $class->isFinalByKeyword()) {
+      return TRUE;
+    }
+    if ($node instanceof MethodCall) {
+      $receivers = $this->getType($node->var)->getObjectClassReflections();
+
+      return count($receivers) === 1 && $receivers[0]->isFinalByKeyword();
+    }
+
+    // Foo::, self:: and parent:: name the method; static:: dispatches late.
+    return $node instanceof StaticCall && $node->class instanceof Name && !$this->isName($node->class, 'static');
+  }
+
+  /** The callee's body counts its arguments, or cannot be read to rule it out. */
+  private function readsArgumentList(FunctionReflection|MethodReflection $reflection): bool {
+    $callee = $reflection instanceof FunctionReflection
+      ? $this->astResolver->resolveFunctionFromFunctionReflection($reflection)
+      : $this->astResolver->resolveClassMethodFromMethodReflection($reflection);
+    if ($callee === NULL) {
+      return TRUE;
+    }
+
+    return (new NodeFinder())->findFirst(
+      $callee->stmts ?? [],
+      fn (Node $n): bool => $n instanceof FuncCall && $this->isNames($n, ['func_get_args', 'func_num_args', 'func_get_arg']),
+    ) !== NULL;
   }
 
   /**

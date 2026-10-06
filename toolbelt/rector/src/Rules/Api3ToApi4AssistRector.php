@@ -32,16 +32,13 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class Api3ToApi4AssistRector extends AbstractApiCallAssistRector {
 
-  public function refactor(Node $node): ?Node {
-    if (!$node instanceof FuncCall) {
-      return NULL;
-    }
+  protected function refactorCall(FuncCall $node): ?Node {
     $match = $this->matchLiteralApiCall($node, 'civicrm_api3');
     if ($match === NULL) {
       return NULL;
     }
-    [, $action, $params] = $match;
-    if (strtolower($action->value) !== 'get') {
+    [$entity, $action, $params] = $match;
+    if (strtolower($action->value) !== 'get' || $this->api4ActionCall($entity->value, 'get', NULL) === NULL) {
       return NULL;
     }
 
@@ -77,13 +74,7 @@ final class Api3ToApi4AssistRector extends AbstractApiCallAssistRector {
     }
 
     $node->name = new Name('civicrm_api4');
-    $newArg = new Arg(new Array_($newItems));
-    if (isset($node->args[2])) {
-      $node->args[2] = $newArg;
-    }
-    else {
-      $node->args[] = $newArg;
-    }
+    $node->args = [new Arg($entity), new Arg($action), new Arg(new Array_($newItems))];
 
     return $node;
   }

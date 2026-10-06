@@ -4,7 +4,9 @@ declare(strict_types = 1);
 
 namespace CiviKitchen\Rector\Rules;
 
+use CiviKitchen\Rector\CallArgs;
 use PhpParser\Node;
+use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Throw_;
@@ -31,7 +33,18 @@ final class CrmCoreErrorFatalToExceptionRector extends AbstractRector {
       return NULL;
     }
 
-    return new Throw_(new New_(new FullyQualified('CRM_Core_Exception'), $node->getArgs()));
+    // fatal($message = NULL, $code = NULL, $email = NULL) has no counterpart
+    // for $email, and without a message it shows a generic one.
+    $args = CallArgs::byName($node, ['message', 'code', 'email']);
+    if (!isset($args['message']) || isset($args['email'])) {
+      return NULL;
+    }
+    $exceptionArgs = [new Arg($args['message'])];
+    if (isset($args['code'])) {
+      $exceptionArgs[] = new Arg($args['code']);
+    }
+
+    return new Throw_(new New_(new FullyQualified('CRM_Core_Exception'), $exceptionArgs));
   }
 
   public function getRuleDefinition(): RuleDefinition {

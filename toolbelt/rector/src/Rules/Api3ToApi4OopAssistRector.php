@@ -6,13 +6,11 @@ namespace CiviKitchen\Rector\Rules;
 
 use PhpParser\Node;
 use PhpParser\Node\Arg;
-use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\ConstFetch;
+use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\MethodCall;
-use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Name;
-use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Scalar\String_;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
@@ -32,7 +30,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class Api3ToApi4OopAssistRector extends AbstractApiCallAssistRector {
 
-  public function refactor(Node $node): ?Node {
+  protected function refactorCall(FuncCall $node): ?Node {
     $match = $this->matchLiteralApiCall($node, 'civicrm_api3');
     if ($match === NULL) {
       return NULL;
@@ -73,24 +71,20 @@ final class Api3ToApi4OopAssistRector extends AbstractApiCallAssistRector {
       $permArg = $checkPermissions;
     }
 
-    $expr = new StaticCall(new FullyQualified('Civi\\Api4\\' . $entity->value), 'get', [new Arg($permArg)]);
+    $expr = $this->api4ActionCall($entity->value, 'get', $permArg);
+    if ($expr === NULL) {
+      return NULL;
+    }
     foreach ($parts['where'] as [$field, $value]) {
       $expr = new MethodCall($expr, 'addWhere', [new Arg(new String_($field)), new Arg(new String_('=')), new Arg($value)]);
     }
-    if ($select !== NULL) {
-      if ($select instanceof Array_) {
-        $selectArgs = [];
-        foreach ($select->items as $sel) {
-          if (!$sel instanceof ArrayItem || $sel->key !== NULL) {
-            return NULL;
-          }
-          $selectArgs[] = new Arg($sel->value);
-        }
-        $expr = new MethodCall($expr, 'addSelect', $selectArgs);
+    // classifyApi3GetParams() hands select over as a list literal.
+    if ($select instanceof Array_ && $select->items !== []) {
+      $selectArgs = [];
+      foreach ($select->items as $sel) {
+        $selectArgs[] = new Arg($sel->value);
       }
-      else {
-        $expr = new MethodCall($expr, 'setSelect', [new Arg($select)]);
-      }
+      $expr = new MethodCall($expr, 'addSelect', $selectArgs);
     }
     // Guardrail: preserve the api3 get() default cap of 25.
     $expr = new MethodCall($expr, 'setLimit', [new Arg($limit ?? new Int_(25))]);

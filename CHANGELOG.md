@@ -70,6 +70,22 @@ except that a break the consumers are adjusted for ships as a minor, marked
   similar.
 - `CiviKitchen.Files.MaxFileLength` measures files that start with `<?=` or
   HTML and reports on line 1.
+- The rector rules map named arguments by name and skip calls they cannot
+  map (spread, unknown name). `Api4ArrayToOopRector` maps AND/OR/NOT where
+  groups to `addClause()` and skips where rows with an `isExpression` flag
+  (only `DAOGetAction::addWhere()` takes one), calls with an `$index` argument, entities
+  without their own `Civi\Api4` class (`Custom_*`, `CustomValue`) and magic
+  actions with a non-literal `checkPermissions`. The Api3ToApi4 rectors skip
+  api3 control keys (`rowCount`, `sort`, `offset`, `option.*`, `return.*`),
+  possible array filter values, non-canonical entity names and results read
+  as the api3 envelope; a comma-list `return` becomes a select list and
+  `version` is dropped. `CrmUtilsArrayValueToCoalesceRector` rewrites only
+  where `??` is equivalent: no or a NULL default, and a subject that is
+  provably an array, `ArrayAccess` or NULL. `CrmCoreErrorFatalToExceptionRector` passes message
+  and code to the right constructor slots and skips calls without a message
+  or with `$email`. `PositionalDefaultsToNamedArgsRector` skips callees that
+  can be overridden or implemented elsewhere, magic and built-in methods, and
+  callees that read `func_get_args()`.
 - The oxlint rule `civikitchen/api4-contract` no longer reports another
   extension's APIv4 entity whose name is close to a core one (`Contract`,
   `Project`, `Groups`). An unknown entity is reported only when it differs
