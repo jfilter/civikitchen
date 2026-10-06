@@ -70,6 +70,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   similar.
 - `CiviKitchen.Files.MaxFileLength` measures files that start with `<?=` or
   HTML and reports on line 1.
+- The oxlint rule `civikitchen/api4-contract` no longer reports another
+  extension's APIv4 entity whose name is close to a core one (`Contract`,
+  `Project`, `Groups`). An unknown entity is reported only when it differs
+  from a core entity in letter case or by two swapped neighbouring letters
+  (`contact`, `Contatc`).
 
 ## [1.31.0] - 2026-10-05
 

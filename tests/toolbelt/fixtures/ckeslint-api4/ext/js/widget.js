@@ -5,6 +5,8 @@
     return {
       typos: function () {
         CRM.api4('Contatc', 'get', {}); // expect: entity Contatc
+        CRM.api4('Acitvity', 'get', {}); // expect: entity Acitvity
+        CRM.api4('contact', 'get', {}); // expect: entity contact
         CRM.api4('Contact', 'gett', {}); // expect: action Contact::gett
         CRM.api4('Contact', 'get', { select: ['display_nam'] }); // expect: field Contact.display_nam
         crmApi4('Contact', 'get', { where: [['OR', [['contact_typ', '=', 'Individual']]]] }); // expect: field Contact.contact_typ
@@ -28,6 +30,20 @@
         CRM.api4('Widget', 'get', { select: ['anything'] });
         CRM.api4('Greeter', 'get', { select: ['anything'] });
         CRM.api4('Custom_Survey', 'get', { select: ['anything'] });
+        // Other extensions' entities: one or two edits from a core name, a swap
+        // of a short one (ACL), and one near nothing.
+        CRM.api4('Identity', 'get', {});
+        CRM.api4('Project', 'get', {});
+        CRM.api4('Folder', 'get', {});
+        CRM.api4('Contract', 'get', {});
+        CRM.api4('Groups', 'get', {});
+        CRM.api4('Notes', 'get', {});
+        CRM.api4('Reports', 'get', {});
+        CRM.api4('Mail', 'get', {});
+        CRM.api4('Vote', 'get', {});
+        CRM.api4('Patch', 'get', {});
+        CRM.api4('Cal', 'get', {});
+        CRM.api4('Frobnicator', 'get', {});
         return crmApi4(entityName, 'get', { select: ['whatever'] });
       },
     };

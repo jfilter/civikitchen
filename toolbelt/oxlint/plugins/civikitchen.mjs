@@ -31,34 +31,24 @@ function words(value) {
   return value ? value.split(' ') : [];
 }
 
-function levenshtein(a, b) {
-  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    const current = [i];
-    for (let j = 1; j <= b.length; j++) {
-      current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    }
-    previous = current;
+// Equal ignoring case, or but for one swapped pair of neighbouring letters.
+function isSlipOf(typed, known) {
+  const [a, b] = [typed.toLowerCase(), known.toLowerCase()];
+  if (a.length !== b.length) {
+    return false;
   }
-  return previous[b.length];
+  const differ = [...a].flatMap((char, i) => (char === b[i] ? [] : [i]));
+  if (differ.length === 0) {
+    return true;
+  }
+  const [i, j] = differ;
+  return differ.length === 2 && j === i + 1 && a[i] === b[j] && a[j] === b[i];
 }
 
-// Two edits away from a four-letter entity is a different word, not a typo.
+// An added, dropped or changed letter makes another extension's entity
+// (Contract, Groups, Vote); a swap in a short name too (ACL -> Cal).
 function nearestEntity(api, entity) {
-  if (entity.length < 4) {
-    return null;
-  }
-  const tolerance = entity.length >= 6 ? 2 : 1;
-  let best = null;
-  let bestDistance = Infinity;
-  for (const known of Object.keys(api.entities)) {
-    const distance = levenshtein(entity.toLowerCase(), known.toLowerCase());
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = known;
-    }
-  }
-  return bestDistance <= tolerance ? best : null;
+  return entity.length < 4 ? null : Object.keys(api.entities).find((known) => isSlipOf(entity, known)) ?? null;
 }
 
 function entityIsKnown(api, entity) {

@@ -232,7 +232,7 @@ test-vendored-paths: ## civikitchen.yaml vendored_paths file-list exclusion
 
 # The APIv4 contract rule reaches oxlint through its alpha jsPlugins bridge;
 # only a run through the pinned toolchain proves the rule still fires.
-test-ckeslint: $(OXLINT_STAMP) ## ckeslint: APIv4 contract rule and --core over fixtures
+test-ckeslint: $(OXLINT_STAMP) $(SCENARIO_YAML_STAMP) ## ckeslint: APIv4 contract rule and --core over fixtures
 	bash tests/toolbelt/test-ckeslint.sh
 
 test-ckcoverage: $(SCENARIO_YAML_STAMP) ## ckcoverage temporary logs, coverage floor, tests opt-out
