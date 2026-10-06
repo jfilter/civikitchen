@@ -14,6 +14,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- `cklint` runs its mago stage at the PHP floor in `composer.json`
+  `require.php` instead of the baseline's 8.1, so a repo above 8.1 may use the
+  language features of its floor. Rules that only apply from 8.2 on, such as
+  `sensitive-parameter`, start reporting in those repos.
+
 ## [1.31.0] - 2026-10-05
 
 ### Added

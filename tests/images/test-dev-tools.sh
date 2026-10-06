@@ -246,6 +246,21 @@ else
     fail "cklint didn't report the bare ts() (output: ${CKLINT_OUT:0:200})"
 fi
 
+# mago lints at the repo's declared PHP floor: a trait constant (PHP 8.2) is a
+# semantics error under the baseline's 8.1, and fine for a >=8.3 repo.
+FLOORDIR="${WORKDIR}/floorext"
+mkdir -p "${FLOORDIR}"
+printf '<?php\n\ntrait Floor {\n  public const LEVEL = 1;\n}\n' > "${FLOORDIR}/Floor.php"
+(cd "${FLOORDIR}" && git init -q . && git add -A) >/dev/null 2>&1
+FLOOR_BASE="$( (cd "${FLOORDIR}" && cklint Floor.php) 2>&1 || true)"
+printf '{"require": {"php": ">=8.3"}}\n' > "${FLOORDIR}/composer.json"
+FLOOR_83="$( (cd "${FLOORDIR}" && cklint Floor.php) 2>&1 || true)"
+if grep -q "Constants in traits" <<<"${FLOOR_BASE}" && ! grep -q "Constants in traits" <<<"${FLOOR_83}"; then
+    ok "cklint's mago stage lints at the composer.json PHP floor"
+else
+    fail "cklint ignored the PHP floor (8.1: ${FLOOR_BASE:0:200} | 8.3: ${FLOOR_83:0:200})"
+fi
+
 # The declare spacing has to be the SAME shape in the sniff and in ckfmt, or
 # every file in the fleet is unfixable: Slevomat and Drupal.WhiteSpace.
 # OperatorSpacing would each demand what the other forbids. Both spellings are
