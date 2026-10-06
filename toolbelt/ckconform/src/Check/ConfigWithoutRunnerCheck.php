@@ -32,7 +32,8 @@ final class ConfigWithoutRunnerCheck implements Check
         'phpstan.neon.dist' => [['phpstan'], 'phpstan'],
         'phpstan.neon' => [['phpstan'], 'phpstan'],
         'phpunit.xml.dist' => [['phpunit', 'ckcoverage'], 'phpunit'],
-        'phpunit-unit.xml.dist' => [['ckcoverage'], 'phpunit'],
+        // Run only by a phpunit step that names it, see NAMED_CONFIGS.
+        'phpunit-unit.xml.dist' => [[], 'phpunit'],
         'playwright.config.ts' => [['playwright', 'npx playwright'], 'playwright'],
         'playwright.config.js' => [['playwright', 'npx playwright'], 'playwright'],
         'vitest.config.ts' => [['vitest'], 'vitest'],

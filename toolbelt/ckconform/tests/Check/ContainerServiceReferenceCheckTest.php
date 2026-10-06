@@ -154,6 +154,16 @@ final class ContainerServiceReferenceCheckTest extends CheckTestCase
         $this->assertFails($this->run_(new ContainerServiceReferenceCheck(), $context), 'Civi/Greeter/Gone.php');
     }
 
+    public function testAMissingClassUnderAnOwnSingleSegmentPrefixFails(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(key: 'de.example.greeter'),
+            'composer.json' => '{"autoload":{"psr-4":{"Greeter\\\\":"src"}}}',
+            'greeter.php' => $this->container("new Definition('Greeter\\Gone')"),
+        ], git: true);
+        $this->assertFails($this->run_(new ContainerServiceReferenceCheck(), $context), 'src/Gone.php');
+    }
+
     /** Composer tries every path of a prefix and every prefix that matches. */
     public function testAClassInASecondComposerPathIsFound(): void
     {

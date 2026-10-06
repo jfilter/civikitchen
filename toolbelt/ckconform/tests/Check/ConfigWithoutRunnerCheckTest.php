@@ -91,7 +91,7 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'vitest.config.ts');
     }
 
-    /** A second phpunit config only one repo remembers to run. */
+    /** ckcoverage runs phpunit.xml(.dist) only, so a second config needs its own step. */
     public function testASecondPhpunitConfigNeedsItsOwnStep(): void
     {
         $context = $this->repo([
@@ -99,7 +99,27 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
             'phpunit-unit.xml.dist' => '<phpunit/>',
             '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: ckcoverage tests/phpunit\n",
         ], git: true);
-        $this->assertPasses($this->run_(new ConfigWithoutRunnerCheck(), $context));
+        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpunit-unit.xml.dist');
+    }
+
+    /** `ck ci --extra-phpunit-config` and `ckcoverage -c` run the named config; a skipped gate does not. */
+    public function testTheSecondConfigRunsThroughCkCiOrCkcoverage(): void
+    {
+        $steps = [
+            'ck ci --extra-phpunit-config phpunit-unit.xml.dist' => true,
+            'ck ci --only ckcoverage,phpunit-extra --extra-phpunit-config="phpunit-unit.xml.dist"' => true,
+            'ckcoverage -c phpunit-unit.xml.dist' => true,
+            'ck ci --skip phpunit-extra --extra-phpunit-config phpunit-unit.xml.dist' => false,
+        ];
+        foreach ($steps as $step => $runs) {
+            $context = $this->repo([
+                'phpunit.xml.dist' => '<phpunit/>',
+                'phpunit-unit.xml.dist' => '<phpunit/>',
+                '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: {$step}\n",
+            ], git: true);
+            $result = $this->run_(new ConfigWithoutRunnerCheck(), $context);
+            $runs ? $this->assertPasses($result) : $this->assertFails($result, 'phpunit-unit.xml.dist');
+        }
     }
 
     /**
@@ -183,14 +203,31 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
     /** `ck ci` unites repeated --only lists before it subtracts --skip. */
     public function testRepeatedOnlyListsAddUp(): void
     {
-        $context = $this->runnerRepo('ck ci --only=cklint --only=ckcoverage,phpstan', self::PHP_CONFIGS);
-        $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+        foreach (['ck ci --only=cklint --only=ckcoverage,phpstan', 'ck ci --only "cklint, ckcoverage, phpstan"'] as $step) {
+            $context = $this->runnerRepo($step, self::PHP_CONFIGS);
+            $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+        }
+    }
+
+    /** A gate list from a variable may name any gate. */
+    public function testAQuotedVariableOnlyListCountsAsAnyGate(): void
+    {
+        foreach (['ck ci --only "$CK_GATES"', 'ck ci --only="${{ inputs.gates }}"', 'ck ci --skip "$CK_SKIP"'] as $step) {
+            $context = $this->runnerRepo($step, self::PHP_CONFIGS);
+            $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+        }
+    }
+
+    public function testADirectoryNamedCkphpunitIsNoRunner(): void
+    {
+        $context = $this->runnerRepo('ls tests/ckphpunit', ['phpunit.xml.dist' => '<phpunit/>']);
+        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpunit.xml.dist (no phpunit step)');
     }
 
     /** `ck phpunit` and the ckphpunit binary are `ck test`. */
     public function testCkPhpunitAndCkphpunitRunPhpunit(): void
     {
-        foreach (['ck phpunit', 'ckphpunit --group headless'] as $step) {
+        foreach (['ck phpunit', 'ckphpunit --group headless', 'vendor/bin/ckphpunit', '$CK_TOOL_PATH/bin/ckphpunit', '$CK_BIN/ckphpunit', './ckphpunit'] as $step) {
             $context = $this->runnerRepo($step, ['phpunit.xml.dist' => '<phpunit/>']);
             $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
         }
@@ -249,5 +286,24 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
             '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: vendor/bin/phpunit\n",
         ], git: true);
         $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpunit-unit.xml.dist');
+    }
+
+    /** ckcoverage runs phpunit.xml(.dist) only; the shared CI runs a second config through extra_phpunit_config. */
+    public function testTheSharedCiRunsTheSecondConfigOnlyWhenNamed(): void
+    {
+        $uses = "jobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n";
+        $unnamed = $this->repo([
+            'phpunit.xml.dist' => '<phpunit/>',
+            'phpunit-unit.xml.dist' => '<phpunit/>',
+            '.github/workflows/ci.yml' => $uses,
+        ], git: true);
+        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $unnamed), 'phpunit-unit.xml.dist');
+
+        $named = $this->repo([
+            'phpunit.xml.dist' => '<phpunit/>',
+            'phpunit-unit.xml.dist' => '<phpunit/>',
+            '.github/workflows/ci.yml' => $uses . "    with:\n      extra_phpunit_config: phpunit-unit.xml.dist\n",
+        ], git: true);
+        $this->assertPasses($this->run_(new ConfigWithoutRunnerCheck(), $named));
     }
 }

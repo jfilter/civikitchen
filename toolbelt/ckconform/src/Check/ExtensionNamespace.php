@@ -114,7 +114,7 @@ final class ExtensionNamespace
             }
             $rest = substr($class, strlen($prefix));
             // A bare `Civi\` (civix's classloader) maps core's classes too; only an own sub-namespace is ours.
-            if (substr_count($prefix, '\\') === 1 && !in_array(strtolower(strtok($rest, '\\')), $namespaces, true)) {
+            if ($prefix === 'Civi\\' && !in_array(strtolower(strtok($rest, '\\')), $namespaces, true)) {
                 continue;
             }
             foreach ($paths as $path) {

@@ -80,14 +80,18 @@ final class CiCommands
     /** `ck ci` becomes the gates it runs (its --only/--skip lists dropped), `ck <x>` gains `ck<x>`. */
     private static function expandCk(string $text): string
     {
-        // The ckphpunit binary is `ck test`.
-        $text = preg_replace('/(?<![\w.\/-])ckphpunit(?![\w-])/', 'ckphpunit phpunit', $text) ?? $text;
-
-        return preg_replace_callback(
+        $text = preg_replace_callback(
             '/(?<![\w.-])ck[ \t]+([a-z][\w-]*)([^\n;&|]*)/',
             static fn (array $call): string => $call[1] === 'ci'
                 ? implode(' ', self::selectedGates($call[2]))
                 : 'ck' . $call[1] . ' ' . (self::CK_EXTRAS[$call[1]] ?? '') . $call[2],
+            $text,
+        ) ?? $text;
+
+        // ckphpunit (`ck test`) and ckcoverage run phpunit, also called from `…bin/`, `$VAR/` or `./`; `tests/ckphpunit` does not.
+        return preg_replace(
+            '/(?<![\w.\/-])((?:\$\{?\w+\}?|\.\.?|(?:[\w.-]+\/)*bin)\/)?(ckphpunit|ckcoverage)(?![\w\/.-])/',
+            '$1$2 phpunit',
             $text,
         ) ?? $text;
     }
@@ -97,13 +101,21 @@ final class CiCommands
     {
         // As CiCommand: the union of every --only list (all gates without one), minus every --skip.
         $lists = ['only' => [], 'skip' => []];
-        preg_match_all('/--(only|skip)(?:=|[ \t]+)["\']?([\w,-]+)/', $arguments, $options, PREG_SET_ORDER);
-        foreach ($options as [, $option, $list]) {
-            $lists[$option] += array_flip(explode(',', $list));
+        preg_match_all('/--(only|skip)(?:=|[ \t]+)(?:"([^"]*)"|\'([^\']*)\'|([\w,-]+))/', $arguments, $options, PREG_SET_ORDER);
+        foreach ($options as $match) {
+            $list = $match[2] . ($match[3] ?? '') . ($match[4] ?? '');
+            // A list from a variable is unknown: it may select any gate and skips none we can name.
+            if (str_contains($list, '$')) {
+                continue;
+            }
+            $lists[$match[1]] += array_flip(array_map('trim', explode(',', $list)));
         }
-        $gates = $lists['only'] === [] ? self::CI_GATES : array_intersect_key(self::CI_GATES, $lists['only']);
+        $gates = array_diff_key($lists['only'] === [] ? self::CI_GATES : array_intersect_key(self::CI_GATES, $lists['only']), $lists['skip']);
+        if (isset($gates['phpunit-extra']) && preg_match('/--extra-phpunit-config(?:=|[ \t]+)(["\']?)([^\s"\']+)\1/', $arguments, $extra) === 1) {
+            $gates['phpunit-extra'] = 'phpunit -c ' . $extra[2];
+        }
 
-        return array_diff_key($gates, $lists['skip']);
+        return $gates;
     }
 
     private static function withScripts(Context $context, string $text): string

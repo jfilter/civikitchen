@@ -97,4 +97,18 @@ final class FloatingTagCheckTest extends CheckTestCase
         );
         $this->assertSilent($this->run_(new FloatingTagCheck(), $context));
     }
+
+    /** A `#` inside quotes starts no comment, and a comment hides no untagged image. */
+    public function testOnlyAnUnquotedHashStartsAComment(): void
+    {
+        // In a block scalar the shell reads the line, and its `#` inside quotes is no comment.
+        $quoted = $this->workflow("    steps:\n      - run: |\n          echo \"a #b\" && curl -L https://example.org/releases/latest/download/x\n");
+        $this->assertWarns($this->run_(new FloatingTagCheck(), $quoted), '.github/workflows/ci.yml:7:');
+
+        $commented = $this->workflow("    services:\n      db:\n        image: mariadb # pin later\n");
+        $this->assertWarns($this->run_(new FloatingTagCheck(), $commented), '.github/workflows/ci.yml:7:        image: mariadb');
+
+        $apostrophe = $this->workflow("    steps:\n      - run: echo don't # see releases/latest/download\n");
+        $this->assertSilent($this->run_(new FloatingTagCheck(), $apostrophe));
+    }
 }

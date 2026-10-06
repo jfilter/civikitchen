@@ -226,6 +226,55 @@ final class LockfileCheckTest extends CheckTestCase
         );
     }
 
+    /** A character class matches one listed character, and a `**` segment also matches no directory at all. */
+    public function testAWorkspaceGlobSupportsClassesAndAnEmptyDoubleStar(): void
+    {
+        $context = $this->repo([
+            'package.json' => '{"workspaces": ["packages/[ab]*", "apps/**/web", "libs/[!x]*"]}',
+            'package-lock.json' => '{}',
+            'packages/a1/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'packages/c1/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'apps/web/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'apps/site/web/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'libs/x1/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'libs/y1/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+        ], git: true);
+        self::assertSame(
+            [
+                'libs/x1/package.json has no tracked lockfile (builds are unreproducible)',
+                'packages/c1/package.json has no tracked lockfile (builds are unreproducible)',
+            ],
+            $this->run_(new LockfileCheck(), $context)->messages('FAIL'),
+        );
+    }
+
+    /** Brace lists, a leading `]` in a class, and `**` inside a segment, which only acts as `*`. */
+    public function testAWorkspaceGlobReadsBracesAndClassEdges(): void
+    {
+        $context = $this->repo([
+            'package.json' => '{"workspaces": ["a/{x,y}", "b/[]z]*", "c/[[:alpha:]]", "c/[^]", "d/q**/e"]}',
+            'package-lock.json' => '{}',
+            'a/x/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'a/y/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'a/w/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'b/]1/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'b/z1/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'b/q1/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'c/1/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'd/qe/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'd/qx/e/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+        ], git: true);
+        self::assertSame(
+            [
+                'a/w/package.json has no tracked lockfile (builds are unreproducible)',
+                'b/q1/package.json has no tracked lockfile (builds are unreproducible)',
+                'c/1/package.json has no tracked lockfile (builds are unreproducible)',
+                'd/qe/package.json has no tracked lockfile (builds are unreproducible)',
+            ],
+            $this->run_(new LockfileCheck(), $context)->messages('FAIL'),
+        );
+    }
+
     public function testAManifestWithoutDependenciesNeedsNoLockfile(): void
     {
         $context = $this->repo(['ang/package.json' => '{"type": "module"}'], git: true);

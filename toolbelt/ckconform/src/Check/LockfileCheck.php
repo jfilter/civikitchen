@@ -159,12 +159,30 @@ final class LockfileCheck implements Check
         return $member;
     }
 
-    /** Workspace globs: `*` and `?` stay within one path segment, `**` spans any number. */
+    /**
+     * Workspace globs: `*`, `?` and `[...]` stay within one path segment, a `**` segment
+     * spans any number of them, including none, and `{a,b}` lists alternatives.
+     */
     private static function globMatches(string $glob, string $path): bool
     {
-        $regex = strtr(preg_quote($glob, '#'), ['\\*\\*' => '.*', '\\*' => '[^/]*', '\\?' => '[^/]']);
+        return preg_match('#^' . self::globRegex($glob) . '$#', $path) === 1;
+    }
 
-        return preg_match('#^' . $regex . '$#', $path) === 1;
+    private static function globRegex(string $glob): string
+    {
+        return preg_replace_callback(
+            '#(?<![^/])\*\*/|\*\*|\*|\?|\[([!^]?)(\][^\]/]*|[^\]/]+)\]|\{([^{}]*,[^{}]*)\}|[^*?\[{]+|[\[{]#',
+            static fn (array $token): string => match (true) {
+                $token[0] === '**/' => '(?:.*/)?',
+                $token[0] === '**' => '.*',
+                $token[0] === '*' => '[^/]*',
+                $token[0] === '?' => '[^/]',
+                ($token[3] ?? '') !== '' => '(?:' . implode('|', array_map(self::globRegex(...), explode(',', $token[3]))) . ')',
+                ($token[2] ?? '') !== '' => '[' . ($token[1] !== '' ? '^/' : '') . str_replace('\\-', '-', preg_quote($token[2], '#')) . ']',
+                default => preg_quote($token[0], '#'),
+            },
+            $glob,
+        ) ?? throw new \RuntimeException("workspace glob {$glob} could not be translated: " . preg_last_error_msg());
     }
 
     private function hasLockfile(Context $context, string $manifest): bool

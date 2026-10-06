@@ -20,6 +20,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `require.php` instead of the baseline's 8.1, so a repo above 8.1 may use the
   language features of its floor. Rules that only apply from 8.2 on, such as
   `sensitive-parameter`, start reporting in those repos.
+- ckconform's `config-without-runner` no longer counts `ck coverage` as the
+  runner of `phpunit-unit.xml.dist`, because ckcoverage runs only
+  `phpunit.xml(.dist)`. A repo with that config needs a step that names it
+  (`phpunit -c`, `ckcoverage -c`, `ck ci --extra-phpunit-config`), or
+  `extra_phpunit_config` on the shared CI workflow.
 
 ### Removed
 
@@ -152,14 +157,16 @@ except that a break the consumers are adjusted for ships as a minor, marked
   missing `params.version` as the APIv3 default mgd-php applies and warns
   instead of failing.
 - ckconform's `container-service-reference` no longer fails core classes
-  under civix's `Civi\` classloader and tries every PSR-4 path and prefix that
-  matches; `config-without-runner` counts a phpunit step that names
-  `phpunit-unit.xml.dist`; `permission-closure` knows the loop-built
-  `… contributions of all types` permissions; `lockfile` workspace globs keep
-  `*` within one directory level. The CI checks run the union of repeated
-  `ck ci --only` lists and count `ck phpunit`/`ckphpunit` as phpunit;
-  `floating-tag` ignores trailing comments and `container:` keys outside a
-  job.
+  under civix's `Civi\` classloader, still fails a missing class under an own
+  single-segment prefix, and tries every PSR-4 path and prefix that matches;
+  `permission-closure` knows the loop-built `… contributions of all types`
+  permissions; `lockfile` workspace globs keep `*`, `?` and `[…]` within one
+  directory level, let a `**` segment match none and read `{a,b}` lists. The
+  CI checks run the union of repeated, also quoted, `ck ci --only` lists,
+  treat a list from a variable as any gate, and count `ck phpunit`,
+  `ckphpunit` and `ckcoverage`, also called from a `bin/`, `$VAR/` or `./`
+  path, as phpunit; `floating-tag` ignores trailing comments outside quotes
+  and `container:` keys outside a job.
 - ckconform's `required-extensions` demands search_kit only for
   SearchDisplays, not for core SavedSearches; `message-template-token` scans
   only message templates, ignores JavaScript `${…}` interpolations and
