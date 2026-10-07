@@ -1770,7 +1770,7 @@ else
     cp -R "${CK_SRC}/scaffold" "${CK_SRC}/packages" "${CK_SRC}/toolbelt" "${TPL_SRC}/"
     TPL_EXT="${TPL_SRC}/example_ext"
     mkdir -p "${TPL_EXT}"
-    printf '%s\n' '<extension key="org.acme.example_ext" type="module"><file>example_ext</file></extension>' \
+    printf '%s\n' '<extension key="org.acme.example_ext" type="module"><file>example_ext</file><license>AGPL-3.0</license></extension>' \
         > "${TPL_EXT}/info.xml"
     # ckinit's YAML parser lives in a gitignored vendor/, so the checkout CI
     # mounts here usually has none.
