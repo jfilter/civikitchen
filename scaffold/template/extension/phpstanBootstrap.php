@@ -57,7 +57,10 @@ $ckRegister = static function (string $ckDir): void {
 // afform keeps its extensions a level down (ext/afform/core).
 libxml_use_internal_errors(use_errors: TRUE);
 $ckCoreKeys = [];
-foreach (array_merge(glob($coreDir . '/ext/*/info.xml') ?: [], glob($coreDir . '/ext/*/*/info.xml') ?: []) as $ckCoreInfo) {
+foreach (array_merge(
+  glob($coreDir . '/ext/*/info.xml') ?: [],
+  glob($coreDir . '/ext/*/*/info.xml') ?: [],
+) as $ckCoreInfo) {
   $ckCoreExt = dirname($ckCoreInfo);
   $ckCoreXml = simplexml_load_file($ckCoreInfo);
   if ($ckCoreXml !== FALSE) {
