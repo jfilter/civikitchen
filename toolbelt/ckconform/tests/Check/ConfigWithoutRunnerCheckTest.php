@@ -244,11 +244,12 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
     }
 
     /** A gate list from a variable may name any gate. */
-    public function testAQuotedVariableOnlyListCountsAsAnyGate(): void
+    public function testAShellExpandedOnlyListCountsAsAnyGate(): void
     {
         $steps = [
             'ck ci --only "$CK_GATES"', 'ck ci --only="${{ inputs.gates }}"', 'ck ci --skip "$CK_SKIP"',
-            'ck ci --only cklint --only "$GATES"', 'ck ci --only=cklint,$EXTRA',
+            'ck ci --only cklint --only "$GATES"', 'ck ci --only=cklint,$EXTRA', 'ck ci --only `cat .ci-gates`',
+            'ck ci --only="`cat .ci-gates`"', 'ck ci --only={cklint,phpstan,ckcoverage}',
         ];
         foreach ($steps as $step) {
             $context = $this->runnerRepo($step, self::PHP_CONFIGS);
@@ -288,7 +289,8 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
     {
         foreach (['ck phpunit', 'ckphpunit --group headless', 'vendor/bin/ckphpunit', '$CK_TOOL_PATH/bin/ckphpunit', '$CK_BIN/ckphpunit', './ckphpunit', '/opt/toolbelt/bin/ckphpunit', '~/bin/ckphpunit',
             '${{ github.workspace }}/toolbelt/bin/ckphpunit', '"$TB"/ckphpunit', '/ckphpunit',
-            '"$(composer config bin-dir)/ckphpunit"', '`composer config bin-dir`/ckphpunit', '"${{ github.workspace }}/toolbelt/bin"/ckphpunit'] as $step) {
+            '"$(composer config bin-dir)/ckphpunit"', '`composer config bin-dir`/ckphpunit', '"${{ github.workspace }}/toolbelt/bin"/ckphpunit',
+            'out=`ckphpunit`', '/usr/local/sbin/ckphpunit', 'node_modules/.bin/ckphpunit'] as $step) {
             $context = $this->runnerRepo($step, ['phpunit.xml.dist' => '<phpunit/>']);
             $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
         }

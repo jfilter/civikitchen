@@ -161,7 +161,8 @@ final class LockfileCheck implements Check
 
     /**
      * npm's reading of a workspace list, applied to pnpm-workspace.yaml too: an odd run of `!`
-     * negates, a later pattern inside a negation lifts it, and a backslash separates paths.
+     * negates, a later pattern inside a negation lifts it, and a backslash separates paths
+     * except in a negation, where it escapes the next character.
      *
      * @param list<string> $patterns
      */
@@ -171,12 +172,21 @@ final class LockfileCheck implements Check
         $negated = [];
         foreach ($patterns as $pattern) {
             $bangs = strspn($pattern, '!');
-            $glob = preg_replace('#^\.?/+#', '', str_replace('\\', '/', substr($pattern, $bangs)))
+            $glob = $bangs % 2 === 1
+                ? preg_replace_callback('#\\\\([^/])#s', static fn (array $escape): string => str_contains('*?[', $escape[1]) ? "[{$escape[1]}]" : $escape[1], substr($pattern, $bangs))
+                : str_replace('\\', '/', substr($pattern, $bangs));
+            $glob = preg_replace('#^\.?/+#', '', $glob ?? throw new \RuntimeException("workspace glob {$pattern} could not be read: " . preg_last_error_msg()))
                 ?? throw new \RuntimeException("workspace glob {$pattern} could not be read: " . preg_last_error_msg());
+            // npm reads `a//b` as `a/b` and `a/x/../b` as `a/b`.
+            $glob = preg_replace('#/{2,}#', '/', $glob) ?? $glob;
+            do {
+                $glob = preg_replace('#(?<![^/])(?!\.\.(?:/|$))[^/]+/\.\.(?:/|$)#', '', $glob, 1, $resolved) ?? $glob;
+            } while ($resolved > 0);
             if ($bangs % 2 === 1) {
                 $negated[] = $glob;
                 continue;
             }
+            $glob = rtrim($glob, '/');
             $negated = array_filter($negated, static fn (string $negation): bool => !self::globMatches($negation, $glob));
             $included[] = $glob;
         }
@@ -192,7 +202,9 @@ final class LockfileCheck implements Check
     private static function globMatches(string $glob, string $path): bool
     {
         foreach (self::expandBraces($glob) as $expanded) {
-            $matched = preg_match('#^' . self::globRegex(rtrim($expanded, '/')) . '$#u', $path);
+            // A name that is not UTF-8 is matched byte by byte.
+            $unicode = preg_match('//u', $path) === 1 ? 'u' : '';
+            $matched = preg_match('#^' . self::globRegex(rtrim($expanded, '/')) . '$#' . $unicode, $path);
             if ($matched === false) {
                 throw new \RuntimeException("workspace path {$path} could not be matched: " . preg_last_error_msg());
             }

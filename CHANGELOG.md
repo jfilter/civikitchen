@@ -202,22 +202,24 @@ except that a break the consumers are adjusted for ships as a minor, marked
   managed file could not be evaluated; `managed-entity-metadata` treats a
   missing `params.version` as the APIv3 default mgd-php applies and warns
   instead of failing.
-- ckconform's `container-service-reference` no longer fails core classes
-  under civix's `Civi\` classloader, still fails a missing class under an own
+- ckconform's `container-service-reference` no longer fails core classes under
+  civix's `Civi\` classloader, still fails a missing class under an own
   single-segment prefix, and tries every PSR-4 path and prefix that matches;
   `permission-closure` knows the loop-built `… contributions of all types`
   permissions; `lockfile` reads workspace lists like npm: `*`, `?` and `[…]`
   stay within one directory level, also for non-ASCII names, a `**` segment
   also matches none, nested `{a,{b,c}}` lists expand, a leading `/` is
-  ignored, a backslash separates paths and a later pattern inside a negation
-  lifts it. The CI checks run the union of repeated, also quoted, `ck ci
-  --only` lists, end them at a subshell or redirection, treat a list that
-  names a variable as any gate, count `phpunit-extra` only with a second
-  config and `phpstan-tests` never for `phpstan.neon.dist`, and count `ck
-  phpunit`, `ckphpunit` and `ckcoverage`, also called by an absolute, `~/`,
-  `./`, variable or `$(…)` path or named in a YAML list, as phpunit;
-  `floating-tag` ignores trailing comments outside quotes
-  and `container:` keys outside a job.
+  ignored, a backslash separates paths (in a negation it escapes the next
+  character), `a//b` and `a/x/../b` read as `a/b`, a name that is not UTF-8
+  matches byte by byte and a later pattern inside a negation lifts it. The CI
+  checks run the union of repeated, also quoted, `ck ci --only` lists, end
+  them at a subshell or redirection, treat a list that names a variable, a
+  backtick command or a brace list as any gate, count `phpunit-extra` only
+  with a second config and `phpstan-tests` never for `phpstan.neon.dist`, and
+  count `ck phpunit`, `ckphpunit` and `ckcoverage`, also called by an
+  absolute, `~/`, `./`, `sbin/`, `.bin/`, variable or `$(…)` path, in
+  backticks or named in a YAML list, as phpunit; `floating-tag` ignores
+  trailing comments outside quotes and `container:` keys outside a job.
 - ckconform's `required-extensions` demands search_kit only for
   SearchDisplays, not for core SavedSearches; `message-template-token` scans
   only message templates, ignores JavaScript `${…}` interpolations and

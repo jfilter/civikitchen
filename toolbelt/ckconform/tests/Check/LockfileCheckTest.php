@@ -278,7 +278,7 @@ final class LockfileCheckTest extends CheckTestCase
     /** As npm: nested and empty brace alternatives, `**` matching its own root, a leading `/`, escapes and ranges in classes. */
     public function testAWorkspaceGlobFollowsNpm(): void
     {
-        $workspaces = ['e/{f,{g,h}}', 'apps/**', 'x/{,y}', '/lead/*', 'k/[!-a]', 'm/[z-a]', 'n/[a\\-c]', 'p/**', '!p/b/**', 'p/b/a', '!!q/*', '!z/a', 'z/*', 'u/?', 'v/[ä]'];
+        $workspaces = ['e/{f,{g,h}}', 'apps/**', 'x/{,y}', '/lead/*', 'k/[!-a]', 'm/[z-a]', 'n/[a\\-c]', 'p/**', '!p/b/**', 'p/b/a', '!!q/*', '!z/a', 'z/*', 'u/?', 'v/[ä]', 'w/*', '!w/\\b', '!w/\\\\c', '!w/\\?'];
         $context = $this->repo([
             'package.json' => json_encode(['workspaces' => $workspaces]),
             'package-lock.json' => '{}',
@@ -303,6 +303,10 @@ final class LockfileCheckTest extends CheckTestCase
             'z/b/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
             'u/ä/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
             'v/ä/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'w/b/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'w/c/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'w/\\c/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'w/?/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
         ], git: true);
         self::assertSame(
             [
@@ -312,6 +316,9 @@ final class LockfileCheckTest extends CheckTestCase
                 'm/q/package.json has no tracked lockfile (builds are unreproducible)',
                 'n/-/package.json has no tracked lockfile (builds are unreproducible)',
                 'n/b/package.json has no tracked lockfile (builds are unreproducible)',
+                'w/?/package.json has no tracked lockfile (builds are unreproducible)',
+                'w/\\c/package.json has no tracked lockfile (builds are unreproducible)',
+                'w/b/package.json has no tracked lockfile (builds are unreproducible)',
                 'z/a/package.json has no tracked lockfile (builds are unreproducible)',
             ],
             $this->run_(new LockfileCheck(), $context)->messages('FAIL'),

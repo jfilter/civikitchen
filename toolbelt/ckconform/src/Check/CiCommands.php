@@ -97,7 +97,7 @@ final class CiCommands
         // ckphpunit (`ck test`) and ckcoverage run phpunit, also called by path — but not `tests/ckphpunit`.
         // The path may hold a `$(…)` or backtick expression; a YAML flow list may name the binary.
         return preg_replace_callback(
-            '/(?<![^\s"\'=;&|(\[{,])((?:\$\([^()\n]*\)|`[^`\n]*`|[^\s;&|()`])*\/)?(ckphpunit|ckcoverage)(?![\w\/.-])/',
+            '/(?<![^\s"\'=;&|(\[{,`])((?:\$\([^()\n]*\)|`[^`\n]*`|[^\s;&|()`])*\/)?(ckphpunit|ckcoverage)(?![\w\/.-])/',
             static fn (array $call): string => $call[1] === '' || self::isBinaryDirectory($call[1])
                 ? $call[1] . $call[2] . ' phpunit'
                 : $call[0],
@@ -105,13 +105,13 @@ final class CiCommands
         ) ?? $text;
     }
 
-    /** `…/bin/`, `/`, `~/`, `./`, or a directory taken from a variable or expression. */
+    /** `…/bin/`, `…/sbin/`, `…/.bin/`, `/`, `~/`, `./`, or a directory taken from a variable or expression. */
     private static function isBinaryDirectory(string $path): bool
     {
         $parts = explode('/', rtrim($path, '/'));
         $last = trim(end($parts), '"\'');
 
-        return in_array($last, ['bin', '', '~', '.', '..'], true) || strpbrk($last, '$})`') !== false;
+        return in_array($last, ['bin', 'sbin', '.bin', '', '~', '.', '..'], true) || strpbrk($last, '$})`') !== false;
     }
 
     /** @return array<string, string> the gates `ck ci <arguments>` runs after --only/--skip */
@@ -122,13 +122,14 @@ final class CiCommands
         $unknownOnly = false;
         preg_match_all('/--(only|skip)(?:=|[ \t]+)(?:"([^"]*)"|\'([^\']*)\'|([^\s"\']+))/', $arguments, $options, PREG_SET_ORDER);
         foreach ($options as $match) {
-            $list = $match[2] . ($match[3] ?? '') . ($match[4] ?? '');
-            // A list from a variable is unknown: an --only one may add any gate, a --skip one skips none we can name.
-            if (str_contains($list, '$')) {
+            $names = array_filter(array_map('trim', explode(',', $match[2] . ($match[3] ?? '') . ($match[4] ?? ''))));
+            // CiCommand rejects an unknown gate, so one here is shell expansion (`$X`, backticks, `{a,b}`):
+            // an --only list may then add any gate, a --skip list skips none we can name.
+            if (array_diff($names, array_keys(self::CI_GATES)) !== []) {
                 $unknownOnly = $unknownOnly || $match[1] === 'only';
                 continue;
             }
-            $lists[$match[1]] += array_flip(array_map('trim', explode(',', $list)));
+            $lists[$match[1]] += array_flip($names);
         }
         $selected = $lists['only'] === [] || $unknownOnly ? self::CI_GATES : array_intersect_key(self::CI_GATES, $lists['only']);
         $gates = array_diff_key($selected, $lists['skip']);
