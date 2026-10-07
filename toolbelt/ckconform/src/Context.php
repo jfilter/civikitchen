@@ -132,6 +132,14 @@ final class Context
         return $last === '' ? null : $last;
     }
 
+    /** info.xml's `<file>`, which civix writes into E::SHORT_NAME; null when absent. */
+    public function fileName(): ?string
+    {
+        $file = trim((string) ($this->infoXml()?->file ?? ''));
+
+        return $file === '' ? null : $file;
+    }
+
     /** The `<version>` declared in info.xml, '' when absent. */
     public function infoVersion(): string
     {

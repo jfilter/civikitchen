@@ -12,9 +12,11 @@ final class ExtensionUtilStubTest extends CheckTestCase
 {
     public function testTheCivixConstantsComeFromInfoXml(): void
     {
-        ExtensionUtilStub::register($this->repo(['info.xml' => $this->infoXml(key: 'org.example.stubconst')]));
-        $class = 'CRM_Stubconst_ExtensionUtil';
-        self::assertSame(['stubconst', 'org.example.stubconst', 'CRM_Stubconst'], [
+        $info = str_replace('<file>org.example.stubconst</file>', '<file>stub_const</file>', $this->infoXml(key: 'org.example.stubconst'));
+        ExtensionUtilStub::register($this->repo(['info.xml' => $info]));
+        $class = 'CRM_StubConst_ExtensionUtil';
+        // civix writes <file>, not the key's last segment, into SHORT_NAME.
+        self::assertSame(['stub_const', 'org.example.stubconst', 'CRM_StubConst'], [
             constant($class . '::SHORT_NAME'), constant($class . '::LONG_NAME'), constant($class . '::CLASS_PREFIX'),
         ]);
     }

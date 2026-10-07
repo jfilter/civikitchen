@@ -24,6 +24,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - `cksmarty` strips Civi tokens (`{contact.first_name}`, `{form.myFormUrl}`)
   with core's token parser before compiling a managed MessageTemplate body,
   as a real render does; such a body no longer fails as a Smarty syntax error.
+- ckconform's ExtensionUtil stub takes `E::SHORT_NAME` from info.xml's
+  `<file>`, as civix does, instead of the key's last segment.
 
 ## [1.32.0] - 2026-10-07
 

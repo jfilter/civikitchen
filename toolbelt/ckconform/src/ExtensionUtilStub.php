@@ -25,7 +25,7 @@ final class ExtensionUtilStub
     public static function register(?Context $context = null): void
     {
         if ($context !== null) {
-            self::$names = [$context->shortName() ?? '', $context->extensionKey() ?? ''];
+            self::$names = [$context->fileName() ?? '', $context->extensionKey() ?? ''];
         }
         static $registered = false;
         if ($registered) {
