@@ -26,6 +26,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
   as a real render does; such a body no longer fails as a Smarty syntax error.
 - ckconform's ExtensionUtil stub takes `E::SHORT_NAME` from info.xml's
   `<file>`, as civix does, instead of the key's last segment.
+- ckconform's `api4-self-entity` reads a string as an entity name only where
+  APIv4 receives one: `CRM.api4()` / `crmApi4()`, a literal `ajax/api4/` URL,
+  and the repo's own declared wrappers around them, found by following their
+  parameters and resolved through imports and re-exports from repo paths. An
+  event or action name such as `emit('FormSaved')` is no longer reported, and
+  an entity passed in a later argument (`api4(config, 'Foo', 'get')`) is now
+  checked. Object and class methods and wrappers imported from a package are
+  not followed.
 
 ## [1.32.0] - 2026-10-07
 
