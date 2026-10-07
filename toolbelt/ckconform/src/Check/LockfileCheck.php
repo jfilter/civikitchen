@@ -143,46 +143,134 @@ final class LockfileCheck implements Check
     /** @param list<array{0: string, 1: mixed}> $patterns workspace root directory and glob, `!` negating */
     private function isWorkspaceMember(string $manifest, array $patterns): bool
     {
-        $member = false;
+        $directory = dirname($manifest);
+        $globs = [];
         foreach ($patterns as [$root, $pattern]) {
-            $directory = dirname($manifest);
-            if (!is_string($pattern) || $root === $this->directoryOf($manifest) || !str_starts_with($directory . '/', $root)) {
-                continue;
+            if (is_string($pattern) && $root !== $this->directoryOf($manifest) && str_starts_with($directory . '/', $root)) {
+                $globs[$root][] = $pattern;
             }
-            $negated = str_starts_with($pattern, '!');
-            $glob = rtrim(preg_replace('#^(\./)+#', '', ltrim($pattern, '!')) ?? '', '/');
-            if (self::globMatches($glob, substr($directory, strlen($root)))) {
-                $member = !$negated;
+        }
+        foreach ($globs as $root => $rootGlobs) {
+            if (self::workspacesInclude($rootGlobs, substr($directory, strlen((string) $root)))) {
+                return true;
             }
         }
 
-        return $member;
+        return false;
     }
 
     /**
-     * Workspace globs: `*`, `?` and `[...]` stay within one path segment, a `**` segment
-     * spans any number of them, including none, and `{a,b}` lists alternatives.
+     * npm's reading of a workspace list, applied to pnpm-workspace.yaml too: an odd run of `!`
+     * negates, a later pattern inside a negation lifts it, and a backslash separates paths.
+     *
+     * @param list<string> $patterns
+     */
+    private static function workspacesInclude(array $patterns, string $path): bool
+    {
+        $included = [];
+        $negated = [];
+        foreach ($patterns as $pattern) {
+            $bangs = strspn($pattern, '!');
+            $glob = preg_replace('#^\.?/+#', '', str_replace('\\', '/', substr($pattern, $bangs)))
+                ?? throw new \RuntimeException("workspace glob {$pattern} could not be read: " . preg_last_error_msg());
+            if ($bangs % 2 === 1) {
+                $negated[] = $glob;
+                continue;
+            }
+            $negated = array_filter($negated, static fn (string $negation): bool => !self::globMatches($negation, $glob));
+            $included[] = $glob;
+        }
+        $matches = static fn (string $glob): bool => self::globMatches($glob, $path);
+
+        return array_filter($included, $matches) !== [] && array_filter($negated, $matches) === [];
+    }
+
+    /**
+     * Workspace globs as npm reads them: `*`, `?` and `[...]` stay within one path segment,
+     * a `**` segment spans any number of them, including none, and `{a,b}` lists alternatives.
      */
     private static function globMatches(string $glob, string $path): bool
     {
-        return preg_match('#^' . self::globRegex($glob) . '$#', $path) === 1;
+        foreach (self::expandBraces($glob) as $expanded) {
+            $matched = preg_match('#^' . self::globRegex(rtrim($expanded, '/')) . '$#u', $path);
+            if ($matched === false) {
+                throw new \RuntimeException("workspace path {$path} could not be matched: " . preg_last_error_msg());
+            }
+            if ($matched === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * `a/{b,{c,d}}` as `a/b`, `a/c` and `a/d`; a brace without a top-level comma stays literal.
+     *
+     * @return list<string>
+     */
+    private static function expandBraces(string $glob): array
+    {
+        $depth = 0;
+        $open = 0;
+        $commas = [];
+        for ($i = 0, $length = strlen($glob); $i < $length; $i++) {
+            $char = $glob[$i];
+            if ($char === '{' && $depth++ === 0) {
+                $open = $i;
+                $commas = [];
+            } elseif ($char === ',' && $depth === 1) {
+                $commas[] = $i;
+            } elseif ($char === '}' && $depth > 0 && --$depth === 0 && $commas !== []) {
+                $bounds = [$open, ...$commas, $i];
+                $expanded = [];
+                for ($k = 0; $k < count($bounds) - 1; $k++) {
+                    $alternative = substr($glob, $bounds[$k] + 1, $bounds[$k + 1] - $bounds[$k] - 1);
+                    array_push($expanded, ...self::expandBraces(substr($glob, 0, $open) . $alternative . substr($glob, $i + 1)));
+                }
+
+                return $expanded;
+            }
+        }
+
+        return [$glob];
     }
 
     private static function globRegex(string $glob): string
     {
         return preg_replace_callback(
-            '#(?<![^/])\*\*/|\*\*|\*|\?|\[([!^]?)(\][^\]/]*|[^\]/]+)\]|\{([^{}]*,[^{}]*)\}|[^*?\[{]+|[\[{]#',
+            '#/\*\*(?![^/])|(?<![^/])\*\*/|(?<![^/])\*\*$|\*\*?|\?|\[([!^]?)(\]?[^\]/]*)\]|[^*?\[/]+|.#su',
             static fn (array $token): string => match (true) {
+                $token[0] === '/**' => '(?:/.*)?',
                 $token[0] === '**/' => '(?:.*/)?',
-                $token[0] === '**' => '.*',
-                $token[0] === '*' => '[^/]*',
+                $token[0] === '**' && $glob === '**' => '.*',
+                // A `**` inside a segment is a plain `*`.
+                $token[0] === '*' || $token[0] === '**' => '[^/]*',
                 $token[0] === '?' => '[^/]',
-                ($token[3] ?? '') !== '' => '(?:' . implode('|', array_map(self::globRegex(...), explode(',', $token[3]))) . ')',
-                ($token[2] ?? '') !== '' => '[' . ($token[1] !== '' ? '^/' : '') . str_replace('\\-', '-', preg_quote($token[2], '#')) . ']',
+                ($token[2] ?? '') !== '' => self::globClass($token[1] !== '', $token[2]),
                 default => preg_quote($token[0], '#'),
             },
             $glob,
         ) ?? throw new \RuntimeException("workspace glob {$glob} could not be translated: " . preg_last_error_msg());
+    }
+
+    /** A glob class as a regex that never matches `/`; an inverted range matches nothing, as in npm. */
+    private static function globClass(bool $negated, string $content): string
+    {
+        preg_match_all('#(.)(?:-(.))?#su', $content, $items, PREG_SET_ORDER);
+        $class = '';
+        foreach ($items as $item) {
+            $from = $item[1];
+            $to = ($item[2] ?? '') === '' ? $from : $item[2];
+            if ($from <= $to) {
+                $class .= preg_quote($from, '#') . ($to === $from ? '' : '-' . preg_quote($to, '#'));
+            }
+        }
+        if ($class === '') {
+            return $negated ? '[^/]' : '(?!)';
+        }
+
+        return $negated ? '(?!/)[^' . $class . ']' : '[' . $class . ']';
     }
 
     private function hasLockfile(Context $context, string $manifest): bool

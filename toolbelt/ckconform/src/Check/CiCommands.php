@@ -20,9 +20,11 @@ final class CiCommands
         'ckcivix' => 'ckcivix',
         'ckfmt' => 'ckfmt',
         'ckcoverage' => 'ckcoverage phpunit',
+        // Runs only with a second config, see selectedGates().
         'phpunit-extra' => 'phpunit',
         'phpstan' => 'phpstan',
-        'phpstan-tests' => 'phpstan',
+        // Analyses the tests with phpstan-tests.neon(.dist), never phpstan.neon.dist.
+        'phpstan-tests' => 'phpstan-tests',
         'ckcompat' => 'ckcompat',
         'ckdeps' => 'ckdeps',
         'cktaint' => 'cktaint',
@@ -85,38 +87,57 @@ final class CiCommands
     private static function expandCk(string $text): string
     {
         $text = preg_replace_callback(
-            '/(?<![\w.-])ck[ \t]+([a-z][\w-]*)([^\n;&|]*)/',
+            '/(?<![\w.-])ck[ \t]+([a-z][\w-]*)([^\n;&|()<>]*)/',
             static fn (array $call): string => $call[1] === 'ci'
-                ? implode(' ', self::selectedGates($call[2]))
+                ? implode(' ', self::selectedGates($call[2], str_contains($text, 'CK_EXTRA_PHPUNIT_CONFIG')))
                 : 'ck' . $call[1] . ' ' . (self::CK_EXTRAS[$call[1]] ?? '') . $call[2],
             $text,
         ) ?? $text;
 
-        // ckphpunit (`ck test`) and ckcoverage run phpunit, also called from `…bin/`, `$VAR/` or `./`; `tests/ckphpunit` does not.
-        return preg_replace(
-            '/(?<![\w.\/-])((?:\$\{?\w+\}?|\.\.?|(?:[\w.-]+\/)*bin)\/)?(ckphpunit|ckcoverage)(?![\w\/.-])/',
-            '$1$2 phpunit',
+        // ckphpunit (`ck test`) and ckcoverage run phpunit, also called by path — but not `tests/ckphpunit`.
+        // The path may hold a `$(…)` or backtick expression; a YAML flow list may name the binary.
+        return preg_replace_callback(
+            '/(?<![^\s"\'=;&|(\[{,])((?:\$\([^()\n]*\)|`[^`\n]*`|[^\s;&|()`])*\/)?(ckphpunit|ckcoverage)(?![\w\/.-])/',
+            static fn (array $call): string => $call[1] === '' || self::isBinaryDirectory($call[1])
+                ? $call[1] . $call[2] . ' phpunit'
+                : $call[0],
             $text,
         ) ?? $text;
     }
 
+    /** `…/bin/`, `/`, `~/`, `./`, or a directory taken from a variable or expression. */
+    private static function isBinaryDirectory(string $path): bool
+    {
+        $parts = explode('/', rtrim($path, '/'));
+        $last = trim(end($parts), '"\'');
+
+        return in_array($last, ['bin', '', '~', '.', '..'], true) || strpbrk($last, '$})`') !== false;
+    }
+
     /** @return array<string, string> the gates `ck ci <arguments>` runs after --only/--skip */
-    private static function selectedGates(string $arguments): array
+    private static function selectedGates(string $arguments, bool $extraFromEnvironment): array
     {
         // As CiCommand: the union of every --only list (all gates without one), minus every --skip.
         $lists = ['only' => [], 'skip' => []];
-        preg_match_all('/--(only|skip)(?:=|[ \t]+)(?:"([^"]*)"|\'([^\']*)\'|([\w,-]+))/', $arguments, $options, PREG_SET_ORDER);
+        $unknownOnly = false;
+        preg_match_all('/--(only|skip)(?:=|[ \t]+)(?:"([^"]*)"|\'([^\']*)\'|([^\s"\']+))/', $arguments, $options, PREG_SET_ORDER);
         foreach ($options as $match) {
             $list = $match[2] . ($match[3] ?? '') . ($match[4] ?? '');
-            // A list from a variable is unknown: it may select any gate and skips none we can name.
+            // A list from a variable is unknown: an --only one may add any gate, a --skip one skips none we can name.
             if (str_contains($list, '$')) {
+                $unknownOnly = $unknownOnly || $match[1] === 'only';
                 continue;
             }
             $lists[$match[1]] += array_flip(array_map('trim', explode(',', $list)));
         }
-        $gates = array_diff_key($lists['only'] === [] ? self::CI_GATES : array_intersect_key(self::CI_GATES, $lists['only']), $lists['skip']);
-        if (isset($gates['phpunit-extra']) && preg_match('/--extra-phpunit-config(?:=|[ \t]+)(["\']?)([^\s"\']+)\1/', $arguments, $extra) === 1) {
+        $selected = $lists['only'] === [] || $unknownOnly ? self::CI_GATES : array_intersect_key(self::CI_GATES, $lists['only']);
+        $gates = array_diff_key($selected, $lists['skip']);
+        // As CiCommand: the gate runs `phpunit -c FILE` only when the flag or CK_EXTRA_PHPUNIT_CONFIG names FILE.
+        $hasExtra = preg_match('/--extra-phpunit-config(?:=|[ \t]+)(["\']?)([^\s"\']+)\1/', $arguments, $extra) === 1;
+        if (isset($gates['phpunit-extra']) && $hasExtra) {
             $gates['phpunit-extra'] = 'phpunit -c ' . $extra[2];
+        } elseif (!$extraFromEnvironment) {
+            unset($gates['phpunit-extra']);
         }
 
         return $gates;

@@ -275,6 +275,49 @@ final class LockfileCheckTest extends CheckTestCase
         );
     }
 
+    /** As npm: nested and empty brace alternatives, `**` matching its own root, a leading `/`, escapes and ranges in classes. */
+    public function testAWorkspaceGlobFollowsNpm(): void
+    {
+        $workspaces = ['e/{f,{g,h}}', 'apps/**', 'x/{,y}', '/lead/*', 'k/[!-a]', 'm/[z-a]', 'n/[a\\-c]', 'p/**', '!p/b/**', 'p/b/a', '!!q/*', '!z/a', 'z/*', 'u/?', 'v/[ä]'];
+        $context = $this->repo([
+            'package.json' => json_encode(['workspaces' => $workspaces]),
+            'package-lock.json' => '{}',
+            'e/f/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'e/g/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'e/h/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'e/i/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'apps/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'x/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'x/y/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'lead/a/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'k/b/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'k/-/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'k/a/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'm/q/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'n/-/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'n/b/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'n/[a/-c]/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'p/b/c/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'q/a/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'z/a/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'z/b/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'u/ä/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+            'v/ä/package.json' => '{"dependencies": {"react": "^18.3.0"}}',
+        ], git: true);
+        self::assertSame(
+            [
+                'e/i/package.json has no tracked lockfile (builds are unreproducible)',
+                'k/-/package.json has no tracked lockfile (builds are unreproducible)',
+                'k/a/package.json has no tracked lockfile (builds are unreproducible)',
+                'm/q/package.json has no tracked lockfile (builds are unreproducible)',
+                'n/-/package.json has no tracked lockfile (builds are unreproducible)',
+                'n/b/package.json has no tracked lockfile (builds are unreproducible)',
+                'z/a/package.json has no tracked lockfile (builds are unreproducible)',
+            ],
+            $this->run_(new LockfileCheck(), $context)->messages('FAIL'),
+        );
+    }
+
     public function testAManifestWithoutDependenciesNeedsNoLockfile(): void
     {
         $context = $this->repo(['ang/package.json' => '{"type": "module"}'], git: true);

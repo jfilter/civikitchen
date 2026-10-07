@@ -224,6 +224,16 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         self::assertStringNotContainsString('phpcs.xml.dist', $reporter->render());
     }
 
+    /** The opt-in gates run phpunit only with a second config and phpstan only on the tests' own config. */
+    public function testOptInGatesDoNotRunTheMainConfigs(): void
+    {
+        $context = $this->runnerRepo('ck ci --skip ckcoverage,phpstan', self::PHP_CONFIGS);
+        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpstan.neon.dist (no phpstan step), phpunit.xml.dist (no phpunit step)');
+
+        $context = $this->runnerRepo("ck ci --skip ckcoverage\n        env:\n          CK_EXTRA_PHPUNIT_CONFIG: phpunit.xml.dist", ['phpunit.xml.dist' => '<phpunit/>']);
+        $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+    }
+
     /** `ck ci` unites repeated --only lists before it subtracts --skip. */
     public function testRepeatedOnlyListsAddUp(): void
     {
@@ -236,7 +246,11 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
     /** A gate list from a variable may name any gate. */
     public function testAQuotedVariableOnlyListCountsAsAnyGate(): void
     {
-        foreach (['ck ci --only "$CK_GATES"', 'ck ci --only="${{ inputs.gates }}"', 'ck ci --skip "$CK_SKIP"'] as $step) {
+        $steps = [
+            'ck ci --only "$CK_GATES"', 'ck ci --only="${{ inputs.gates }}"', 'ck ci --skip "$CK_SKIP"',
+            'ck ci --only cklint --only "$GATES"', 'ck ci --only=cklint,$EXTRA',
+        ];
+        foreach ($steps as $step) {
             $context = $this->runnerRepo($step, self::PHP_CONFIGS);
             $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
         }
@@ -244,14 +258,37 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
 
     public function testADirectoryNamedCkphpunitIsNoRunner(): void
     {
-        $context = $this->runnerRepo('ls tests/ckphpunit', ['phpunit.xml.dist' => '<phpunit/>']);
-        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpunit.xml.dist (no phpunit step)');
+        foreach (['ls tests/ckphpunit', 'ls "tests"/ckphpunit'] as $step) {
+            $context = $this->runnerRepo($step, ['phpunit.xml.dist' => '<phpunit/>']);
+            $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpunit.xml.dist (no phpunit step)');
+        }
+    }
+
+    /** A subshell or redirection around `ck ci` ends its gate list. */
+    public function testACkCiInASubshellOrRedirectedRunsItsGates(): void
+    {
+        foreach (['(ck ci --only=ckcoverage)', 'out=$(ck ci --only ckcoverage)', 'ck ci --only=ckcoverage>ci.log'] as $step) {
+            $context = $this->runnerRepo($step, ['phpunit.xml.dist' => '<phpunit/>']);
+            $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
+        }
+    }
+
+    public function testACkphpunitNamedInAMatrixListRunsPhpunit(): void
+    {
+        $context = $this->repo([
+            'phpunit.xml.dist' => '<phpunit/>',
+            '.github/workflows/ci.yml' => "jobs:\n  t:\n    strategy:\n      matrix:\n        tool: [ckphpunit, phpstan]\n"
+                . "    runs-on: ubuntu-24.04\n    steps:\n      - run: vendor/bin/\${{ matrix.tool }}\n",
+        ], git: true);
+        $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
     }
 
     /** `ck phpunit` and the ckphpunit binary are `ck test`. */
     public function testCkPhpunitAndCkphpunitRunPhpunit(): void
     {
-        foreach (['ck phpunit', 'ckphpunit --group headless', 'vendor/bin/ckphpunit', '$CK_TOOL_PATH/bin/ckphpunit', '$CK_BIN/ckphpunit', './ckphpunit'] as $step) {
+        foreach (['ck phpunit', 'ckphpunit --group headless', 'vendor/bin/ckphpunit', '$CK_TOOL_PATH/bin/ckphpunit', '$CK_BIN/ckphpunit', './ckphpunit', '/opt/toolbelt/bin/ckphpunit', '~/bin/ckphpunit',
+            '${{ github.workspace }}/toolbelt/bin/ckphpunit', '"$TB"/ckphpunit', '/ckphpunit',
+            '"$(composer config bin-dir)/ckphpunit"', '`composer config bin-dir`/ckphpunit', '"${{ github.workspace }}/toolbelt/bin"/ckphpunit'] as $step) {
             $context = $this->runnerRepo($step, ['phpunit.xml.dist' => '<phpunit/>']);
             $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
         }

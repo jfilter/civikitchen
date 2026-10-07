@@ -202,12 +202,17 @@ except that a break the consumers are adjusted for ships as a minor, marked
   under civix's `Civi\` classloader, still fails a missing class under an own
   single-segment prefix, and tries every PSR-4 path and prefix that matches;
   `permission-closure` knows the loop-built `… contributions of all types`
-  permissions; `lockfile` workspace globs keep `*`, `?` and `[…]` within one
-  directory level, let a `**` segment match none and read `{a,b}` lists. The
-  CI checks run the union of repeated, also quoted, `ck ci --only` lists,
-  treat a list from a variable as any gate, and count `ck phpunit`,
-  `ckphpunit` and `ckcoverage`, also called from a `bin/`, `$VAR/` or `./`
-  path, as phpunit; `floating-tag` ignores trailing comments outside quotes
+  permissions; `lockfile` reads workspace lists like npm: `*`, `?` and `[…]`
+  stay within one directory level, also for non-ASCII names, a `**` segment
+  also matches none, nested `{a,{b,c}}` lists expand, a leading `/` is
+  ignored, a backslash separates paths and a later pattern inside a negation
+  lifts it. The CI checks run the union of repeated, also quoted, `ck ci
+  --only` lists, end them at a subshell or redirection, treat a list that
+  names a variable as any gate, count `phpunit-extra` only with a second
+  config and `phpstan-tests` never for `phpstan.neon.dist`, and count `ck
+  phpunit`, `ckphpunit` and `ckcoverage`, also called by an absolute, `~/`,
+  `./`, variable or `$(…)` path or named in a YAML list, as phpunit;
+  `floating-tag` ignores trailing comments outside quotes
   and `container:` keys outside a job.
 - ckconform's `required-extensions` demands search_kit only for
   SearchDisplays, not for core SavedSearches; `message-template-token` scans
