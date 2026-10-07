@@ -54,6 +54,7 @@ final class TransactionalTestDdlRuleTest extends RuleTestCase
                 ['CustomGroup::update() setting is_multiple in a transactional test' . self::ADVICE, 146],
                 ["civicrm_api3('CustomGroup', 'update') setting is_multiple in a transactional test" . self::ADVICE, 147],
                 ["civicrm_api('CustomGroup', 'update') setting is_multiple in a transactional test" . self::ADVICE, 148],
+                ["civicrm_api('CustomGroup', 'update') setting is_multiple in a transactional test" . self::ADVICE, 149],
             ],
         );
     }

@@ -146,6 +146,7 @@ final class MultipleFlipTest extends TestCase implements TransactionalInterface
         \Civi\Api4\CustomGroup::update(false)->setValues(['is_multiple' => true])->addWhere('id', '=', 1)->execute();
         \civicrm_api3('CustomGroup', 'update', ['id' => 1, 'is_multiple' => 1]);
         \civicrm_api('CustomGroup', 'update', ['version' => 4, 'values' => ['is_multiple' => 1]]);
+        \civicrm_api('CustomGroup', 'update', ['version' => '4', 'values' => ['is_multiple' => 1]]);
     }
 }
 

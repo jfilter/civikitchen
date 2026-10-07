@@ -252,14 +252,16 @@ except that a break the consumers are adjusted for ships as a minor, marked
   field checks. First-class APIv4 callables are checked.
 - The phpstan action-parameter checks cover `?T` and `mixed` properties,
   trait properties, constructor assignments and getters that read the
-  property only through `??`, `??=`, `isset()` or `empty()` or in a ternary
-  or if branch where it is set, initialise it first or return or throw while
-  it is unset; public properties are no
+  property only through `??`, `??=`, `isset()` or `empty()` or in a ternary,
+  if, elseif, `&&`/`and`/`||`/`or` operand or `match (true)` arm where it is
+  set, also after a negated check, initialise it first, in every branch, or
+  return or throw while it is unset; a write through the property as an
+  object no longer counts as guarded; public properties are no
   longer treated as API parameters.
 - The phpstan transactional-DDL rule exempts TEMPORARY tables and reports
   custom-field updates and deletes, BAO writes (a custom-group update only when it
   sets `is_multiple`, not when it filters on it, also through `civicrm_api()`
-  with version 4), `self::`/`static::` helpers
+  with version `4` or `'4'`), `self::`/`static::` helpers
   and `tearDown()`. The silent-catch rule accepts `->log()` at error level and
   nullsafe calls, and sees `CRM_Utils_SQL_Select::execute()`. The SQL table
   rule ignores strings, comments (`--` only before whitespace, as MySQL

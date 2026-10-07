@@ -280,4 +280,202 @@ class GuardedGetterAction extends AbstractAction
     {
         return !empty(trim($this->trimmed)) ? 'y' : null;
     }
+
+    protected ?string $andGuard;
+
+    protected ?string $andIf;
+
+    protected ?string $orExit;
+
+    protected ?string $andCall;
+
+    protected array $elseifAfterInit;
+
+    protected ?string $matchArm;
+
+    protected string $nestedInit;
+
+    protected ?string $orWrong;
+
+    public function getAndGuard(): ?string
+    {
+        return isset($this->andGuard) && $this->andGuard !== '' ? $this->andGuard : null;
+    }
+
+    public function getAndIf(): ?string
+    {
+        if (isset($this->andIf) && $this->andIf !== '') {
+            return $this->andIf;
+        }
+
+        return null;
+    }
+
+    public function getOrExit(): ?string
+    {
+        if (!isset($this->orExit) || $this->orExit === '') {
+            return null;
+        }
+
+        return $this->orExit;
+    }
+
+    public function getAndCall(): bool
+    {
+        return isset($this->andCall) && strlen($this->andCall) > 0;
+    }
+
+    public function getElseifAfterInit(): array
+    {
+        if (!isset($this->elseifAfterInit)) {
+            $this->elseifAfterInit = [];
+        } elseif ($this->elseifAfterInit === []) {
+            $this->elseifAfterInit = [1];
+        }
+
+        return $this->elseifAfterInit;
+    }
+
+    public function getMatchArm(): ?string
+    {
+        return match (true) {
+            isset($this->matchArm) => $this->matchArm,
+            default => null,
+        };
+    }
+
+    public function getNestedInit(): string
+    {
+        if (!isset($this->nestedInit)) {
+            if (PHP_INT_SIZE > 4) {
+                $this->nestedInit = 'a';
+            } else {
+                $this->nestedInit = 'b';
+            }
+        }
+
+        return $this->nestedInit;
+    }
+
+    public function getOrWrong(): bool
+    {
+        return isset($this->orWrong) || $this->orWrong === '';
+    }
+
+    protected ?string $matchDefault;
+
+    protected string $noElse;
+
+    protected ?string $andWrong;
+
+    protected ?string $elseifGuard;
+
+    public function getMatchDefault(): ?string
+    {
+        return match (true) {
+            isset($this->matchDefault) => 'set',
+            default => $this->matchDefault,
+        };
+    }
+
+    public function getNoElse(): string
+    {
+        if (PHP_INT_SIZE > 4) {
+            $this->noElse = 'a';
+        } elseif (PHP_INT_SIZE > 2) {
+            $this->noElse = 'b';
+        }
+
+        return $this->noElse;
+    }
+
+    public function getAndWrong(): bool
+    {
+        return !isset($this->andWrong) && $this->andWrong === '';
+    }
+
+    public function getElseifGuard(): ?string
+    {
+        if (PHP_INT_SIZE < 4) {
+            return null;
+        } elseif (isset($this->elseifGuard)) {
+            return $this->elseifGuard;
+        }
+
+        return null;
+    }
+
+    protected ?string $matchUnsetFirst;
+
+    protected ?string $notCompound;
+
+    protected ?string $wordAnd;
+
+    protected ?string $matchUnsetRead;
+
+    public function getMatchUnsetFirst(): ?string
+    {
+        return match (true) {
+            !isset($this->matchUnsetFirst) => null,
+            $this->matchUnsetFirst === '' => 'empty',
+            default => $this->matchUnsetFirst,
+        };
+    }
+
+    public function getNotCompound(): ?string
+    {
+        if (!(isset($this->notCompound) && $this->notCompound !== '')) {
+            return null;
+        }
+
+        return $this->notCompound;
+    }
+
+    public function getWordAnd(): bool
+    {
+        return isset($this->wordAnd) and $this->wordAnd !== '';
+    }
+
+    public function getMatchUnsetRead(): ?string
+    {
+        return match (true) {
+            !isset($this->matchUnsetRead) => $this->matchUnsetRead,
+            default => null,
+        };
+    }
+
+    protected ?string $elseifUnset;
+
+    protected ?string $elseifUnsetExit;
+
+    protected ?\stdClass $writeThrough;
+
+    public function getElseifUnset(): ?string
+    {
+        if (PHP_INT_SIZE < 4) {
+            return '1';
+        } elseif (!isset($this->elseifUnset)) {
+            return null;
+        } else {
+            return $this->elseifUnset;
+        }
+    }
+
+    public function getElseifUnsetExit(): ?string
+    {
+        if (PHP_INT_SIZE < 4) {
+            return '1';
+        } elseif (!isset($this->elseifUnsetExit)) {
+            return null;
+        }
+
+        return $this->elseifUnsetExit;
+    }
+
+    public function getWriteThrough(): ?\stdClass
+    {
+        $this->writeThrough->y = 1;
+
+        return $this->writeThrough ?? null;
+    }
 }

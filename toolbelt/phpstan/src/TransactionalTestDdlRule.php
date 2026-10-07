@@ -300,7 +300,7 @@ final class TransactionalTestDdlRule implements Rule
     {
         $params = CallArgs::value($call, 2, 'params');
         $version = self::item($params, 'version');
-        if ($function === 'civicrm_api4' || ($version instanceof Node\Scalar\Int_ && $version->value === 4)) {
+        if ($function === 'civicrm_api4' || (($version instanceof Node\Scalar\Int_ || $version instanceof Node\Scalar\String_) && (string) $version->value === '4')) {
             return self::item(self::item($params, 'values'), 'is_multiple') !== null;
         }
         if (strtolower($action) === 'setvalue') {
