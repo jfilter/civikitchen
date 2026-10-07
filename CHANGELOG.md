@@ -21,6 +21,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   (`ext/afform/core`) resolve without a `scanDirectories` entry, and a
   `<requires>` entry that names a core extension is no longer reported as
   missing from the ext dir.
+- `cksmarty` strips Civi tokens (`{contact.first_name}`, `{form.myFormUrl}`)
+  with core's token parser before compiling a managed MessageTemplate body,
+  as a real render does; such a body no longer fails as a Smarty syntax error.
 
 ## [1.32.0] - 2026-10-07
 

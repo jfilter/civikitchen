@@ -18,6 +18,8 @@
 #   * cklifecycle's settings-metadata check names every malformed
 #     pseudoconstant and passes valid ones, on a site that loads options;
 #   * cklifecycle accepts managed records core keeps by cleanup policy;
+#   * cksmarty compiles managed MessageTemplate bodies that mix Civi tokens
+#     with Smarty, and still fails a broken one;
 #   * the phpstan field check accepts every live get and create field on the
 #     catalog's minor release.
 # The db service gets a plain MYSQL_USER and no grant script: the app user
@@ -207,8 +209,8 @@ check "core patch log lists the patch" \
 # 10) cklifecycle's settings-metadata check and managed cleanup policies. Copied
 # in, not bind-mounted, so the malformed fixture is not enabled while the steps
 # above run.
-docker exec "${APP}" bash -c 'cp -R /civikitchen-lifecycle-fixtures/. /var/www/html/ext/ && chown -R www-data: /var/www/html/ext/cksettings* /var/www/html/ext/ckmanagedkept'
-cv ext:enable cksettingsgood cksettingsbad ckmanagedkept >/dev/null || true
+docker exec "${APP}" bash -c 'cp -R /civikitchen-lifecycle-fixtures/. /var/www/html/ext/ && chown -R www-data: /var/www/html/ext/cksettings* /var/www/html/ext/ckmanagedkept /var/www/html/ext/ckmsgtpl*'
+cv ext:enable cksettingsgood cksettingsbad ckmanagedkept ckmsgtplgood ckmsgtplbad >/dev/null || true
 lifecycle() { docker exec -u www-data -w "/var/www/html/ext/$1" "${APP}" cklifecycle > "${FIXTURE}/lifecycle-$1.log" 2>&1; }
 check "cklifecycle passes valid pseudoconstants" "lifecycle cksettingsgood"
 check "cklifecycle fails malformed pseudoconstants" "! lifecycle cksettingsbad"
@@ -217,5 +219,14 @@ for name in cksettingsbad_snake cksettingsbad_table cksettingsbad_callback; do
     check "the settings check names ${name}" "grep -q 'FAILED: ${name}:' '${FIXTURE}/lifecycle-cksettingsbad.log'"
 done
 [ "${fail}" = 0 ] || tail -20 "${FIXTURE}"/lifecycle-*.log
+
+# 11) cksmarty on managed MessageTemplate bodies: core strips Civi tokens
+# before Smarty compiles, so a token is no Smarty error, an unclosed {if} is.
+smarty() { docker exec -u www-data -w "/var/www/html/ext/$1" "${APP}" cksmarty > "${FIXTURE}/smarty-$1.log" 2>&1; }
+check "cksmarty passes a body with Civi tokens" "smarty ckmsgtplgood"
+check "cksmarty fails an unclosed {if}" "! smarty ckmsgtplbad"
+check "cksmarty names the broken body" "grep -q 'MessageTemplate MessageTemplate_ckmsgtplbad (msg_html)' '${FIXTURE}/smarty-ckmsgtplbad.log'"
+check "cksmarty passes the token-only subject" "! grep -q 'ckmsgtplbad (msg_subject)' '${FIXTURE}/smarty-ckmsgtplbad.log'"
+[ "${fail}" = 0 ] || tail -20 "${FIXTURE}"/smarty-*.log
 
 if [ "${fail}" = 0 ]; then echo "==> PASS: ${IMAGE} on ${DATABASE_IMAGE}"; else echo "==> FAIL: ${IMAGE} on ${DATABASE_IMAGE}"; exit 1; fi

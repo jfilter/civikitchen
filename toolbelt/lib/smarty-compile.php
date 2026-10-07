@@ -167,6 +167,7 @@ else {
   }
   else {
     echo "cksmarty: compiling " . count($managed) . " managed MessageTemplate body/bodies ...\n";
+    $tokens = new \Civi\Token\TokenProcessor(\Civi::dispatcher(), ['controller' => 'cksmarty']);
     foreach ($managed as $record) {
       if (in_array($record['name'], $skip, TRUE)) {
         continue;
@@ -188,6 +189,9 @@ else {
         // string resource writes a compiled file keyed by content hash, which
         // is the same path a real render takes. eval: is marked recompiled and
         // is not written at all.
+        // Civi tokens ({contact.first_name}) are substituted before Smarty
+        // sees the body, so strip them with core's own token parser first.
+        $body = $tokens->visitTokens($body, static fn (): string => '', $field === 'msg_html' ? 'text/html' : 'text/plain');
         $error = $compile($smarty, 'string:' . $body);
         if ($error !== NULL) {
           $failures[] = "MessageTemplate {$record['name']} ($field): $error";
