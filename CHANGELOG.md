@@ -41,12 +41,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `require.php` instead of the baseline's 8.1, so a repo above 8.1 may use the
   language features of its floor. Rules that only apply from 8.2 on, such as
   `sensitive-parameter`, start reporting in those repos.
-- ckconform's `config-without-runner` no longer counts `ck coverage` as the
-  runner of `phpunit-unit.xml.dist`, because ckcoverage runs only
-  `phpunit.xml(.dist)`. Unless its test directories lie inside the main
-  suite's, a repo with that config needs a step that names it (`phpunit -c`,
-  `ckcoverage -c`, `ck ci --extra-phpunit-config`), or `extra_phpunit_config`
-  on the shared CI workflow.
+- **Breaking**: ckconform's `config-without-runner` no longer counts
+  `ck coverage` as the runner of `phpunit-unit.xml.dist`, because ckcoverage
+  runs only `phpunit.xml(.dist)`. Unless its test directories lie inside the
+  main suite's, a repo with that config needs a step that names it
+  (`phpunit -c`, `ckcoverage -c`, `ck ci --extra-phpunit-config`), or
+  `extra_phpunit_config` on the shared CI workflow.
 - The template's `phpstan.neon.dist` analyses `CRM/*/BAO/*`, and `ckconform`'s
   `test-suite-required` counts BAO classes as source: civix only seeds them,
   the logic in them is the extension's own. A seeded config keeps its old
@@ -188,9 +188,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   sources where the toolbelt's PHPUnit 9 reads them, in `<coverage><include>`
   or the legacy `<filter><whitelist>`, names a PHPUnit 10 `<source>` as
   ignored and judges a shipped `phpunit.xml` before the `.dist` file, as
-  PHPUnit does; `front-end-api3` scans `.ts`/`.tsx`/`.jsx` and `crmApi()`;
-  `gitignore` and `gitignore-coverage` honour a repository-root .gitignore and
-  phpunit's `cacheResult`/`cacheResultFile`.
+  PHPUnit does; `gitignore` and `gitignore-coverage` honour a
+  repository-root .gitignore and phpunit's `cacheResult`/`cacheResultFile`.
+- **Breaking**: ckconform's `front-end-api3` scans `.ts`/`.tsx`/`.jsx` files
+  and `crmApi()` calls, so an APIv3 call in a TypeScript test now fails it.
 - `ckcoverage` parses the phpunit config: a commented-out `<coverage>` no
   longer passes, `<filter><whitelist>` does, a malformed config is reported as
   such, and a run whose filter is missing or matches no file says so instead
