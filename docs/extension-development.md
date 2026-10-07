@@ -366,7 +366,22 @@ lists the civix steps; `--fix` applies both (civix has no preview mode). If
 the extension ships its own `rector.php`, that config wins. Scope with
 `--no-civix` / `--no-rector`, explicit paths, or `--all`; the opt-in `--api`
 (OO style) / `--api=array` flags additionally migrate a safe subset of APIv3
-calls to APIv4 — preview and review those.
+calls to APIv4 — preview and review those. A `get` call is migrated only
+when its result is discarded or, inside a function, read solely as
+`$result['values']` / `$result['count']`; those reads become
+`$result->getArrayCopy()` / `$result->countFetched()`, keyed by id like
+APIv3 unless `sequential` is 1. The rows are APIv4's, so review what reads
+them:
+
+- fields and value types follow APIv4 (ids are integers; APIv3's joined
+  contact fields such as `email` are gone);
+- APIv4 hides deleted, test and template records (`is_deleted`, `is_test`,
+  `is_template`) unless the where clause names the field or the lookup goes
+  through a unique key, while APIv3 applied only each entity's own defaults
+  — test recurring contributions, deleted activities or a trashed contact
+  found by `external_identifier` can appear or disappear;
+- APIv3-only defaults such as Note's `entity_table = civicrm_contact` no
+  longer filter.
 
 ```bash
 ckx ckmodernize

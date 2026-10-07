@@ -235,10 +235,17 @@ except that a break the consumers are adjusted for ships as a minor, marked
   without their own `Civi\Api4` class (`Custom_*`, `CustomValue`) and magic
   actions with a non-literal `checkPermissions`. The Api3ToApi4 rectors skip
   api3 control keys (`rowCount`, `sort`, `offset`, `option.*`, `return.*`),
-  possible array filter values, non-canonical entity names and results read
-  as the api3 envelope; a comma-list `return` becomes a select list and
-  `version` is dropped. `CrmUtilsArrayValueToCoalesceRector` rewrites only
-  where `??` is equivalent: no or a NULL default, and a subject that is
+  possible array filter values and non-canonical entity names, and rewrite
+  a call only where its result is discarded or, inside a function, read
+  solely as `$r['values']` or `$r['count']`: those reads become
+  `$r->getArrayCopy()` (`$r[$key]` for one row) and `$r->countFetched()`,
+  and the api4 call selects `id` and keys the rows by it unless `sequential`
+  is 1. A result that is returned, passed on, read as `['id']` or written
+  stays api3. The rewritten rows are api4's: its fields and value types, and
+  its default filters on `is_deleted`, `is_test` and `is_template` instead
+  of api3's per-entity defaults, so a count can change. A comma-list
+  `return` becomes a select list and `version` is dropped.
+  `CrmUtilsArrayValueToCoalesceRector` rewrites only where `??` is equivalent: no or a NULL default, and a subject that is
   provably an array, `ArrayAccess` or NULL. `CrmCoreErrorFatalToExceptionRector` passes message
   and code to the right constructor slots and skips calls without a message
   or with `$email`. `PositionalDefaultsToNamedArgsRector` skips callees that

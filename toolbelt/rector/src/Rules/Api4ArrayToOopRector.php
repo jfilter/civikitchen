@@ -29,7 +29,11 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  */
 final class Api4ArrayToOopRector extends AbstractApiCallAssistRector {
 
-  protected function refactorCall(FuncCall $node): ?Node {
+  public function getNodeTypes(): array {
+    return [FuncCall::class];
+  }
+
+  public function refactor(Node $node): ?Node {
     $match = $this->matchLiteralApiCall($node, 'civicrm_api4');
     if ($match === NULL) {
       return NULL;

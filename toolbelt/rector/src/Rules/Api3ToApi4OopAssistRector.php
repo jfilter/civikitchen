@@ -4,11 +4,10 @@ declare(strict_types = 1);
 
 namespace CiviKitchen\Rector\Rules;
 
-use PhpParser\Node;
 use PhpParser\Node\Arg;
+use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\ConstFetch;
-use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\Int_;
@@ -26,25 +25,13 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  * Same safe subset + guardrails (checkPermissions becomes the get() argument,
  * defaulting to FALSE to preserve api3 behavior; limit defaults to 25). Same
  * bail-outs (non-get, operators, chaining, options beyond limit/offset,
- * non-literal params). Preview only.
+ * non-literal params). A result read only as `$r['values']`/`$r['count']`
+ * gets `->indexBy('id')` unless `sequential` is 1; its rows follow api4's
+ * fields and default filters. Preview only.
  */
-final class Api3ToApi4OopAssistRector extends AbstractApiCallAssistRector {
+final class Api3ToApi4OopAssistRector extends AbstractApi3GetAssistRector {
 
-  protected function refactorCall(FuncCall $node): ?Node {
-    $match = $this->matchLiteralApiCall($node, 'civicrm_api3');
-    if ($match === NULL) {
-      return NULL;
-    }
-    [$entity, $action, $params] = $match;
-    if (strtolower($action->value) !== 'get') {
-      return NULL;
-    }
-
-    $parts = $this->classifyApi3GetParams($params);
-    if ($parts === NULL) {
-      return NULL;
-    }
-
+  protected function api4Call(String_ $entity, String_ $action, array $parts, bool $indexById): ?Expr {
     // The builder emits clauses in a fixed order, so only the value of each
     // top-level clause matters here, not its position in the source array.
     $select = NULL;
@@ -92,7 +79,9 @@ final class Api3ToApi4OopAssistRector extends AbstractApiCallAssistRector {
       $expr = new MethodCall($expr, 'setOffset', [new Arg($offset)]);
     }
 
-    return new MethodCall($expr, 'execute');
+    $expr = new MethodCall($expr, 'execute');
+
+    return $indexById ? new MethodCall($expr, 'indexBy', [new Arg(new String_('id'))]) : $expr;
   }
 
   private function bool(bool $value): ConstFetch {

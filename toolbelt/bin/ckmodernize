@@ -135,7 +135,7 @@ if [ "${do_rector}" -eq 1 ]; then
   rc=$?
   if [ -n "${CK_API_MIGRATE:-}" ]; then
     echo >&2
-    echo "ckmodernize --api: assisted only the safe literal get() calls (checkPermissions + limit guardrails kept). Other actions, operators, chaining, dynamic params, and ALL return-value handling stay api3 — review manually; cklint flags every remaining civicrm_api3 call." >&2
+    echo "ckmodernize --api: assisted only the safe literal get() calls (checkPermissions + limit guardrails kept). Results are migrated only where read solely as ['values'] / ['count'] in the same function; their rows follow APIv4's fields, types and default filters (is_deleted/is_test/is_template), so counts can change. Other actions, operators, chaining, dynamic params and any other result use stay api3 — review manually; cklint flags every remaining civicrm_api3 call." >&2
   fi
   exit "${rc}"
 fi

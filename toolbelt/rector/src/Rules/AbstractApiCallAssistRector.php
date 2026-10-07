@@ -10,7 +10,6 @@ use PhpParser\Node\Arg;
 use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
-use PhpParser\Node\Expr\ArrayDimFetch;
 use PhpParser\Node\Expr\ConstFetch;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\StaticCall;
@@ -20,13 +19,11 @@ use PHPStan\Reflection\ReflectionProvider;
 use Rector\Rector\AbstractRector;
 
 /**
- * Shared skeleton of the civicrm_api3/civicrm_api4 call rewriters: match a
- * literal `<function>('Entity', 'action', [...])` and hand the parts to the
- * concrete rule, which bails (NULL) on anything outside its safe subset.
+ * Shared helpers of the civicrm_api3/civicrm_api4 call rewriters: match a
+ * literal `<function>('Entity', 'action', [...])` and map its parts; the
+ * concrete rule bails (NULL) on anything outside its safe subset.
  */
 abstract class AbstractApiCallAssistRector extends AbstractRector {
-
-  private const DEREFERENCED = 'ckApiResultDereferenced';
 
   /**
    * api3 keys that steer the call rather than filter it (api/v3/utils.php);
@@ -38,28 +35,8 @@ abstract class AbstractApiCallAssistRector extends AbstractRector {
   ];
 
   public function __construct(
-    private readonly ReflectionProvider $reflectionProvider,
+    protected readonly ReflectionProvider $reflectionProvider,
   ) {}
-
-  public function getNodeTypes(): array {
-    return [ArrayDimFetch::class, FuncCall::class];
-  }
-
-  /**
-   * The parent is visited first: a result read as an array — the api3
-   * envelope's ['values'] — marks the call so the rewrite skips it.
-   */
-  public function refactor(Node $node): ?Node {
-    if ($node instanceof ArrayDimFetch) {
-      $node->var->setAttribute(self::DEREFERENCED, TRUE);
-
-      return NULL;
-    }
-
-    return $node instanceof FuncCall && $node->getAttribute(self::DEREFERENCED) !== TRUE ? $this->refactorCall($node) : NULL;
-  }
-
-  abstract protected function refactorCall(FuncCall $node): ?Node;
 
   /**
    * `\Civi\Api4\<Entity>::<action>($checkPermissions)`, or NULL when that
@@ -125,15 +102,16 @@ abstract class AbstractApiCallAssistRector extends AbstractRector {
    * `where` is a list of [field, value expr]; `top` is an ordered list of
    * [clause, value expr] with clause one of select|checkPermissions|limit|
    * offset, in source order so the array rule can reproduce it verbatim.
-   * `sequential` is dropped: api4 results are always sequential; so is
-   * `version`, which civicrm_api3() overwrites anyway. `select` is always a
-   * list literal, the comma list api3 also accepts split up.
+   * `sequential` is handed over on its own, it only shapes the result;
+   * `version` is dropped, civicrm_api3() overwrites it anyway. `select` is
+   * always a list literal, the comma list api3 also accepts split up.
    *
-   * @return array{where: list<array{string, Expr}>, top: list<array{string, Expr}>}|null
+   * @return array{where: list<array{string, Expr}>, top: list<array{string, Expr}>, sequential: ?Expr}|null
    */
   protected function classifyApi3GetParams(Array_ $params): ?array {
     $where = [];
     $top = [];
+    $sequential = NULL;
 
     foreach ($params->items as $item) {
       if (!$item instanceof ArrayItem || !$item->key instanceof String_) {
@@ -142,7 +120,11 @@ abstract class AbstractApiCallAssistRector extends AbstractRector {
       $key = $item->key->value;
       $value = $item->value;
 
-      if ($key === 'sequential' || $key === 'version') {
+      if ($key === 'sequential') {
+        $sequential = $value;
+        continue;
+      }
+      if ($key === 'version') {
         continue;
       }
       if (in_array($key, self::API3_CONTROL_KEYS, TRUE) || str_contains($key, '.')) {
@@ -180,7 +162,7 @@ abstract class AbstractApiCallAssistRector extends AbstractRector {
       $where[] = [$key, $value];
     }
 
-    return ['where' => $where, 'top' => $top];
+    return ['where' => $where, 'top' => $top, 'sequential' => $sequential];
   }
 
   /**
