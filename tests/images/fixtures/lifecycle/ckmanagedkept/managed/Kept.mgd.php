@@ -39,4 +39,19 @@ return [
       'match' => ['option_group_id', 'name'],
     ],
   ],
+  [
+    'name' => 'CustomGroup_ckmanagedkept_extra',
+    'entity' => 'CustomGroup',
+    'cleanup' => 'never',
+    'params' => [
+      'version' => 4,
+      'values' => [
+        'name' => 'ckmanagedkept_extra',
+        'title' => 'ckmanagedkept extra',
+        'extends' => 'Contact',
+        'table_name' => 'civicrm_ckmanagedkept_extra',
+      ],
+      'match' => ['name'],
+    ],
+  ],
 ];

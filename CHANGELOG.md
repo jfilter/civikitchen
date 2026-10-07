@@ -73,7 +73,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 - `cklifecycle` no longer fails a managed record core keeps on uninstall by
   its `cleanup` policy (`never`, or `unused` while referenced), nor the option
-  group, option value or scheduled job it points to.
+  group, option value, scheduled job or custom group table it points to, nor
+  the values of a kept option group.
 - An extension attached through `CIVIKITCHEN_EXTENSION_PATH` counts as mounted,
   so provisioning installs its `<requires>` and declared dependency sources.
 - `ckconform`'s `mixin-declaration` no longer warns about settings or menu

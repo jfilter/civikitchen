@@ -73,9 +73,6 @@ foreach (['civicrm_' . $prefix . '%', $prefix . '%'] as $like) {
     $leftoverTables[(string) $dao->t] ??= 'matches the extension prefix';
   }
 }
-foreach ($leftoverTables as $table => $why) {
-  $findings[] = "table `{$table}` still exists after uninstall ({$why}) — drop it in sql/auto_uninstall.sql or uninstall()";
-}
 
 // Managed entities of a module that no longer exists. CiviCRM reconciles
 // civicrm_managed by module, so a row left here is an entity nothing owns —
@@ -93,6 +90,17 @@ while ($dao->fetch()) {
   $findings[] = "orphaned civicrm_managed row #{$dao->id} ({$dao->entity_type} '{$dao->name}') for module {$key}";
 }
 
+// A custom group core keeps by policy keeps its table.
+foreach ($kept['CustomGroup'] ?? [] as $customGroupId) {
+  unset($leftoverTables[(string) CRM_Core_DAO::singleValueQuery(
+    'SELECT table_name FROM civicrm_custom_group WHERE id = %1',
+    [1 => [$customGroupId, 'Integer']],
+  )]);
+}
+foreach ($leftoverTables as $table => $why) {
+  $findings[] = "table `{$table}` still exists after uninstall ({$why}) — drop it in sql/auto_uninstall.sql or uninstall()";
+}
+
 $dao = CRM_Core_DAO::executeQuery(
   'SELECT og.id, og.name FROM civicrm_option_group og WHERE og.name LIKE %1',
   [1 => [$prefix . '%', 'String']],
@@ -104,13 +112,13 @@ while ($dao->fetch()) {
   $findings[] = "option group '{$dao->name}' (#{$dao->id}) survived uninstall";
 }
 $dao = CRM_Core_DAO::executeQuery(
-  'SELECT ov.id, ov.name, og.name AS group_name FROM civicrm_option_value ov'
+  'SELECT ov.id, ov.name, ov.option_group_id, og.name AS group_name FROM civicrm_option_value ov'
   . ' INNER JOIN civicrm_option_group og ON og.id = ov.option_group_id'
   . ' WHERE ov.name LIKE %1',
   [1 => [$prefix . '%', 'String']],
 );
 while ($dao->fetch()) {
-  if (in_array((int) $dao->id, $kept['OptionValue'] ?? [], TRUE)) {
+  if (in_array((int) $dao->id, $kept['OptionValue'] ?? [], TRUE) || in_array((int) $dao->option_group_id, $kept['OptionGroup'] ?? [], TRUE)) {
     continue;
   }
   $findings[] = "option value '{$dao->name}' (#{$dao->id}, group {$dao->group_name}) survived uninstall";
