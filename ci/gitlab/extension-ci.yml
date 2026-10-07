@@ -56,6 +56,10 @@ variables:
 
 civikitchen-ci:
   extends: .civikitchen
+  # A job without rules is left out of merge request pipelines, whose status
+  # is the one the merge request shows.
+  rules:
+    - when: on_success
   script:
     - runuser -u www-data -- ck ci
     - if [ "$CK_JS_TESTS" = "1" ]; then runuser -u www-data -- npm test; fi

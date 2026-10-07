@@ -465,6 +465,10 @@ then run as the web user:
   `tests/e2e/lib.sh` then calls `cv` directly instead of through compose; a
   repository's own helpers check the same variable.
 
+Both jobs run in branch and in merge request pipelines, so a push to a branch
+with an open merge request starts both; a project that wants one adds
+GitLab's `workflow: rules` below the managed block.
+
 Variables below the managed block override the defaults:
 
 | Variable | Default | Effect |

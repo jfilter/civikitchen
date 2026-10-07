@@ -108,7 +108,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario \
-	test-compose-isolation test-sibling-wiring test-sibling-checkout test-vendored-paths test-ckeslint test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
+	test-compose-isolation test-sibling-wiring test-gitlab-mr-jobs test-sibling-checkout test-vendored-paths test-ckeslint test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
 	test-ck-headless test-ckcoretest test-phpstan-bootstrap test-shell-portability test-install-trivy test-resolve-civicrm-stable lint lint-shell lint-shell-portability \
 	test-database-matrix test-compose-config test-demo-basic-auth test-release-retag test-release-steps test-ci-gates-step test-release-script \
         lint-actions lint-php lint-schema lint-changelog test-changelog build test-images e2e-ckcreate e2e tools clean
@@ -129,7 +129,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-compose-isolation test-sibling-wiring test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-resolve-civicrm-stable test-changelog ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-compose-isolation test-sibling-wiring test-gitlab-mr-jobs test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-resolve-civicrm-stable test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -272,6 +272,9 @@ test-compose-isolation: $(SCENARIO_YAML_STAMP) ## Per-job compose project names 
 # whose <requires> names a sibling the registry does not know.
 test-sibling-wiring: $(SCENARIO_YAML_STAMP) ## Stack-booting jobs reach the private-dependency steps
 	bash tests/parity/test-sibling-wiring.sh
+
+test-gitlab-mr-jobs: $(SCENARIO_YAML_STAMP) ## Every shared GitLab job runs in merge request pipelines
+	bash tests/parity/test-gitlab-mr-jobs.sh
 
 test-sibling-checkout: ## Sibling clones land in one directory per extension key
 	bash tests/parity/test-sibling-checkout.sh

@@ -1,0 +1,25 @@
+variables:
+  CK_IMAGE: example
+
+.base:
+  image: $CK_IMAGE
+
+.ruled:
+  rules:
+    - when: on_success
+
+bare:
+  extends: .base
+  script:
+    - true
+
+inherited:
+  extends: [.base, .ruled]
+  script:
+    - true
+
+own:
+  rules:
+    - when: on_success
+  script:
+    - true

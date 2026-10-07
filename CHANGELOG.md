@@ -16,6 +16,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- The shared GitLab pipeline runs `civikitchen-ci` in merge request pipelines
+  too. GitLab left the job out there, so a merge request showed a green
+  pipeline in which only `civikitchen-e2e` had run.
 - The managed `phpstanBootstrap.php` finds core extensions by their
   `info.xml` one level deeper as well, so afform's classes
   (`ext/afform/core`) resolve without a `scanDirectories` entry, and a
