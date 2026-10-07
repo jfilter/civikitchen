@@ -36,13 +36,19 @@ final class CoverageCommand implements Command
             }
             return $this->error('no phpunit config.');
         }
-        $contents = file_get_contents($config);
-        if ($contents === false || !str_contains($contents, '<coverage')) {
+        libxml_use_internal_errors(true);
+        $parsed = simplexml_load_file($config);
+        if ($parsed === false) {
+            return $this->error("{$config} is not well-formed XML.");
+        }
+        // PHPUnit 9 reads the include list from <coverage> or <filter><whitelist>, never <source>.
+        if (($parsed->xpath('/*/coverage | /*/filter/whitelist') ?: []) === []) {
             if ($testsOptional) {
                 echo "ckcoverage: phpunit config declares no <coverage> section, and policy.tests declares tests optional - nothing to measure.\n";
                 return 0;
             }
-            return $this->error('phpunit config declares no <coverage> section - nothing to measure.');
+            $hint = ($parsed->xpath('/*/source') ?: []) !== [] ? ' (PHPUnit 9 ignores <source>: list the sources in <coverage><include>)' : '';
+            return $this->error("phpunit config declares no <coverage> section{$hint} - nothing to measure.");
         }
 
         $clover = tempnam(sys_get_temp_dir(), 'ckcoverage-');
@@ -100,6 +106,13 @@ final class CoverageCommand implements Command
             return $this->error('every test was skipped - a skipped suite is not a passing suite.');
         }
         if (!is_file($clover) || filesize($clover) === 0) {
+            $log = (string) file_get_contents($runLog);
+            if (str_contains($log, 'No filter is configured')) {
+                return $this->error('phpunit saw no coverage filter - list the sources in <coverage><include>.');
+            }
+            if (str_contains($log, 'Incorrect filter configuration')) {
+                return $this->error('the <coverage> include list matches no file - check its paths.');
+            }
             return $this->error('phpunit produced no clover report (is pcov/xdebug loaded?)');
         }
 

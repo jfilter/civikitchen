@@ -185,9 +185,16 @@ except that a break the consumers are adjusted for ships as a minor, marked
   shorthand, untagged images and `docker://` steps.
 - ckconform's `deploy-hygiene` accepts directories in `deploy_hygiene.paths`
   and `.env.sample`/`.env.template`; `coverage-section` requires coverage
-  sources; `front-end-api3` scans `.ts`/`.tsx`/`.jsx` and `crmApi()`;
+  sources where the toolbelt's PHPUnit 9 reads them, in `<coverage><include>`
+  or the legacy `<filter><whitelist>`, names a PHPUnit 10 `<source>` as
+  ignored and judges a shipped `phpunit.xml` before the `.dist` file, as
+  PHPUnit does; `front-end-api3` scans `.ts`/`.tsx`/`.jsx` and `crmApi()`;
   `gitignore` and `gitignore-coverage` honour a repository-root .gitignore and
   phpunit's `cacheResult`/`cacheResultFile`.
+- `ckcoverage` parses the phpunit config: a commented-out `<coverage>` no
+  longer passes, `<filter><whitelist>` does, a malformed config is reported as
+  such, and a run whose filter is missing or matches no file says so instead
+  of blaming the coverage driver.
 - ckconform's `license-skeleton` accepts CRLF and trailing spaces;
   `license-coherence` reads `(A or B)` expressions; `lockfile` honours
   workspaces, platform packages and dependency-free manifests, and flags an

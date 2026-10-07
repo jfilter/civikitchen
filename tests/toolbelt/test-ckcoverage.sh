@@ -39,9 +39,13 @@ while [ "$#" -gt 0 ]; do
 done
 test -n "$clover"
 test -n "$junit"
-cat > "$clover" <<'XML'
+if [ -n "${CK_FIXTURE_FILTER_WARNING:-}" ]; then
+  echo "Warning:       ${CK_FIXTURE_FILTER_WARNING}, code coverage will not be processed"
+else
+  cat > "$clover" <<'XML'
 <coverage><project><metrics statements="8" coveredstatements="6"/></project></coverage>
 XML
+fi
 {
   echo '<testsuites>'
   i=0
@@ -64,6 +68,44 @@ grep -q '75.00% line coverage (6/8 statements)' <<<"$out"
 grep -q 'reporting only' <<<"$out"
 
 echo 'ok   ckcoverage uses the shared PHP CLI and a unique temporary run log'
+
+# PHPUnit 9 reads the include list from <coverage> or the legacy
+# <filter><whitelist>. It ignores <source>; a commented-out section is no section.
+cat > "$work/ext/phpunit.xml.dist" <<'EOF'
+<phpunit><filter><whitelist><directory>src</directory></whitelist></filter></phpunit>
+EOF
+out=$(cd "$work/ext" && PATH="$work/bin:$PATH" "$root/toolbelt/bin/ckcoverage")
+grep -q 'line coverage' <<<"$out"
+for config in '<phpunit/>' '<phpunit><!-- <coverage/> --></phpunit>' \
+  '<phpunit><source><include><directory>src</directory></include></source></phpunit>'; do
+  printf '%s\n' "$config" > "$work/ext/phpunit.xml.dist"
+  status=0
+  out=$(cd "$work/ext" && PATH="$work/bin:$PATH" "$root/toolbelt/bin/ckcoverage" 2>&1) || status=$?
+  test "$status" -ne 0
+  grep -q 'no <coverage> section' <<<"$out"
+done
+grep -q 'PHPUnit 9 ignores <source>' <<<"$out"
+printf '<phpunit><coverage>\n' > "$work/ext/phpunit.xml.dist"
+status=0
+out=$(cd "$work/ext" && PATH="$work/bin:$PATH" "$root/toolbelt/bin/ckcoverage" 2>&1) || status=$?
+test "$status" -ne 0
+grep -q 'not well-formed XML' <<<"$out"
+cat > "$work/ext/phpunit.xml.dist" <<'EOF'
+<phpunit><coverage/></phpunit>
+EOF
+# Without sources, or with paths matching no file, phpunit warns and writes no
+# clover report; the message names that rather than the coverage driver.
+for case in 'No filter is configured:no coverage filter' \
+  'Incorrect filter configuration:matches no file'; do
+  status=0
+  out=$(cd "$work/ext" && PATH="$work/bin:$PATH" CK_FIXTURE_FILTER_WARNING="${case%%:*}" \
+    "$root/toolbelt/bin/ckcoverage" 2>&1) || status=$?
+  test "$status" -ne 0
+  grep -q "${case#*:}" <<<"$out"
+  if grep -q 'pcov/xdebug' <<<"$out"; then exit 1; fi
+done
+
+echo 'ok   ckcoverage reads the include list where PHPUnit 9 does and names a filter that measures nothing'
 
 # A configured floor of 0 is a floor, not an unset key: the run must report it
 # as met instead of falling back to "reporting only".

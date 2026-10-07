@@ -75,16 +75,57 @@ final class CoverageSectionCheckTest extends CheckTestCase
             'tests/phpunit/SomeTest.php' => '<?php',
             'phpunit.xml.dist' => '<?xml version="1.0"?><phpunit><coverage cacheDirectory=".phpunit.cache"/></phpunit>',
         ]);
-        $this->assertFails($this->run_(new CoverageSectionCheck(), $context), 'lists no sources');
+        $this->assertFails($this->run_(new CoverageSectionCheck(), $context), '<coverage> lists no sources');
     }
 
-    /** PHPUnit 10 moved the include list from <coverage> to <source>. */
-    public function testSourcesUnderTheSourceElementCount(): void
+    /** The toolbelt's PHPUnit 9 measures nothing from <source>, with or without an empty <coverage>. */
+    public function testSourcesUnderTheSourceElementDoNotCount(): void
+    {
+        foreach (['<coverage/>', ''] as $coverage) {
+            $context = $this->repo([
+                'tests/phpunit/SomeTest.php' => '<?php',
+                'phpunit.xml.dist' => '<?xml version="1.0"?><phpunit>' . $coverage . '<source><include><directory>Civi</directory></include></source></phpunit>',
+            ]);
+            $this->assertFails($this->run_(new CoverageSectionCheck(), $context), 'PHPUnit 9 ignores <source>');
+        }
+    }
+
+    /** PHPUnit 9 still measures the deprecated <filter><whitelist> layout. */
+    public function testALegacyWhitelistCounts(): void
     {
         $context = $this->repo([
             'tests/phpunit/SomeTest.php' => '<?php',
-            'phpunit.xml.dist' => '<?xml version="1.0"?><phpunit><coverage/><source><include><directory>Civi</directory></include></source></phpunit>',
+            'phpunit.xml.dist' => '<?xml version="1.0"?><phpunit><filter><whitelist><directory suffix=".php">CRM</directory></whitelist></filter></phpunit>',
         ]);
         $this->assertOk($this->run_(new CoverageSectionCheck(), $context), 'declares coverage sources');
+    }
+
+    public function testAnEmptyWhitelistFails(): void
+    {
+        $context = $this->repo([
+            'tests/phpunit/SomeTest.php' => '<?php',
+            'phpunit.xml.dist' => '<?xml version="1.0"?><phpunit><filter><whitelist/></filter></phpunit>',
+        ]);
+        $this->assertFails($this->run_(new CoverageSectionCheck(), $context), 'lists no sources');
+    }
+
+    /** PHPUnit reads phpunit.xml first, so the .dist file's sources do not reach the run. */
+    public function testAShippedPhpunitXmlIsJudgedAlone(): void
+    {
+        $context = $this->repo([
+            'tests/phpunit/SomeTest.php' => '<?php',
+            'phpunit.xml' => '<?xml version="1.0"?><phpunit><testsuites/></phpunit>',
+            'phpunit.xml.dist' => '<?xml version="1.0"?><phpunit><coverage><include><directory>Civi</directory></include></coverage></phpunit>',
+        ]);
+        $this->assertFails($this->run_(new CoverageSectionCheck(), $context), 'has no <coverage> section');
+    }
+
+    public function testAMalformedConfigIsNamed(): void
+    {
+        $context = $this->repo([
+            'tests/phpunit/SomeTest.php' => '<?php',
+            'phpunit.xml.dist' => '<?xml version="1.0"?><phpunit><coverage>',
+        ]);
+        $this->assertFails($this->run_(new CoverageSectionCheck(), $context), 'not well-formed XML');
     }
 }

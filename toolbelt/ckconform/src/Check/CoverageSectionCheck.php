@@ -9,13 +9,13 @@ use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
- * Coverage has to be measurable before it can be demanded: without a <coverage>
- * section `phpunit --coverage-text` reports on nothing, which reads like a
- * passing gate.
+ * Coverage has to be measurable before it can be demanded: without an include
+ * list `phpunit --coverage-text` reports on nothing, which reads like a passing
+ * gate. The toolbelt runs PHPUnit 9, which reads the list from <coverage> or the
+ * legacy <filter><whitelist> and ignores PHPUnit 10's <source>.
  *
  * The config is parsed as XML and a real element is required: a commented-out
- * `<!-- <coverage> -->` must not satisfy the gate. ckcoverage needs the
- * <coverage> element itself; the sources may sit in it or, from PHPUnit 10, in <source>.
+ * `<!-- <coverage> -->` must not satisfy the gate.
  */
 final class CoverageSectionCheck implements Check
 {
@@ -30,38 +30,49 @@ final class CoverageSectionCheck implements Check
             return;
         }
 
-        $verdicts = [];
-        foreach (['phpunit.xml.dist', 'phpunit.xml'] as $candidate) {
-            $verdict = $this->coverage($context->readShipped($candidate));
-            if ($verdict === 'sources') {
-                $reporter->ok('phpunit config declares coverage sources');
+        // PHPUnit reads phpunit.xml before phpunit.xml.dist, so a shipped one is judged alone.
+        [$verdict, $source] = $this->coverage(
+            $context->readShipped('phpunit.xml') ?? $context->readShipped('phpunit.xml.dist'),
+        );
+        if ($verdict === 'sources') {
+            $reporter->ok('phpunit config declares coverage sources');
 
-                return;
-            }
-            $verdicts[] = $verdict;
+            return;
         }
 
-        $reporter->fail(in_array('empty', $verdicts, true)
-            ? 'phpunit config\'s <coverage> lists no sources (<coverage><include> or, from PHPUnit 10, <source><include>) — coverage runs measure nothing'
-            : 'phpunit config has no <coverage> section — coverage runs measure nothing');
+        $reporter->fail(match ($verdict) {
+            'malformed' => 'phpunit config is not well-formed XML',
+            'empty' => 'phpunit config\'s <coverage> lists no sources',
+            default => 'phpunit config has no <coverage> section',
+        } . ($source ? ' (PHPUnit 9 ignores <source>: list the sources in <coverage><include>)' : '')
+            . ' — coverage runs measure nothing');
     }
 
-    /** 'sources', 'empty' for a <coverage> without an include list, or 'none'. */
-    private function coverage(?string $xml): string
+    /**
+     * 'sources', 'empty' for a section without an include list, 'malformed',
+     * or 'none'; and whether PHPUnit 10's <source> is there.
+     *
+     * @return array{string, bool}
+     */
+    private function coverage(?string $xml): array
     {
         if ($xml === null || trim($xml) === '') {
-            return 'none';
+            return ['none', false];
         }
 
         $previous = libxml_use_internal_errors(true);
         $parsed = simplexml_load_string($xml);
         libxml_use_internal_errors($previous);
 
-        if ($parsed === false || ($parsed->xpath('//coverage') ?: []) === []) {
-            return 'none';
+        if ($parsed === false) {
+            return ['malformed', false];
         }
-        $sources = '/*/*[self::coverage or self::source]/include/*[self::directory or self::file]';
+        $source = ($parsed->xpath('/*/source') ?: []) !== [];
+        $entries = '/*/coverage/include/*[self::directory or self::file] | /*/filter/whitelist/*[self::directory or self::file]';
+        if (($parsed->xpath($entries) ?: []) !== []) {
+            return ['sources', $source];
+        }
 
-        return ($parsed->xpath($sources) ?: []) !== [] ? 'sources' : 'empty';
+        return [($parsed->xpath('/*/coverage | /*/filter/whitelist') ?: []) !== [] ? 'empty' : 'none', $source];
     }
 }
