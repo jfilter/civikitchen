@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.32.0] - 2026-10-07
+
 ### Added
 
 - CI on GitLab: `ci/gitlab/extension-ci.yml` runs `ck ci`, `cklifecycle` and,
@@ -1456,7 +1458,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.31.0...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.32.0...HEAD
+[1.32.0]: https://github.com/jfilter/civikitchen/compare/v1.31.0...v1.32.0
 [1.31.0]: https://github.com/jfilter/civikitchen/compare/v1.30.2...v1.31.0
 [1.30.2]: https://github.com/jfilter/civikitchen/compare/v1.30.1...v1.30.2
 [1.30.1]: https://github.com/jfilter/civikitchen/compare/v1.30.0...v1.30.1
