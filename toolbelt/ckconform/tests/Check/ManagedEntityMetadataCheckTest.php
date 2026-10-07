@@ -56,7 +56,7 @@ final class ManagedEntityMetadataCheckTest extends CheckTestCase
         );
     }
 
-    public function testFailsOnMissingVersion(): void
+    public function testWarnsOnMissingVersion(): void
     {
         $context = $this->repo(['managed/NoVersion.mgd.php' => <<<'PHP'
             <?php

@@ -15,7 +15,8 @@ use CiviKitchen\Ckconform\Reporter;
  * nested build manifest is one `npm publish` away from being open source.
  *
  * Tracked rather than on-disk: an untracked manifest cannot be published by
- * anyone else. node_modules is excluded — vendored manifests are not ours.
+ * anyone else. node_modules and `vendored_paths` are excluded: third-party
+ * manifests keep their upstream licence.
  */
 final class NpmLicenseCheck implements Check
 {
