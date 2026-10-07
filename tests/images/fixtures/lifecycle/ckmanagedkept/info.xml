@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<extension key="ckmanagedkept" type="module">
+  <file>ckmanagedkept</file>
+  <name>ckmanagedkept</name>
+  <description>Copied in by tests/images/boot-test-standalone.sh for cklifecycle's managed cleanup policies; nothing else uses it.</description>
+  <version>1.0.0</version>
+  <releaseDate>2026-01-01</releaseDate>
+  <compatibility><ver>6.0</ver></compatibility>
+  <mixins><mixin>mgd-php@1.0.0</mixin></mixins>
+</extension>

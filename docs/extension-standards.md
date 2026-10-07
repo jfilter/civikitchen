@@ -1327,7 +1327,9 @@ ext:uninstall` exiting 0 means `uninstall()` did not throw — nothing more. The
 check asserts that no table the extension declares (`sql/*.sql`, `xml/schema/`)
 or that carries its `<file>` prefix survived, that `civicrm_managed` holds no
 row for the module, and that no option group, option value or scheduled job
-with that prefix is left running against code that is gone.
+with that prefix is left running against code that is gone. A managed record
+core keeps by policy — `cleanup` `never`, or `unused` while referenced — and
+the entity it points to are not leftovers.
 
 **Nothing may fail quietly during the cycle.** Every step's output plus the
 delta of the CiviCRM ConfigAndLog files is scanned for `SQLSTATE[…]`, `DB

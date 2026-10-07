@@ -16,7 +16,8 @@
 #   * word replacements reach ts(), which the standalone boot order breaks
 #     without the core patch.
 #   * cklifecycle's settings-metadata check names every malformed
-#     pseudoconstant and passes valid ones, on a site that loads options.
+#     pseudoconstant and passes valid ones, on a site that loads options;
+#   * cklifecycle accepts managed records core keeps by cleanup policy.
 # The db service gets a plain MYSQL_USER and no grant script: the app user
 # holds rights on its own database only, exactly as a hand-written stack.
 #
@@ -46,7 +47,7 @@ rmdir "${FIXTURE}/headless"
 sed "s/__EXTKEY__/ckbootfixture/g" "${SRC}/scaffold/template/extension/phpunit.xml.dist" \
    > "${FIXTURE}/phpunit.xml.dist"
 PROFILE_FIXTURE="$(cd "$(dirname "$0")/fixtures/external-profile" && pwd)"
-SETTINGS_FIXTURE="$(cd "$(dirname "$0")/fixtures/settings-metadata" && pwd)"
+LIFECYCLE_FIXTURE="$(cd "$(dirname "$0")/fixtures/lifecycle" && pwd)"
 
 RAW="$(echo "${IMAGE}-${DATABASE_IMAGE}" | tr -c 'a-z0-9' '-')"
 SLUG="satest-$(echo "${RAW}" | cut -c1-32)$(echo "${RAW}" | cksum | cut -d' ' -f1)"
@@ -86,7 +87,7 @@ docker run -d --name "${APP}" --network "${NET}" \
     -e CIVIKITCHEN_TRUST_EXTERNAL_PROFILES=1 \
     -v "${FIXTURE}:/var/www/html/ext/ckbootfixture:ro" \
     -v "${PROFILE_FIXTURE}:/civikitchen-external-profiles:ro" \
-    -v "${SETTINGS_FIXTURE}:/civikitchen-settings-fixtures:ro" \
+    -v "${LIFECYCLE_FIXTURE}:/civikitchen-lifecycle-fixtures:ro" \
     "${extra[@]}" \
     "${IMAGE}" >/dev/null
 
@@ -189,13 +190,15 @@ check "word replacement applies on an en_US site (got '${replaced}')" "[ '${repl
 check "core patch log lists the patch" \
     "docker exec '${APP}' grep -Eq '^(applied|contained) i18n-boot-replacements.patch$' /usr/local/share/civikitchen/core-patches.log"
 
-# 10) cklifecycle's settings-metadata check. Copied in, not bind-mounted, so
-# the malformed fixture is not enabled while the steps above run.
-docker exec "${APP}" bash -c 'cp -R /civikitchen-settings-fixtures/. /var/www/html/ext/ && chown -R www-data: /var/www/html/ext/cksettings*'
-cv ext:enable cksettingsgood cksettingsbad >/dev/null || true
+# 10) cklifecycle's settings-metadata check and managed cleanup policies. Copied
+# in, not bind-mounted, so the malformed fixture is not enabled while the steps
+# above run.
+docker exec "${APP}" bash -c 'cp -R /civikitchen-lifecycle-fixtures/. /var/www/html/ext/ && chown -R www-data: /var/www/html/ext/cksettings* /var/www/html/ext/ckmanagedkept'
+cv ext:enable cksettingsgood cksettingsbad ckmanagedkept >/dev/null || true
 lifecycle() { docker exec -u www-data -w "/var/www/html/ext/$1" "${APP}" cklifecycle > "${FIXTURE}/lifecycle-$1.log" 2>&1; }
 check "cklifecycle passes valid pseudoconstants" "lifecycle cksettingsgood"
 check "cklifecycle fails malformed pseudoconstants" "! lifecycle cksettingsbad"
+check "cklifecycle passes records kept by cleanup never" "lifecycle ckmanagedkept"
 for name in cksettingsbad_snake cksettingsbad_table cksettingsbad_callback; do
     check "the settings check names ${name}" "grep -q 'FAILED: ${name}:' '${FIXTURE}/lifecycle-cksettingsbad.log'"
 done

@@ -78,12 +78,18 @@ foreach ($leftoverTables as $table => $why) {
 }
 
 // Managed entities of a module that no longer exists. CiviCRM reconciles
-// civicrm_managed by module, so a row left here is an entity nothing owns.
+// civicrm_managed by module, so a row left here is an entity nothing owns —
+// unless core kept it by policy: cleanup `never`, or `unused` while referenced.
+$kept = [];
 $dao = CRM_Core_DAO::executeQuery(
-  'SELECT id, entity_type, name FROM civicrm_managed WHERE module = %1',
+  'SELECT id, entity_type, entity_id, name, cleanup FROM civicrm_managed WHERE module = %1',
   [1 => [$key, 'String']],
 );
 while ($dao->fetch()) {
+  if (in_array($dao->cleanup, ['never', 'unused'], TRUE)) {
+    $kept[$dao->entity_type][] = (int) $dao->entity_id;
+    continue;
+  }
   $findings[] = "orphaned civicrm_managed row #{$dao->id} ({$dao->entity_type} '{$dao->name}') for module {$key}";
 }
 
@@ -92,6 +98,9 @@ $dao = CRM_Core_DAO::executeQuery(
   [1 => [$prefix . '%', 'String']],
 );
 while ($dao->fetch()) {
+  if (in_array((int) $dao->id, $kept['OptionGroup'] ?? [], TRUE)) {
+    continue;
+  }
   $findings[] = "option group '{$dao->name}' (#{$dao->id}) survived uninstall";
 }
 $dao = CRM_Core_DAO::executeQuery(
@@ -101,6 +110,9 @@ $dao = CRM_Core_DAO::executeQuery(
   [1 => [$prefix . '%', 'String']],
 );
 while ($dao->fetch()) {
+  if (in_array((int) $dao->id, $kept['OptionValue'] ?? [], TRUE)) {
+    continue;
+  }
   $findings[] = "option value '{$dao->name}' (#{$dao->id}, group {$dao->group_name}) survived uninstall";
 }
 
@@ -109,6 +121,9 @@ $dao = CRM_Core_DAO::executeQuery(
   [1 => [$prefix . '%', 'String']],
 );
 while ($dao->fetch()) {
+  if (in_array((int) $dao->id, $kept['Job'] ?? [], TRUE)) {
+    continue;
+  }
   $findings[] = "scheduled job '{$dao->name}' (#{$dao->id}, {$dao->api_entity}.{$dao->api_action}) survived uninstall";
 }
 
