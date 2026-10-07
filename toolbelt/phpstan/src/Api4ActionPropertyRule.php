@@ -355,17 +355,29 @@ final class Api4ActionPropertyRule implements Rule
 
             return $inner === null ? null : !$inner;
         }
+        // `isset($this->x) === false`, `empty($this->x) != true`.
+        if (($expr instanceof Node\Expr\BinaryOp\Identical || $expr instanceof Node\Expr\BinaryOp\NotIdentical
+            || $expr instanceof Node\Expr\BinaryOp\Equal || $expr instanceof Node\Expr\BinaryOp\NotEqual)
+            && $expr->right instanceof Node\Expr\ConstFetch && in_array($expr->right->name->toLowerString(), ['true', 'false'], true)) {
+            $inner = self::presence($expr->left, $isRead);
+            $flip = ($expr->right->name->toLowerString() === 'false')
+                !== ($expr instanceof Node\Expr\BinaryOp\NotIdentical || $expr instanceof Node\Expr\BinaryOp\NotEqual);
+
+            return $inner === null ? null : $inner !== $flip;
+        }
+        // A set offset or property of the property means the property is set too.
+        $reads = static fn (Node\Expr $operand): bool => array_filter(self::fetchChain($operand), $isRead) !== [];
 
         return match (true) {
-            $expr instanceof Node\Expr\Isset_ && array_filter($expr->vars, $isRead) !== [] => true,
-            $expr instanceof Node\Expr\Empty_ && $isRead($expr->expr) => false,
+            $expr instanceof Node\Expr\Isset_ && array_filter($expr->vars, $reads) !== [] => true,
+            $expr instanceof Node\Expr\Empty_ && $reads($expr->expr) => false,
             default => null,
         };
     }
 
     /**
-     * `$this->x ??= …;`, `$this->x = …;`, or an if whose branches initialise up to one whose
-     * condition being false means the property is set (`!isset($this->x)`), or through the else.
+     * `$this->x ??= …;`, `$this->x = …;` (also to an offset), or an if whose branches initialise
+     * or find it set, up to one whose condition being false means it is set, or through the else.
      *
      * @param callable(Node): bool $isRead
      */
@@ -373,16 +385,17 @@ final class Api4ActionPropertyRule implements Rule
     {
         if ($stmt instanceof Node\Stmt\Expression) {
             return ($stmt->expr instanceof Node\Expr\Assign || $stmt->expr instanceof Node\Expr\AssignOp\Coalesce)
-                && $isRead($stmt->expr->var);
+                && array_filter(self::fetchChain($stmt->expr->var, arraysOnly: true), $isRead) !== [];
         }
         if (!$stmt instanceof Node\Stmt\If_) {
             return false;
         }
         foreach ([$stmt, ...$stmt->elseifs] as $branch) {
-            if (!self::blockInitialises($branch->stmts, $isRead)) {
+            $presence = self::presence($branch->cond, $isRead);
+            if ($presence !== true && !self::blockInitialises($branch->stmts, $isRead)) {
                 return false;
             }
-            if (self::presence($branch->cond, $isRead) === false) {
+            if ($presence === false) {
                 return true;
             }
         }

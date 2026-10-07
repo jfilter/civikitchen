@@ -478,4 +478,116 @@ class GuardedGetterAction extends AbstractAction
 
         return $this->writeThrough ?? null;
     }
+
+    protected ?string $setBranch;
+
+    protected int $setBranchThrow;
+
+    protected ?array $notEmptyBranch;
+
+    protected ?int $elseifSet;
+
+    protected array $offsetInit;
+
+    protected array $offsetCoalesce;
+
+    public function getSetBranch(): ?string
+    {
+        if (isset($this->setBranch)) {
+            error_log('given');
+        } else {
+            $this->setBranch = 'd';
+        }
+
+        return $this->setBranch;
+    }
+
+    public function getSetBranchThrow(): int
+    {
+        if (isset($this->setBranchThrow)) {
+            error_log('given');
+        } else {
+            throw new \RuntimeException('setBranchThrow required');
+        }
+
+        return $this->setBranchThrow;
+    }
+
+    public function getNotEmptyBranch(): ?array
+    {
+        if (!empty($this->notEmptyBranch)) {
+            error_log('given');
+        } else {
+            $this->notEmptyBranch = [];
+        }
+
+        return $this->notEmptyBranch;
+    }
+
+    public function getElseifSet(): ?int
+    {
+        if (PHP_INT_SIZE < 2) {
+            return null;
+        } elseif (isset($this->elseifSet)) {
+            error_log('given');
+        } else {
+            $this->elseifSet = 1;
+        }
+
+        return $this->elseifSet;
+    }
+
+    public function getOffsetInit(): array
+    {
+        $this->offsetInit['a'] = 1;
+
+        return $this->offsetInit;
+    }
+
+    public function getOffsetCoalesce(): array
+    {
+        $this->offsetCoalesce['a'] ??= 1;
+
+        return $this->offsetCoalesce;
+    }
+
+    protected array $offsetIsset;
+
+    protected ?string $issetFalse;
+
+    protected ?string $emptyNotTrue;
+
+    protected ?string $issetTrueWrong;
+
+    public function getOffsetIsset(): ?array
+    {
+        if (isset($this->offsetIsset['k'])) {
+            return $this->offsetIsset;
+        }
+
+        return null;
+    }
+
+    public function getIssetFalse(): ?string
+    {
+        if (isset($this->issetFalse) === false) {
+            return null;
+        }
+
+        return $this->issetFalse;
+    }
+
+    public function getEmptyNotTrue(): ?string
+    {
+        return empty($this->emptyNotTrue) != true ? $this->emptyNotTrue : null;
+    }
+
+    public function getIssetTrueWrong(): ?string
+    {
+        if (isset($this->issetTrueWrong) === true) {
+            return null;
+        }
+
+        return $this->issetTrueWrong;
+    }
 }
