@@ -258,6 +258,23 @@ final class Api4SelfEntityCheckTest extends CheckTestCase
             . "function report(entity) {\n  try { emit(entity); } catch ({ entity }) { return crmApi4(entity, 'get'); }\n}\n"
             . "notify('FormSaved');\nreport('FormFailed');\n",
         ];
+        yield 'local declarations hiding a wrapper' => [
+            "export function Cached() { const getEntities = (key) => cache.read(key); return getEntities('LedgerCacheKey'); }\n"
+            . "export function Stored() { const apiCall = store.reader; return apiCall('LedgerStoreKey'); }\n"
+            . "export function Picked() { const { getEntities } = store; return getEntities('LedgerPickKey'); }\n",
+        ];
+        yield 'nested helper named like a wrapper of the same file' => [
+            "export function load(entity) { return crmApi4(entity, 'get'); }\n"
+            . "export function usePrefs() { const load = (key) => localStorage.getItem(key); return load('LedgerColumnState'); }\n"
+            . "export function prefs() { function load(key) { return sessionStorage.getItem(key); } return load('LedgerRowState'); }\n",
+        ];
+        yield 'comparison in a default value' => [
+            "function load(entity) { return crmApi4(entity, 'get'); }\n"
+            . "export function Prefs(limit = max > 10 ? 10 : max, load) { return load('LedgerColumnState'); }\n",
+        ];
+        yield 'parameter hiding a namespace import' => [
+            "import * as api from './api';\nexport function Page(api) { return api.getEntities('PageData'); }\n",
+        ];
         yield 'capitalised receivers' => ["Cookies.get('CsrfToken');\nObject.keys('SomeThing');\nApi.getEntities('LedgerThing');\n"];
         yield 'function that calls the API but forwards its argument elsewhere' => [
             "function notify(eventName) { crmApi4('Contact', 'get', {}); bus.emit(eventName); }\n"
@@ -352,6 +369,12 @@ final class Api4SelfEntityCheckTest extends CheckTestCase
         ];
         yield 'parameter redeclared in a loop only' => [
             "function fetchAll(entity) {\n  for (const entity of extra) { log(entity); }\n  return crmApi4(entity, 'get');\n}\nfetchAll('LedgerAdapter');\n",
+        ];
+        yield 'call inside a component' => [
+            "import { getEntities } from './api/civicrm';\nexport function Ledger() { const rows = getEntities('LedgerAdapter'); return rows; }\n",
+        ];
+        yield 'wrapper inside a module IIFE' => [
+            "(function (angular) {\n  function load(entity) { return crmApi4(entity, 'get'); }\n  load('LedgerAdapter');\n})(angular);\n",
         ];
         yield 'injected crmApi4' => [
             "angular.module('ledger').controller('LedgerCtrl', ['\$scope', 'crmApi4', function (\$scope, crmApi4) {\n"

@@ -30,9 +30,10 @@ use CiviKitchen\Ckconform\Reporter;
  * (`export * from './civicrm'`). Relative paths resolve exactly; `@/` and `~/` take
  * the nearest file whose path ends in the rest. Object and class methods are not
  * followed: their names (`get`, `load`) are shared by every Map and loader.
- * Neither are wrappers from a package. Beyond its position, a finding needs a
- * multi-word CamelCase name (LedgerAdapter, not Email) that neither core nor
- * this extension defines.
+ * Neither are wrappers from a package, nor functions declared inside a named
+ * function: those, like any local binding, only hide a same-named wrapper.
+ * Beyond its position, a finding needs a multi-word CamelCase name
+ * (LedgerAdapter, not Email) that neither core nor this extension defines.
  */
 /**
  * Declared wrapper names by file, each file's default export, its imports
@@ -179,12 +180,33 @@ final class Api4SelfEntityCheck implements Check
      */
     private static function candidates(string $file, string $text, string $code, array $apis, array $scope, array $functions): array
     {
+        // Parameters and local declarations hide a wrapper of the same name in their
+        // scope; a declaration that defines a wrapper itself does not.
+        $local = [];
+        $defines = [];
+        foreach ($functions as [$key, , $start, $end, $bound]) {
+            foreach ($bound as $name) {
+                $local[$name][] = [$start, $end];
+            }
+            if ($key !== null) {
+                $defines[$key][] = $start;
+            }
+        }
+        foreach (self::declarations($code, 0, strlen($code)) as [$name, $from, $to]) {
+            $semicolon = strpos($code, ';', $from);
+            foreach ($defines[$name] ?? [] as $start) {
+                if ($start > $from && ($semicolon === false || $semicolon > $start)) {
+                    continue 2;
+                }
+            }
+            $local[$name][] = [$from, $to];
+        }
+
         $names = [];
-        foreach (self::calls($file, $text, $code, $apis, $scope) as [$positions, $args, $at, $callee]) {
-            // Inside a function with a parameter of that name, the name is the parameter;
-            // an injected `crmApi4` is still core's.
-            foreach ($callee === null || isset(self::CORE_APIS['#' . $callee]) ? [] : $functions as [, , $start, $end, $bound]) {
-                if ($at > $start && $at < $end && in_array($callee, $bound, true)) {
+        foreach (self::calls($file, $text, $code, $apis, $scope) as [$positions, $args, $at, $binding, $callee]) {
+            // An injected `crmApi4` is still core's.
+            foreach (isset(self::CORE_APIS['#' . $callee]) ? [] : $local[$binding] ?? [] as [$from, $to]) {
+                if ($at > $from && $at < $to) {
                     continue 2;
                 }
             }
@@ -300,11 +322,11 @@ final class Api4SelfEntityCheck implements Check
 
     /**
      * Calls that reach a known API: entity positions, argument texts, offset,
-     * and the callee's name when it is called bare.
+     * the name a local binding would have to hide (callee or receiver), and the callee.
      *
      * @param array<string, list<int>> $apis
      * @param Scope $scope
-     * @return list<array{list<int>, list<string>, int, ?string}>
+     * @return list<array{list<int>, list<string>, int, string, string}>
      */
     private static function calls(string $file, string $text, string $code, array $apis, array $scope): array
     {
@@ -338,7 +360,8 @@ final class Api4SelfEntityCheck implements Check
             foreach (self::parts($code, $open + 1, $close, types: false) as [$from, $to]) {
                 $args[] = trim(substr($text, $from, $to - $from));
             }
-            $calls[] = [array_values(array_unique($positions)), $args, $match[0][1], $receiver === null ? $match[1][0] : null];
+            $callee = $receiver === null ? $match[1][0] : $receiver . '.' . $match[1][0];
+            $calls[] = [array_values(array_unique($positions)), $args, $match[0][1], $receiver ?? $match[1][0], $callee];
         }
 
         return $calls;
@@ -536,6 +559,20 @@ final class Api4SelfEntityCheck implements Check
             }
         }
 
+        // A function declared inside a named one is local to it, not a wrapper; inside
+        // an anonymous one (a module IIFE, an Angular factory) it still is.
+        usort($functions, static fn (array $a, array $b): int => $a[2] <=> $b[2]);
+        $open = [];
+        foreach ($functions as $i => [$key, , $start, $end]) {
+            while ($open !== [] && end($open)[0] <= $start) {
+                array_pop($open);
+            }
+            if ($key !== null && !str_contains($key, '.') && in_array(true, array_column($open, 1), true)) {
+                $functions[$i][0] = null;
+            }
+            $open[] = [$end, $key !== null];
+        }
+
         return $functions;
     }
 
@@ -583,9 +620,13 @@ final class Api4SelfEntityCheck implements Check
     private static function declarations(string $code, int $start, int $end): array
     {
         $declarations = [];
-        $pattern = '/(?<![\w$.])(?:(?:const|let|var)(?![\w$])\s*(?:(' . self::IDENT . ')|[{[])|catch\s*\()/';
+        $pattern = '/(?<![\w$.])(?:(?:const|let|var)(?![\w$])\s*(?:(' . self::IDENT . ')|[{[])|function\s*\*?\s*(' . self::IDENT . ')|catch\s*\()/';
         preg_match_all($pattern, substr($code, $start, $end - $start), $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
-        foreach ($matches as $match) {
+        $blocks = self::blockEnds($code, array_map(static fn (array $match): int => $start + $match[0][1], $matches), $start, $end);
+        foreach ($matches as $m => $match) {
+            if (($match[2][0] ?? '') !== '') {
+                $match[1] = $match[2];
+            }
             $at = $start + $match[0][1];
             $last = $at + strlen($match[0][0]) - 1;
             $close = ($match[1][0] ?? '') === '' ? self::closer($code, $last) : null;
@@ -598,7 +639,7 @@ final class Api4SelfEntityCheck implements Check
                 $loop = preg_match('/\bfor\s*(?:await\s*)?(\()\s*$/', substr($code, $head, $at - $head), $for, PREG_OFFSET_CAPTURE) === 1
                     ? self::closer($code, $head + $for[1][1])
                     : null;
-                $to = $loop === null ? self::blockEnd($code, $at, $end) : min($end, self::bodyEnd($code, $loop + 1));
+                $to = $loop === null ? $blocks[$m] : min($end, self::bodyEnd($code, $loop + 1));
             }
             foreach ($names as $name) {
                 $declarations[] = [$name, $at, $to];
@@ -728,19 +769,34 @@ final class Api4SelfEntityCheck implements Check
         return null;
     }
 
-    /** The end of the block that contains $at, or $limit when it reaches that far. */
-    private static function blockEnd(string $code, int $at, int $limit): int
+    /**
+     * For each offset (ascending), the end of the block that contains it, or
+     * $limit when it reaches that far: one pass instead of one per offset.
+     *
+     * @param list<int> $offsets
+     * @return list<int>
+     */
+    private static function blockEnds(string $code, array $offsets, int $from, int $limit): array
     {
-        $depth = 0;
-        for ($i = $at; $i < $limit; $i++) {
+        $stack = [];
+        $closes = [];
+        $owners = [];
+        $next = 0;
+        for ($i = $from; $i < $limit; $i++) {
+            while (isset($offsets[$next]) && $offsets[$next] <= $i) {
+                $owners[$next++] = $stack === [] ? null : $stack[count($stack) - 1];
+            }
             if ($code[$i] === '{') {
-                $depth++;
-            } elseif ($code[$i] === '}' && $depth-- === 0) {
-                return $i;
+                $stack[] = $i;
+            } elseif ($code[$i] === '}' && $stack !== []) {
+                $closes[array_pop($stack)] = $i;
             }
         }
 
-        return $limit;
+        return array_map(
+            static fn (?int $owner): int => $owner === null ? $limit : $closes[$owner] ?? $limit,
+            array_pad($owners, count($offsets), null),
+        );
     }
 
     /**
@@ -752,12 +808,20 @@ final class Api4SelfEntityCheck implements Check
     {
         $parts = [];
         $depth = 0;
+        $angles = 0;
         $from = $start;
         for ($i = $start; $i < $end; $i++) {
             $char = $code[$i];
-            if (str_contains('([{', $char) || ($types && $char === '<')) {
+            // `<` opens a type argument list right after a name; `a > b` in a default compares.
+            if ($types && $char === '<' && preg_match('/[\w$]/', $code[$i - 1]) === 1) {
+                $angles++;
                 $depth++;
-            } elseif (str_contains(')]}', $char) || ($types && $char === '>' && $code[$i - 1] !== '=')) {
+            } elseif ($types && $char === '>' && $angles > 0 && $code[$i - 1] !== '=') {
+                $angles--;
+                $depth--;
+            } elseif (str_contains('([{', $char)) {
+                $depth++;
+            } elseif (str_contains(')]}', $char)) {
                 $depth--;
             } elseif ($char === ',' && $depth === 0) {
                 $parts[] = [$from, $i];
