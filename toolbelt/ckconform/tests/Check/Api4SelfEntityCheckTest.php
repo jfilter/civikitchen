@@ -416,6 +416,19 @@ final class Api4SelfEntityCheckTest extends CheckTestCase
         $this->assertPasses($this->run_(new Api4SelfEntityCheck(), $context));
     }
 
+    /** `@/utils` names the nearest file ending in utils, not every one in the repo. */
+    public function testAnAliasImportResolvesToTheNearestMatch(): void
+    {
+        $context = $this->ext([
+            'frontend/src/utils.ts' => "export function load(bundle: string) { return fetch('/l10n/' + bundle); }\n",
+            'ang/legacy/utils.js' => "function load(entity) { return CRM.api4(entity, 'get'); }\n",
+            'frontend/src/Page.tsx' => "import { load } from '@/utils';\nload('CommonStrings');\n",
+            'frontend/src/page.ts' => "function connect(entity: string) { return crmApi4(entity, 'get'); }\nexport default connect(mapState)(Page);\n",
+            'frontend/src/App.tsx' => "import Page from './page';\nPage('MainPage');\n",
+        ]);
+        $this->assertPasses($this->run_(new Api4SelfEntityCheck(), $context));
+    }
+
     /** An import statement quoted in a string imports nothing. */
     public function testAnImportInsideAStringDoesNotCount(): void
     {

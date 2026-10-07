@@ -27,8 +27,8 @@ use CiviKitchen\Ckconform\Reporter;
  * to a named object (`api.f = ...`). A call reaches it in its own file, or in a
  * file that imports it from a repo path (`import { f } from '@/api'`,
  * `import * as api from './api'`, a default import), also through re-exports
- * (`export * from './civicrm'`). Relative paths resolve exactly; `@/` and `~/`
- * match any file whose path ends in the rest. Object and class methods are not
+ * (`export * from './civicrm'`). Relative paths resolve exactly; `@/` and `~/` take
+ * the nearest file whose path ends in the rest. Object and class methods are not
  * followed: their names (`get`, `load`) are shared by every Map and loader.
  * Neither are wrappers from a package. Beyond its position, a finding needs a
  * multi-word CamelCase name (LedgerAdapter, not Email) that neither core nor
@@ -106,9 +106,9 @@ final class Api4SelfEntityCheck implements Check
                     $scope['declared'][$key][$file] = true;
                 }
             }
-            $default = '/(?<![\w$.])export\s+default\s+(?:async\s+)?(?:function\s*\*?\s*)?(?!(?:async|class|function)(?![\w$]))(' . self::IDENT . ')/';
+            $default = '/(?<![\w$.])export\s+default\s+(?:(?:async\s+)?function\s*\*?\s*(' . self::IDENT . ')|(' . self::IDENT . ')\s*(?:;|$))/m';
             if (preg_match($default, $sources[$file][1], $match) === 1) {
-                $scope['defaults'][$file] = $match[1];
+                $scope['defaults'][$file] = $match[1] !== '' ? $match[1] : $match[2];
             }
         }
 
@@ -431,8 +431,13 @@ final class Api4SelfEntityCheck implements Check
                 }
             }
         }
+        // Of several matches, the alias root is the one nearest the importing file.
+        $shared = [];
+        foreach ($memo[$module] as $target) {
+            $shared[$target] = strspn($file ^ $target, "\0");
+        }
 
-        return $memo[$module];
+        return $shared === [] ? [] : array_keys($shared, max($shared), true);
     }
 
     /**
