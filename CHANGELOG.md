@@ -264,12 +264,15 @@ except that a break the consumers are adjusted for ships as a minor, marked
   slip only when it differs from a core entity in letter case or by two
   swapped neighbouring letters, the same judgement as the oxlint rule.
 - The phpstan APIv4 catalog includes `tags`, `_depth` and `_descendents`
-  wherever core adds them at runtime. Fluent field checks see aliases selected
-  later in the chain or through `setSelect()`, and builders held in variables,
-  and skip orderBy and groupBy names when a select is not fully known
-  (spread, merged or conditional lists). An explicit join binds its alias
-  whatever its conditions; a join whose entity is not known skips the join
-  field checks. First-class APIv4 callables are checked.
+  wherever core adds them at runtime. The standalone boot test, on the
+  catalog's CiviCRM minor, fails when the field check rejects a field live
+  `getFields` reports for `get` or `create`; the image matrix always builds
+  that minor. Fluent field checks see aliases selected later in the chain or
+  through `setSelect()`, and builders held in variables, and skip orderBy and
+  groupBy names when a select is not fully known (spread, merged or
+  conditional lists). An explicit join binds its alias whatever its
+  conditions; a join whose entity is not known skips the join field checks.
+  First-class APIv4 callables are checked.
 - The phpstan action-parameter checks cover `?T` and `mixed` properties, trait
   properties, constructor assignments and getters that read the property only
   through `??`, `??=`, `isset()` or `empty()` or in a ternary, if, elseif,

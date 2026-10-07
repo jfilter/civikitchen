@@ -136,27 +136,10 @@ final class Api4Contract
      */
     public function checkField(string $entity, string $field, string $clause): array
     {
-        if (!Api4Catalog::hasCompleteFields($entity)) {
+        if (!self::rejectsField($entity, $field, $clause)) {
             return [];
         }
-        if (!self::isCheckableFieldName($field)) {
-            return [];
-        }
-        // `status_id:label` selects the option label of a real field.
         [$name] = explode(':', $field, 2);
-        if (in_array($name, Api4Catalog::fields($entity), true)) {
-            return [];
-        }
-        if (in_array($name, Api4Catalog::ANY_ENTITY_FIELDS, true)) {
-            return [];
-        }
-        if (self::isWriteClause($clause) && preg_match('/[A-Z]/', $name) === 1) {
-            // A write passes its values on to the BAO, which reads control
-            // params next to the fields — core itself writes skipStatusCal
-            // that way. Field names are snake_case, those params camelCase,
-            // and that is the only signal separating them.
-            return [];
-        }
 
         return [
             RuleErrorBuilder::message(sprintf(
@@ -240,6 +223,26 @@ final class Api4Contract
     public static function readsEntityFields(string $action): bool
     {
         return in_array(strtolower($action), self::RECORD_ACTIONS, true);
+    }
+
+    /**
+     * Whether checkField reports the name. Static and free of phpstan types,
+     * so the live getFields drift test asks the same question on a booted site.
+     */
+    public static function rejectsField(string $entity, string $field, string $clause): bool
+    {
+        if (!Api4Catalog::hasCompleteFields($entity) || !self::isCheckableFieldName($field)) {
+            return false;
+        }
+        // `status_id:label` selects the option label of a real field.
+        [$name] = explode(':', $field, 2);
+        if (in_array($name, Api4Catalog::fields($entity), true) || in_array($name, Api4Catalog::ANY_ENTITY_FIELDS, true)) {
+            return false;
+        }
+
+        // A write passes its values on to the BAO, which reads control params
+        // next to the fields (core's skipStatusCal); only the case tells them apart.
+        return !(self::isWriteClause($clause) && preg_match('/[A-Z]/', $name) === 1);
     }
 
     /** Clauses that write, and therefore reach the BAO. */

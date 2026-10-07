@@ -44,6 +44,7 @@ on:
           release. Non-empty REPLACES the supported list in
           toolbelt/versions.env (CK_STANDALONE_EXTRA_MINORS) for this run —
           a one-off rebuild of an unsupported minor does not need a commit.
+          The phpstan APIv4 catalog's minor is built and promoted either way.
         required: false
         default: ''
 

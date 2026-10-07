@@ -4,6 +4,7 @@
 # release. Emits stable/minor/standalone_versions outputs. The extras come
 # from CK_STANDALONE_EXTRA_MINORS in toolbelt/versions.env; a non-empty
 # $EXTRA_MINORS (the workflow_dispatch input) replaces the list for one run.
+# The phpstan catalog's minor is added either way.
 set -euo pipefail
 
 if [ -z "${EXTRA_MINORS:-}" ]; then
@@ -11,6 +12,13 @@ if [ -z "${EXTRA_MINORS:-}" ]; then
   source toolbelt/versions.env
   EXTRA_MINORS="${CK_STANDALONE_EXTRA_MINORS:-}"
 fi
+
+# The phpstan APIv4 catalog's minor is always built: the standalone boot test
+# checks the catalog against live getFields only on that release.
+CATALOG_MINOR=$(sed -n "s/^ *public const CORE_VERSION = '\([0-9]*\.[0-9]*\)\.[0-9]*';\$/\1/p" \
+  toolbelt/phpstan/src/Api4Catalog.php)
+[[ "${CATALOG_MINOR}" =~ ^[0-9]+\.[0-9]+$ ]] || { echo "no CORE_VERSION in Api4Catalog.php" >&2; exit 1; }
+EXTRA_MINORS="${EXTRA_MINORS:+${EXTRA_MINORS},}${CATALOG_MINOR}"
 
 STABLE=$(curl -fsS https://latest.civicrm.org/stable.php)
 echo "upstream stable: ${STABLE}"
@@ -34,6 +42,8 @@ for v in "${EXTRAS[@]}"; do
     exit 1
   fi
   [ "${v}" = "${MINOR}" ] && continue
+  [[ ",${SEEN:-}," == *",${v},"* ]] && continue
+  SEEN="${SEEN:-},${v}"
   exact=$(curl -fsS https://latest.civicrm.org/versions.json \
     | jq -re --arg m "${v}" '.[$m].releases[-1].version')
   if ! [[ "${exact}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then

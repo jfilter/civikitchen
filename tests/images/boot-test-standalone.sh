@@ -17,7 +17,9 @@
 #     without the core patch.
 #   * cklifecycle's settings-metadata check names every malformed
 #     pseudoconstant and passes valid ones, on a site that loads options;
-#   * cklifecycle accepts managed records core keeps by cleanup policy.
+#   * cklifecycle accepts managed records core keeps by cleanup policy;
+#   * the phpstan field check accepts every live get and create field on the
+#     catalog's minor release.
 # The db service gets a plain MYSQL_USER and no grant script: the app user
 # holds rights on its own database only, exactly as a hand-written stack.
 #
@@ -120,6 +122,18 @@ check "site serves HTTP 200 (got ${code})" "[ '${code}' = '200' ]"
 
 db_version=$(docker exec "${DB}" sh -c 'mariadb -uroot -proot -Nse "SELECT CONCAT(@@version, \" \", @@version_comment)" 2>/dev/null || mysql -uroot -proot -Nse "SELECT CONCAT(@@version, \" \", @@version_comment)"' 2>/dev/null || true)
 check "database responds (${db_version:-unknown})" "[ -n '${db_version}' ]"
+
+# 1b) The phpstan field check accepts every live get and create field: a
+# rejected one is a false unknownField report. The label carries the script's
+# verdict, so a row on another release shows "skipped", not a silent pass.
+docker cp "${SRC}/toolbelt/phpstan/tools/live-api4-drift.php" "${APP}:/tmp/" >/dev/null
+docker cp "${SRC}/toolbelt/phpstan/src" "${APP}:/tmp/ck-phpstan-src" >/dev/null
+drift_rc=0
+drift=$(docker exec -u www-data -e CK_PHPSTAN_SRC=/tmp/ck-phpstan-src "${APP}" \
+    cv scr /tmp/live-api4-drift.php 2>&1) || drift_rc=$?
+while IFS= read -r line; do echo "    ${line}"; done <<<"${drift}"
+verdict=$(grep '^live-api4-drift: ' <<<"${drift}" | tail -1 | sed 's/^live-api4-drift: //' || true)
+check "APIv4 catalog vs live getFields: ${verdict:-no verdict}" "[ ${drift_rc} = 0 ] && [ -n \"\${verdict}\" ]"
 
 # 2) The bind-mounted extension is enabled without CIVIKITCHEN_ENABLE_EXTENSIONS.
 status=$(cv api4 Extension.get +w key=ckbootfixture +s status | tr -d '[:space:]' || true)
