@@ -14,6 +14,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- The managed `phpstanBootstrap.php` finds core extensions by their
+  `info.xml` one level deeper as well, so afform's classes
+  (`ext/afform/core`) resolve without a `scanDirectories` entry, and a
+  `<requires>` entry that names a core extension is no longer reported as
+  missing from the ext dir.
+
 ## [1.32.0] - 2026-10-07
 
 ### Added

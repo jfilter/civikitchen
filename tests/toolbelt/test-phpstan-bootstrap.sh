@@ -21,6 +21,11 @@ echo '<?php' > "$core/api/api.php"
 # Core component extension: ships with core, off its classloader path.
 mkdir -p "$core/ext/civi_member/Civi/Api4"
 echo '<?php namespace Civi\Api4; class Membership {}' > "$core/ext/civi_member/Civi/Api4/Membership.php"
+echo '<extension key="civi_member" type="module"><file>civi_member</file></extension>' > "$core/ext/civi_member/info.xml"
+# Afform ships its extensions one level down, keyed unlike the directory.
+mkdir -p "$core/ext/afform/core/Civi/Afform/Event"
+echo '<?php namespace Civi\Afform\Event; class AfformSubmitEvent {}' > "$core/ext/afform/core/Civi/Afform/Event/AfformSubmitEvent.php"
+echo '<extension key="org.civicrm.afform" type="module"><file>afform</file></extension>' > "$core/ext/afform/core/info.xml"
 # A package whose classes sit off the civix layout stays uncovered.
 mkdir -p "$core/ext/flexmailer/src/Civi/Flexmailer"
 echo '<?php namespace Civi\Flexmailer; class Sender {}' > "$core/ext/flexmailer/src/Civi/Flexmailer/Sender.php"
@@ -48,6 +53,7 @@ cat > "$ext/repo/info.xml" <<'XML'
   <requires>
     <ext>org.example.dep</ext>
     <ext>org.example.absent</ext>
+    <ext>org.civicrm.afform</ext>
   </requires>
 </extension>
 XML
@@ -59,13 +65,14 @@ probe='require $argv[1];
     is_subclass_of("CRM_Dep_DAO_Thing", "CRM_Core_DAO_Base") ? "dao" : "-", "\n";'
 coreprobe='require $argv[1];
   echo class_exists("Civi\\Api4\\Membership") ? "member" : "-", " ",
-    class_exists("Civi\\Flexmailer\\Sender") ? "flexmailer" : "-", "\n";'
+    class_exists("Civi\\Flexmailer\\Sender") ? "flexmailer" : "-", " ",
+    class_exists("Civi\\Afform\\Event\\AfformSubmitEvent") ? "afform" : "-", "\n";'
 out="$(CIVICRM_CORE_DIR="$core" CK_EXT_DIR="$ext" php -r "$probe" "$ext/repo/phpstanBootstrap.php" 2>"$work/stderr")"
 [[ "$out" == "crm civi vendor dao" ]] || fail "required extension classes did not resolve: '$out'"
 grep -q 'org.example.absent is not under' "$work/stderr" \
   || fail "a required extension with no directory must be noted on stderr: $(cat "$work/stderr")"
-if grep -q 'org.example.dep' "$work/stderr"; then
-  fail "a present extension must not be reported: $(cat "$work/stderr")"
+if grep -qE 'org.example.dep|org.civicrm.afform' "$work/stderr"; then
+  fail "a present or core extension must not be reported: $(cat "$work/stderr")"
 fi
 
 # No <requires>: nothing registered, nothing said.
@@ -77,6 +84,6 @@ out="$(CIVICRM_CORE_DIR="$core" CK_EXT_DIR="$ext" php -r "$probe" "$ext/repo/php
 # Core component extensions need no <requires> entry; a package off the civix
 # layout is not covered and stays a scanDirectories entry.
 out="$(CIVICRM_CORE_DIR="$core" CK_EXT_DIR="$ext" php -r "$coreprobe" "$ext/repo/phpstanBootstrap.php" 2>"$work/stderr")"
-[[ "$out" == "member -" ]] || fail "core ext autoloading is wrong: '$out'"
+[[ "$out" == "member - afform" ]] || fail "core ext autoloading is wrong: '$out'"
 
 echo "phpstan bootstrap: ok"
