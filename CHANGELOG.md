@@ -14,12 +14,6 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
-### Fixed
-
-- `ckcoverage` points pcov at the extension root. pcov instruments only its
-  `pcov.directory`, which it guesses as `./src`, `./lib` or `./app` when one
-  exists, so an extension with a JavaScript `src/` measured 0% of its PHP.
-
 ## [1.33.0] - 2026-10-09
 
 ### Changed
@@ -43,6 +37,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   fixes the six Go stdlib CVEs the image scan excused for 7.0.2001. Three
   newer ones, fixed only in Go 1.26.9, are excused the same way until a
   tsgolint release carries them.
+- `ckcoverage` points pcov at the extension root. pcov instruments only its
+  `pcov.directory`, which it guesses as `./src`, `./lib` or `./app` when one
+  exists, so an extension with a JavaScript `src/` measured 0% of its PHP.
 
 ## [1.32.1] - 2026-10-07
 
