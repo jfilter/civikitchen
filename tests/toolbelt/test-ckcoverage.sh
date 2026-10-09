@@ -12,6 +12,7 @@ grep -q "tempnam(sys_get_temp_dir(), 'ckcoverage-run-')" \
 
 work=$(mktemp -d)
 trap '/bin/rm -rf "$work"' EXIT
+unset PHP_INI_SCAN_DIR
 mkdir -p "$work/bin" "$work/ext"
 cat > "$work/ext/info.xml" <<'EOF'
 <extension key="fixture" type="module"><file>fixture</file></extension>
@@ -39,12 +40,31 @@ while [ "$#" -gt 0 ]; do
 done
 test -n "$clover"
 test -n "$junit"
+# Like pcov: covers only if pcov.directory (ini, else ./src|lib|app, else cwd) is the
+# cwd. One scan dir follows CK_FIXTURE_SCAN_HEAD; "none" is empty (proc_open drops '').
+head=${CK_FIXTURE_SCAN_HEAD:-:}
+if [ "$head" = none ]; then head=; fi
+scan=${PHP_INI_SCAN_DIR-}
+case "$scan" in
+  "$head"*) ;;
+  *) echo "PHP_INI_SCAN_DIR lost its head: $scan" >&2; exit 1 ;;
+esac
+ini_dir=${scan#"$head"}
+case "$ini_dir" in *:*|'') echo "PHP_INI_SCAN_DIR has no single directory after its head: $scan" >&2; exit 1 ;; esac
+directory=$(sed -n 's/^pcov\.directory="\(.*\)"$/\1/p' "$ini_dir"/*.ini 2>/dev/null | tail -n 1)
+if [ -z "$directory" ]; then
+  directory=$(pwd -P)
+  for guess in src lib app; do
+    if [ -d "$guess" ]; then directory=$(pwd -P)/$guess; break; fi
+  done
+fi
+covered=0
+if [ "$directory" = "$(pwd -P)" ]; then covered=6; fi
 if [ -n "${CK_FIXTURE_FILTER_WARNING:-}" ]; then
   echo "Warning:       ${CK_FIXTURE_FILTER_WARNING}, code coverage will not be processed"
 else
-  cat > "$clover" <<'XML'
-<coverage><project><metrics statements="8" coveredstatements="6"/></project></coverage>
-XML
+  printf '<coverage><project><metrics statements="8" coveredstatements="%s"/></project></coverage>\n' \
+    "$covered" > "$clover"
 fi
 {
   echo '<testsuites>'
@@ -68,6 +88,34 @@ grep -q '75.00% line coverage (6/8 statements)' <<<"$out"
 grep -q 'reporting only' <<<"$out"
 
 echo 'ok   ckcoverage uses the shared PHP CLI and a unique temporary run log'
+
+# pcov guesses its directory as ./src when one exists, which in an extension
+# with a JavaScript src/ is no PHP at all: ckcoverage points it at the root.
+mkdir -p "$work/ext/src" "$work/tmp"
+out=$(cd "$work/ext" && PATH="$work/bin:$PATH" TMPDIR="$work/tmp" "$root/toolbelt/bin/ckcoverage")
+grep -q '75.00% line coverage (6/8 statements)' <<<"$out"
+# The caller's scan directories stay in front; an empty variable scans nothing.
+out=$(cd "$work/ext" && PATH="$work/bin:$PATH" TMPDIR="$work/tmp" PHP_INI_SCAN_DIR=/caller/ini \
+  CK_FIXTURE_SCAN_HEAD=/caller/ini: "$root/toolbelt/bin/ckcoverage")
+grep -q '75.00% line coverage (6/8 statements)' <<<"$out"
+out=$(cd "$work/ext" && PATH="$work/bin:$PATH" TMPDIR="$work/tmp" PHP_INI_SCAN_DIR='' \
+  CK_FIXTURE_SCAN_HEAD=none "$root/toolbelt/bin/ckcoverage")
+grep -q '75.00% line coverage (6/8 statements)' <<<"$out"
+rmdir "$work/ext/src"
+test -z "$(ls -A "$work/tmp")"
+
+echo 'ok   ckcoverage points pcov at the extension root and keeps the caller'"'"'s ini directories'
+
+# A quote or $ in the path would break or expand the ini value.
+mkdir "$work/q\"x"
+cp "$work/ext/info.xml" "$work/ext/phpunit.xml.dist" "$work/q\"x/"
+status=0
+out=$(cd "$work/q\"x" && PATH="$work/bin:$PATH" TMPDIR="$work/tmp" "$root/toolbelt/bin/ckcoverage" 2>&1) || status=$?
+test "$status" -ne 0
+grep -q 'must not contain' <<<"$out"
+test -z "$(ls -A "$work/tmp")"
+
+echo 'ok   ckcoverage refuses an extension path pcov.directory cannot hold'
 
 # PHPUnit 9 reads the include list from <coverage> or the legacy
 # <filter><whitelist>. It ignores <source>; a commented-out section is no section.

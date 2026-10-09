@@ -60,19 +60,36 @@ final class CoverageCommand implements Command
         if ($clover === false || $runLog === false || $junit === false) {
             return $this->error('could not create temporary files.');
         }
-        register_shutdown_function(static function () use ($clover, $runLog, $junit, $callerJunit): void {
+        // pcov instruments only pcov.directory, which it guesses as ./src, ./lib or
+        // ./app when one exists - in an extension with a JS src/ that is no PHP at all.
+        $iniDir = $clover . '.ini.d';
+        $iniFile = $iniDir . '/zz-ckcoverage.ini';
+        register_shutdown_function(static function () use ($clover, $runLog, $junit, $callerJunit, $iniDir, $iniFile): void {
             @unlink($clover);
             @unlink($runLog);
+            @unlink($iniFile);
+            @rmdir($iniDir);
             if ($callerJunit === null) {
                 @unlink($junit);
             }
         });
+        $cwd = getcwd();
+        if ($cwd === false || strpbrk($cwd, '"$') !== false) {
+            return $this->error('the extension path must not contain " or $ - pcov.directory cannot be set to it.');
+        }
+        if (!mkdir($iniDir, 0700) || file_put_contents($iniFile, 'pcov.directory="' . $cwd . "\"\n") === false) {
+            return $this->error('could not create temporary files.');
+        }
 
         echo "ckcoverage: running the suite with coverage (this is slower than a plain run) ...\n";
         $runner = $this->findExecutable('ckphpunit') ?? 'phpunit';
         $environment = getenv();
         $environment = is_array($environment) ? $environment : [];
         $environment['CIVICRM_UF'] = $environment['CIVICRM_UF'] ?? 'UnitTests';
+        // An empty segment keeps PHP's own scan directory, as an unset variable does;
+        // a variable set to '' scans nothing, so it gets no such segment.
+        $scanDirs = $environment['PHP_INI_SCAN_DIR'] ?? null;
+        $environment['PHP_INI_SCAN_DIR'] = $scanDirs === '' ? $iniDir : $scanDirs . PATH_SEPARATOR . $iniDir;
         $command = [$runner, '--coverage-clover', $clover];
         if ($callerJunit === null) {
             $command[] = '--log-junit';

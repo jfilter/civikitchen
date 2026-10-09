@@ -14,6 +14,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- `ckcoverage` points pcov at the extension root. pcov instruments only its
+  `pcov.directory`, which it guesses as `./src`, `./lib` or `./app` when one
+  exists, so an extension with a JavaScript `src/` measured 0% of its PHP.
+
 ## [1.33.0] - 2026-10-09
 
 ### Changed

@@ -785,6 +785,9 @@ in the history is not.
   it listed was skipped — phpunit prints "No tests executed!" or a suite of
   skips and exits 0 either way, which is not a passing suite. Only
   `policy.tests` with `mode: optional` makes such a run acceptable.
+- `ckcoverage` points pcov at the extension root for its run, so a `src/`,
+  `lib/` or `app/` without PHP (pcov's own guesses) does not hide the PHP
+  elsewhere.
 - `ckcoverage` reports line coverage and fails below the `policy.coverage.minimum` floor
   in `civikitchen.yaml`; `minimum: 0` is a floor that is always met, not an
   absent key. Adopt it in that order: **measure first, set the floor to
