@@ -253,14 +253,21 @@ in the checkout reaches the zip. The release fails when
 
 The build runs before any credential is minted on the runner, because it
 executes the repo's and its dependencies' code. A build script that calls a Node
-binary gets the runner's own Node.
+binary gets the `node_version` input's Node, the same default as extension CI.
 
 Locally, run the same two Bun commands first. `ckrelease dist` never runs the
 build: it stages the outputs the working tree holds and refuses, naming each
 missing one, until they exist. Build at the commit you archive, since the
 outputs come from the working tree and not from `--ref`.
 
-No caller input is involved, so a repo adopts this in `civikitchen.yaml` alone.
+Extension CI builds the same output before every job that runs the suite or
+the browser tests (`ci`, `mutation`, `compat`, `playwright`), because those load
+it and git does not carry it. `upgrade` and `schema-parity` skip it: they check
+the previous release out into the mount, where an untracked build would collide
+with a `dist/` that release still committed; `core-upgrade` runs no suite. A Bun
+build needs the CI caller's `bun: true`, and CI fails without it: one tree,
+installed one way, is what the release builds from. The GitLab pipeline has no
+Bun, so a release-only build is a GitHub-only setup.
 
 ## The smoke test
 

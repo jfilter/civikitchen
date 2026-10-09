@@ -1,0 +1,40 @@
+# Fixture for the dist-build-wiring gate: `bare` runs PHPUnit without building,
+# `late` builds only after its suite ran, `built` does it right.
+name: Fixture
+on: workflow_call
+
+jobs:
+  key:
+    runs-on: ubuntu-latest
+    outputs:
+      dist_build_tool: ${{ steps.dist-build.outputs.tool }}
+    steps:
+      - id: dist-build
+        run: echo "tool=bun" >> "$GITHUB_OUTPUT"
+
+  bare:
+    needs: key
+    runs-on: ubuntu-latest
+    steps:
+      - name: PHPUnit
+        run: docker compose exec -T app ckphpunit
+
+  late:
+    needs: key
+    runs-on: ubuntu-latest
+    steps:
+      - name: Playwright
+        run: bun run test:e2e
+      - name: Build the declared release output
+        if: ${{ needs.key.outputs.dist_build_tool == 'bun' }}
+        run: bun run build
+
+  built:
+    needs: key
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build the declared release output
+        if: ${{ needs.key.outputs.dist_build_tool == 'bun' }}
+        uses: ./.civikitchen-siblings/ci/.github/actions/release-build
+      - name: Mutation testing
+        run: docker compose exec -T app ckmutate

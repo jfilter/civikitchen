@@ -14,6 +14,15 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- Extension CI builds the `policy.dist.build` output before the jobs that
+  run the suite or the browser tests (`ci`, `mutation`, `compat`,
+  `playwright`), so a repo can keep its frontend bundle out of git and still
+  test it. A Bun build requires the caller's `bun: true`.
+- `extension-release.yml` takes a `node_version` input (default `24`) and sets
+  up that Node for the `policy.dist.build` build, as CI does.
+
 ## [1.33.0] - 2026-10-09
 
 ### Changed

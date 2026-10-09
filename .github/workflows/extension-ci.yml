@@ -250,6 +250,7 @@ jobs:
       ext_path: ${{ steps.key.outputs.ext_path }}
       tool_path: ${{ steps.key.outputs.tool_path }}
       repo_path: ${{ steps.key.outputs.repo_path }}
+      dist_build_tool: ${{ steps.dist-build.outputs.tool }}
     env:
       CK_EXT_KEY_INPUT: ${{ inputs.key }}
       CK_WORKING_DIRECTORY: ${{ inputs.working_directory }}
@@ -316,7 +317,44 @@ jobs:
             echo "ext_path=$ext_path"
             echo "tool_path=$tool_path"
             echo "repo_path=$repo_path"
+            echo "wd=$wd"
           } >> "$GITHUB_OUTPUT"
+
+      # policy.dist.build: output the repo builds instead of committing. Every job
+      # that runs the extension's tests or pages builds it the way the release does.
+      - name: Check out civikitchen for the policy parser
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: jfilter/civikitchen
+          ref: ${{ job.workflow_sha }}
+          sparse-checkout: |
+            toolbelt
+            packages
+          path: .civikitchen-ci
+
+      - name: Read the declared release build
+        id: dist-build
+        env:
+          CK_WD: ${{ steps.key.outputs.wd }}
+          CK_USE_BUN: ${{ inputs.bun }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "$CK_WD/civikitchen.yaml" ]; then
+            echo "tool=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
+            --working-dir=.civikitchen-ci/packages/civikitchen-scenario-schema
+          ckconform="$GITHUB_WORKSPACE/.civikitchen-ci/toolbelt/bin/ckconform"
+          # Refuses an unsafe output path, an unpinned Bun or a missing bun.lock up front.
+          (cd "$CK_WD" && php "$ckconform" --dist-paths > /dev/null)
+          tool=$(cd "$CK_WD" && php "$ckconform" --policy dist_build_tool)
+          if [ "$tool" = bun ] && [ "$CK_USE_BUN" != true ]; then
+            echo "policy.dist.build builds with Bun, so the frontend steps must too — set the bun input" >&2
+            exit 1
+          fi
+          echo "tool=$tool" >> "$GITHUB_OUTPUT"
 
   # Template drift: the tooling files civikitchen owns (CI caller, test
   # bootstraps, CI compose stack) must match the template, or
@@ -734,6 +772,12 @@ jobs:
           else
             npm test
           fi
+
+      # Tests and pages load it, and git does not carry it. The key job made
+      # sure Bun drives this job, so the install above has run.
+      - name: Build the declared release output (bun run build)
+        if: ${{ needs.key.outputs.dist_build_tool == 'bun' }}
+        run: bun run build
 
       # --- Private dependencies (opt-in via composer_install / sibling_repo) --
       #
@@ -1338,8 +1382,8 @@ jobs:
             || { echo "invalid extension key: $CK_EXT_KEY" >&2; exit 1; }
 
       # Private dependencies — see the note on the same pair of steps in `ci`.
-      - name: Check out civikitchen for the shared private-dependency steps
-        if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
+      - name: Check out civikitchen for the shared steps
+        if: ${{ inputs.composer_install || inputs.sibling_repo != '' || needs.key.outputs.dist_build_tool != '' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -1347,6 +1391,14 @@ jobs:
           ref: ${{ job.workflow_sha }}
           sparse-checkout: .github/actions
           path: .civikitchen-siblings/ci
+
+      # The suite loads it. Before any token is minted: the build runs dependency code.
+      - name: Build the declared release output
+        if: ${{ needs.key.outputs.dist_build_tool == 'bun' }}
+        uses: ./.civikitchen-siblings/ci/.github/actions/release-build
+        with:
+          node_version: ${{ inputs.node_version }}
+          working_directory: ${{ inputs.working_directory }}
 
       - name: Private dependencies
         id: deps
@@ -1772,8 +1824,8 @@ jobs:
           persist-credentials: false
 
       # Private dependencies — see the note on the same pair of steps in `ci`.
-      - name: Check out civikitchen for the shared private-dependency steps
-        if: ${{ inputs.composer_install || inputs.sibling_repo != '' }}
+      - name: Check out civikitchen for the shared steps
+        if: ${{ inputs.composer_install || inputs.sibling_repo != '' || needs.key.outputs.dist_build_tool != '' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -1781,6 +1833,14 @@ jobs:
           ref: ${{ job.workflow_sha }}
           sparse-checkout: .github/actions
           path: .civikitchen-siblings/ci
+
+      # The suite loads it. Before any token is minted: the build runs dependency code.
+      - name: Build the declared release output
+        if: ${{ needs.key.outputs.dist_build_tool == 'bun' }}
+        uses: ./.civikitchen-siblings/ci/.github/actions/release-build
+        with:
+          node_version: ${{ inputs.node_version }}
+          working_directory: ${{ inputs.working_directory }}
 
       - name: Private dependencies
         id: deps
@@ -2002,6 +2062,11 @@ jobs:
           else
             npm ci --ignore-scripts
           fi
+
+      # The pages under test load it; the key job made sure Bun drives this job.
+      - name: Build the declared release output (bun run build)
+        if: ${{ needs.key.outputs.dist_build_tool == 'bun' }}
+        run: bun run build
 
       # Browsers come from `playwright install`, never from the install hook
       # --ignore-scripts just skipped. No browser argument: which projects the

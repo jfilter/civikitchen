@@ -1,0 +1,31 @@
+name: CiviKitchen release build
+description: >-
+  Builds the output a repo declares under policy.dist.build, the way the
+  release workflow does, for a job that has no frontend steps of its own.
+
+inputs:
+  node_version:
+    description: Node the installed binaries run on; Bun replaces npm, not node.
+    required: true
+  working_directory:
+    description: >-
+      The extension's directory inside the repository. Composite steps do not
+      inherit the calling job's defaults.run.working-directory.
+    default: '.'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: ${{ inputs.node_version }}
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version-file: ${{ inputs.working_directory }}/package.json
+    - name: bun install --frozen-lockfile && bun run build
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: |
+        set -euo pipefail
+        bun install --frozen-lockfile
+        bun run build
