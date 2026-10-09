@@ -7,6 +7,7 @@ namespace CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Check;
 use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\HookSurface;
+use CiviKitchen\Ckconform\PhpSource;
 use CiviKitchen\Ckconform\Reporter;
 use CiviKitchen\Ckconform\Suppressions;
 
@@ -20,50 +21,56 @@ use CiviKitchen\Ckconform\Suppressions;
  * never registered, the menu route 404s — while every test that does not
  * exercise that exact path stays green.
  *
- * scan-classes is the one entry core itself nags about: an entity picked up by
- * Civi\Api4\Service\LegacyEntityScanner instead of the class scanner raises a
- * status-check message ("APIv4 Entities using Legacy Entity Scanner"), so the
- * extension works but pays a full-extension file scan on every request.
+ * scan-classes fails: an entity picked up by Civi\Api4\Service\LegacyEntityScanner
+ * raises a status-check message on every site ("APIv4 Entities using Legacy
+ * Entity Scanner") and adds an extension file scan to every cache rebuild.
  *
- * A warning, not a failure: older civix generated an xmlMenu/managed hook into
- * the .civix shim instead of using a mixin, so a repo on that pattern loads the
- * files a different way and is not broken. Until every mapping has a proven hard
- * failure this stays a prompt for a human — is the mixin missing, or is the file
- * itself a vestige to delete?
+ * The others warn: older civix wired xmlMenu/managed hooks into the .civix shim
+ * instead of a mixin, so such a repo loads the files another way and is not
+ * broken — a prompt for a human: is the mixin missing, or the file a vestige?
  */
 final class MixinDeclarationCheck implements Check
 {
     /**
-     * civix mixin => the artefact family it loads, as (directory, suffix). An
-     * empty directory means the suffix may sit anywhere in the tree (schema/ for
-     * entities, settings/ for settings). Version-agnostic: mgd-php@1.0.0 and
-     * mgd-php@2.0.0 both satisfy "mgd-php".
-     *
-     * 'direct' restricts the match to immediate children of the directory. Only
-     * scan-classes needs it: core's LegacyEntityScanner globs `Civi/Api4/*.php`
-     * without recursing, so Civi/Api4/Action/* is not an entity class and is no
-     * evidence of a missing mixin.
+     * civix mixin => the paths it loads, relative to the extension root and
+     * mirroring core's mixin/<name>@<version>/mixin.php: `*` stays within one
+     * directory; `dir`, `**`, `name` matches name at any depth below dir. A file anywhere else
+     * (a nested example extension, a fixture) is no evidence. Version-agnostic:
+     * mgd-php@1.0.0 and mgd-php@2.0.0 both satisfy "mgd-php".
      *
      * 'hook' names the hook older civix loaded the family through. It serves only
      * that purpose, so the extension implementing it loads the files anyway.
      *
-     * @var array<string, array{dir: string, suffix: string, label: string, direct?: bool, hook?: string}>
+     * 'fail' marks a gap core itself reports on the site's status page; 'class'
+     * counts only files that declare a class.
+     *
+     * @var array<string, array{globs: list<string>, label: string, hook?: string, class?: bool, fail?: bool}>
      */
     private const REQUIREMENTS = [
-        'mgd-php' => ['dir' => 'managed/', 'suffix' => '.mgd.php', 'label' => 'managed records (managed/*.mgd.php)'],
-        'entity-types-php' => ['dir' => '', 'suffix' => '.entityType.php', 'label' => 'entity schemas (*.entityType.php)'],
-        'menu-xml' => ['dir' => 'xml/Menu/', 'suffix' => '.xml', 'label' => 'menu routes (xml/Menu/*.xml)', 'hook' => 'xmlMenu'],
+        'mgd-php' => [
+            'globs' => ['*.mgd.php', 'managed/**/*.mgd.php', 'api/**/*.mgd.php', 'CRM/**/*.mgd.php', 'Civi/**/*.mgd.php'],
+            'label' => 'managed records (managed/*.mgd.php)',
+            'hook' => 'managed',
+        ],
+        // @1 read xml/schema/CRM/, @2 reads schema/.
+        'entity-types-php' => [
+            'globs' => ['schema/*.entityType.php', 'xml/schema/CRM/*/*.entityType.php'],
+            'label' => 'entity schemas (schema/*.entityType.php)',
+            'hook' => 'entityTypes',
+        ],
+        'menu-xml' => ['globs' => ['xml/Menu/*.xml'], 'label' => 'menu routes (xml/Menu/*.xml)', 'hook' => 'xmlMenu'],
         'setting-php' => [
-            'dir' => '',
-            'suffix' => '.setting.php',
-            'label' => 'settings (*.setting.php)',
+            'globs' => ['settings/**/*.setting.php'],
+            'label' => 'settings (settings/*.setting.php)',
             'hook' => 'alterSettingsFolders',
         ],
-        'ang-php' => ['dir' => 'ang/', 'suffix' => '.ang.php', 'label' => 'Angular modules (ang/*.ang.php)'],
+        'ang-php' => ['globs' => ['ang/*.ang.php'], 'label' => 'Angular modules (ang/*.ang.php)'],
+        // LegacyEntityScanner globs Civi/Api4/*.php without recursing and skips
+        // what class_exists() rejects, so only a declared class counts.
         'scan-classes' => [
-            'dir' => 'Civi/Api4/',
-            'suffix' => '.php',
-            'direct' => true,
+            'globs' => ['Civi/Api4/*.php'],
+            'class' => true,
+            'fail' => true,
             'label' => 'APIv4 entities (Civi/Api4/*.php)',
         ],
     ];
@@ -80,23 +87,27 @@ final class MixinDeclarationCheck implements Check
         }
 
         $declared = $this->declaredMixins($context);
-        $missing = [];
-        $enable = [];
+        $missing = ['fail' => [], 'warn' => []];
         foreach (self::REQUIREMENTS as $mixin => $spec) {
             if (in_array($mixin, $declared, true) || $this->implementsHook($context, $spec['hook'] ?? null)) {
                 continue;
             }
-            if ($this->hasArtefact($context, $spec['dir'], $spec['suffix'], $spec['direct'] ?? false)) {
-                $missing[] = $spec['label'] . ' need the ' . $mixin . ' mixin';
-                $enable[] = $mixin . '@<version>';
+            if ($this->hasArtefact($context, $spec['globs'], $spec['class'] ?? false)) {
+                $missing[($spec['fail'] ?? false) ? 'fail' : 'warn'][$mixin] = $spec['label'] . ' need the ' . $mixin . ' mixin';
             }
         }
 
-        if ($missing !== []) {
+        foreach ($missing as $level => $labels) {
+            if ($labels === []) {
+                continue;
+            }
             // civix insists on name@version; `civix mixin` lists what it has.
-            $reporter->warn(
-                'info.xml ships files no declared mixin loads: ' . implode('; ', $missing)
-                . ' — enable with `civix mixin --enable=' . implode(',', $enable)
+            $reporter->{$level}(
+                'info.xml ships files no declared mixin loads: ' . implode('; ', $labels)
+                . ' — enable with `civix mixin --enable=' . implode(',', array_map(
+                    static fn (string $mixin): string => $mixin . '@<version>',
+                    array_keys($labels),
+                ))
                 . '` (`civix mixin` lists the versions), or delete the files if they are a vestige'
             );
         }
@@ -131,21 +142,14 @@ final class MixinDeclarationCheck implements Check
         return false;
     }
 
-    private function hasArtefact(Context $context, string $dir, string $suffix, bool $direct = false): bool
+    /** @param list<string> $globs */
+    private function hasArtefact(Context $context, array $globs, bool $class): bool
     {
         foreach ($context->trackedFiles() as $file) {
-            // Test trees ship nothing; their fixtures are no artefacts.
-            if (!str_ends_with($file, $suffix) || str_starts_with($file, 'tests/') || str_contains($file, '/tests/')) {
+            if (!$this->matchesAny($file, $globs)) {
                 continue;
             }
-            if ($dir === '') {
-                return true;
-            }
-            $rest = $this->below($file, $dir);
-            if ($rest === null) {
-                continue;
-            }
-            if ($direct && str_contains($rest, '/')) {
+            if ($class && !$this->declaresClass((string) $context->read($file))) {
                 continue;
             }
             // A file that opts out is no evidence: an Api4 class loaded some
@@ -161,16 +165,34 @@ final class MixinDeclarationCheck implements Check
         return false;
     }
 
-    /**
-     * The part of $file below $dir, or null if $file is not under it at all.
-     */
-    private function below(string $file, string $dir): ?string
+    /** @param list<string> $globs */
+    private function matchesAny(string $file, array $globs): bool
     {
-        if (str_starts_with($file, $dir)) {
-            return substr($file, strlen($dir));
+        foreach ($globs as $glob) {
+            [$dir, $name] = array_pad(explode('/**/', $glob, 2), 2, null);
+            $matches = $name === null
+                ? fnmatch($glob, $file, FNM_PATHNAME)
+                : str_starts_with($file, $dir . '/') && fnmatch($name, basename($file));
+            if ($matches) {
+                return true;
+            }
         }
-        $at = strpos($file, '/' . $dir);
 
-        return $at === false ? null : substr($file, $at + strlen($dir) + 1);
+        return false;
+    }
+
+    /** Whether the source declares a named class (not an interface, trait or enum). */
+    private function declaresClass(string $source): bool
+    {
+        $tokens = PhpSource::codeTokens($source);
+        foreach ($tokens as $i => $token) {
+            if ($token->is(T_CLASS) && ($tokens[$i + 1] ?? null)?->is(T_STRING)
+                && !($tokens[$i - 1] ?? null)?->is([T_DOUBLE_COLON, T_NEW])
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

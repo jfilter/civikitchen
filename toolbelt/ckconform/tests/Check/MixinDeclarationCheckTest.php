@@ -113,13 +113,32 @@ final class MixinDeclarationCheckTest extends CheckTestCase
         $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
     }
 
-    public function testAnApi4EntityWithoutScanClassesWarns(): void
+    /** Core lists such entities on the status page, so this one fails. */
+    public function testAnApi4EntityWithoutScanClassesFails(): void
     {
         $context = $this->repo([
             'info.xml' => $this->info("    <mixin>mgd-php@2.0.0</mixin>\n"),
             'Civi/Api4/Widget.php' => "<?php\nnamespace Civi\\Api4;\nclass Widget {}\n",
         ], git: true);
-        $this->assertWarns($this->run_(new MixinDeclarationCheck(), $context), 'scan-classes');
+        $reporter = $this->run_(new MixinDeclarationCheck(), $context);
+        $this->assertFails($reporter, '`civix mixin --enable=scan-classes@<version>`');
+        self::assertSame(0, $reporter->warnings());
+    }
+
+    /** A missing scan-classes fails on its own; the softer gaps still only warn. */
+    public function testScanClassesFailsBesideAWarning(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->info(''),
+            'Civi/Api4/Widget.php' => "<?php\nnamespace Civi\\Api4;\nclass Widget {}\n",
+            'xml/Menu/ext.xml' => "<menu></menu>\n",
+        ], git: true);
+        $reporter = $this->run_(new MixinDeclarationCheck(), $context);
+        self::assertSame(1, $reporter->failures());
+        self::assertStringNotContainsString('menu-xml', implode("\n", $reporter->messages('fail')));
+        $this->assertWarns($reporter, '`civix mixin --enable=menu-xml@<version>`');
+        self::assertSame(1, $reporter->warnings());
+        self::assertStringNotContainsString('scan-classes', implode("\n", $reporter->messages('warn')));
     }
 
     /** Action classes live below Civi/Api4/ and are not scanned entities. */
@@ -164,5 +183,94 @@ final class MixinDeclarationCheckTest extends CheckTestCase
             'tests/fixtures/xml/Menu/myext.xml' => '<menu/>',
         ], git: true);
         $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
+    }
+
+    /** Core loads from fixed paths below the root; a nested example tree is not the extension's. */
+    public function testArtefactsOutsideTheMixinPathsDoNotCount(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->info(''),
+            'solutions/step/4/managed/Thing.mgd.php' => "<?php\nreturn [];\n",
+            'solutions/step/3/schema/Note.entityType.php' => "<?php\nreturn [];\n",
+            'solutions/step/4/settings/step.setting.php' => "<?php\nreturn [];\n",
+            'solutions/step/4/Civi/Api4/Note.php' => "<?php\nclass Note {}\n",
+            'solutions/step/4/xml/Menu/step.xml' => "<menu></menu>\n",
+            'solutions/step/4/ang/step.ang.php' => "<?php\nreturn [];\n",
+            'schema/sub/Note.entityType.php' => "<?php\nreturn [];\n",
+            'ang/sub/step.ang.php' => "<?php\nreturn [];\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
+    }
+
+    /** mgd-php reads the whole managed/ and api/ subtrees and *.mgd.php at the root. */
+    public function testManagedRecordsCountInEveryPathCoreLoads(): void
+    {
+        $paths = ['Thing.mgd.php', 'managed/sub/Thing.mgd.php', 'api/v3/Thing.mgd.php', 'CRM/Ext/Thing.mgd.php', 'Civi/Ext/Thing.mgd.php'];
+        foreach ($paths as $path) {
+            $context = $this->repo([
+                'info.xml' => $this->info(''),
+                $path => "<?php\nreturn [];\n",
+            ], git: true);
+            $this->assertWarns($this->run_(new MixinDeclarationCheck(), $context), 'mgd-php');
+        }
+    }
+
+    /** setting-php hands settings/ to a recursive scan, ang-php reads ang/ directly. */
+    public function testNestedSettingsAndRootAngularModulesCount(): void
+    {
+        foreach (['settings/sub/ext.setting.php' => 'setting-php', 'ang/ext.ang.php' => 'ang-php'] as $path => $mixin) {
+            $context = $this->repo(['info.xml' => $this->info(''), $path => "<?php\nreturn [];\n"], git: true);
+            $this->assertWarns($this->run_(new MixinDeclarationCheck(), $context), $mixin);
+        }
+    }
+
+    /** class_exists() rejects traits and interfaces, so core never lists them. */
+    public function testATraitOrInterfaceInApi4IsNoEntity(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->info(''),
+            'Civi/Api4/WidgetTrait.php' => "<?php\nnamespace Civi\\Api4;\ntrait WidgetTrait { public function n() { return self::class; } }\n",
+            'Civi/Api4/WidgetInterface.php' => "<?php\nnamespace Civi\\Api4;\ninterface WidgetInterface {}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
+    }
+
+    public function testASuppressedEntityFileDoesNotFail(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->info(''),
+            'Civi/Api4/Widget.php' => "<?php\n// ckconform-ignore-file mixin-declaration -- registered by the scanClasses hook\n"
+                . "namespace Civi\\Api4;\nclass Widget {}\n",
+        ], git: true);
+        $reporter = $this->run_(new MixinDeclarationCheck(), $context);
+        self::assertSame(0, $reporter->failures());
+        self::assertSame(0, $reporter->warnings());
+    }
+
+    /** entity-types-php@1 read xml/schema/CRM/; older civix loaded it through the shim's hook. */
+    public function testTheLegacySchemaLayoutCountsUnlessTheHookLoadsIt(): void
+    {
+        $files = ['xml/schema/CRM/Ext/Thing.entityType.php' => "<?php\nreturn [];\n"];
+        $context = $this->repo(['info.xml' => $this->info('')] + $files, git: true);
+        $this->assertWarns($this->run_(new MixinDeclarationCheck(), $context), 'entity-types-php');
+
+        $context = $this->repo([
+            'info.xml' => str_replace('key="ext"', 'key="org.example.ext"', $this->info('')),
+            'ext.php' => "<?php\nfunction ext_civicrm_entityTypes(&\$entityTypes) {}\n",
+            'ext.civix.php' => "<?php\n",
+        ] + $files, git: true);
+        $this->assertSilent($this->run_(new MixinDeclarationCheck(), $context));
+    }
+
+    /** The hook proves nothing about which classes it registers; only the mixin counts. */
+    public function testAnOwnScanClassesHookStillFails(): void
+    {
+        $context = $this->repo([
+            'info.xml' => str_replace('key="ext"', 'key="org.example.ext"', $this->info('')),
+            'ext.php' => "<?php\nfunction ext_civicrm_scanClasses(array &\$classes) {}\n",
+            'ext.civix.php' => "<?php\n",
+            'Civi/Api4/Widget.php' => "<?php\nnamespace Civi\\Api4;\nclass Widget {}\n",
+        ], git: true);
+        $this->assertFails($this->run_(new MixinDeclarationCheck(), $context), 'scan-classes');
     }
 }

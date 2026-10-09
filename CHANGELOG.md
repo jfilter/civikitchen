@@ -14,6 +14,23 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking**: `ckconform` fails an extension that ships APIv4 entities
+  (`Civi/Api4/*.php`) without the `scan-classes` mixin. Core lists every such
+  entity on the site's status page ("APIv4 Entities using Legacy Entity
+  Scanner"), so the former warning reached production unnoticed. Fix with
+  `civix mixin --enable=scan-classes@1.0.0`; the other mixin gaps still warn.
+  Only a file declaring a class counts; a deliberate exception takes a
+  `ckconform-ignore-file mixin-declaration -- <reason>` comment.
+
+### Fixed
+
+- `ckconform`'s mixin check counts only files at the paths core's mixins
+  load (`schema/*.entityType.php`, `settings/`, `managed/`, `CRM/` and `Civi/`
+  for `*.mgd.php`, …). Managed records outside `managed/` now count too. A nested example tree such as `solutions/<step>/managed/` no longer
+  reports a missing mixin for the enclosing extension.
+
 ## [1.32.1] - 2026-10-07
 
 ### Fixed
