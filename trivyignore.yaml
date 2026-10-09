@@ -87,63 +87,37 @@ vulnerabilities:
   #
   # opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/*/tsgolint is a
   # prebuilt Go binary from npm; its stdlib version is whatever oxlint built
-  # with (1.26.5), and nothing here can relink it. All six CVEs are in server
-  # or wire-format code paths (HTTP/2 server, URL/path parsing, XML decoding,
-  # TLS handshake, ASN.1). tsgolint is the type-aware linter behind ckeslint:
-  # it reads TypeScript sources the developer points it at, opens no listener
-  # and speaks no TLS/HTTP/XML/ASN.1, so none of them is reachable.
-  # oxlint-tsgolint 7.0.2001 (newest, 2026-07-21) predates go1.26.6; no build
-  # with the fixes exists. On expiry: `npm view oxlint-tsgolint version` —
-  # bump toolbelt/oxlint/package.json as soon as a release built with
-  # >= 1.26.6 is out and delete all six entries together.
+  # with (1.26.8 in 7.0.2003), and nothing here can relink it. All three CVEs
+  # are denial-of-service paths in HTTP and TLS servers/clients. tsgolint is
+  # the type-aware linter behind ckeslint: it reads TypeScript sources the
+  # developer points it at, opens no listener and speaks no TLS/HTTP, so none
+  # of them is reachable. On expiry: `npm view oxlint-tsgolint version` — bump
+  # toolbelt/oxlint/package.json as soon as a release built with >= 1.26.9 is
+  # out and delete all three entries together.
   # -------------------------------------------------------------------------
-  - id: CVE-2026-33818
+  - id: CVE-2026-78667
     paths:
       - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
     statement: >-
-      Go stdlib encoding/asn1 stack exhaustion on nested input in the prebuilt tsgolint binary — unreachable
+      Go stdlib net/http denial of service via a crafted HTTP request in the prebuilt tsgolint binary — unreachable
       from a local linter that serves nothing; see the group note above.
-    expired_at: 2026-11-01
+    expired_at: 2026-11-10
 
-  - id: CVE-2026-56853
+  - id: CVE-2026-78669
     paths:
       - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
     statement: >-
-      Go stdlib net/http h2c server pre-read in the prebuilt tsgolint binary — unreachable
+      Go stdlib net/http internal HTTP/2 denial of service in the prebuilt tsgolint binary — unreachable
       from a local linter that serves nothing; see the group note above.
-    expired_at: 2026-11-01
+    expired_at: 2026-11-10
 
-  - id: CVE-2026-56858
+  - id: CVE-2026-97031
     paths:
       - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
     statement: >-
-      Go stdlib net/url unescaped-slash path parsing in the prebuilt tsgolint binary — unreachable
+      Go stdlib crypto/tls handshake denial of service in the prebuilt tsgolint binary — unreachable
       from a local linter that serves nothing; see the group note above.
-    expired_at: 2026-11-01
-
-  - id: CVE-2026-56859
-    paths:
-      - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
-    statement: >-
-      Go stdlib encoding/xml DecodeElement depth reset in the prebuilt tsgolint binary — unreachable
-      from a local linter that serves nothing; see the group note above.
-    expired_at: 2026-11-01
-
-  - id: CVE-2026-56860
-    paths:
-      - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
-    statement: >-
-      Go stdlib path resolution of .. segments in the prebuilt tsgolint binary — unreachable
-      from a local linter that serves nothing; see the group note above.
-    expired_at: 2026-11-01
-
-  - id: CVE-2026-56862
-    paths:
-      - "opt/civikitchen/toolbelt/oxlint/node_modules/@oxlint-tsgolint/**"
-    statement: >-
-      Go stdlib crypto/tls KeyUpdate state handling in the prebuilt tsgolint binary — unreachable
-      from a local linter that serves nothing; see the group note above.
-    expired_at: 2026-11-01
+    expired_at: 2026-11-10
 
   # -------------------------------------------------------------------------
   # CiviCRM core's bundled frontend libraries

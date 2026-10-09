@@ -36,8 +36,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 - `ckconform`'s mixin check counts only files at the paths core's mixins
   load (`schema/*.entityType.php`, `settings/`, `managed/`, `CRM/` and `Civi/`
-  for `*.mgd.php`, …). Managed records outside `managed/` now count too. A nested example tree such as `solutions/<step>/managed/` no longer
-  reports a missing mixin for the enclosing extension.
+  for `*.mgd.php`, …). Managed records outside `managed/` now count too. A
+  nested example tree such as `solutions/<step>/managed/` no longer reports a
+  missing mixin for the enclosing extension.
+- The images ship `oxlint-tsgolint` 7.0.2003, built with Go 1.26.8, which
+  fixes the six Go stdlib CVEs the image scan excused for 7.0.2001. Three
+  newer ones, fixed only in Go 1.26.9, are excused the same way until a
+  tsgolint release carries them.
 
 ## [1.32.1] - 2026-10-07
 
