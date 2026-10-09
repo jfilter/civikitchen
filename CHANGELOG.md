@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.33.0] - 2026-10-10
+
 ### Changed
 
 - **Breaking**: `ckconform` fails an extension that ships APIv4 entities
@@ -1501,7 +1503,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.32.1...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.33.0...HEAD
+[1.33.0]: https://github.com/jfilter/civikitchen/compare/v1.32.1...v1.33.0
 [1.32.1]: https://github.com/jfilter/civikitchen/compare/v1.32.0...v1.32.1
 [1.32.0]: https://github.com/jfilter/civikitchen/compare/v1.31.0...v1.32.0
 [1.31.0]: https://github.com/jfilter/civikitchen/compare/v1.30.2...v1.31.0
