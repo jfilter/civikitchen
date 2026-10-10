@@ -49,7 +49,7 @@
 : "${CK_SETTINGS_D:=}"
 # Mount table used to tell bind-mounted extensions from downloaded ones.
 : "${CK_MOUNTINFO:=/proc/self/mountinfo}"
-# Where the version-matching core language tarball is fetched from.
+# Where the core language archives are fetched from.
 : "${CK_L10N_BASE_URL:=https://download.civicrm.org}"
 # Where ck_listen_on_site_port writes its Apache config (rewritten on every boot).
 : "${CK_APACHE_CONF:=/etc/apache2/conf-enabled/civikitchen-site-port.conf}"
@@ -732,13 +732,13 @@ ck_enable_extensions() {
 # sets lcMessages; it has to be one of the installed locales.
 ck_locales() {
     local out version l10n_dir
-    local -a members=()
-    out="$(ck_locale_members)" || return 1
+    local -a locales=()
+    out="$(ck_requested_locales)" || return 1
     [[ -n "${out}" ]] || return 0
-    mapfile -t members <<< "${out}"
+    mapfile -t locales <<< "${out}"
     version="$(ck_as_web cv ev 'echo CRM_Utils_System::version();')"
     l10n_dir="$(ck_as_web cv path -d '[civicrm.l10n]')"
-    ck_fetch_locales "${version}" "${l10n_dir}" "${members[@]}" || return 1
+    ck_fetch_locales "${version}" "${l10n_dir}" "${locales[@]}" || return 1
     if [[ -n "${CIVIKITCHEN_DEFAULT_LOCALE:-}" ]]; then
         ck_as_web cv setting:set "lcMessages=${CIVIKITCHEN_DEFAULT_LOCALE}" >/dev/null
         echo "[civikitchen] Default locale set to ${CIVIKITCHEN_DEFAULT_LOCALE} (lcMessages)."
@@ -749,21 +749,17 @@ ck_locales() {
 # installer renders its seed labels through ts(). $1 = core source dir.
 ck_locales_before_install() {
     local src="$1" l10n_dir="$2" out version
-    local -a members=()
-    out="$(ck_locale_members)" || return 1
+    local -a locales=()
+    out="$(ck_requested_locales)" || return 1
     [[ -n "${out}" ]] || return 0
-    mapfile -t members <<< "${out}"
+    mapfile -t locales <<< "${out}"
     version="$(ck internal xml-field "${src}/xml/version.xml" version_no)" || return 1
-    if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "[civikitchen] ERROR: no CiviCRM version in ${src}/xml/version.xml" >&2
-        return 1
-    fi
-    ck_fetch_locales "${version}" "${l10n_dir}" "${members[@]}"
+    ck_fetch_locales "${version}" "${l10n_dir}" "${locales[@]}"
 }
 
-# Validate CIVIKITCHEN_LOCALES / CIVIKITCHEN_DEFAULT_LOCALE and print the
-# l10n tarball member of each requested locale, one per line.
-ck_locale_members() {
+# Validate CIVIKITCHEN_LOCALES / CIVIKITCHEN_DEFAULT_LOCALE and print each
+# requested locale, one per line.
+ck_requested_locales() {
     if [[ -z "${CIVIKITCHEN_LOCALES:-}" ]]; then
         if [[ -n "${CIVIKITCHEN_DEFAULT_LOCALE:-}" ]]; then
             echo "[civikitchen] ERROR: CIVIKITCHEN_DEFAULT_LOCALE=${CIVIKITCHEN_DEFAULT_LOCALE} needs its language files — list it in CIVIKITCHEN_LOCALES" >&2
@@ -772,7 +768,7 @@ ck_locale_members() {
         return 0
     fi
     local locale
-    local -a locales=() members=()
+    local -a locales=() requested=()
     IFS=',' read -ra locales <<< "${CIVIKITCHEN_LOCALES}"
     for locale in "${locales[@]}"; do
         locale="${locale// /}"
@@ -781,42 +777,52 @@ ck_locale_members() {
             echo "[civikitchen] ERROR: '${locale}' is not a CiviCRM locale (expected e.g. de_DE)" >&2
             return 1
         fi
-        members+=("civicrm/l10n/${locale}")
+        requested+=("${locale}")
     done
-    [[ ${#members[@]} -gt 0 ]] || return 0
-    if [[ -n "${CIVIKITCHEN_DEFAULT_LOCALE:-}" && " ${members[*]} " != *" civicrm/l10n/${CIVIKITCHEN_DEFAULT_LOCALE} "* ]]; then
+    [[ ${#requested[@]} -gt 0 ]] || return 0
+    if [[ -n "${CIVIKITCHEN_DEFAULT_LOCALE:-}" && " ${requested[*]} " != *" ${CIVIKITCHEN_DEFAULT_LOCALE} "* ]]; then
         echo "[civikitchen] ERROR: CIVIKITCHEN_DEFAULT_LOCALE=${CIVIKITCHEN_DEFAULT_LOCALE} is not in CIVIKITCHEN_LOCALES=${CIVIKITCHEN_LOCALES}" >&2
         return 1
     fi
-    printf '%s\n' "${members[@]}"
+    printf '%s\n' "${requested[@]}"
 }
 
-# $1 = CiviCRM version, $2 = l10n dir, then tarball members. A locale whose
-# core catalogue is already in the dir is not fetched again.
+# $1 = CiviCRM version, $2 = l10n dir, then locales. A locale whose core
+# catalogue is already in the dir is not fetched again.
 ck_fetch_locales() {
-    local version="$1" l10n_dir="$2" member tarball unpack
+    local version="$1" l10n_dir="$2" locale archive prefix unpack
     shift 2
-    local -a members=()
-    for member in "$@"; do
-        [[ -s "${l10n_dir}/${member#civicrm/l10n/}/LC_MESSAGES/civicrm.mo" ]] || members+=("${member}")
+    local -a missing=()
+    for locale in "$@"; do
+        [[ -s "${l10n_dir}/${locale}/LC_MESSAGES/civicrm.mo" ]] || missing+=("${locale}")
     done
-    if [[ ${#members[@]} -eq 0 ]]; then
+    if [[ ${#missing[@]} -eq 0 ]]; then
         echo "[civikitchen] Core language files ${CIVIKITCHEN_LOCALES} already in ${l10n_dir}."
         return 0
     fi
-    tarball="${CK_L10N_BASE_URL}/civicrm-${version}-l10n.tar.gz"
-    echo "[civikitchen] Installing core language files ${members[*]#civicrm/l10n/} from ${tarball} into ${l10n_dir}..."
+    # A release has its own archive. An alpha or beta core (master, or a release
+    # branch before its release) has none and takes the daily catalogue.
+    if [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        archive="${CK_L10N_BASE_URL}/civicrm-${version}-l10n.tar.gz" prefix=civicrm/l10n
+    elif [[ "${version}" =~ ^[0-9]+\.[0-9]+\.(alpha|beta)[0-9]+$ ]]; then
+        archive="${CK_L10N_BASE_URL}/civicrm-l10n-core/archives/civicrm-l10n-daily.tar.gz" prefix=l10n
+    else
+        echo "[civikitchen] ERROR: no core language files for CiviCRM version '${version}' (expected X.Y.Z, X.Y.alphaN or X.Y.betaN)" >&2
+        return 1
+    fi
+    echo "[civikitchen] Installing core language files ${missing[*]} from ${archive} into ${l10n_dir}..."
     unpack="$(mktemp -d)"
-    # Streamed, not saved: the tarball is ~100 MB and only a few MB of it are
-    # wanted. tar exits non-zero for a member that is not in the archive, so an
-    # unknown locale fails here instead of silently leaving English behind.
-    if ! (set -o pipefail; curl -fsSL "${tarball}" | tar -xz -C "${unpack}" "${members[@]}"); then
+    # Streamed, not saved: the archive carries every locale and only a few MB
+    # of it are wanted. tar exits non-zero for a member that is not in the
+    # archive, so an unknown locale fails here instead of silently leaving
+    # English behind.
+    if ! (set -o pipefail; curl -fsSL "${archive}" | tar -xz -C "${unpack}" "${missing[@]/#/${prefix}/}"); then
         rm -rf "${unpack}"
-        echo "[civikitchen] ERROR: could not fetch ${members[*]#civicrm/l10n/} from ${tarball}" >&2
+        echo "[civikitchen] ERROR: could not fetch ${missing[*]} from ${archive}" >&2
         return 1
     fi
     mkdir -p "${l10n_dir}"
-    cp -R "${unpack}/civicrm/l10n/." "${l10n_dir}/"
+    cp -R "${unpack}/${prefix}/." "${l10n_dir}/"
     rm -rf "${unpack}"
     chown -R "${CK_WEB_USER}:${CK_WEB_GROUP}" "${l10n_dir}"
 }

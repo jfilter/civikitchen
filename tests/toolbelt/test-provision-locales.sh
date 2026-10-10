@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# CIVIKITCHEN_LOCALES fetches the version-matching core l10n tarball and
-# unpacks only the requested locales into [civicrm.l10n]; the default locale
-# has to be one of them. Fake curl serves a tarball built here; fake cv
-# answers the version and path queries and records the rest.
+# CIVIKITCHEN_LOCALES fetches the version-matching core l10n tarball (the daily
+# catalogue for an alpha or beta core) and unpacks only the requested locales
+# into [civicrm.l10n]; the default locale has to be one of them. Fake curl
+# serves archives built here; fake cv answers the version and path queries and
+# records the rest.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -15,6 +16,10 @@ echo de > "$work/tar/civicrm/l10n/de_DE/LC_MESSAGES/civicrm.mo"
 echo fr > "$work/tar/civicrm/l10n/fr_FR/LC_MESSAGES/civicrm.mo"
 echo sql > "$work/tar/civicrm/sql/civicrm_data.de_DE.mysql"
 tar -C "$work/tar" -czf "$work/civicrm-6.17.2-l10n.tar.gz" civicrm
+# The daily catalogue has no civicrm/ top directory.
+mkdir -p "$work/daily/l10n/de_DE/LC_MESSAGES"
+echo de-daily > "$work/daily/l10n/de_DE/LC_MESSAGES/civicrm.mo"
+tar -C "$work/daily" -czf "$work/civicrm-l10n-daily.tar.gz" l10n
 
 cat > "$work/bin/curl" <<'FAKE'
 #!/usr/bin/env bash
@@ -28,7 +33,7 @@ cat > "$work/bin/cv" <<'FAKE'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$CV_LOG"
 case "$1" in
-  ev) echo 6.17.2 ;;
+  ev) echo "${CV_VERSION:-6.17.2}" ;;
   path) echo "$CV_L10N_DIR" ;;
 esac
 FAKE
@@ -81,6 +86,25 @@ CIVIKITCHEN_LOCALES="de_DE,fr_FR" ck_locales >/dev/null
 if CIVIKITCHEN_LOCALES="de_DE" CIVIKITCHEN_DEFAULT_LOCALE="fr_FR" ck_locales_before_install "$work/core" "$work/other/l10n" >/dev/null 2>&1; then fail "pre-install: default outside the list must fail"; fi
 if CIVIKITCHEN_LOCALES="de_DE" ck_locales_before_install "$work/missing" "$work/other/l10n" >/dev/null 2>&1; then fail "pre-install without a core version must fail"; fi
 [[ ! -e "$work/other" ]] || fail "a failed pre-install check must not fetch anything"
+
+# Master and the release branch report X.Y.alphaN / X.Y.betaN, which have no
+# release tarball: the daily catalogue serves them, before and after install.
+daily='https://l10n.example.org/civicrm-l10n-core/archives/civicrm-l10n-daily.tar.gz'
+printf '<?xml version="1.0"?>\n<version>\n  <version_no>6.21.alpha1</version_no>\n</version>\n' > "$work/core/xml/version.xml"
+: > "$CURL_LOG"; /bin/rm -rf "$work/site"
+CIVIKITCHEN_LOCALES="de_DE" ck_locales_before_install "$work/core" "$work/site/l10n" >/dev/null
+grep -qx "$daily" "$CURL_LOG" || fail "6.21.alpha1 expected the daily catalogue, got: $(cat "$CURL_LOG")"
+[[ "$(cat "$work/site/l10n/de_DE/LC_MESSAGES/civicrm.mo")" == de-daily ]] || fail "de_DE .mo from the daily catalogue not installed"
+: > "$CURL_LOG"; /bin/rm -rf "$work/site"
+CV_VERSION=6.20.beta1 CIVIKITCHEN_LOCALES="de_DE" ck_locales >/dev/null
+grep -qx "$daily" "$CURL_LOG" || fail "6.20.beta1 expected the daily catalogue, got: $(cat "$CURL_LOG")"
+[[ "$(cat "$work/site/l10n/de_DE/LC_MESSAGES/civicrm.mo")" == de-daily ]] || fail "de_DE .mo not installed for 6.20.beta1"
+# Any other version string names no archive and fails before a download.
+: > "$CURL_LOG"; /bin/rm -rf "$work/site"
+if CV_VERSION=6.20 CIVIKITCHEN_LOCALES="de_DE" ck_locales >/dev/null 2>&1; then fail "version 6.20 must fail"; fi
+printf '<?xml version="1.0"?>\n<version>\n</version>\n' > "$work/core/xml/version.xml"
+if CIVIKITCHEN_LOCALES="de_DE" ck_locales_before_install "$work/core" "$work/site/l10n" >/dev/null 2>&1; then fail "pre-install without a version_no must fail"; fi
+[[ ! -s "$CURL_LOG" && ! -e "$work/site" ]] || fail "an unknown version must not fetch anything: $(cat "$CURL_LOG")"
 
 # A locale the tarball does not carry fails instead of leaving English behind.
 if CIVIKITCHEN_LOCALES="xx_XX" ck_locales >/dev/null 2>&1; then fail "unknown locale must fail"; fi

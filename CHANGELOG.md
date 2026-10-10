@@ -25,6 +25,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   no longer cuts a tag short, which made a fieldset's fields look stray.
 - `ckconform`'s `api4-entity` takes the lowest `<compatibility><ver>` as the
   extension's floor, as the other checks do, not the first one listed.
+- `CIVIKITCHEN_LOCALES` works on an alpha or beta core, such as a Standalone
+  image built with `CIVICRM_SOURCE=git` from `master` or a release branch.
+  Such a core has no `civicrm-<version>-l10n.tar.gz`, so the first boot
+  stopped with "no CiviCRM version"; its language files now come from core's
+  daily catalogue.
 
 ## [1.34.0] - 2026-10-09
 
