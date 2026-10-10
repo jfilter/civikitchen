@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The managed test bootstrap's ck_headless() queues the extension's info.xml
 # <requires> before the extension itself, without touching the extension
-# system, restores the core foreign keys its own signing drops, and drains the
+# system, restores the core foreign keys its own signing drops before 6.20, and drains the
 # status messages the build queues. Civi is stubbed: what is under test is the
 # info.xml reader and the calls the builder receives.
 set -euo pipefail
@@ -58,6 +58,10 @@ namespace {
     public static bool $builtAfterRestore = FALSE;
     public static array $executed = [];
   }
+  class CRM_Utils_System {
+    public static string $version = '6.19.0';
+    public static function version(): string { return self::$version; }
+  }
   class CRM_Core_Session {
     public static array $status = ['boot noise'];
     public static function singleton(): self { return new self(); }
@@ -74,6 +78,7 @@ PHP
 probe='
   require $argv[1];
   require $argv[2];
+  CRM_Utils_System::$version = getenv("CK_CORE") ?: "6.19.0";
   $b = ck_headless();
   $last = end($b->steps);
   echo implode(",", $b->installed), "|",
@@ -96,6 +101,12 @@ IFS='|' read -r installed restored order executed sig drained <<<"$out"
 [[ "$executed" == *"USE \`civicrm_test\`"* ]] \
   || fail "the restore must select the scratch database; got '$executed'"
 [[ "$executed" == *"CORE SCHEMA SQL"* ]] || fail "the restore must replay the CoreSchemaStep SQL; got '$executed'"
+
+# 6.20 keeps the keys while signing, and replaying the SQL would add them twice.
+out="$(CK_CORE=6.20.beta1 php -r "$probe" "$work/stubs.php" "$work/ext/tests/phpunit/ckHeadless.php")"
+IFS='|' read -r _ restored _ executed _ _ <<<"$out"
+[[ "$restored" == "no-restore" && -z "$executed" ]] \
+  || fail "on 6.20 the core schema SQL must not be replayed; got '$restored' '$executed'"
 
 # The build queues managed-entity errors; the last step drains them, so no test
 # starts with status messages it did not cause.
