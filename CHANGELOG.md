@@ -14,6 +14,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- `:standalone-6.19` keeps being rebuilt once 6.20 is the stable release:
+  6.19 joins the supported minors in `CK_STANDALONE_EXTRA_MINORS`.
+
 ### Fixed
 
 - `ckconform` no longer warns about an extra field outside every fieldset: an
