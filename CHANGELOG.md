@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.35.0] - 2026-10-11
+
 ### Added
 
 - `extension-ci.yml` takes a `matrix_playwright` input (default off). With
@@ -1585,7 +1587,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.34.0...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.35.0...HEAD
+[1.35.0]: https://github.com/jfilter/civikitchen/compare/v1.34.0...v1.35.0
 [1.34.0]: https://github.com/jfilter/civikitchen/compare/v1.33.0...v1.34.0
 [1.33.0]: https://github.com/jfilter/civikitchen/compare/v1.32.1...v1.33.0
 [1.32.1]: https://github.com/jfilter/civikitchen/compare/v1.32.0...v1.32.1
