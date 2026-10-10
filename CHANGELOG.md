@@ -66,6 +66,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   no longer cuts a tag short, which made a fieldset's fields look stray.
 - `ckconform`'s `api4-entity` takes the lowest `<compatibility><ver>` as the
   extension's floor, as the other checks do, not the first one listed.
+- The template's `ck_headless()` restores the core foreign keys only on a
+  core before 6.20. 6.20 keeps them while signing the headless environment,
+  and re-adding them stopped every headless suite with "Duplicate key on
+  write or update". Run `ckinit --update` to pick up the template.
 - `CIVIKITCHEN_LOCALES` works on an alpha or beta core, such as a Standalone
   image built with `CIVICRM_SOURCE=git` from `master` or a release branch.
   Such a core has no `civicrm-<version>-l10n.tar.gz`, so the first boot
