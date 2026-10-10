@@ -39,7 +39,7 @@ final class Api4EntityCheck implements Check
             return;
         }
 
-        $declaredVer = $this->declaredVersion($context);
+        $declaredVer = $context->compatibilityFloor();
         $missing = [];
         $tooNew = [];
         $undeclared = [];
@@ -138,21 +138,6 @@ final class Api4EntityCheck implements Check
         }
 
         return $entities;
-    }
-
-    /**
-     * The oldest core the extension promises to run on.
-     */
-    private function declaredVersion(Context $context): ?string
-    {
-        $info = $context->infoXml();
-        if ($info === null) {
-            return null;
-        }
-        $versions = $info->xpath('//compatibility/ver') ?: [];
-        $value = isset($versions[0]) ? trim((string) $versions[0]) : '';
-
-        return $value === '' ? null : $value;
     }
 
     /**

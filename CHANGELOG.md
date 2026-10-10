@@ -14,6 +14,18 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- `ckconform` no longer warns about an extra field outside every fieldset: an
+  `af-field` with no `name` and an input type in its `defn`, which core binds
+  to the form rather than to an entity. Core renders extra fields from CiviCRM
+  6.15 on, and those of input types other than Email, Number, Text, TextArea,
+  Toggle and Url from 6.16 on, so an extension with a lower compatibility
+  floor gets a warning about them instead. A raw `>` inside an attribute value
+  no longer cuts a tag short, which made a fieldset's fields look stray.
+- `ckconform`'s `api4-entity` takes the lowest `<compatibility><ver>` as the
+  extension's floor, as the other checks do, not the first one listed.
+
 ## [1.34.0] - 2026-10-09
 
 ### Added

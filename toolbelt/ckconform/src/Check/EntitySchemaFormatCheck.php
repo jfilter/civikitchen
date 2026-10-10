@@ -31,7 +31,7 @@ final class EntitySchemaFormatCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        $floor = $this->compatibilityFloor($context);
+        $floor = $context->compatibilityFloor();
         if ($floor === null || version_compare($floor, self::CANONICAL_SINCE, '<')) {
             return;
         }
@@ -55,26 +55,5 @@ final class EntitySchemaFormatCheck implements Check
                 );
             }
         }
-    }
-
-    /** The lowest <compatibility><ver> from info.xml, or null when absent. */
-    private function compatibilityFloor(Context $context): ?string
-    {
-        $info = $context->infoXml();
-        if ($info === null) {
-            return null;
-        }
-        $floor = null;
-        foreach ($info->xpath('//compatibility/ver') ?: [] as $ver) {
-            $value = trim((string) $ver);
-            if ($value === '' || preg_match('/^\d+(\.\d+)*$/', $value) !== 1) {
-                continue;
-            }
-            if ($floor === null || version_compare($value, $floor, '<')) {
-                $floor = $value;
-            }
-        }
-
-        return $floor;
     }
 }

@@ -151,6 +151,27 @@ final class Context
         return trim((string) $info->version);
     }
 
+    /** The lowest `<compatibility><ver>` from info.xml, or null when absent. */
+    public function compatibilityFloor(): ?string
+    {
+        $info = $this->infoXml();
+        if ($info === null) {
+            return null;
+        }
+        $floor = null;
+        foreach ($info->xpath('//compatibility/ver') ?: [] as $ver) {
+            $value = trim((string) $ver);
+            if ($value === '' || preg_match('/^\d+(\.\d+)*$/', $value) !== 1) {
+                continue;
+            }
+            if ($floor === null || version_compare($value, $floor, '<')) {
+                $floor = $value;
+            }
+        }
+
+        return $floor;
+    }
+
     /** The `<license>` declared in info.xml, '' when absent. */
     public function infoLicense(): string
     {

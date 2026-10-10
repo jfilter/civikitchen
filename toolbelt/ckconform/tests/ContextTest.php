@@ -49,6 +49,14 @@ final class ContextTest extends CheckTestCase
         self::assertSame([], $this->repo(['info.xml' => 'not xml'])->requiredExtensions());
     }
 
+    public function testCompatibilityFloorIsTheLowestNumericVer(): void
+    {
+        $context = $this->repo([
+            'info.xml' => $this->infoXml(compatibility: '6.19', extra: '<compatibility><ver>6.x</ver><ver>6.15</ver></compatibility>'),
+        ]);
+        self::assertSame('6.15', $context->compatibilityFloor());
+    }
+
     public function testExtensionDirectoryIsRelativeToTheRepositoryRoot(): void
     {
         self::assertSame('example', $this->monorepoExtension([], [])->extensionDirectory());

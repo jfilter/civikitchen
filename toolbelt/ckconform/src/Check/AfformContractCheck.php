@@ -30,12 +30,24 @@ use CiviKitchen\Ckconform\Reporter;
  * a static guess would either miss custom fields or cry wolf on them. Only the
  * structural contract inside the file is checked — plus an `af-field` sitting
  * outside every fieldset, which has no entity to bind to at all (blocks and
- * search forms excepted: the embedding form supplies their fieldset).
+ * search forms excepted: the embedding form supplies their fieldset). An extra
+ * field carries no `name` and an input type in its `defn`, and binds to the
+ * form itself; a compatibility floor below the core that supports it is a warn.
  */
 final class AfformContractCheck implements Check
 {
     /** Afform types that legitimately declare no entities of their own. */
     private const ENTITYLESS_TYPES = ['block', 'search'];
+
+    /** Extra fields arrived in EXTRA_FIELDS_SINCE for these input types only. */
+    private const EARLY_EXTRA_INPUT_TYPES = ['Email', 'Number', 'Text', 'TextArea', 'Toggle', 'Url'];
+
+    private const EXTRA_FIELDS_SINCE = '6.15';
+
+    private const ANY_EXTRA_INPUT_SINCE = '6.16';
+
+    /** A start tag's attributes up to its `>`, each quoted value taken whole. */
+    private const ATTRIBUTE_RUN = '(?:[^>"\']++|"[^"]*+"|\'[^\']*+\')*+';
 
     public function name(): string
     {
@@ -52,6 +64,7 @@ final class AfformContractCheck implements Check
         if ($layouts === []) {
             return;
         }
+        $floor = $context->compatibilityFloor();
 
         foreach ($layouts as $relative) {
             $html = $context->read($relative);
@@ -111,6 +124,10 @@ final class AfformContractCheck implements Check
             if ($type === null || !in_array($type, self::ENTITYLESS_TYPES, true)) {
                 $this->checkStrayFields($html, $relative, $reporter);
             }
+
+            if ($floor !== null && version_compare($floor, self::ANY_EXTRA_INPUT_SINCE, '<')) {
+                $this->checkExtraFields($html, $relative, $floor, $reporter);
+            }
         }
     }
 
@@ -162,22 +179,94 @@ final class AfformContractCheck implements Check
      * An af-field that no af-fieldset element encloses. Approximated by
      * position: a field before the first fieldset opening tag, or after the
      * point where fieldset nesting has closed again, has no entity to bind to.
+     * An extra field binds to the form, so it may stand anywhere.
      */
     private function checkStrayFields(string $html, string $relative, Reporter $reporter): void
     {
-        if (preg_match_all('/<af-field\b[^>]*>/i', $html, $fields, PREG_OFFSET_CAPTURE) < 1) {
+        $fields = $this->fieldTags($html);
+        if ($fields === []) {
             return;
         }
         $ranges = $this->fieldsetRanges($html);
-        foreach ($fields[0] as [$tag, $offset]) {
+        foreach ($fields as [$tag, $offset]) {
             foreach ($ranges as [$start, $end]) {
                 if ($offset >= $start && $offset < $end) {
                     continue 2;
                 }
             }
-            $name = preg_match('/\bname\s*=\s*["\']([^"\']*)["\']/i', $tag, $m) === 1 ? $m[1] : '?';
-            $reporter->warn("$relative: <af-field name=\"$name\"> sits outside every af-fieldset — it has no entity to bind to");
+            if ($this->extraFieldInputType($tag) !== null) {
+                continue;
+            }
+            $name = $this->attributes($tag)['name'] ?? '';
+            $reporter->warn("$relative: <af-field name=\"" . ($name === '' ? '?' : $name) . "\"> sits outside every af-fieldset — it has no entity to bind to");
         }
+    }
+
+    /**
+     * Older cores have no extra fields: they look the field up by its empty
+     * name and break, inside a fieldset as well as outside one. 6.15 throws on
+     * an input type outside EARLY_EXTRA_INPUT_TYPES.
+     */
+    private function checkExtraFields(string $html, string $relative, string $floor, Reporter $reporter): void
+    {
+        $needed = null;
+        $inputType = '';
+        foreach ($this->fieldTags($html) as [$tag]) {
+            $type = $this->extraFieldInputType($tag);
+            if ($type === null) {
+                continue;
+            }
+            $since = in_array($type, self::EARLY_EXTRA_INPUT_TYPES, true) ? self::EXTRA_FIELDS_SINCE : self::ANY_EXTRA_INPUT_SINCE;
+            if ($needed === null || version_compare($since, $needed, '>')) {
+                [$needed, $inputType] = [$since, $type];
+            }
+        }
+        if ($needed !== null && version_compare($floor, $needed, '<')) {
+            $reporter->warn("$relative: holds an extra <af-field> (no name) with input type $inputType, which CiviCRM supports from $needed on — info.xml's compatibility floor is $floor");
+        }
+    }
+
+    /**
+     * Each af-field start tag with its byte offset.
+     *
+     * @return list<array{0: string, 1: int}>
+     */
+    private function fieldTags(string $html): array
+    {
+        return preg_match_all('/<af-field(?=[\s\/>])' . self::ATTRIBUTE_RUN . '>/i', $html, $fields, PREG_OFFSET_CAPTURE) > 0 ? $fields[0] : [];
+    }
+
+    /**
+     * The input type of an extra field: one with no name, which core binds to
+     * the form and renders from its `defn`. Null for any other field.
+     */
+    private function extraFieldInputType(string $tag): ?string
+    {
+        $attributes = $this->attributes($tag);
+        if (($attributes['name'] ?? '') !== '') {
+            return null;
+        }
+        $defn = html_entity_decode($attributes['defn'] ?? '', ENT_QUOTES | ENT_HTML5);
+
+        return preg_match('/\binput_type[\'"]?\s*:\s*([\'"])(\w+)\1/', $defn, $m) === 1 ? $m[2] : null;
+    }
+
+    /**
+     * A start tag's attributes, lowercased name => value ('' when bare). As in
+     * HTML, a value may go unquoted and the first of a repeated name wins.
+     *
+     * @return array<string, string>
+     */
+    private function attributes(string $tag): array
+    {
+        $inner = (string) preg_replace('#^<[^\s/>]+|/?>$#', '', $tag);
+        preg_match_all('/([^\s"\'\/=>]+)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'=<>`]+)))?/', $inner, $matches, PREG_SET_ORDER);
+        $attributes = [];
+        foreach ($matches as $match) {
+            $attributes[strtolower($match[1])] ??= ($match[2] ?? '') . ($match[3] ?? '') . ($match[4] ?? '');
+        }
+
+        return $attributes;
     }
 
     /**
@@ -189,7 +278,7 @@ final class AfformContractCheck implements Check
      */
     private function fieldsetRanges(string $html): array
     {
-        if (preg_match_all('#<(/?)([a-z0-9-]+)\b([^>]*)>#i', $html, $tags, PREG_OFFSET_CAPTURE) < 1) {
+        if (preg_match_all('#<(/?)([a-z0-9-]++)(' . self::ATTRIBUTE_RUN . ')>#i', $html, $tags, PREG_OFFSET_CAPTURE) < 1) {
             return [];
         }
 
