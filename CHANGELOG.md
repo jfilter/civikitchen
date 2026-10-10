@@ -14,6 +14,15 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- `:standalone-master` and `:standalone-beta`: Standalone built daily from
+  civicrm-core's `master` and from its newest release branch, the next
+  release in beta, to test an extension against what core ships next. They
+  pass the smoke tests only, get no release tags and never hold up a
+  release. `/usr/local/share/civikitchen/civicrm-source.log` names the core
+  and packages commits an image holds.
+
 ### Changed
 
 - `:standalone-6.19` keeps being rebuilt once 6.20 is the stable release:

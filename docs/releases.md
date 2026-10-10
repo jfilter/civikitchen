@@ -39,6 +39,9 @@ A release is a git tag on this repo plus the image tags that go with it.
 
 The moving tags stay exactly as they are. They are the development and canary
 edge, and the daily rebuild keeps pointing them at current CiviCRM.
+`:standalone-master` and `:standalone-beta`, built from core's branches by
+*Build Git Images*, get no release tags, and a release does not check that
+workflow.
 
 ## What a consumer pins
 

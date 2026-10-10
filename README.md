@@ -202,7 +202,9 @@ CIVICRM_VERSION=5.78.2 docker compose up -d --build
 `:drupal10`, `:drupal11`, `:wordpress` and `:joomla` carry the same tools on a
 civibuild site, and each has a `-demo` variant with an embedded database.
 Moving tags are rebuilt daily from the current CiviCRM stable and move only
-after their tests pass; extension repositories pin the `:v1` release tags. See
+after their tests pass; extension repositories pin the `:v1` release tags.
+`:standalone-master` and `:standalone-beta` follow core's `master` and newest
+release branch instead, smoke-tested only and outside the release. See
 [Images](docs/images.md) and [Tags & versions](docs/images.md#tags--versions).
 
 ## Requirements

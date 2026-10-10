@@ -1,0 +1,89 @@
+# :standalone-master and :standalone-beta from civicrm-core's master and newest
+# release branch. build-git-image.yml builds, tests and promotes each tag
+# independently, outside the release (release.sh waits for Build Dev Images).
+name: Build Git Images
+
+on:
+  push:
+    branches: [main]
+    # Image inputs reach these tags with the next daily run or manual dispatch.
+    paths:
+      - '.github/workflows/build-git-images.yml'
+      - '.github/workflows/build-git-image.yml'
+      - '.github/workflows/merge-manifest.yml'
+      - '.github/scripts/resolve-civicrm-git.sh'
+  schedule:
+    # An hour ahead of Build Dev Images, so the two do not compete for runners.
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
+
+# The moving tags are last-writer-wins, so a run that may already have promoted
+# is never cancelled; a newer run only replaces one still waiting.
+concurrency:
+  group: build-git-images
+  cancel-in-progress: false
+
+# Default for every job; the ones that push to GHCR or open an issue widen it.
+permissions:
+  contents: read
+
+jobs:
+  resolve-civicrm:
+    runs-on: ubuntu-24.04
+    outputs:
+      refs: ${{ steps.resolve.outputs.git_refs }}
+    steps:
+      - name: Checkout (for the resolve script)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve master and the newest release branch
+        id: resolve
+        run: .github/scripts/resolve-civicrm-git.sh
+
+  standalone:
+    name: standalone-${{ matrix.source.tag }}
+    needs: resolve-civicrm
+    # The cap for every job of the called workflows, which push to GHCR.
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      # A broken master must not cancel the beta chain, nor the other way round.
+      fail-fast: false
+      matrix:
+        source: ${{ fromJSON(needs.resolve-civicrm.outputs.refs) }}
+
+    uses: ./.github/workflows/build-git-image.yml
+    with:
+      ref: ${{ matrix.source.ref }}
+      tag: ${{ matrix.source.tag }}
+
+  notify-scheduled-failure:
+    # A tag that fails keeps its last good image, unseen otherwise; its own
+    # label keeps the issue apart from the stable images' one.
+    needs: [standalone]
+    if: github.event_name == 'schedule' && failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+
+    steps:
+      - name: Checkout (for the notify script)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Open or bump the git-built images issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          LABEL: ci-git-images-failure
+          LABEL_DESCRIPTION: "Daily build of :standalone-master / :standalone-beta failed"
+          TITLE: Scheduled git image build is failing
+          BODY: "The daily build of :standalone-master or :standalone-beta failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n\nEach tag is built, tested and promoted on its own; a tag that failed keeps serving its last good image. The cause is often upstream in civicrm-core; the released images are not affected."
+          AGAIN: "The scheduled git image build failed again: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: .github/scripts/notify-scheduled-failure.sh

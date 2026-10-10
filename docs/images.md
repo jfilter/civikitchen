@@ -264,8 +264,10 @@ about every file that still names one, with the replacement.
 
 All images rebuild **daily** (and on pushes that touch the image inputs, `docker/**` and `toolbelt/**` among them) against the
 current CiviCRM stable release, resolved from
-[latest.civicrm.org](https://latest.civicrm.org/stable.php) at build time. The
-pipeline is test-then-promote ([ADR-0014](adr/0014-images-are-tested-then-promoted.md)): a release that breaks the build or the boot
+[latest.civicrm.org](https://latest.civicrm.org/stable.php) at build time.
+`:standalone-master` and `:standalone-beta` are the exception: they follow core's
+branches, and a change to the image inputs reaches them with their next daily
+build. The pipeline is test-then-promote ([ADR-0014](adr/0014-images-are-tested-then-promoted.md)): a release that breaks the build or the boot
 tests never reaches the stable tags — they keep serving the last good image
 until the breakage is fixed. The cron run builds with the layer cache disabled,
 so `apt-get upgrade` in the Dockerfiles actually re-runs and Debian security
@@ -280,6 +282,22 @@ development and for the canary repo:
 | `:standalone-<minor>` | Latest patch of that minor (e.g. `:standalone-6.16`). The current stable minor always gets one; older minors keep being rebuilt (newest patch, current tooling) as long as they are listed in `CK_STANDALONE_EXTRA_MINORS` in `toolbelt/versions.env` — the supported-versions list. A minor dropped from the list freezes at its last built patch; a one-off rebuild of another minor is *Build Dev Images* → `workflow_dispatch` → `extra_standalone_minors`. |
 | `:drupal10`, `:drupal11`, `:wordpress`, `:joomla`, `:*-demo` | Bake the current stable at image-build time. Check what a pulled image contains without booting it: `docker inspect <image> --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`. |
 | `:<flavor>-php<version>` | The buildkit dev flavors also publish a PHP-suffixed tag (e.g. `:drupal10-php8.3`) — same image, explicit about the PHP it carries. |
+| `:standalone-master` | The head of civicrm-core `master` (e.g. `6.21.alpha1`), built daily from git by the *Build Git Images* workflow. |
+| `:standalone-beta` | The head of core's newest `X.Y` branch, the next release (e.g. `6.20.beta1`), built daily from git by *Build Git Images*. Between a release and core cutting the next branch, usually within the hour, this is still the branch of the minor that just shipped. |
+
+The two git-built tags pass only the smoke tests (the bundled dev tools, and
+a first boot with an external database, a mounted extension and a core
+locale), not the end-to-end, database, scenario and scaffold gates of the
+other standalone tags, and no vulnerability scan. They are not part of the
+release contract: no release tag points at them, and a release does not wait
+for *Build Git Images*. Each tag is built, tested and promoted on its own, so
+a failing `master` build leaves `:standalone-beta` moving and the other way
+round; only the branch lookup, which they share, stops both. A failed daily
+run opens its own issue.
+`/usr/local/share/civikitchen/civicrm-source.log` in the image names the
+civicrm-core and civicrm-packages commits it was built from. Each architecture
+fetches the branch on its own, so its amd64 and arm64 images can differ by
+the commits that landed between the two builds.
 
 The **release** tags (`:v1`, `:v1.2.3` and their per-flavor spellings such as
 `:standalone-v1` or `:drupal10-v1.2.3`) mark a deliberate release of the whole
@@ -384,8 +402,10 @@ the civibuild site
 
 ### Standalone on an unreleased branch
 
-To test against core `master` (or a release branch before its tarball exists),
-build Standalone from git:
+`:standalone-master` and `:standalone-beta` are Standalone built from core's
+`master` and its newest release branch, published daily
+([Tags & versions](#tags--versions)). For another branch or tag, or a build
+of your own, build Standalone from git:
 
 ```bash
 make build CIVICRM_SOURCE=git CIVICRM_VERSION=master   # tags civikitchen:standalone-master
@@ -405,7 +425,7 @@ checkout over the image's copy, and toggle the change there (`git stash`,
 ```yaml
 services:
   app:
-    image: civikitchen:standalone-master
+    image: ghcr.io/jfilter/civikitchen:standalone-master
     volumes:
       - ../civicrm-core/ext/afform:/var/www/html/core/ext/afform
 ```

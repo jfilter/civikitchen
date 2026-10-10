@@ -29,8 +29,9 @@ on:
         type: string
       prefix:
         description: >-
-          Prepended to every entry of `tags`. The standalone caller passes
-          'standalone-' because its matrix carries bare CiviCRM versions; the
+          Prepended to every entry of `tags`. The standalone callers pass
+          'standalone-', as their entries are exact CiviCRM versions
+          (`6.19.0`) or the names of the git-built tags (`master`, `beta`); the
           others pass whole tag names and leave this empty.
         type: string
         default: ''

@@ -148,8 +148,8 @@ jobs:
           # serving the base image's outdated packages past their security fix.
           no-cache: ${{ github.event_name == 'schedule' }}
 
-  # The per-arch candidates become one multi-platform tag. Three callers, one
-  # implementation — see .github/workflows/merge-manifest.yml. The matrix here
+  # The per-arch candidates become one multi-platform tag. Every caller shares
+  # one implementation — see .github/workflows/merge-manifest.yml. The matrix here
   # carries bare CiviCRM versions, hence the prefix.
   merge-standalone:
     needs: [resolve-civicrm, build-standalone]
