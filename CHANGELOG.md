@@ -16,6 +16,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Added
 
+- `extension-ci.yml` takes a `matrix_playwright` input (default off). With
+  `playwright: true` and `matrix_images` set, the browser suite also runs on
+  every `matrix_images` entry, each leg on its own stack and port, side by
+  side. Set without `playwright` or with an empty `matrix_images`, the input
+  fails the run.
 - `:standalone-master` and `:standalone-beta`: Standalone built daily from
   civicrm-core's `master` and from its newest release branch, the next
   release in beta, to test an extension against what core ships next. They
@@ -25,11 +30,33 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Changed
 
+- The `playwright` job runs as a matrix over its images, so its check is
+  named `playwright (<image>)`, or `playwright ()` without an `image` input.
+  A run with `playwright` on also runs the short `compat-images` job, which
+  computes the legs. Without `matrix_playwright` the job still runs once, on
+  `image`, and uploads its report as `playwright-<key>`. A branch protection
+  rule that requires the `playwright` check needs the new name.
+- `matrix_images` must name each image once. A repeat fails the run instead of
+  starting two legs that cancel each other.
 - `:standalone-6.19` keeps being rebuilt once 6.20 is the stable release:
   6.19 joins the supported minors in `CK_STANDALONE_EXTRA_MINORS`.
 
 ### Fixed
 
+- A job in `extension-ci.yml` is cancelled only by its own copy in a newer run
+  of the same caller workflow on the same ref and image: the concurrency
+  groups carry the caller's workflow name and the image, a matrix leg's
+  included. The legs of `compat` cancelled each other, runs of one caller with
+  different `image` inputs cancelled each other from `key` on, and a scheduled
+  caller and the push caller cancelled each other on the same ref. A second
+  caller needs a `name:` of its own.
+- **Breaking**: the `playwright` job publishes the stack only on a port that
+  is free on the runner, not on 8080 or any other port the caller's compose
+  file publishes on `app`, and sets `CIVIKITCHEN_SITE_URL` and
+  `CIVICRM_BASE_URL` to it. Two browser jobs on one self-hosted runner host,
+  from different repos or runs, failed on the taken port. A suite that
+  hardcodes `localhost:8080` instead of reading `CIVICRM_BASE_URL` no longer
+  reaches the site.
 - `ckconform` no longer warns about an extra field outside every fieldset: an
   `af-field` with no `name` and an input type in its `defn`, which core binds
   to the form rather than to an entity. Core renders extra fields from CiviCRM
@@ -44,6 +71,7 @@ except that a break the consumers are adjusted for ships as a minor, marked
   Such a core has no `civicrm-<version>-l10n.tar.gz`, so the first boot
   stopped with "no CiviCRM version"; its language files now come from core's
   daily catalogue.
+
 
 ## [1.34.0] - 2026-10-09
 

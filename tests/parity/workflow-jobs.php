@@ -8,6 +8,20 @@ declare(strict_types=1);
  */
 
 /**
+ * The whole workflow document, parsed as YAML.
+ *
+ * @return array<mixed>
+ */
+function ck_workflow_parsed(string $file): array
+{
+    require_once dirname(__DIR__, 2) . '/packages/civikitchen-scenario-schema/vendor/autoload.php';
+
+    $document = Symfony\Component\Yaml\Yaml::parseFile($file);
+
+    return is_array($document) ? $document : [];
+}
+
+/**
  * The workflow's `jobs:` mapping, parsed as YAML.
  *
  * Comments are gone by construction, so a check built on this cannot be
@@ -17,10 +31,8 @@ declare(strict_types=1);
  */
 function ck_jobs_parsed(string $file): array
 {
-    require_once dirname(__DIR__, 2) . '/packages/civikitchen-scenario-schema/vendor/autoload.php';
-
-    $document = Symfony\Component\Yaml\Yaml::parseFile($file);
-    if (!is_array($document) || !is_array($document['jobs'] ?? null)) {
+    $document = ck_workflow_parsed($file);
+    if (!is_array($document['jobs'] ?? null)) {
         return [];
     }
 
@@ -73,6 +85,46 @@ function ck_scalar_text(mixed $value): string
     });
 
     return implode("\n", $scalars);
+}
+
+/**
+ * Whether a `${{ }}` expression in $text reads $context, a context or one of
+ * its properties (`matrix`, `github.workflow`).
+ *
+ * Text outside the expressions and quoted strings inside them do not count,
+ * and neither does a longer name: `github.workflow_ref` is not `github.workflow`.
+ */
+function ck_expression_reads(string $text, string $context): bool
+{
+    preg_match_all('/\$\{\{(.*?)\}\}/s', $text, $expressions);
+    $reference = '/(?<![\w.-])' . preg_quote($context, '/') . '(?![\w-])/';
+    foreach ($expressions[1] as $expression) {
+        if (preg_match($reference, preg_replace("/'(?:[^']|'')*'/", "''", $expression) ?? $expression) === 1) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * What the legs of a matrix job differ in: `matrix.<key>` for each vector key,
+ * or `matrix` itself where the YAML does not spell the keys out. Empty without a matrix.
+ *
+ * @return list<string>
+ */
+function ck_matrix_contexts(array $job): array
+{
+    $matrix = $job['strategy']['matrix'] ?? null;
+    if ($matrix === null) {
+        return [];
+    }
+    $vectors = is_array($matrix) ? array_diff(array_map('strval', array_keys($matrix)), ['include', 'exclude']) : [];
+    if ($vectors === []) {
+        return ['matrix'];
+    }
+
+    return array_values(array_map(static fn (string $key): string => "matrix.$key", $vectors));
 }
 
 /**

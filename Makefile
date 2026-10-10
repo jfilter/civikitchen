@@ -108,9 +108,9 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario \
-	test-compose-isolation test-sibling-wiring test-dist-build-wiring test-gitlab-mr-jobs test-sibling-checkout test-vendored-paths test-ckeslint test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
+	test-compose-isolation test-concurrency-groups test-matrix-legs test-sibling-wiring test-dist-build-wiring test-gitlab-mr-jobs test-sibling-checkout test-vendored-paths test-ckeslint test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
 	test-ck-headless test-ckcoretest test-phpstan-bootstrap test-shell-portability test-install-trivy test-resolve-civicrm-stable test-resolve-civicrm-git lint lint-shell lint-shell-portability \
-	test-database-matrix test-compose-config test-demo-basic-auth test-release-retag test-release-steps test-ci-gates-step test-release-script \
+	test-database-matrix test-compose-config test-playwright-port test-demo-basic-auth test-release-retag test-release-steps test-ci-gates-step test-release-script \
         lint-actions lint-php lint-schema lint-changelog test-changelog build test-images e2e-ckcreate e2e tools clean
 
 help: ## Show this help
@@ -129,7 +129,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-compose-isolation test-sibling-wiring test-dist-build-wiring test-gitlab-mr-jobs test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-resolve-civicrm-stable test-resolve-civicrm-git test-changelog ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-compose-isolation test-concurrency-groups test-matrix-legs test-sibling-wiring test-dist-build-wiring test-gitlab-mr-jobs test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-resolve-civicrm-stable test-resolve-civicrm-git test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -268,6 +268,14 @@ test-tool-locks: ## Tool lockfiles: in sync, and resolved against the PHP floor
 test-compose-isolation: $(SCENARIO_YAML_STAMP) ## Per-job compose project names in the workflows
 	bash tests/parity/test-compose-project-isolation.sh
 
+# A group missing the caller workflow, the image or the leg cancels jobs that
+# are not its own copy in a newer run, which Actions only shows as cancelled.
+test-concurrency-groups: $(SCENARIO_YAML_STAMP) ## Extension CI concurrency groups name the caller workflow, image and leg
+	bash tests/parity/test-concurrency-groups.sh
+
+test-matrix-legs: $(SCENARIO_YAML_STAMP) ## Extension CI matrix legs: own project and artifact, compat and browser legs as written
+	bash tests/parity/test-matrix-legs.sh
+
 # Without the sibling override a stack-booting job cannot install an extension
 # whose <requires> names a sibling the registry does not know.
 test-sibling-wiring: $(SCENARIO_YAML_STAMP) ## Stack-booting jobs reach the private-dependency steps
@@ -287,6 +295,11 @@ test-database-matrix: ## Supported database images gate standalone promotion
 
 test-compose-config: ## Every shipped compose file passes `docker compose config`
 	bash tests/parity/test-compose-config.sh
+
+# Browser jobs on one self-hosted host share its ports; a fixed one fails the
+# second job. Needs node and the docker CLI, like test-compose-config.
+test-playwright-port: $(SCENARIO_YAML_STAMP) ## The browser job publishes a free port and points the site URL at it
+	bash tests/parity/test-playwright-port.sh
 
 test-demo-basic-auth: ## Demo smoke test delegates long Basic Auth credentials to curl
 	bash tests/parity/test-demo-basic-auth.sh

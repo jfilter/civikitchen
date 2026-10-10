@@ -60,9 +60,11 @@ on:
         default: ''
       matrix_images:
         description: >-
-          Compatibility matrix: comma-separated image tags, one stack boot and
-          full suite each — typically oldest claimed minor plus newest. Empty
-          adds no jobs. Weekly caller, not the push run.
+          Compatibility matrix: comma-separated image tags, each listed once.
+          Every tag gets a job that boots the stack and runs PHPUnit there,
+          plus the lifecycle gate with `lifecycle`, and with matrix_playwright
+          a browser leg of its own. Typically oldest claimed minor plus
+          newest. Empty adds no jobs. Weekly caller, not the push run.
         type: string
         default: ''
       lifecycle:
@@ -136,7 +138,16 @@ on:
       playwright:
         description: >-
           Browser tests as their own job: stack with published HTTP port and
-          demo login, then `npm run test:e2e`. Slow — scheduled caller only.
+          demo login, then `npm run test:e2e`, on `image` (matrix_playwright
+          adds the matrix_images). Slow — scheduled caller only.
+        type: boolean
+        default: false
+      matrix_playwright:
+        description: >-
+          With `playwright`, run the browser suite on every matrix_images
+          entry too, each leg on its own stack and port, side by side — for
+          UI that changes between CiviCRM versions. Fails without
+          `playwright` or with empty matrix_images.
         type: boolean
         default: false
       extra_phpunit_config:
@@ -231,14 +242,10 @@ jobs:
   # output. Parsed as XML, not with a tag-shaped regex — the same reader the
   # sibling step uses, inline because this runs on the bare runner.
   key:
-    # A push that supersedes an earlier one on the same ref cancels that run's
-    # copy of this job: on a self-hosted runner with a handful of slots, a
-    # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other. The job name is a literal: inside a
-    # reusable workflow github.job is the CALLER's job id, the same for every
-    # job here, and one shared group cancels the run against itself.
+    # Cancelled only by this job in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-key
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-key
       cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     # No defaults.run.working-directory here, unlike every other job: a
@@ -363,14 +370,10 @@ jobs:
   # (template_custom=<file> -- <reason>); the fix for everything else is one
   # `scaffold/ckinit.php --update` away.
   template:
-    # A push that supersedes an earlier one on the same ref cancels that run's
-    # copy of this job: on a self-hosted runner with a handful of slots, a
-    # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other. The job name is a literal: inside a
-    # reusable workflow github.job is the CALLER's job id, the same for every
-    # job here, and one shared group cancels the run against itself.
+    # Cancelled only by this job in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-template
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-template
       cancel-in-progress: true
     if: ${{ inputs.check_template }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -474,14 +477,10 @@ jobs:
   # scan step), not per repo — a switch that turns the gate off is one nobody
   # ever turns back on.
   osv:
-    # A push that supersedes an earlier one on the same ref cancels that run's
-    # copy of this job: on a self-hosted runner with a handful of slots, a
-    # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other. The job name is a literal: inside a
-    # reusable workflow github.job is the CALLER's job id, the same for every
-    # job here, and one shared group cancels the run against itself.
+    # Cancelled only by this job in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-osv
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-osv
       cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     defaults:
@@ -575,8 +574,10 @@ jobs:
   # permanent, while a false positive can be scoped to its rule and path in an
   # expiring .trivyignore.yaml entry.
   security:
+    # Cancelled only by this job in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-security
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-security
       cancel-in-progress: true
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     defaults:
@@ -625,14 +626,10 @@ jobs:
             .
 
   ci:
-    # A push that supersedes an earlier one on the same ref cancels that run's
-    # copy of this job: on a self-hosted runner with a handful of slots, a
-    # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other. The job name is a literal: inside a
-    # reusable workflow github.job is the CALLER's job id, the same for every
-    # job here, and one shared group cancels the run against itself.
+    # Cancelled only by this job in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-ci
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-ci
       cancel-in-progress: true
     needs: key
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
@@ -924,14 +921,10 @@ jobs:
   # and "move to HEAD" is a second `git checkout` afterwards. No second stack,
   # no image build, no artifact shuffling.
   upgrade:
-    # A push that supersedes an earlier one on the same ref cancels that run's
-    # copy of this job: on a self-hosted runner with a handful of slots, a
-    # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other. The job name is a literal: inside a
-    # reusable workflow github.job is the CALLER's job id, the same for every
-    # job here, and one shared group cancels the run against itself.
+    # Cancelled only by this job in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-upgrade
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-upgrade
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.upgrade_from_last_release }}
@@ -1107,14 +1100,10 @@ jobs:
   # Two boots on one runner, so: scheduled caller, like every other opt-in job
   # here.
   schema-parity:
-    # A push that supersedes an earlier one on the same ref cancels that run's
-    # copy of this job: on a self-hosted runner with a handful of slots, a
-    # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other. The job name is a literal: inside a
-    # reusable workflow github.job is the CALLER's job id, the same for every
-    # job here, and one shared group cancels the run against itself.
+    # Cancelled only by this job in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-schema-parity
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-schema-parity
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.schema_parity }}
@@ -1342,14 +1331,10 @@ jobs:
   # saying so, which is what makes switching the input on safe before the
   # number is known.
   mutation:
-    # A push that supersedes an earlier one on the same ref cancels that run's
-    # copy of this job: on a self-hosted runner with a handful of slots, a
-    # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other. The job name is a literal: inside a
-    # reusable workflow github.job is the CALLER's job id, the same for every
-    # job here, and one shared group cancels the run against itself.
+    # Cancelled only by this job in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-mutation
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-mutation
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.mutation }}
@@ -1468,14 +1453,10 @@ jobs:
   # Skipped entirely when the input is empty — the matrix_images deal: a caller
   # that never sets it pays nothing.
   core-upgrade:
-    # A push that supersedes an earlier one on the same ref cancels that run's
-    # copy of this job: on a self-hosted runner with a handful of slots, a
-    # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other. The job name is a literal: inside a
-    # reusable workflow github.job is the CALLER's job id, the same for every
-    # job here, and one shared group cancels the run against itself.
+    # Cancelled only by this job in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-core-upgrade
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-core-upgrade
       cancel-in-progress: true
     needs: key
     if: ${{ inputs.core_upgrade_from != '' }}
@@ -1743,31 +1724,33 @@ jobs:
 
   # --- Compatibility matrix (opt-in via matrix_images) ----------------------
   #
-  # Skipped entirely when matrix_images is empty: a skipped job costs no
-  # runner minutes, so callers that never set the input keep today's run.
+  # Runs when matrix_images, playwright or matrix_playwright is set, skipped
+  # otherwise: a skipped job costs no runner minutes, so callers that set none
+  # of them keep today's run.
   #
   # A matrix needs a JSON array, and workflow expressions have no split(), so
-  # the CSV is parsed here and handed on as `images`. Same shape as
-  # build-dev-images.yml's resolve-civicrm job.
+  # the CSV is parsed here and handed on as `images` (the compat legs) and
+  # `playwright_images` (the browser legs). Same shape as build-dev-images.yml's
+  # resolve-civicrm job.
   compat-images:
-    # A push that supersedes an earlier one on the same ref cancels that run's
-    # copy of this job: on a self-hosted runner with a handful of slots, a
-    # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other. The job name is a literal: inside a
-    # reusable workflow github.job is the CALLER's job id, the same for every
-    # job here, and one shared group cancels the run against itself.
+    # Cancelled only by this job in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-compat-images
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-compat-images
       cancel-in-progress: true
-    if: ${{ inputs.matrix_images != '' }}
+    if: ${{ inputs.matrix_images != '' || inputs.playwright || inputs.matrix_playwright }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     outputs:
       images: ${{ steps.parse.outputs.images }}
-    env:
-      CK_MATRIX_IMAGES: ${{ inputs.matrix_images }}
+      playwright_images: ${{ steps.parse.outputs.playwright_images }}
     steps:
-      - name: Parse matrix_images
+      - name: Parse matrix_images into the compat and browser legs
         id: parse
+        env:
+          CK_MATRIX_IMAGES: ${{ inputs.matrix_images }}
+          CK_IMAGE: ${{ inputs.image }}
+          CK_PLAYWRIGHT: ${{ inputs.playwright }}
+          CK_MATRIX_PLAYWRIGHT: ${{ inputs.matrix_playwright }}
         run: |
           set -euo pipefail
           images=$(jq -Rc 'split(",") | map(sub("^ +";"") | sub(" +$";"")) | map(select(length > 0))' \
@@ -1778,8 +1761,25 @@ jobs:
           jq -e 'all(test("^[A-Za-z0-9][A-Za-z0-9._/-]*(:[A-Za-z0-9._-]+)?(@sha256:[a-f0-9]{64})?$"))' \
             <<< "$images" > /dev/null \
             || { echo "matrix_images contains something that is not an image reference: $images" >&2; exit 1; }
-          echo "images=$images" >> "$GITHUB_OUTPUT"
+          # Two legs on one image would share a concurrency group and cancel each other.
+          jq -e 'length == (unique | length)' <<< "$images" > /dev/null \
+            || { echo "matrix_images lists an image more than once: $images" >&2; exit 1; }
+          if [ "$CK_MATRIX_PLAYWRIGHT" = true ]; then
+            [ "$CK_PLAYWRIGHT" = true ] \
+              || { echo "matrix_playwright is on but playwright is off — there is no browser job to add legs to" >&2; exit 1; }
+            [ "$images" != '[]' ] \
+              || { echo "matrix_playwright is on but matrix_images is empty — there is no image to add a browser leg for" >&2; exit 1; }
+          fi
+          # The run's own image is always the first browser leg (empty: the compose
+          # file's default); matrix_playwright appends the matrix images that differ.
+          playwright_images=$(jq -c --arg image "$CK_IMAGE" --arg matrix "$CK_MATRIX_PLAYWRIGHT" \
+            '[$image] + (if $matrix == "true" then . - [$image] else [] end)' <<< "$images")
+          {
+            echo "images=$images"
+            echo "playwright_images=$playwright_images"
+          } >> "$GITHUB_OUTPUT"
           echo "compat matrix: $images"
+          echo "browser legs: $playwright_images"
 
   # One boot + suite per extra image. Deliberately NOT the full `ci` pass:
   # cklint, ckconform, phpstan and the coverage floor are enforced by the ck*
@@ -1788,16 +1788,14 @@ jobs:
   # version-dependent is whether the extension installs into that CiviCRM and
   # whether its tests pass there.
   compat:
-    # A push that supersedes an earlier one on the same ref cancels that run's
-    # copy of this job: on a self-hosted runner with a handful of slots, a
-    # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other. The job name is a literal: inside a
-    # reusable workflow github.job is the CALLER's job id, the same for every
-    # job here, and one shared group cancels the run against itself.
+    # Cancelled only by the same leg in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-compat
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-${{ matrix.image }}-compat
       cancel-in-progress: true
     needs: [compat-images, key]
+    # compat-images also runs for the browser legs alone, with no compat legs.
+    if: ${{ inputs.matrix_images != '' }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     strategy:
       # One old CiviCRM failing must not hide the result for the new one.
@@ -1913,29 +1911,31 @@ jobs:
   #
   # examples/extension-with-playwright, promoted from a copy-paste starter to a
   # job: CiviCRM in Docker, the browser on the runner, the suite talking to
-  # http://localhost:8080. Skipped entirely when the input is off, so callers
-  # that never set it keep exactly the run they have — same deal as the compat
-  # matrix.
+  # http://localhost on a free port. Skipped entirely when the input is off, so
+  # callers that never set it keep exactly the run they have — same deal as the
+  # compat matrix.
   #
   # Its own job rather than more steps in `ci`: browsers, an npm tree and a
   # published port on every push run is the opposite of what the standards ask
   # of ci.yml, and a browser failure that also hides the PHPUnit result is a
-  # bad trade. The suite is version-independent enough that this job runs once
-  # on `image`, not per matrix entry — see the notes in
-  # docs/extension-standards.md.
+  # bad trade. One leg on `image`; matrix_playwright adds one per matrix_images
+  # entry, from the list compat-images computes — see docs/extension-standards.md.
   playwright:
-    # A push that supersedes an earlier one on the same ref cancels that run's
-    # copy of this job: on a self-hosted runner with a handful of slots, a
-    # fleet-wide template update otherwise queues three generations of the
-    # same suite behind each other. The job name is a literal: inside a
-    # reusable workflow github.job is the CALLER's job id, the same for every
-    # job here, and one shared group cancels the run against itself.
+    # Cancelled only by the same leg in a newer run of the same caller workflow,
+    # ref, directory and image. Literal name: github.job is the caller's job id.
     concurrency:
-      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-playwright
+      group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-${{ matrix.image }}-playwright
       cancel-in-progress: true
-    needs: key
+    needs: [compat-images, key]
     if: ${{ inputs.playwright }}
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
+    # Legs show as `playwright (<image>)`; a `name:` expression would show
+    # verbatim on the skipped job in every run without playwright.
+    strategy:
+      # One image failing must not hide the result for the others.
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.compat-images.outputs.playwright_images) }}
     env:
       CK_COMPOSE_FILE: ${{ inputs.compose_file }}
       CK_EXT_KEY: ${{ needs.key.outputs.key }}
@@ -1944,9 +1944,9 @@ jobs:
       CK_EXT_PATH: ${{ needs.key.outputs.ext_path }}
       CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
       CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
-      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      CIVIKITCHEN_IMAGE: ${{ matrix.image }}
       # One compose project per job — see the note in `ci`.
-      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-playwright
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-playwright-${{ strategy.job-index }}
     defaults:
       run:
         working-directory: ${{ inputs.working_directory }}
@@ -1984,48 +1984,6 @@ jobs:
           ext_key: ${{ needs.key.outputs.key }}
           working_directory: ${{ inputs.working_directory }}
 
-      # Two things the CI stack deliberately lacks, added here instead of in
-      # the template compose file — that one is template-managed, and no repo
-      # should take drift (or a port, or a login user) for a job it may never
-      # switch on:
-      #   * a published port. The CI stack is only ever spoken to through
-      #     `docker compose exec`, so nothing on it is reachable from the
-      #     runner, where the browser lives.
-      #   * a login user. CIVIKITCHEN_DEMO_USER is opt-in in the image; without
-      #     it the site has an auth provider and no account to use it with.
-      # Port 8080 is fixed, not an input: the template CI compose sets
-      # CIVIKITCHEN_SITE_URL=http://localhost:8080 and CiviCRM bakes that into
-      # every asset and redirect URL, so a site published on another port
-      # serves pages pointing at one that isn't there.
-      - name: Compose override — publish the port, create the demo user
-        run: |
-          set -euo pipefail
-          override="$RUNNER_TEMP/civikitchen-playwright-override.yml"
-          cat > "$override" <<'YAML'
-          services:
-            app:
-              ports:
-                - "8080:80"
-              environment:
-                CIVIKITCHEN_DEMO_USER: admin
-                CIVIKITCHEN_DEMO_PASS: admin
-          YAML
-          echo "CK_PW_OVERRIDE=$override" >> "$GITHUB_ENV"
-
-      - name: Start CiviCRM stack
-        env:
-          CK_SIBLING_OVERRIDE: ${{ steps.deps.outputs.sibling_override }}
-        run: |
-          set -euo pipefail
-          # The port/demo-user override and the sibling one touch different
-          # keys; compose merges any number of -f files.
-          compose=(-f "$CK_COMPOSE_FILE" -f "$CK_PW_OVERRIDE")
-          if [ -n "${CK_SIBLING_OVERRIDE:-}" ]; then
-            compose+=(-f "$CK_SIBLING_OVERRIDE")
-          fi
-          docker compose "${compose[@]}" down -v --remove-orphans
-          docker compose "${compose[@]}" up -d --wait --quiet-pull
-
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -2046,6 +2004,56 @@ jobs:
           # next to its lockfile; an unpinned setup would test whatever Bun
           # shipped this week.
           bun-version-file: ${{ inputs.working_directory }}/package.json
+
+      # Two things the CI stack deliberately lacks, added here instead of in
+      # the template compose file — that one is template-managed, and no repo
+      # should take drift (or a port, or a login user) for a job it may never
+      # switch on:
+      #   * a published port. The CI stack is only ever spoken to through
+      #     `docker compose exec`, so nothing on it is reachable from the
+      #     runner, where the browser lives.
+      #   * a login user. CIVIKITCHEN_DEMO_USER is opt-in in the image; without
+      #     it the site has an auth provider and no account to use it with.
+      # The port is any free one, not 8080: jobs on one self-hosted host share
+      # its ports. CiviCRM bakes CIVIKITCHEN_SITE_URL into every asset and
+      # redirect URL, so the override points it at the same port, and the
+      # suite reaches the site through CIVICRM_BASE_URL.
+      - name: Compose override — publish a free port, create the demo user
+        run: |
+          set -euo pipefail
+          # Free when asked; `up` binds it after the image pull and the database's
+          # health check. A job taking it in between fails the start, never shares it.
+          port=$(node -e 'const s = require("node:net").createServer().listen(0, () => { console.log(s.address().port); s.close(); });')
+          override="$RUNNER_TEMP/civikitchen-playwright-override.yml"
+          # `!override` drops ports the compose file publishes itself (a CMS one has
+          # 8080), which Compose would otherwise add to this one.
+          cat > "$override" <<YAML
+          services:
+            app:
+              ports: !override
+                - "$port:80"
+              environment:
+                CIVIKITCHEN_SITE_URL: http://localhost:$port
+                CIVIKITCHEN_DEMO_USER: admin
+                CIVIKITCHEN_DEMO_PASS: admin
+          YAML
+          echo "CK_PW_OVERRIDE=$override" >> "$GITHUB_ENV"
+          # Read by the example config's `baseURL` and auth.setup.ts.
+          echo "CIVICRM_BASE_URL=http://localhost:$port" >> "$GITHUB_ENV"
+
+      - name: Start CiviCRM stack
+        env:
+          CK_SIBLING_OVERRIDE: ${{ steps.deps.outputs.sibling_override }}
+        run: |
+          set -euo pipefail
+          # The port/demo-user override and the sibling one touch different
+          # keys; compose merges any number of -f files.
+          compose=(-f "$CK_COMPOSE_FILE" -f "$CK_PW_OVERRIDE")
+          if [ -n "${CK_SIBLING_OVERRIDE:-}" ]; then
+            compose+=(-f "$CK_SIBLING_OVERRIDE")
+          fi
+          docker compose "${compose[@]}" down -v --remove-orphans
+          docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       # Same --ignore-scripts rule as the ci job: this job installs the
       # extension's own tree, and a browser test repo is exactly where an
@@ -2092,10 +2100,7 @@ jobs:
 
       - name: Playwright (npm run test:e2e / bun run test:e2e)
         env:
-          # Read by the example config's `baseURL` and auth.setup.ts. Matches
-          # CIVIKITCHEN_SITE_URL in the stack, which is what CiviCRM believes
-          # it is served as.
-          CIVICRM_BASE_URL: http://localhost:8080
+          # CIVICRM_BASE_URL comes from the override step, which picks the port.
           DEMO_USER: admin
           DEMO_PASS: admin
           CK_USE_BUN: ${{ inputs.bun }}
@@ -2116,7 +2121,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-${{ needs.key.outputs.key }}
+          # One name per leg: playwright-<key> on `image`, -1, -2, … on the matrix legs.
+          name: playwright-${{ needs.key.outputs.key }}${{ strategy.job-index != 0 && format('-{0}', strategy.job-index) || '' }}
           # Artifact paths are workspace-relative, not run-step-relative.
           path: |
             ${{ inputs.working_directory }}/playwright-report/

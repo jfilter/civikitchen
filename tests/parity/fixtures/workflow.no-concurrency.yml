@@ -1,0 +1,10 @@
+# Fixture for the concurrency-group gate: a workflow without a single group
+# fails the check instead of passing it with nothing checked.
+name: Fixture
+on: workflow_call
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'

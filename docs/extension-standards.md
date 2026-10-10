@@ -982,7 +982,7 @@ red image test, not as a quieter report.
 
 An extension with a `package.json` has three things the default CI run does
 not do: install the tree (nothing is committed — see the lockfile rule above),
-run the JS unit suite, and drive the UI in a browser. Five more opt-in inputs
+run the JS unit suite, and drive the UI in a browser. Six more opt-in inputs
 on `extension-ci.yml`, all off by default:
 
 | Input | What it adds |
@@ -990,7 +990,8 @@ on `extension-ci.yml`, all off by default:
 | `npm_ci` | `npm ci --ignore-scripts` on the runner, before the stack boots. The stack bind-mounts the checkout, so `node_modules/` is there for PHP code that reads an asset bundle. |
 | `js_tests` | Runs `npm test`. Implies `npm_ci`. Fails when `package.json` has no `test` script. |
 | `bun` | Uses Bun for all of the above instead of npm: `bun install --frozen-lockfile`, `bun run test`, `bun run test:e2e`. Implies the install, the way `js_tests` implies `npm_ci`. Needs a committed `bun.lock` and `"packageManager": "bun@x.y.z"` in `package.json` — that is the Bun the jobs install, so a Bun release cannot change a green run on its own. |
-| `playwright` | Own job: boots the stack with port 8080 published and an `admin` / `admin` demo user, then runs `npm run test:e2e` from the runner. Report and traces are uploaded on failure. |
+| `playwright` | Own job: boots the stack on a free host port with an `admin` / `admin` demo user, then runs `npm run test:e2e` from the runner, on `image`. Report and traces are uploaded on failure. |
+| `matrix_playwright` | Runs that job on every `matrix_images` entry as well, one leg and stack per image. Needs `playwright` and `matrix_images` — see below. |
 | `node_version` | Node for all of the above. Default `'24'` — the major the dev images ship, so a browser job tests the Node the image actually serves. Still applies under `bun` — see below. |
 
 Playwright traces are retained on failure by default because they are the most
@@ -1132,15 +1133,19 @@ browsers and is the slowest thing in the pipeline. Put it in the scheduled
 
 What that job assumes, because the shared workflow cannot ask:
 
-- the stack is the standalone CI stack from the template
-  (`CIVIKITCHEN_SITE_URL=http://localhost:8080`). The port is fixed to 8080 to
-  match it: CiviCRM bakes that URL into every asset and redirect, so a site
-  published elsewhere serves links to a port that isn't listening. A CMS
-  compose file boots fine, but its login is the CMS's, so the suite has to
-  handle that itself — the demo user the job creates is a Standalone one.
+- the stack is the standalone CI stack from the template. The job publishes
+  it only on a port that is free on the runner, dropping any the compose file
+  publishes itself (this needs Docker Compose 2.24.4 or later), and sets
+  `CIVIKITCHEN_SITE_URL` to `http://localhost:<that port>`, overriding the
+  template's 8080: CiviCRM bakes that URL into every asset and redirect, and
+  browser jobs on one self-hosted host share its ports, so no fixed port
+  would do. A CMS compose file boots fine, but its login is the CMS's, so the
+  suite has to handle that itself — the demo user the job creates is a
+  Standalone one.
 - the suite reads `CIVICRM_BASE_URL`, `DEMO_USER` and `DEMO_PASS` from the
   environment (the starter's `playwright.config.ts` and `tests/auth.setup.ts`
-  already do). The job sets all three; a hardcoded `localhost:8080` works too.
+  already do). The job sets all three, `CIVICRM_BASE_URL` to the site URL
+  above; a hardcoded `localhost:8080` reaches nothing.
 - all browsers are installed, so a config with `webkit` or `firefox` projects
   works without another input. GitHub-hosted runners additionally use
   `--with-deps`; self-hosted runner images must provide the system libraries
@@ -1149,11 +1154,15 @@ What that job assumes, because the shared workflow cannot ask:
 Copy-pasteable starter, including the config files and the `test:e2e` script:
 [`examples/extension-with-playwright/`](../examples/extension-with-playwright/).
 
-The job runs once, on `image` — it is not multiplied by `matrix_images`.
-UI behaviour that breaks per CiviCRM version is real but rare, and a browser
-run per image is the most expensive thing this pipeline could do by default.
-If you need it, say so on the issue rather than working around it in a
-repo-local job.
+By default the job runs once, on `image`. UI behaviour that breaks per
+CiviCRM version is real but rare, and a browser run per image is the most
+expensive thing this pipeline can do, so it takes a second opt-in:
+`matrix_playwright: true`, next to `playwright: true` and a non-empty
+`matrix_images`, adds one leg per `matrix_images` entry, each on its own
+stack and port, so the legs run side by side. Set without either of the two,
+it fails the run instead of testing nothing. Each leg is a job named
+`playwright (<image>)` — `playwright ()` for the leg on an unset `image` —
+and the report artifact of every leg after the first carries its index.
 
 ## Private dependencies
 
@@ -1305,7 +1314,7 @@ that sets none of them gets exactly the run it has today.
 
 | Input | What it adds |
 |---|---|
-| `matrix_images` | One extra job per CiviKitchen image tag (comma-separated): boots the stack and runs the suite against that CiviCRM. |
+| `matrix_images` | One extra job per CiviKitchen image tag (comma-separated, each listed once): boots the stack and runs the PHPUnit suite against that CiviCRM, plus the lifecycle gate with `lifecycle`. With `matrix_playwright` every tag also gets a browser leg — see [Frontend](#frontend-js-dependencies-js-tests-and-browser-tests). |
 | `lifecycle` | After the suite, in the running stack: `disable` → `enable` → `uninstall` → `install`, then asserts the extension is installed again — plus the post-uninstall and log checks described [below](#the-lifecycle-gate-what-cklifecycle-adds-to-the-cycle). |
 | `upgrade_from_last_release` | Installs the newest reachable git tag, swaps the working tree to the tested commit, runs `cv upgrade:db --mode=ext` and asserts no upgrade stayed pending. |
 | `schema_parity` | Own job: installs the last release and upgrades it to this commit, then installs this commit from scratch, and diffs the two schemas over the extension's own tables. See [below](#schema-parity-does-the-upgrader-arrive-where-install-does). |
@@ -1316,7 +1325,10 @@ minor you support and current stable. The image tags are `:standalone-<minor>`
 (e.g. `:standalone-6.16`) and the moving `:standalone`; see
 [images.md](images.md#tags--versions). A `<minor>` tag keeps being rebuilt
 only while it is on the supported list there, so a minor your matrix or
-`core_upgrade_from` pins has to be on it.
+`core_upgrade_from` pins has to be on it. `:standalone-beta` and
+`:standalone-master` are what core ships next, built daily from its branches:
+a red leg there can be a core regression, so they belong in the scheduled
+caller, not in the push run.
 
 The matrix jobs run the **suite**, not the full `ci` pass: `cklint`,
 `ckconform`, `phpstan` and the coverage floor are enforced by the tools inside
@@ -1482,9 +1494,8 @@ the four asserts above — worth having, and the honest limit is that it says
 nothing about your own data. The log says as much when it finds no fixtures.
 
 It is the **slowest single check** in the pipeline: two boots plus a full core
-schema upgrade. Like the browser job, it runs once, on `image`; it is not
-multiplied by `matrix_images`. A multi-hop upgrade matrix is a separate
-feature, not a flag.
+schema upgrade. It runs once, on `image`; nothing multiplies it by
+`matrix_images`. A multi-hop upgrade matrix is a separate feature, not a flag.
 
 ### The scheduled caller
 
@@ -1528,6 +1539,9 @@ jobs:
       # Browser tests, for a repo that has a test:e2e script — another stack
       # boot, which is exactly why it lives here and not in ci.yml.
       # playwright: true
+      # The browser suite on the matrix image too, for UI that changes between
+      # CiviCRM versions: one more boot per matrix image.
+      # matrix_playwright: true
       # Mutation testing (ckmutate): does the suite assert on what it covers.
       # A no-op until civikitchen.yaml sets policy.mutation.minimum_msi — and set
       # policy.mutation.paths too: without it a run on main mutates only the
@@ -1541,6 +1555,12 @@ A scheduled workflow only runs from the default branch, so a red weekly run
 means the released state is broken — worth an issue, not a rerun.
 `workflow_dispatch` is there for the moment that matters most: before cutting a
 release.
+
+The weekly run and a push run on the same branch leave each other alone:
+every concurrency group in `extension-ci.yml` carries the calling workflow's
+`name:` and the `image`, so a job is cancelled only by its own copy in a newer
+run of the same caller. That holds as long as the two callers' names differ —
+keep the second one's `name:` distinct from the template's `CI`.
 
 `compat.yml` is **not** template-managed: which versions you claim is your
 policy, so `ckinit` neither stamps nor checks this file.

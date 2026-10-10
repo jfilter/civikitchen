@@ -31,8 +31,14 @@ keys on, artifact paths and scan targets are named relative to it, and
 concurrency groups carry the directory and compose project names the extension
 key, so one
 job per extension in the same caller does not cancel or tear down its
-neighbour. Where each part of the run happens in that layout, and how the
-release splits into `build` and `publish` stages, is in
+neighbour. The groups in `extension-ci.yml` also carry the calling workflow's
+name and the `image`, a matrix leg's included, so a scheduled caller next to
+the push caller, runs of one caller on different images and the legs of one
+matrix do not cancel each other either. Call it once per extension and run;
+further images go through `matrix_images`, as two calls for one extension in
+one run share their compose project and artifact names. Where each part of
+the run happens in that layout, and how the release splits into `build` and
+`publish` stages, is in
 [Several extensions in one repository](extension-development.md#several-extensions-in-one-repository).
 
 All jobs resolve their runner in the same order:

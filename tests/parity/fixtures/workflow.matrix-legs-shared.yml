@@ -1,0 +1,77 @@
+# Fixture for the matrix-leg gate. `shared` gives all its legs one compose
+# project and one artifact name; `bait` names the leg only in comments and
+# quoted text; `partial` names one of its two matrix keys. `indexed` tells its
+# legs apart, and `hosted` boots on a GitHub-hosted label, where every leg has
+# a Docker daemon of its own.
+name: Fixture
+on: workflow_call
+
+jobs:
+  shared:
+    runs-on: ${{ inputs.runs_on || 'ubuntu-latest' }}
+    strategy:
+      matrix:
+        image: [example/a, example/b]
+    env:
+      CIVIKITCHEN_IMAGE: ${{ matrix.image }}
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-shared
+    steps:
+      - run: docker compose up -d --wait
+      - uses: actions/upload-artifact@v7
+        with:
+          name: report-shared
+
+  bait:
+    runs-on: ${{ inputs.runs_on || 'ubuntu-latest' }}
+    strategy:
+      matrix:
+        image: [example/a, example/b]
+    env:
+      # One project per leg, via strategy.job-index.
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-bait-${{ 'strategy.job-index' }}
+    steps:
+      - run: docker compose up -d --wait
+      - uses: actions/upload-artifact@v7
+        with:
+          # One name per leg, via matrix.image.
+          name: report-bait-matrix.image
+
+  indexed:
+    runs-on: ${{ inputs.runs_on || 'ubuntu-latest' }}
+    strategy:
+      matrix:
+        variant: [a, b]
+    env:
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-indexed-${{ strategy.job-index }}
+    steps:
+      - run: docker compose up -d --wait
+      - uses: actions/upload-artifact@v7
+        with:
+          name: report-indexed-${{ strategy.job-index }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: logs-indexed-${{ matrix.variant }}
+
+  hosted:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        variant: [a, b]
+    env:
+      COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-hosted
+    steps:
+      - run: docker compose up -d --wait
+      - uses: actions/upload-artifact@v7
+        with:
+          name: report-hosted-${{ matrix.variant }}
+
+  partial:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.1', '8.3']
+        db: [mysql, mariadb]
+    steps:
+      - uses: actions/upload-artifact@v7
+        with:
+          name: report-partial-${{ matrix.php }}

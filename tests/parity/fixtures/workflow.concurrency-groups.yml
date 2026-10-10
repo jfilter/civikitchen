@@ -1,0 +1,110 @@
+# Fixture for the concurrency-group gate. Flagged: `no-workflow`, `no-image`,
+# `literal` and `quoted` (the names only as text), `near-miss` (longer names),
+# `legs` and `include-legs` (legs not told apart) and the pair `copy-a` /
+# `copy-b` (one group for two jobs). Clean: `good`, `good-legs`, `no-group`.
+name: Fixture
+on: workflow_call
+
+jobs:
+  no-workflow:
+    concurrency:
+      group: ck-${{ github.ref }}-${{ inputs.image }}-no-workflow
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
+
+  no-image:
+    concurrency:
+      group: ck-${{ github.ref }}-${{ github.workflow }}-no-image
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
+
+  # The group names github.workflow and inputs.image.
+  literal:
+    concurrency:
+      group: ck-github.workflow-inputs.image-${{ github.ref }}-literal
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
+
+  quoted:
+    concurrency:
+      group: ck-${{ 'github.workflow' }}-${{ format('{0}', 'inputs.image') }}-quoted
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
+
+  near-miss:
+    concurrency:
+      group: ck-${{ github.workflow_ref }}-${{ inputs.image_tag }}-near-miss
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
+
+  legs:
+    concurrency:
+      group: ck-${{ github.workflow }}-${{ inputs.image }}-legs
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [example/a, example/b]
+    steps:
+      - run: 'true'
+
+  include-legs:
+    concurrency:
+      group: ck-${{ github.workflow }}-${{ inputs.image }}-include-legs
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: example/a
+          - image: example/b
+    steps:
+      - run: 'true'
+
+  copy-a:
+    concurrency:
+      group: ck-${{ github.workflow }}-${{ inputs.image }}-copy
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
+
+  copy-b:
+    concurrency:
+      group: ck-${{ github.workflow }}-${{ inputs.image }}-copy
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
+
+  good:
+    concurrency: ck-${{ github.ref }}-${{ github.workflow }}-${{ inputs.image }}-good
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
+
+  good-legs:
+    concurrency:
+      group: ck-${{ github.workflow }}-${{ inputs.image }}-${{ matrix.image }}-good-legs
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: ${{ fromJSON(needs.no-group.outputs.images) }}
+    steps:
+      - run: 'true'
+
+  no-group:
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'

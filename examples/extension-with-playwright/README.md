@@ -42,11 +42,12 @@ this suite for you — no repo-local browser job:
       playwright: true
 ```
 
-The job boots your `.docker/docker-compose.ci.yml` stack with port 8080
-published and the `admin` / `admin` demo user created, then runs
-`npm run test:e2e` on the runner with `CIVICRM_BASE_URL`, `DEMO_USER` and
-`DEMO_PASS` set — the same variables `playwright.config.ts` and
-`tests/auth.setup.ts` already read here. Report and traces are uploaded when
+The job boots your `.docker/docker-compose.ci.yml` stack on a free host port
+with the `admin` / `admin` demo user created, then runs `npm run test:e2e` on
+the runner with `CIVICRM_BASE_URL`, `DEMO_USER` and `DEMO_PASS` set — the
+same variables `playwright.config.ts` and `tests/auth.setup.ts` already read
+here. The port changes from run to run, so a test that needs the site's URL
+takes it from `baseURL`, never as a literal `localhost:8080`. Report and traces are uploaded when
 it fails. It is a slow check: put it in the scheduled caller, not in
 `ci.yml`. Add `bun: true` alongside and the job installs and runs the suite
 with Bun instead; nothing in these files changes. See
