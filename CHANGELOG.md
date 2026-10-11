@@ -90,6 +90,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- A recreated app container (image update, `docker compose up` after a compose
+  change) no longer re-runs the `init.d` hooks against the kept database
+  volume, which seeded it a second time. Their run is marked in the database
+  (setting `civikitchen_provisioned`); profile, locales and extensions are
+  still re-applied, and `docker compose down -v` still provisions afresh.
 - A job in `extension-ci.yml` is cancelled only by its own copy in a newer run
   of the same caller workflow on the same ref and image: the concurrency
   groups carry the caller's workflow name and the image, a matrix leg's

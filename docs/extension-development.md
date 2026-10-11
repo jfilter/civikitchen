@@ -41,8 +41,11 @@ docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpunit"
 `docker compose down` (without `-v`) drops the container and keeps the DB
 volume: the entrypoint detects the existing tables and runs
 `cv core:install -K` to keep them, so the next boot is fast and DB state
-survives. `docker compose down -v` drops the DB volume too; the next `up` is a
-fresh install.
+survives. A recreated container re-applies profile, locales and extensions,
+which restore its file system, but runs the `init.d` hooks only if the
+database lacks the setting `civikitchen_provisioned` their first run wrote, so
+it does not seed the kept database a second time. `docker compose down -v` drops
+the DB volume too; the next `up` is a fresh install.
 
 Several stacks on one machine collide on host ports. The template compose
 reads them from a gitignored `.docker/.env` (`CK_HTTP_PORT`, `CK_MAILDEV_PORT`,

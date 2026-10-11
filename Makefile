@@ -227,13 +227,14 @@ test-scenario: $(SCENARIO_YAML_STAMP) ## Declarative scenario schema, plan, Comp
 
 # The entrypoint's <requires> resolution decides what a CI stack installs before
 # `ext:enable`; a regression here surfaces as every dependent repo's boot failing.
-test-provision: ## provision.sh: <requires>, mounted extensions, core locales, test DB and its boot patch, no civicrm.org calls (fake cv), site port
+test-provision: ## provision.sh: <requires>, mounted extensions, core locales, test DB and its boot patch, no civicrm.org calls (fake cv), site port, database marker
 	bash tests/toolbelt/test-provision-requires.sh
 	bash tests/toolbelt/test-provision-mounts.sh
 	bash tests/toolbelt/test-provision-locales.sh
 	bash tests/toolbelt/test-provision-composer.sh
 	bash tests/toolbelt/test-provision-test-db.sh
 	bash tests/toolbelt/test-provision-phone-home.sh
+	bash tests/toolbelt/test-provision-db-marker.sh
 	bash tests/toolbelt/test-provision-site-port.sh
 	bash tests/toolbelt/test-test-db-boot.sh
 

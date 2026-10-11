@@ -28,6 +28,9 @@
 : "${CK_EXT_DIR:=/var/www/html/ext}"
 : "${CK_DATA_DIRS:=/var/www/html/private /var/www/html/public}"
 : "${CK_PROVISIONED_MARKER:=/var/www/html/private/.civikitchen-provisioned}"
+# init.d hooks seed the database, so their run is marked there: a recreated
+# container (private/ gone, database volume kept) must not run them twice.
+: "${CK_PROVISIONED_SETTING:=civikitchen_provisioned}"
 # Separate marker for the standalone post-install CONFIG bundle (ck_post_install_config:
 # dev settings / SMTP / test DB / auth / demo user). Kept distinct from
 # CK_PROVISIONED_MARKER so config and provisioning retry independently.
@@ -1068,11 +1071,20 @@ ck_post_install_provision() {
         echo "[civikitchen] Already provisioned (${CK_PROVISIONED_MARKER}) — CIVIKITCHEN_PROFILE / *_EXTENSIONS / init.d changes are not re-applied; remove the marker to re-run."
         return 0
     fi
+    # Profiles re-apply idempotently and restore what a new container lost
+    # (downloaded extensions, l10n files, credentials); init.d hooks run once per database.
+    local seeded
+    seeded="$(ck_as_web cv ev "echo \\Civi::settings()->get('${CK_PROVISIONED_SETTING}') ? 'yes' : 'no';")"
     ck_no_phone_home
     ck_locales
     ck_apply_profile
     ck_extra_extensions
     ck_enable_extensions
-    ck_run_init_hooks
+    if [[ "${seeded}" == "yes" ]]; then
+        echo "[civikitchen] init.d hooks already ran on this database (setting ${CK_PROVISIONED_SETTING}) — not re-run; re-provision with docker compose down -v."
+    else
+        ck_run_init_hooks
+        ck_as_web cv ev "\\Civi::settings()->set('${CK_PROVISIONED_SETTING}', TRUE);" >/dev/null
+    fi
     touch "${CK_PROVISIONED_MARKER}"
 }
