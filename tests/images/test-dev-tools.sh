@@ -527,7 +527,7 @@ cp -r /opt/civikitchen/toolbelt "${WORKDIR}/toolbelt"
 if EXT_TESTS_OUT="$(php "${WORKDIR}/toolbelt/mago-ext/tests/run.php" --mago="$(command -v mago)" 2>&1)"; then
     ok "CiviKitchen mago extension cases"
 else
-    fail "CiviKitchen mago extension cases (${EXT_TESTS_OUT: -600})"
+    fail "CiviKitchen mago extension cases ($(grep -v '^ok ' <<<"${EXT_TESTS_OUT}" | head -40))"
 fi
 
 # ---------------------------------------------------------------------------
