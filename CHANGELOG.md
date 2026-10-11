@@ -14,6 +14,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- `ckmigrate` no longer leaves a doubled blank line, or a blank line opening a
+  block, where it drops a phpcs comment, so its result passes `ckfmt --check`.
+
 ## [1.37.0] - 2026-10-11
 
 ### Added

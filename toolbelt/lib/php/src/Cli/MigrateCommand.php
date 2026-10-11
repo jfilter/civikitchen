@@ -215,7 +215,12 @@ final class MigrateCommand implements Command
         };
         if ($lineStart && preg_match('/^(\r\n|\n|\r)/', $next, $newline) === 1) {
             $trimBefore();
-            $this->setText($tokens, $index + 1, substr($next, strlen($newline[1])));
+            $rest = substr($next, strlen($newline[1]));
+            // A blank line after the comment goes too where it would double one before it or open a block.
+            if (preg_match('/(?:\{|\R[ \t]*)\R[ \t]*$/', $previous . $whitespace) === 1) {
+                $rest = preg_replace('/^[ \t]*\R/', '', $rest, 1);
+            }
+            $this->setText($tokens, $index + 1, $rest);
         } elseif ($lineStart) {
             // Code follows on the comment's line: it keeps the line's indentation.
             $this->setText($tokens, $index + 1, ltrim($next, " \t"));

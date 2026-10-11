@@ -478,6 +478,12 @@ final class SharedPhpTest extends TestCase
                 "<?php\nfunction f() {\n    // phpcs:disable A\n    // phpcs:disable B\n    # phpcs:disable C\n    return 1;\n}\n",
                 "<?php\nfunction f() {\n    return 1;\n}\n",
             ],
+            'no doubled blank line' => ["<?php\n\$a = 1;\n\n// phpcs:enable X\n\n\$b = 2;\n", "<?php\n\$a = 1;\n\n\$b = 2;\n"],
+            'no blank line opening a block' => [
+                "<?php\nfunction f() {\n  // phpcs:ignore X.Y.Z -- why\n  // phpcs:disable Y\n\n  return 1;\n}\n",
+                "<?php\nfunction f() {\n  return 1;\n}\n",
+            ],
+            'a blank line between statements stays' => ["<?php\n\$a = 1;\n// phpcs:enable X\n\n\$b = 2;\n", "<?php\n\$a = 1;\n\n\$b = 2;\n"],
             'CRLF lines go whole' => ["<?php\r\n    // phpcs:disable X\r\n    \$a = 1;\r\n", "<?php\r\n    \$a = 1;\r\n"],
             'no space where no token could merge' => ["<?php\nfoo(/* phpcs:ignore X.Y.Z */\$b);\n", "<?php\nfoo(\$b);\n"],
             'a rule off in the baseline gets no pragma' => ["<?php\nf(TRUE); // phpcs:ignore CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean -- magic setter\n", "<?php\nf(TRUE);\n"],
