@@ -76,6 +76,15 @@ SHELLCHECK_PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]').$(subst ar
 SHELLCHECK_SHA256 := $(CK_SHELLCHECK_SHA256_$(subst .,_,$(SHELLCHECK_PLATFORM)))
 SHELLCHECK := $(CACHE)/shellcheck-$(CK_SHELLCHECK_VERSION)
 
+# mago for the extension's fixture suite: the image's release (versions.env),
+# one hash per platform there. Release assets are named by target triple.
+MAGO_TRIPLE_linux_x86_64 := x86_64-unknown-linux-gnu
+MAGO_TRIPLE_linux_aarch64 := aarch64-unknown-linux-gnu
+MAGO_TRIPLE_darwin_aarch64 := aarch64-apple-darwin
+MAGO_TRIPLE := $(MAGO_TRIPLE_$(subst .,_,$(SHELLCHECK_PLATFORM)))
+MAGO_SHA256 := $(CK_MAGO_SHA256_$(subst .,_,$(SHELLCHECK_PLATFORM)))
+MAGO := $(CACHE)/mago-$(CK_MAGO_VERSION)
+
 # What gets linted is decided by WHAT A FILE IS, never by where it lives.
 #
 # A directory list fails OPEN: a file it does not match is not reported as
@@ -107,7 +116,7 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario \
+.PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-mago-ext test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario \
 	test-compose-isolation test-concurrency-groups test-matrix-legs test-sibling-wiring test-dist-build-wiring test-gitlab-mr-jobs test-sibling-checkout test-vendored-paths test-ckeslint test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
 	test-ck-headless test-ckcoretest test-phpstan-bootstrap test-shell-portability test-install-trivy test-resolve-civicrm-stable test-resolve-civicrm-git lint lint-shell lint-shell-portability \
 	test-database-matrix test-compose-config test-playwright-port test-demo-basic-auth test-release-retag test-release-steps test-ci-gates-step test-release-script \
@@ -129,7 +138,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-compose-isolation test-concurrency-groups test-matrix-legs test-sibling-wiring test-dist-build-wiring test-gitlab-mr-jobs test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-resolve-civicrm-stable test-resolve-civicrm-git test-changelog ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-mago-ext test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-compose-isolation test-concurrency-groups test-matrix-legs test-sibling-wiring test-dist-build-wiring test-gitlab-mr-jobs test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-resolve-civicrm-stable test-resolve-civicrm-git test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -159,6 +168,12 @@ test-phpstan: $(PHPUNIT) $(CORE) ## The phpstan extension's rule tests + catalog
 	# Without fiber scopes a rule sees body variables as mixed; both paths must agree.
 	PHPSTAN_FNSR=0 CIVICRM_CORE_DIR=$(abspath $(CORE)) \
 	  php $(PHPUNIT) -c toolbelt/phpstan/phpunit.xml.dist
+
+# Every mago extension rule against its fixtures, through the pinned mago
+# binary; the runner refuses a binary whose version differs from the SDK's.
+test-mago-ext: $(MAGO) ## The mago extension's rule and plugin fixtures
+	composer install --no-interaction --no-progress --working-dir=toolbelt/mago-ext
+	php toolbelt/mago-ext/tests/run.php --mago=$(abspath $(MAGO))
 
 # ckmodernize writes these rewrites into extension code, so each rule's
 # fixtures pin both the rewrite and the calls it must leave alone.
@@ -426,7 +441,7 @@ $(SCENARIO_YAML_STAMP): packages/civikitchen-scenario-schema/composer.json packa
 	composer install --no-interaction --no-progress --working-dir=packages/civikitchen-scenario-schema
 	@touch $(SCENARIO_YAML_STAMP)
 
-tools: $(PHPUNIT) $(CACHE)/actionlint $(SHELLCHECK) $(SCENARIO_YAML_STAMP) $(OXLINT_STAMP) ## Pre-fetch the pinned tools and YAML parser
+tools: $(PHPUNIT) $(MAGO) $(CACHE)/actionlint $(SHELLCHECK) $(SCENARIO_YAML_STAMP) $(OXLINT_STAMP) ## Pre-fetch the pinned tools and YAML parser
 
 $(SHELLCHECK):
 	@mkdir -p $(CACHE)
@@ -438,6 +453,17 @@ $(SHELLCHECK):
 	tar -xJf $@.tar.xz -C $(CACHE) --strip-components=1 shellcheck-v$(CK_SHELLCHECK_VERSION)/shellcheck
 	mv $(CACHE)/shellcheck $@
 	rm $@.tar.xz
+
+$(MAGO):
+	@mkdir -p $(CACHE)
+	@[ -n "$(MAGO_SHA256)" ] && [ -n "$(MAGO_TRIPLE)" ] || { \
+	  echo "no mago hash pinned for $(SHELLCHECK_PLATFORM) — add CK_MAGO_SHA256_$(subst .,_,$(SHELLCHECK_PLATFORM)) to toolbelt/versions.env" >&2; exit 1; }
+	curl -fsSLo $@.tar.gz \
+	  "https://github.com/carthage-software/mago/releases/download/$(CK_MAGO_VERSION)/mago-$(CK_MAGO_VERSION)-$(MAGO_TRIPLE).tar.gz"
+	echo "$(MAGO_SHA256)  $@.tar.gz" | sha256sum -c --strict -
+	tar -xzf $@.tar.gz -C $(CACHE) --strip-components=1 mago-$(CK_MAGO_VERSION)-$(MAGO_TRIPLE)/mago
+	mv $(CACHE)/mago $@
+	rm $@.tar.gz
 
 $(PHPUNIT):
 	@mkdir -p $(CACHE)

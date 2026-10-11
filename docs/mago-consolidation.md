@@ -1,0 +1,192 @@
+# Consolidating the PHP toolbelt on mago
+
+The images ship nine PHP quality tools. This plan moves every job mago can
+do onto mago and removes the tool that did it, one gate at a time. A tool
+leaves only when mago is shown to find what the tool found, on fixtures and
+on real extension code. Where mago has no equivalent, the tool stays.
+
+The decision is [ADR-0017](adr/0017-php-quality-tools-consolidate-on-mago.md).
+The mago pin lives in `toolbelt/install-dev-tools.sh` and follows the newest
+mago release.
+
+## Target state
+
+| Job | Today | Target |
+|---|---|---|
+| Syntax check of changed files (`cklint`) | `php -l` | `mago lint` + `mago analyze` |
+| Layout (`ckfmt`) | mago formatter | unchanged |
+| Style and footgun sniffs (`cklint`) | phpcs + civicrm/coder; strict types and the 8 CiviKitchen rules already on mago | mago linter + CiviKitchen rules as a mago extension |
+| Version compatibility (`ckcompat`) | mago floor parse + PHPCompatibility | mago lint + mago analyze at the floor |
+| Static analysis (`phpstan` gate) | phpstan, deprecation rules, disallowed-calls, phpat, CiviKitchen rules | `mago analyze` + CiviKitchen plugins as a mago extension |
+| Taint analysis (`cktaint`) | psalm | psalm (mago's `tainted-data-to-sink` is a syntactic rule without data flow) |
+| Automated refactoring (`ckmodernize`) | rector | rector (mago has no equivalent) |
+| Mutation testing (`ckmutate`) | infection | infection |
+| Unused and missing dependencies (`ckdeps`) | composer-dependency-analyser | composer-dependency-analyser |
+
+At the end, the `phpcs-root` and `phpstan-root` composer roots, the
+civicrm/coder clone and the phpstan extension package leave the images.
+`ckdeps` moves to its own small composer root.
+
+## Evidence so far
+
+Measured with mago 1.55.0 inside the `:standalone` image on 2026-10-11.
+
+**`php -l`.** Of 20 fixtures that `php -l` rejects, `mago lint` rejects 15.
+The other five are compile errors that only `mago analyze` reports:
+`break` outside a loop, a `continue` level that is too deep, a redeclared
+function, assignment to `$this`, and a default value of the wrong type.
+`php -l` can leave `cklint` only once `mago analyze` runs on every change,
+which is step 3.
+
+**PHPCompatibility.** On 32 version-specific fixtures, checked against an
+8.1 floor:
+
+- mago reports four cases PHPCompatibility misses: `str_increment()`,
+  `Dom\HTMLDocument`, `ReflectionClass::newLazyGhost()` and the 8.5
+  deprecation of `ReflectionProperty::setAccessible()`.
+- mago misses five cases PHPCompatibility reports:
+  - `"${var}"` interpolation, deprecated in 8.2
+  - `get_class()` without an argument, deprecated in 8.3
+  - an implicitly nullable parameter, deprecated in 8.4. mago reports it
+    only when it runs at 8.4 or later, not at the floor.
+  - `mb_trim()`, new in 8.4. mago has no availability data for it.
+  - dynamic class constant fetch `C::{$name}`, PHP 8.3 syntax that mago
+    parses at an 8.1 floor without a finding
+- New functions, classes and methods are reported only by `mago analyze`
+  (`unavailable-*`), not by `mago lint`. Deprecated functions and constants
+  are reported only by `mago analyze` (`deprecated-*`).
+
+PHPCompatibility stays until the five gaps are closed upstream.
+
+**Static analysis.** On one extension that is clean under phpstan level 10,
+`mago analyze` with core as an include ran in 1.2 s, against 4.7 s for
+phpstan. It reported 25 issues:
+
+- 20× `mixed-assignment`, a check stricter than phpstan's level 10
+- 2× `invalid-array-index` on `$result[] = …` against `Civi\Api4\Generic\Result`.
+  These are false positives, because `Result` is an `ArrayObject`.
+- 2× `invalid-type-cast` on an array cast of `Result`, not yet triaged
+- 1× `incompatible-return-type`: an entity's `create()` returns an action
+  that does not extend the parent's `DAOCreateAction`. phpstan misses this
+  real defect.
+
+**Extension API.** mago 1.47 added an extension SDK in PHP: custom linter
+rules on the syntax tree, analyzer plugins (type providers, targeted hooks,
+codebase scans) and issue filters. The CiviKitchen phpcs sniffs and phpstan
+rules port to this SDK. The SDK is young, so a port pins its mago version
+exactly.
+
+## Port status
+
+`toolbelt/mago-ext` is one mago extension (composer root pinned to the mago
+version in `toolbelt/versions.env`). `make test-mago-ext` runs every case in
+`toolbelt/mago-ext/tests/cases` through the real mago binary and compares the
+exact findings; the image tests run the same cases against the image's mago.
+
+- **Linter rules, gating in `cklint`:** all eight CiviKitchen sniffs and
+  Slevomat's `DeclareStrictTypes` (mago's own `strict-types`). The sniffs,
+  their PHPUnit test and Slevomat are gone from the phpcs standard. Over the
+  38 local extension repos the mago rules and the old sniffs agree on 3017
+  findings; the seven differences are six false positives the sniff raised on
+  booleans inside nested array literals, and one `phpcs:ignore` that needs to
+  become `@mago-expect`.
+- **Analyzer plugins, not yet run by any gate:** the APIv4 contract rules
+  (calls, fluent fields, action properties and their initialization), the SQL
+  table rule, GET mutation, transactional test DDL, silent database catch, the
+  `civicrm-disallowed` bans (one list in `civicrm-disallowed.php`, read by both
+  tools), the `@ck-legacy` scope as an issue filter, and phpat's architecture
+  test as a plugin. Each shares its contract logic with the phpstan rule
+  through `toolbelt/phpstan/src`, so the two cannot drift during the shadow
+  phase. The architecture plugin reproduces phpat's findings on the same
+  fixtures, plus two phpat misses (a property's `@var` type and a static
+  property fetch). A local shadow run over 49 extension repos found every
+  finding of both tools on the same line once phpstan's suppressions were
+  lifted; the differences left are the divergences below.
+- **Known gaps, both limits of mago's extension API:** a property
+  initialization provider sees the trait but not the class using it, so a
+  trait's defaults count as initialized outside an action too; a hook sees one
+  class-like's syntax tree, so GET mutation does not trace a handler's call
+  into a trait method.
+- **Known divergences:** the fluent APIv4 field check types each argument
+  where it stands, so mago also checks a field name held in a local variable,
+  which phpstan does not; a select list extended in a branch has a union type,
+  and mago then skips the alias checks on `orderBy`/`groupBy` that phpstan
+  still runs. The bans apply in every repo, while phpstan applies them only
+  where `phpstan.neon.dist` includes `civicrm-disallowed.neon`. A class of a
+  required extension that is not checked out is a boundary finding in mago
+  (its help names the missing extension); phpat skips a class it cannot
+  resolve.
+
+## Steps
+
+Each step ends with the old tool removed from `install-dev-tools.sh`, the
+lock files and the docs, and with a fixture per removed check that fails
+without its replacement.
+
+### 1. Follow the newest mago
+
+- Bump the pin to the newest release and keep bumping it. Each bump derives
+  both checksums anew and checks two properties on the extension repos:
+  - formatter output still produces zero phpcs errors under the CiviKitchen
+    standard
+  - the lint stage produces no new findings
+- Report the five compatibility gaps and the `analyze`-only compile errors
+  upstream. They decide when `ckcompat` can drop PHPCompatibility.
+
+The 1.45 → 1.55 bump changes formatter output for wrapped boolean
+conditions, which now open and close on their own lines, and for wrapped
+concatenations on the right of `=`. Repos with such code fail `ckfmt
+--check` until one `ckfmt` run. The new output is phpcs-clean.
+
+### 2. Replace phpcs with mago linter rules
+
+- Done: the eight CiviKitchen sniffs and Slevomat (see Port status).
+- For every Drupal and Squiz check still active in the CiviKitchen
+  standard, find the mago rule or formatter setting that covers it. Write
+  down the checks with no counterpart, and drop each one deliberately or
+  port it.
+- `// phpcs:ignore` and `phpcs:disable` lines in consumer repos become
+  `@mago-expect` lines. Leftovers need no check of their own: a stale rule
+  reference makes phpcs abort, and a stale `phpcs:ignore` leaves the mago
+  finding standing.
+- Remove phpcs and civicrm/coder. PHPCompatibility keeps a minimal phpcs
+  until step 4.
+
+### 3. Replace phpstan with mago analyze
+
+- Ship a CiviKitchen analyzer baseline: core as an include, civix files as
+  includes, the `Result` false positive filtered by a plugin, and strictness
+  set to phpstan level 10.
+- Done: the phpstan rules, the disallowed bans and the phpat architecture
+  test as analyzer plugins (see Port status). The bans are a plugin rather
+  than `disallowed-functions` settings, because they include static methods
+  and a per-path allowance; the architecture test is a plugin rather than
+  `mago guard`, because its allowed namespaces come from each repo's
+  `info.xml` requirements.
+- Shadow phase: run `mago analyze` in `ck ci` alongside phpstan, non-gating,
+  across the consumer repos. Triage every difference into one of: a mago
+  false positive (fix the plugin or report upstream), a phpstan-only finding
+  (port or accept the loss deliberately), or a real defect (fix it in the
+  repo).
+- Switch the gate once the shadow run is clean on every consumer repo.
+  `phpstan.neon.dist` and `@phpstan-ignore` lines go in the same release,
+  and `ckconform` flags leftovers.
+- `cklint` then runs `mago analyze` on changed files in place of `php -l`.
+
+### 4. Drop PHPCompatibility
+
+- `ckcompat` runs `mago lint` and `mago analyze` at the floor and, for
+  deprecations, at the newest PHP the images ship.
+- This requires the five gaps from step 1 to be fixed upstream, or covered
+  by a CiviKitchen rule.
+
+## Risks
+
+- The extension SDK appeared in 1.47 and mago releases several times a week.
+  Ported rules tie the toolbelt to that API, and every bump runs their
+  fixtures.
+- A formatter change in a bump turns `ckfmt --check` red on unchanged code.
+  The bump procedure in step 1 measures this before a release, and the
+  changelog names the one `ckfmt` run consumers need.
+- Every consumer repo carries a `phpstan.neon.dist` and suppression lines.
+  Steps 2 and 3 migrate them with a `ckconform` check, not by hand.

@@ -64,10 +64,10 @@ PHPUNIT_VERSION="${PHPUNIT_VERSION:-$CK_PHPUNIT_VERSION}"
 # ceiling still holds the SCORE: an engine that gained mutators would push a
 # repo through its civikitchen.yaml floor with no code change.
 INFECTION_VERSION="${INFECTION_VERSION:-0.34.1}"
-# mago powers the PHP half of `ckfmt`. A formatter that changes its output
-# after an unrelated rebuild would turn every repo's format gate red, so the
-# same drift rule as everything else applies.
-MAGO_VERSION="${MAGO_VERSION:-1.45.0}"
+# mago powers the PHP half of `ckfmt` and cklint's mago stage. From
+# versions.env — the Makefile runs the mago extension's fixtures on the same
+# release, and the extension SDK pins it too.
+MAGO_VERSION="${MAGO_VERSION:-$CK_MAGO_VERSION}"
 # npm bundles its own dependency tree (tar, glob, minimatch, sigstore, ...) and
 # that tree lands in the image scan; nothing in this repo's lockfiles can move
 # it, so npm gets installed over the distro package's own — and pinned, like
@@ -92,11 +92,8 @@ NPM_VERSION="${NPM_VERSION:-12.2.0}"
 # therefore means overriding its *_SHA256 as well.
 CIVIX_SHA256="${CIVIX_SHA256:-1c480133bee248c1f09f19c724e2e44266297b63ff2e55a7cbf3ea17a910d906}"
 PHPUNIT_SHA256="${PHPUNIT_SHA256:-$CK_PHPUNIT_SHA256}"
-# mago ships per-arch binaries and publishes no checksum file, so both hashes
-# are derived locally at pin time (curl -LsS <url> | shasum -a 256) — one per
-# platform the images build for.
-MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64:-c18bde21c4f2be586ccfcb070694cdde99e8522df9ff182d993c617d3907d5ef}"
-MAGO_SHA256_AARCH64="${MAGO_SHA256_AARCH64:-4b97298b31e294b0c17928a788392b6dfaaab59c5fb4df2a3504c4e4f847a62f}"
+MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64:-$CK_MAGO_SHA256_linux_x86_64}"
+MAGO_SHA256_AARCH64="${MAGO_SHA256_AARCH64:-$CK_MAGO_SHA256_linux_aarch64}"
 
 # Compared in the shell rather than with `sha256sum -c`: that exits 0 on a
 # malformed checksum line, so an empty or truncated *_SHA256 would wave the
@@ -177,15 +174,15 @@ rm -rf "${CODER_DIR}/.git"
 # the phpcs install (in /opt/composer/vendor/squizlabs/php_codesniffer/), so
 # the setting applies to every user that invokes phpcs in this image.
 # Two paths (comma-separated): the civicrm-coder fork (Drupal/DrupalPractice)
-# AND the bundled CiviKitchen standard (CiviCRM-tuned Drupal + footgun sniffs,
-# what `cklint` runs), toolbelt/phpcs/CiviKitchen.
+# AND the bundled CiviKitchen standard (CiviCRM-tuned Drupal, what `cklint`
+# runs), toolbelt/phpcs/CiviKitchen.
 #
 # This SETS the list, so the paths the composer installer plugin registered for
 # PHPCompatibility (and the PHPCSUtils it is built on) have to be repeated here
 # or `ckcompat` loses its standard on the next build.
 CIVIKITCHEN_CODER_DIR="${TOOLBELT}/phpcs"
 phpcs --config-set installed_paths \
-    "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR},${COMPOSER_HOME}/vendor/phpcompatibility/php-compatibility,${COMPOSER_HOME}/vendor/phpcsstandards/phpcsutils,${COMPOSER_HOME}/vendor/slevomat/coding-standard"
+    "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR},${COMPOSER_HOME}/vendor/phpcompatibility/php-compatibility,${COMPOSER_HOME}/vendor/phpcsstandards/phpcsutils"
 
 # ---------------------------------------------------------------------------
 # rector (isolated install in its own dir) — powers `ckmodernize`. Beside its
@@ -237,6 +234,11 @@ cat > /usr/local/bin/phpstan <<EOF
 exec php ${PHPSTAN_DIR}/vendor/bin/phpstan "\$@"
 EOF
 chmod +x /usr/local/bin/phpstan
+
+# CiviKitchen's mago extension (linter rules and analyzer plugins), registered
+# by toolbelt/mago/mago.toml. Only the extension SDK, from the committed lock;
+# the contract logic it shares is read in place from toolbelt/phpstan/src.
+composer install --working-dir="${TOOLBELT}/mago-ext" --no-interaction --no-progress
 
 # ---------------------------------------------------------------------------
 # psalm (isolated install in its own dir) — powers `cktaint`, installed beside

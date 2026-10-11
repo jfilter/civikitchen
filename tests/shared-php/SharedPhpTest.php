@@ -749,6 +749,62 @@ final class SharedPhpTest extends TestCase
         }
     }
 
+    public function testLintRunsMagoWithTheBaselineAndTheRepoAsExtensionWorkspace(): void
+    {
+        $before = getcwd();
+        chdir($this->temporary);
+        ob_start();
+        try {
+            $runner = new RecordingRunner();
+            self::assertSame(0, (new LintCommand(dirname(__DIR__, 2), $runner))->run(['--all']));
+            self::assertContains(dirname(__DIR__, 2) . '/toolbelt/mago/mago.toml', $this->firstCommand($runner, '/fake/mago'));
+            self::assertSame(getcwd(), $runner->environments['/fake/mago']['CK_MAGO_WORKSPACE'] ?? null);
+        } finally {
+            ob_end_clean();
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
+    public function testLintFixInsertsTheStrictTypesDeclareBeforeTheSafeFixes(): void
+    {
+        $before = getcwd();
+        chdir($this->temporary);
+        ob_start();
+        try {
+            $runner = new RecordingRunner();
+            self::assertSame(0, (new LintCommand(dirname(__DIR__, 2), $runner))->run(['--fix', '--all']));
+            $mago = array_values(array_filter($runner->commands, static fn (array $command): bool => $command[0] === '/fake/mago' && !in_array('config', $command, true)));
+            self::assertCount(2, $mago);
+            self::assertContains('--potentially-unsafe', $mago[0]);
+            self::assertSame('strict-types', $mago[0][array_search('--only', $mago[0], true) + 1]);
+            self::assertNotContains('--potentially-unsafe', $mago[1]);
+        } finally {
+            ob_end_clean();
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
+    public function testLintFixLeavesAStrictTypesOptOutAlone(): void
+    {
+        $before = getcwd();
+        chdir($this->temporary);
+        ob_start();
+        try {
+            foreach (['{"rules": {"strict-types": {"enabled": false}}}' => 1, 'not json' => 2] as $config => $commands) {
+                $runner = new RecordingRunner();
+                $runner->magoLinterConfig = $config;
+                $status = (new LintCommand(dirname(__DIR__, 2), $runner))->run(['--fix', '--all']);
+                $lint = array_filter($runner->commands, static fn (array $command): bool => $command[0] === '/fake/mago' && !in_array('config', $command, true));
+                self::assertNotContains('--potentially-unsafe', array_merge(...array_values($lint) ?: [[]]), $config);
+                self::assertSame($commands === 1 ? 0 : 2, $status, $config);
+                self::assertCount($commands === 1 ? 1 : 0, $lint, $config);
+            }
+        } finally {
+            ob_end_clean();
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
     public function testLintFixSucceedsWhenPhpcbfFixedEverything(): void
     {
         $before = getcwd();
@@ -967,15 +1023,25 @@ final class RecordingRunner extends Runner
         if (str_ends_with($command[0], 'ckconform')) {
             return ['status' => 0, 'output' => "dir tests\n"];
         }
+        if ($command[0] === '/fake/mago' && in_array('config', $command, true)) {
+            return ['status' => 0, 'output' => $this->magoLinterConfig];
+        }
         return ['status' => 0, 'output' => ''];
     }
+
+    /** What `mago config --show linter` prints. */
+    public string $magoLinterConfig = '{"rules": {"strict-types": {"enabled": true}}}';
 
     /** @var array<string, int> exit status per program, 0 when absent */
     public array $exitCodes = [];
 
+    /** @var array<string, ?array<string, string>> the environment each program last ran with */
+    public array $environments = [];
+
     public function passthrough(array $command, ?array $environment = null, ?string $workingDirectory = null): int
     {
         $this->commands[] = $command;
+        $this->environments[$command[0]] = $environment;
         return $this->exitCodes[$command[0]] ?? 0;
     }
 

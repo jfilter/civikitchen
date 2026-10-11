@@ -19,6 +19,7 @@ FLOOR=8.1.31
 ROOTS=(
     toolbelt/phpcs-root
     toolbelt/phpstan-root
+    toolbelt/mago-ext
     toolbelt/rector
     toolbelt/psalm
     packages/civikitchen-scenario-schema

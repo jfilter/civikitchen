@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<extension key="de.example.shapes" type="module">
+  <name>Shapes</name>
+  <classloader>
+    <psr0 prefix="CRM_" path="."/>
+    <psr4 prefix="Civi\" path="Civi"/>
+  </classloader>
+</extension>

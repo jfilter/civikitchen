@@ -222,24 +222,22 @@ up; see
   its own `Sec-Fetch-Site: cross-site` refusal. That is a narrow
   `@phpstan-ignore ck.route.mutationOnGet` naming the mitigation, never a
   baseline entry.
-- `E::ts()`, never bare `ts()` (`CiviKitchen.I18n.UseExtensionTs`).
+- `E::ts()`, never bare `ts()` (`civikitchen/use-extension-ts`).
 - Standard mixins for managed entities / menu / settings / Angular — no
-  bespoke hooks (`CiviKitchen.Extension.UseMixinsForStandardHooks`).
+  bespoke hooks (`civikitchen/use-mixins-for-standard-hooks`).
 - Config as managed entities (`managed/*.mgd.php` or `.mgd.php`), not
   install-time imperative code.
 - A managed `Job` on an entity this repo ships only under `Civi/Api4/` sets
   `version=4` in its `parameters` — the runner parses them the APIv3 way and
   the job otherwise fails on every cron pass (`ckconform` `managed-job`).
 - phpstan level 10 clean (template `phpstan.neon.dist`), files ≤ 1000 lines
-  (`CiviKitchen.Files.MaxFileLength`).
+  (`civikitchen/max-file-length`).
 - `declare(strict_types = 1)` in every file
-  (`SlevomatCodingStandard.TypeHints.DeclareStrictTypes`; `cklint --fix`
-  inserts it). Without it the types phpstan verifies are enforced by nothing at
-  runtime. The spacing is not cosmetic: `Drupal.WhiteSpace.OperatorSpacing`
-  wants the spaces and ckfmt writes them (`space-around-assignment-in-declare`),
-  so the CiviKitchen standard sets Slevomat's `spacesCountAroundEqualsSign` to
-  1. With a 0 there the two sniffs demand opposite things and no file in the
-  fleet can satisfy both.
+  (mago's `strict-types`, armed in the baseline everywhere but
+  `tests/phpunit/bootstrap.php`; `cklint --fix` inserts it). Without it the
+  types phpstan verifies are enforced by nothing at runtime. The spacing is
+  `Drupal.WhiteSpace.OperatorSpacing`'s and ckfmt writes it
+  (`space-around-assignment-in-declare`).
 - **One PHP floor, stated once and checked from three sides.**
   `composer.json` `require.php` is the source of truth; `info.xml`
   `<php_compatibility>` and phpstan's `phpVersion` must agree with it
@@ -271,33 +269,55 @@ up; see
   dropped and what follows them is named — `ckmodernize` rewrites
   `retrieve('delete', 'String', NULL, FALSE, NULL, 'POST')` to
   `retrieve('delete', 'String', method: 'POST')`. Bare `TRUE`/`FALSE` at a call
-  site is a warning (`CiviKitchen.Modern.NameBooleanArguments`) — only a human
-  knows which parameter it is.
+  site is `civikitchen/name-boolean-arguments` — only a human knows which
+  parameter it is, so the baseline leaves it off and a repo arms it once its
+  call sites are named.
 
 ## Tooling every repo must have
 
 - `phpcs.xml.dist` referencing `<rule ref="CiviKitchen"/>` (project layer on
   top is yours) — `cklint` picks it up automatically. The standard is the
   Drupal base minus the doc-comment sniffs that fight PHPStan array-shape
-  PHPDocs (`Drupal.Commenting.FunctionComment` and siblings), plus the
-  CiviKitchen sniffs. One of them is opt-in per repo:
-  `CiviKitchen.Api.NoRequiredOnExternalAction` forbids `@required` on the
-  APIv4 actions the ruleset lists in `externalActions`, because there an empty
-  parameter has to be answered as a verdict, not rejected with an exception.
+  PHPDocs (`Drupal.Commenting.FunctionComment` and siblings).
 - Warnings vs errors in the phpcs layer is a real distinction, not decoration:
-  a sniff is a warning where the fix needs human judgement (which parameter is
-  that `TRUE`?). `cklint` prints
-  them and exits 0 on them — only phpcs *errors* and mago findings fail the
-  gate. Ship warnings down over time; don't let them block a release.
+  `cklint` prints phpcs warnings and exits 0 on them — only phpcs *errors* and
+  every mago finding fail the gate. Ship warnings down over time; don't let
+  them block a release.
 - `cklint` also runs `mago lint` as a second engine: bug-pattern rules the
   phpcs standard does not carry (loose `==`, empty catch blocks, `@`,
   complexity ceilings). The rule set ships in the bundled `mago.toml` —
   subtractive, mago's defaults minus everything another gate already owns
-  (phpcs/Slevomat/Rector/cktaint/spaze) and minus the CiviCRM house idiom
+  (phpcs/Rector/cktaint/spaze) and minus the CiviCRM house idiom
   (`isset()`/`empty()` on API arrays). A deliberate single deviation is a
-  `// @mago-expect lint:<rule>` line in the code, visible in the diff; a
-  committed `mago.toml` replaces the baseline outright. With the baseline, mago
-  lints at the floor in `composer.json` `require.php`.
+  `// @mago-expect lint:<rule>` line in the code, visible in the diff. With the
+  baseline, mago lints at the floor in `composer.json` `require.php`; a
+  committed `mago.toml` replaces it unless it starts with
+  `extends = ["/opt/civikitchen/toolbelt/mago/mago.toml"]`.
+- The baseline also runs CiviKitchen's own rules, a mago extension in
+  `toolbelt/mago-ext` (codes `civikitchen/<rule>`): `use-extension-ts`,
+  `use-mixins-for-standard-hooks`, `max-file-length`, `no-unsafe-unserialize`,
+  `no-tautological-assertion`, `no-generic-var-on-action-param`,
+  `no-required-on-external-action` and the off-by-default
+  `name-boolean-arguments`. A repo configures them through worker options on
+  the extension host command, in a `mago.toml` that extends the baseline:
+
+  ```toml
+  extends = ["/opt/civikitchen/toolbelt/mago/mago.toml"]
+
+  [extension-hosts.civikitchen]
+  command = ["php", "/opt/civikitchen/toolbelt/mago-ext/worker.php",
+    "--exclude=civikitchen/max-file-length:tests/**",
+    "--external-actions=Civi\\Api4\\Action\\Widget\\Intake"]
+  ```
+
+  `--disable=<code>,…` turns rules off, `--exclude=<code>:<glob>,…` scopes them
+  (globs match the repo-relative path), `--max-lines=<n>` moves the file-length
+  ceiling, and `--ignore-calls=<name>,…` replaces the list of calls
+  `name-boolean-arguments` leaves alone. `--external-actions` arms
+  `no-required-on-external-action`: `@required` is forbidden on those APIv4
+  actions, because there an empty parameter has to be answered as a verdict,
+  not rejected with an exception. Repeating the table replaces the baseline's
+  command, so leaving out its `--disable` arms `name-boolean-arguments`.
 - `phpunit.xml.dist` + headless tests per the template
   (`scaffold/template/extension/`), incl. the `TEST_DB_DSN` bootstrap guard.
 - `phpstan.neon.dist` (level 10, no baseline, `phpVersion` at the declared
@@ -368,7 +388,7 @@ up; see
   new file is invisible to both until it is `git add`ed. `cklint` also reads
   untracked files.
 - **Rule packs come from the image, not from each repo's `composer.json`.**
-  phpcs standards (civicrm/coder, PHPCompatibility, Slevomat) and phpstan
+  phpcs standards (civicrm/coder, PHPCompatibility) and phpstan
   extensions (deprecation rules, disallowed-calls, strict-rules) are installed
   once from the image's committed lockfiles (`toolbelt/phpcs-root`,
   `toolbelt/phpstan-root`) — an extension carries no dev dependencies at all. Third-party rules are cherry-picked, never a

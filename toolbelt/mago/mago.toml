@@ -66,10 +66,14 @@ no-short-opening-tag = { enabled = false }
 no-trailing-space = { enabled = false }
 trait-name = { enabled = false }
 
-# Covered by another gate already: Slevomat enforces declare(strict_types),
-# the Rector rule + NameBooleanArguments sniff own named-argument policy,
-# cktaint owns taint analysis, spaze/disallowed-calls owns banned functions.
-strict-types = { enabled = false }
+# declare(strict_types = 1) per file: without it the declared types are enforced
+# by nothing at runtime. The test bootstrap eval()s core's boot code, and eval()
+# inherits the calling file's strict_types — that would arm it inside CiviCRM.
+strict-types = { enabled = true, exclude = ["tests/phpunit/bootstrap.php", "**/tests/phpunit/bootstrap.php"] }
+
+# Covered by another gate already: the Rector rule + the extension's
+# name-boolean-arguments own named-argument policy, cktaint owns taint
+# analysis, spaze/disallowed-calls owns banned functions.
 literal-named-argument = { enabled = false }
 tainted-data-to-sink = { enabled = false }
 no-debug-symbols = { enabled = false }
@@ -95,3 +99,15 @@ too-many-methods = { enabled = true, exclude = ["tests/**", "**/tests/**"] }
 # A test that drives a real preProcess() has to simulate the request that
 # CRM_Utils_Request::retrieve() reads; production code keeps the rule.
 no-request-variable = { enabled = true, exclude = ["tests/**", "**/tests/**"] }
+
+# CiviKitchen's own rules (toolbelt/mago-ext): bare ts(), standard-hook mixins,
+# the @required trap, file length, positional booleans, unserialize,
+# tautological assertions. Codes are civikitchen/<rule>. A repo deviates with
+# its own mago.toml: `extends` this file and repeat this table with worker
+# options — --disable=<code>,… --exclude=<code>:<glob>,… --max-lines=<n>
+# --external-actions=<ActionClass>,… (docs/extension-standards.md).
+# cklint exports CK_MAGO_WORKSPACE, the repo root the rules resolve paths from.
+# Every reported level fails, so name-boolean-arguments (fixing it takes judgement
+# per call site) starts disabled; a repo arms it by repeating the table without it.
+[extension-hosts.civikitchen]
+command = ["php", "/opt/civikitchen/toolbelt/mago-ext/worker.php", "--disable=civikitchen/name-boolean-arguments"]

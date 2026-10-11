@@ -17,7 +17,7 @@ use CiviKitchen\Ckconform\SmartySource;
  * `{crmScope}` names the extension, so the extension's own .po files are never
  * consulted. Nothing errors, nothing warns, no log line appears — the string
  * just renders in English forever, on an install whose l10n/ is complete and
- * whose translators did their job. The phpcs sniff CiviKitchen.I18n.UseExtensionTs
+ * whose translators did their job. The mago rule civikitchen/use-extension-ts
  * closes the PHP half of this hole; the templates had no equivalent.
  *
  * The same applies to the message-template bodies an extension ships inside a

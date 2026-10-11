@@ -80,10 +80,11 @@ committing both files:
 
 | Root | Tools |
 | --- | --- |
-| `toolbelt/phpcs-root` | phpcs, PHPCompatibility, Slevomat, composer-dependency-analyser |
+| `toolbelt/phpcs-root` | phpcs, PHPCompatibility, composer-dependency-analyser |
 | `toolbelt/phpstan-root` | phpstan + the extensions every image ships |
 | `toolbelt/rector` | rector (and the phpstan version it may see) |
 | `toolbelt/psalm` | psalm (taint engine for `cktaint`) |
+| `toolbelt/mago-ext` | the mago extension SDK, pinned to the mago binary in `versions.env` |
 
 Every root resolves its lock against PHP 8.1.31 (`config.platform.php`), the
 floor the images support, so a re-lock on a newer laptop cannot pull a

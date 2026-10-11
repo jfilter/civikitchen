@@ -228,6 +228,7 @@ release branch instead, smoke-tested only and outside the release. See
 | [Releasing an extension](docs/extension-releases.md) | `ckrelease` and `extension-release.yml` |
 | [Releases](docs/releases.md) | How civikitchen itself is versioned and released |
 | [Building locally](docs/building.md) | Build arguments, tool pins, running the image tests |
+| [Consolidating on mago](docs/mago-consolidation.md) | Which PHP tools mago replaces, the evidence, and the migration steps |
 | [Implementation architecture](docs/implementation-architecture.md) | Where PHP, shell and TypeScript each sit |
 | [Architecture decisions](docs/adr/) | ADRs for the contract, release model, checks and images |
 | [Changelog](CHANGELOG.md) | Changes per release |

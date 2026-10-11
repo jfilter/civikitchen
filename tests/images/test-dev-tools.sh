@@ -14,7 +14,7 @@
 #   1. Every binary responds to --version
 #   2. phpcs has the Drupal + DrupalPractice + CiviKitchen standards registered
 #   3. phpcs actually lints a sample file (intentionally non-conforming)
-#   3b. The CiviKitchen footgun sniffs fire, and cklint applies them
+#   3b. cklint's mago stage runs the CiviKitchen extension rules and its tests
 #   3c. ckmodernize boots rector and previews a CiviCRM footgun rewrite
 #   3d. ckrelease builds a dist zip and rejects a mismatched tag
 #   3g. ckcompat rejects syntax the declared PHP floor cannot parse
@@ -193,8 +193,8 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3b. The CiviKitchen footgun sniffs fire, and cklint runs them
-echo "== CiviKitchen standard + cklint =="
+# 3b. cklint runs the CiviKitchen mago extension rules through the baseline
+echo "== CiviKitchen rules + cklint =="
 cat > "${WORKDIR}/Legacy.php" <<'PHP'
 <?php
 function myext_civicrm_managed(&$entities) {
@@ -206,44 +206,61 @@ function f() {
 }
 PHP
 
-CK_OUT="$(phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/Legacy.php" 2>&1 || true)"
-# NOTE: the banned CiviCRM call sites (civicrm_api3, CRM_Core_Error::debug_*)
-# are NOT asserted here any more — they left this standard for phpstan
-# (civicrm-disallowed.neon) and phpat, which resolve types instead of matching
-# tokens. See the ruleset description.
-if grep -q "DeclareStrictTypesMissing\|Missing declare(strict_types" <<<"${CK_OUT}"; then
-    ok "CiviKitchen DeclareStrictTypes (Slevomat) flags the missing declare"
-else
-    fail "Slevomat DeclareStrictTypes didn't fire — is slevomat installed? (output: ${CK_OUT:0:200})"
-fi
-if grep -qi "translation domain" <<<"${CK_OUT}"; then
-    ok "CiviKitchen UseExtensionTs flags bare ts()"
-else
-    fail "CiviKitchen UseExtensionTs didn't flag bare ts() (output: ${CK_OUT:0:200})"
-fi
-if grep -q "civicrm_managed" <<<"${CK_OUT}"; then
-    ok "CiviKitchen UseMixinsForStandardHooks flags legacy mixin hooks"
-else
-    fail "CiviKitchen UseMixinsForStandardHooks didn't flag legacy hook (output: ${CK_OUT:0:200})"
-fi
-
 if CKLINT_HELP="$(cklint --help 2>&1)" && grep -q "uncommitted git changes" <<<"${CKLINT_HELP}"; then
     ok "cklint --help"
 else
     fail "cklint --help"
 fi
 
-# Explicit-path mode without a project phpcs.xml(.dist) in cwd: cklint must
-# syntax-check (php -l) and then apply the CiviKitchen fallback standard.
+# Explicit-path mode without a project config: the mago baseline's extension
+# host runs the CiviKitchen rules next to mago's own strict-types.
 LEGACYDIR="${WORKDIR}/legacyext"
 mkdir -p "${LEGACYDIR}"
 cp "${WORKDIR}/Legacy.php" "${LEGACYDIR}/"
 (cd "${LEGACYDIR}" && git init -q . && git add -A) >/dev/null 2>&1
 CKLINT_OUT="$( (cd "${LEGACYDIR}" && cklint Legacy.php) 2>&1 || true)"
-if grep -qi "translation domain" <<<"${CKLINT_OUT}"; then
-    ok "cklint lints with the CiviKitchen fallback standard"
+for code in strict-types civikitchen/use-extension-ts civikitchen/use-mixins-for-standard-hooks; do
+    if grep -q "${code}" <<<"${CKLINT_OUT}"; then
+        ok "cklint mago stage flags ${code}"
+    else
+        fail "cklint mago stage didn't flag ${code} (output: ${CKLINT_OUT:0:300})"
+    fi
+done
+
+# The rules find info.xml from the repo cklint runs in (CK_MAGO_WORKSPACE), not
+# from mago's config directory: with the prefix known, a helper is no hook.
+INFODIR="${WORKDIR}/infoext"
+mkdir -p "${INFODIR}"
+printf '<?xml version="1.0"?>\n<extension key="org.example.widget" type="module">\n  <file>widget</file>\n</extension>\n' > "${INFODIR}/info.xml"
+cat > "${INFODIR}/widget.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+function widget_civicrm_managed(array &$entities): void {
+}
+
+function helper_civicrm_managed(array &$entities): void {
+}
+PHP
+(cd "${INFODIR}" && git init -q . && git add -A) >/dev/null 2>&1
+INFO_OUT="$( (cd "${INFODIR}" && cklint widget.php) 2>&1 || true)"
+if grep -q "widget_civicrm_managed" <<<"${INFO_OUT}" && ! grep -q "helper_civicrm_managed" <<<"${INFO_OUT}"; then
+    ok "cklint mago stage resolves the extension prefix from the repo's info.xml"
 else
-    fail "cklint didn't report the bare ts() (output: ${CKLINT_OUT:0:200})"
+    fail "cklint mago stage ignored the repo's info.xml (output: ${INFO_OUT:0:400})"
+fi
+
+# cklint --fix inserts the missing declare, spelled so the next plain run passes.
+FIXDIR="${WORKDIR}/fixext"
+mkdir -p "${FIXDIR}"
+printf '<?php\n\nfunction fixext_answer(): int {\n  return 42;\n}\n' > "${FIXDIR}/Answer.php"
+(cd "${FIXDIR}" && git init -q . && git add -A) >/dev/null 2>&1
+FIX_OUT="$( (cd "${FIXDIR}" && cklint --fix Answer.php && cklint Answer.php) 2>&1 )" || true
+if grep -q "declare(strict_types = 1);" "${FIXDIR}/Answer.php" && (cd "${FIXDIR}" && cklint Answer.php) >/dev/null 2>&1; then
+    ok "cklint --fix inserts declare(strict_types = 1) and the result lints clean"
+else
+    fail "cklint --fix left Answer.php without a clean declare ($(head -c 200 "${FIXDIR}/Answer.php") | ${FIX_OUT:0:300})"
 fi
 
 # mago lints at the repo's declared PHP floor: a trait constant (PHP 8.2) is a
@@ -261,10 +278,9 @@ else
     fail "cklint ignored the PHP floor (8.1: ${FLOOR_BASE:0:200} | 8.3: ${FLOOR_83:0:200})"
 fi
 
-# The declare spacing has to be the SAME shape in the sniff and in ckfmt, or
-# every file in the fleet is unfixable: Slevomat and Drupal.WhiteSpace.
-# OperatorSpacing would each demand what the other forbids. Both spellings are
-# asserted so a Slevomat bump that changes the default cannot pass silently.
+# The declare spacing has to be the SAME shape in phpcs and in ckfmt, or every
+# file in the fleet is unfixable. Both spellings are asserted so a Drupal
+# standard bump that changes Drupal.WhiteSpace.OperatorSpacing cannot pass silently.
 cat > "${WORKDIR}/DeclSpaced.php" <<'PHP'
 <?php
 
@@ -349,6 +365,26 @@ else
     fail "CiviKitchen rejects the formatter's array layout (output: ${ARR_OUT:0:300})"
 fi
 
+# A positional boolean takes judgement per call site, so the baseline leaves
+# name-boolean-arguments off: every level mago reports would fail the gate.
+BOOLDIR="${WORKDIR}/boolext"
+mkdir -p "${BOOLDIR}"
+cat > "${BOOLDIR}/Bool.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+function acme_probe(): void {
+  acme_helper('x', TRUE);
+}
+PHP
+(cd "${BOOLDIR}" && git init -q . && git add -A) >/dev/null 2>&1
+if BOOL_OUT="$( (cd "${BOOLDIR}" && cklint Bool.php) 2>&1 )" && ! grep -q "name-boolean-arguments" <<<"${BOOL_OUT}"; then
+    ok "cklint baseline leaves name-boolean-arguments off"
+else
+    fail "cklint flagged or failed on a positional boolean (output: ${BOOL_OUT:0:300})"
+fi
+
 # Warning tier: a phpcs warning is reported but must not fail the gate, while
 # an error still does. Scoped to a two-sniff project ruleset so the assertion
 # is about cklint's exit code, not about the rest of the standard. Both files
@@ -358,8 +394,8 @@ mkdir -p "${WARNDIR}"
 cat > "${WARNDIR}/phpcs.xml.dist" <<'XML'
 <?xml version="1.0"?>
 <ruleset name="WarnGate">
-  <rule ref="CiviKitchen.Modern.NameBooleanArguments"/>
-  <rule ref="CiviKitchen.I18n.UseExtensionTs"/>
+  <rule ref="Generic.Commenting.Todo"/>
+  <rule ref="Generic.PHP.UpperCaseConstant"/>
   <file>.</file>
 </ruleset>
 XML
@@ -368,8 +404,8 @@ cat > "${WARNDIR}/Warn.php" <<'PHP'
 
 declare(strict_types = 1);
 
+// TODO: name the probe.
 function acme_probe(): void {
-  acme_helper('x', TRUE);
 }
 PHP
 cat > "${WARNDIR}/Err.php" <<'PHP'
@@ -377,8 +413,8 @@ cat > "${WARNDIR}/Err.php" <<'PHP'
 
 declare(strict_types = 1);
 
-function acme_label(): string {
-  return ts('hello');
+function acme_flag(): bool {
+  return true;
 }
 PHP
 (cd "${WARNDIR}" && git init -q . && git add -A) >/dev/null 2>&1
@@ -485,13 +521,13 @@ else
     ok "cklint mago stage excludes tests/ from no-request-variable"
 fi
 
-# The sniffs' own unit tests ship with the standard (exact codes + line
-# numbers per fixture, zero findings on the modern counterparts, the
-# externalActions arming behavior).
-if SNIFF_TESTS_OUT="$(phpunit --no-configuration /opt/civikitchen/toolbelt/phpcs/CiviKitchen/tests 2>&1)"; then
-    ok "CiviKitchen sniff unit tests"
+# The extension's own cases (exact findings per fixture) run against the
+# image's mago, from a copy since /opt is not the test's to write to.
+cp -r /opt/civikitchen/toolbelt "${WORKDIR}/toolbelt"
+if EXT_TESTS_OUT="$(php "${WORKDIR}/toolbelt/mago-ext/tests/run.php" --mago="$(command -v mago)" 2>&1)"; then
+    ok "CiviKitchen mago extension cases"
 else
-    fail "CiviKitchen sniff unit tests (${SNIFF_TESTS_OUT:0:300})"
+    fail "CiviKitchen mago extension cases (${EXT_TESTS_OUT: -600})"
 fi
 
 # ---------------------------------------------------------------------------

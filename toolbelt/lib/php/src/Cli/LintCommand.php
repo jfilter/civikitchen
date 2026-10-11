@@ -92,7 +92,7 @@ final class LintCommand implements Command
         } else {
             $magoArguments = [$mago];
             if (is_file('mago.toml')) {
-                echo "cklint: using this repo's own mago.toml (the CiviKitchen lint baseline does not apply).\n";
+                echo "cklint: using this repo's own mago.toml (the CiviKitchen lint baseline applies only through its extends).\n";
             } else {
                 $magoArguments = [...$magoArguments, '--config', $this->checkoutRoot . '/toolbelt/mago/mago.toml'];
                 // The baseline's 8.1 is the fleet floor; a repo declaring a higher one may use its features.
@@ -101,15 +101,38 @@ final class LintCommand implements Command
                     $magoArguments = [...$magoArguments, '--php-version', $floor];
                 }
             }
+            $strictTypes = $fix ? $this->magoRuleEnabled($magoArguments, 'strict-types') : false;
+            if ($strictTypes === null) {
+                return $this->error('could not read the effective mago linter config (mago config --show linter)');
+            }
             $magoArguments[] = 'lint';
+            // The extension rules resolve info.xml and fixtures from the repo root, not mago's config directory.
+            $environment = [...(getenv() ?: []), 'CK_MAGO_WORKSPACE' => (string) getcwd()];
+            // mago rates inserting the declare potentially unsafe; that semantic change is the rule's point.
+            // `--only` would re-enable a rule the repo switched off, hence the config check.
+            if ($strictTypes && $this->runner->passthrough([...$magoArguments, '--only', 'strict-types', '--fix', '--potentially-unsafe', '--format-after-fix', ...$files], $environment) !== 0) {
+                $failed = true;
+            }
             if ($fix) {
                 $magoArguments = [...$magoArguments, '--fix', '--format-after-fix'];
             }
-            if ($this->runner->passthrough([...$magoArguments, ...$files]) !== 0) {
+            if ($this->runner->passthrough([...$magoArguments, ...$files], $environment) !== 0) {
                 $failed = true;
             }
         }
         return $failed ? 1 : 0;
+    }
+
+    /**
+     * @param list<string> $magoArguments mago and its global options
+     */
+    private function magoRuleEnabled(array $magoArguments, string $rule): ?bool
+    {
+        $result = $this->runner->capture([...$magoArguments, 'config', '--show', 'linter', '--no-extensions']);
+        $config = json_decode($result['output'], true);
+        $enabled = is_array($config) ? ($config['rules'][$rule]['enabled'] ?? null) : null;
+
+        return $result['status'] === 0 && is_bool($enabled) ? $enabled : null;
     }
 
     private function findExecutable(string $name): ?string

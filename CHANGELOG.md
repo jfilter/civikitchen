@@ -14,8 +14,36 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- `cklint`'s mago stage runs CiviKitchen's own rules as a mago extension
+  (`/opt/civikitchen/toolbelt/mago-ext`, codes `civikitchen/<rule>`), wired
+  into the baseline `mago.toml` as an extension host. A repo configures them
+  in its own `mago.toml` that `extends` the baseline and repeats the
+  `[extension-hosts.civikitchen]` table with worker options (`--disable`,
+  `--exclude`, `--max-lines`, `--external-actions`; see
+  [Extension standards](docs/extension-standards.md)).
+
 ### Changed
 
+- **Breaking**: the CiviKitchen phpcs sniffs and Slevomat leave the phpcs
+  standard; the same checks run as mago rules in `cklint`.
+  `CiviKitchen.I18n.UseExtensionTs` → `civikitchen/use-extension-ts`, and
+  likewise `use-mixins-for-standard-hooks`, `max-file-length`,
+  `no-unsafe-unserialize`, `no-tautological-assertion`,
+  `no-generic-var-on-action-param`, `no-required-on-external-action`,
+  `name-boolean-arguments`; Slevomat's `DeclareStrictTypes` → mago's
+  `strict-types`. To migrate: a `<rule ref="CiviKitchen.…">` or an exclude
+  of one in `phpcs.xml.dist` now makes phpcs abort, so delete it and move
+  the setting to worker options; `externalActions` becomes
+  `--external-actions`, `maxLines` becomes `--max-lines`; a
+  `phpcs:ignore CiviKitchen.…` becomes `// @mago-expect lint:civikitchen/<rule>`.
+  Slevomat is no longer installed, so a project ruleset that references any
+  `SlevomatCodingStandard.…` sniff aborts the same way.
+- **Breaking**: `name-boolean-arguments` is off in the baseline. mago fails on
+  every level it reports, so the former phpcs warning would fail the gate; a
+  repo arms it by repeating the extension host table without the baseline's
+  `--disable`.
 - The GET-mutation finding names an anonymous page class `class@anonymous`
   instead of phpstan's path hash. A class declared inside a handler no longer
   counts as the handler's code: its writes are no longer reported a second
@@ -25,6 +53,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - The APIv4 check of `civicrm_api4()` follows the function PHP calls: a
   `use function civicrm_api4 as …` alias is checked, and a namespace's own
   function of that name is not.
+- mago 1.55.0 (was 1.45.0). `ckfmt` now breaks a wrapped boolean condition
+  so it opens and closes on lines of its own, and indents a wrapped
+  concatenation after `=` as a block. A repo with such code fails
+  `ckfmt --check` until one `ckfmt` run. The new output passes `cklint`
+  unchanged, and `cklint` reports nothing new.
 
 ## [1.35.0] - 2026-10-10
 
