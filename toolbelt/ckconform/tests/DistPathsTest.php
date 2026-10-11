@@ -15,6 +15,18 @@ final class DistPathsTest extends CheckTestCase
         self::assertFalse(DistPaths::ships('civikitchen.yaml', $excluded));
     }
 
+    public function testDevelopmentConfigNeverShipsByDefault(): void
+    {
+        $excluded = DistPaths::excluded($this->repo([]));
+        $template = dirname(__DIR__, 3) . '/scaffold/template/extension';
+        $scaffolded = array_diff(scandir($template) ?: [], ['.', '..', 'composer.json']);
+        // The configs a ck* tool reads from the repo root, beyond what the template scaffolds.
+        $read = ['mago.toml', 'phpunit-unit.xml.dist', 'composer-dependency-analyser.php', '.oxlintrc.json', 'vitest.config.ts'];
+        foreach ([...$scaffolded, ...$read] as $path) {
+            self::assertFalse(DistPaths::ships($path, $excluded), $path);
+        }
+    }
+
     public function testSecretConfigurationNeverShipsByDefault(): void
     {
         $excluded = DistPaths::excluded($this->repo([]));

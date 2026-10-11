@@ -62,6 +62,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `ckfmt --check` until one `ckfmt` run. The new output passes `cklint`
   unchanged, and `cklint` reports nothing new.
 
+### Fixed
+
+- A release archive no longer ships the development configs the toolbelt
+  reads: `mago.toml`, `phpstan-tests.neon(.dist)`, `phpunit-unit.xml.dist`,
+  `composer-dependency-analyser.php`, `.oxlintrc.json`,
+  `playwright.config.js` and `vitest.config.ts/.js` join the excluded list.
+
 ## [1.35.0] - 2026-10-10
 
 ### Added

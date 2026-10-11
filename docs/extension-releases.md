@@ -174,8 +174,11 @@ top-level directory named the extension key, minus the development layer:
 ```
 .github/ .docker/ .claude/ tests/ node_modules/
 .gitattributes .gitignore .editorconfig civikitchen.yaml .phpunit.result.cache
-phpcs.xml(.dist) phpstan.neon(.dist) phpstanBootstrap.php phpunit.xml(.dist)
-playwright.config.ts package-lock.json bun.lock(b) tsconfig.json renovate.json
+.gitlab-ci.yml renovate.json mago.toml phpcs.xml(.dist)
+composer-dependency-analyser.php phpstan.neon(.dist) phpstan-tests.neon(.dist)
+phpstanBootstrap.php phpunit.xml(.dist) phpunit-unit.xml.dist .oxlintrc.json
+playwright.config.ts/.js vitest.config.ts/.js
+package-lock.json bun.lock(b) tsconfig.json
 ```
 
 Secrets are never packed, whatever the policy says: `.git`, `.env`, `.env.*`,
