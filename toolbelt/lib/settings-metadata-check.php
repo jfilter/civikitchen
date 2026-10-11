@@ -12,8 +12,6 @@
  * catches the common shapes from source; this exercises the real call.
  */
 
-// phpcs:disable Drupal.Commenting.InlineComment.DocBlock
-
 $dir = getenv('CK_LC_DIR') ?: '';
 if ($dir === '') {
   fwrite(STDERR, "settings-metadata-check: CK_LC_DIR must be set.\n");

@@ -135,12 +135,12 @@ if grep -q 'composer.json' <<<"$out"; then
 fi
 
 # --update restores the managed file (re-stamped) and leaves the seeded edit.
-/bin/rm "$work/drift/phpcs.xml.dist"
+/bin/rm "$work/drift/phpstan.neon.dist"
 rewrite_with_sed 's|mariadb:10.11|mariadb:10.6|' "$work/drift/.docker/docker-compose.ci.yml"
 out=$("$root/scaffold/ckinit.php" --update "$work/drift")
 grep -q 'updated   .github/workflows/ci.yml' <<<"$out"
 grep -q 'updated   .docker/docker-compose.ci.yml' <<<"$out"
-grep -q 'created   phpcs.xml.dist' <<<"$out"
+grep -q 'created   phpstan.neon.dist' <<<"$out"
 grep -q 'ext/example_ext' "$work/drift/.docker/docker-compose.ci.yml"
 grep -q '"edited": true' "$work/drift/composer.json"
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
@@ -209,8 +209,8 @@ if [ -x "$work/drift/phpstanBootstrap.php" ]; then
   exit 1
 fi
 
-# phpcs.xml.dist is SEEDED (a repo's project layer): edits must not be drift.
-printf '%s\n' '<!-- local layer -->' >> "$work/drift/phpcs.xml.dist"
+# phpstan.neon.dist is SEEDED (a repo's project layer): edits must not be drift.
+printf '%s\n' '# local layer' >> "$work/drift/phpstan.neon.dist"
 out=$("$root/scaffold/ckinit.php" --check "$work/drift")
 grep -q 'up to date' <<<"$out"
 

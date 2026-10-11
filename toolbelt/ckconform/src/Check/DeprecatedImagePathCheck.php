@@ -26,7 +26,6 @@ final class DeprecatedImagePathCheck implements Check
         '/opt/civikitchen-phpstan' => '/opt/civikitchen/toolbelt/phpstan-root',
         '/opt/civikitchen-psalm' => '/opt/civikitchen/toolbelt/psalm',
         '/opt/civikitchen-rector' => '/opt/civikitchen/toolbelt/rector',
-        '/opt/civikitchen-coder' => '/opt/civikitchen/toolbelt/phpcs',
         '/opt/civikitchen-ckconform' => '/opt/civikitchen/toolbelt/ckconform',
         '/opt/civikitchen-composer-deps.php' => '/opt/civikitchen/toolbelt/lib/composer-deps.php',
         '/opt/civikitchen-oxlint' => '/opt/civikitchen/toolbelt/oxlint',

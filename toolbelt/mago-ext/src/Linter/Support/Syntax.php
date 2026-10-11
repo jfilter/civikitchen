@@ -70,7 +70,7 @@ final class Syntax
     }
 
     /**
-     * The argument a parameter receives, as PHPCSUtils resolves it: the first
+     * The argument a parameter receives, as PHP binds it: the first
      * argument named $name, else the unnamed one at 1-based $position.
      *
      * @param list<array{name: ?string, value: ?Node, spread: bool, node: Node}> $arguments

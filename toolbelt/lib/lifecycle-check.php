@@ -12,8 +12,6 @@
  * that is gone.
  */
 
-// phpcs:disable Drupal.Commenting.InlineComment.DocBlock
-
 $key = getenv('CK_LC_KEY') ?: '';
 $dir = getenv('CK_LC_DIR') ?: '';
 $prefix = getenv('CK_LC_PREFIX') ?: '';

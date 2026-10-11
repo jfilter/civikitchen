@@ -146,13 +146,12 @@ ENV CIVICRM_UF=Standalone
 RUN curl -sS https://getcomposer.org/installer \
     | php -- --install-dir=/usr/local/bin --filename=composer
 
-# Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder,
-# rector/ckmodernize).
+# Shared dev-tools install (civix, phpunit, phpstan, phpcs+PHPCompatibility,
+# mago, rector/ckmodernize).
 # Lives in toolbelt/ so the buildkit image uses the same script.
 # Every tool version is pinned in the script; pass --build-arg to override
 # (e.g. to test a newer phpstan before bumping the default).
 ENV PATH="/opt/composer/vendor/bin:${PATH}"
-ARG CODER_REF
 # Overriding a phar *_VERSION requires overriding its *_SHA256 too — the
 # install script fails a mismatch on purpose.
 ARG CIVIX_VERSION
@@ -171,8 +170,7 @@ COPY toolbelt/phpcs-root /opt/composer
 # configs and toolchains relative to its own real path, so nothing branches on
 # "image or checkout". install-dev-tools.sh links the tools into PATH.
 COPY toolbelt /opt/civikitchen/toolbelt
-RUN CODER_REF="${CODER_REF}" \
-        CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
+RUN CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
         PHPUNIT_VERSION="${PHPUNIT_VERSION}" PHPUNIT_SHA256="${PHPUNIT_SHA256}" \
         INFECTION_VERSION="${INFECTION_VERSION}" \
         MAGO_VERSION="${MAGO_VERSION}" MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64}" \

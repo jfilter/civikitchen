@@ -10,8 +10,8 @@
 #      docker compose exec app cv ext:enable myextension
 #      docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpunit"
 #
-# Tools in the image: cv, civix, composer, node/npm, phpunit, phpstan, phpcs
-# (drupal/coder + dealerdirect installer), pcov, xdebug (opt-in via XDEBUG_MODE).
+# Tools in the image: cv, civix, composer, node/npm, phpunit, phpstan, mago,
+# phpcs (PHPCompatibility), pcov, xdebug (opt-in via XDEBUG_MODE).
 #
 # URLs:
 #   CiviCRM:    http://localhost:8080

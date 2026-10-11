@@ -20,7 +20,7 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'phpstan.neon.dist' => 'parameters:',
-            '.github/workflows/ci.yml' => "jobs:\n  lint:\n    steps:\n      - run: phpcs\n",
+            '.github/workflows/ci.yml' => "jobs:\n  lint:\n    steps:\n      - run: cklint\n",
         ], git: true);
         $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpstan.neon.dist');
     }
@@ -42,28 +42,6 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
             '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: ckcoverage tests/phpunit\n",
         ], git: true);
         $this->assertPasses($this->run_(new ConfigWithoutRunnerCheck(), $context));
-    }
-
-    /** A phpcs.xml.dist that no job runs — style and the footgun sniffs go unenforced. */
-    public function testAPhpcsConfigNobodyRunsFails(): void
-    {
-        $context = $this->repo([
-            'phpcs.xml.dist' => '<ruleset/>',
-            '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: phpstan analyse\n",
-        ], git: true);
-        $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpcs.xml.dist');
-    }
-
-    /** The cklint wrapper counts as running phpcs, as does phpcs directly. */
-    public function testCklintOrPhpcsCountsAsThePhpcsRunner(): void
-    {
-        foreach (['cklint --all', 'phpcs'] as $runner) {
-            $context = $this->repo([
-                'phpcs.xml.dist' => '<ruleset/>',
-                '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n      - run: {$runner}\n",
-            ], git: true);
-            $this->assertPasses($this->run_(new ConfigWithoutRunnerCheck(), $context));
-        }
     }
 
     /**
@@ -157,19 +135,18 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
             'phpunit.xml.dist' => '<phpunit/>',
             '.github/workflows/ci.yml' => "jobs:\n  t:\n    steps:\n"
                 . "      # the phpunit job used to live here; see the notes\n"
-                . "      - run: phpcs\n",
+                . "      - run: cklint\n",
         ], git: true);
         $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'phpunit.xml.dist');
     }
 
     /**
-     * Delegating to the shared CI runs phpcs, phpstan and phpunit, so their
-     * configs are not orphans — even though none of those tokens is in the repo.
+     * Delegating to the shared CI runs phpstan and phpunit, so their configs
+     * are not orphans — even though neither token is in the repo.
      */
-    public function testTheSharedCiSatisfiesPhpcsPhpstanAndPhpunit(): void
+    public function testTheSharedCiSatisfiesPhpstanAndPhpunit(): void
     {
         $context = $this->repo([
-            'phpcs.xml.dist' => '<ruleset/>',
             'phpstan.neon.dist' => 'parameters:',
             'phpunit.xml.dist' => '<phpunit/>',
             '.github/workflows/ci.yml' => "jobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n",
@@ -196,7 +173,6 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
     }
 
     private const PHP_CONFIGS = [
-        'phpcs.xml.dist' => '<ruleset/>',
         'phpstan.neon.dist' => 'parameters:',
         'phpunit.xml.dist' => '<phpunit/>',
     ];
@@ -207,10 +183,9 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
     }
 
-    public function testCkLintAndCkCoverageRunPhpcsAndPhpunit(): void
+    public function testCkCoverageRunsPhpunit(): void
     {
         $context = $this->runnerRepo("ck lint --all && ck coverage tests/phpunit", [
-            'phpcs.xml.dist' => '<ruleset/>',
             'phpunit.xml.dist' => '<phpunit/>',
         ]);
         $this->assertOk($this->run_(new ConfigWithoutRunnerCheck(), $context), 'every tool config has a CI step');
@@ -221,7 +196,6 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         $context = $this->runnerRepo('ck ci --only cklint,ckconform', self::PHP_CONFIGS);
         $reporter = $this->run_(new ConfigWithoutRunnerCheck(), $context);
         $this->assertFails($reporter, 'phpstan.neon.dist (no phpstan step), phpunit.xml.dist (no phpunit step)');
-        self::assertStringNotContainsString('phpcs.xml.dist', $reporter->render());
     }
 
     /** The opt-in gates run phpunit only with a second config and phpstan only on the tests' own config. */

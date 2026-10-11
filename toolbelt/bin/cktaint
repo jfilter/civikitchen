@@ -15,7 +15,7 @@
 # the API kernel or a Smarty template) — docs/extension-standards.md has the
 # reasoning and how to deal with a finding (--baseline / @psalm-suppress).
 #
-# A project's own psalm.xml/.dist wins — same rule as phpcs.xml for cklint.
+# A project's own psalm.xml/.dist wins — same rule as mago.toml for cklint.
 #
 set -uo pipefail
 

@@ -1,22 +1,15 @@
 # The CiviKitchen mago baseline, shipped in the image — the same deal as the
-# bundled phpcs standard and the ESLint baseline. A repo that commits its own
-# mago.toml wins outright; ckfmt and cklint then drop this file.
+# ESLint baseline. A repo that commits its own mago.toml wins outright; ckfmt
+# and cklint then drop this file, and the repo's file extends it to keep it.
 #
-# [formatter] exists for one property, verified empirically before it shipped:
-# code formatted with it produces ZERO findings under the bundled CiviKitchen
-# phpcs standard (Drupal-based). Formatter and lint gate must never disagree,
-# or --fix and --check chase each other forever. Where a mago upgrade breaks
-# that, the fix is a setting here — or, where the formatter's layout is simply
-# a legitimate second opinion the Drupal sniff does not share, one named sniff
-# excluded in the phpcs ruleset (the formatter owns layout). The stand-offs are
-# listed in docs/extension-standards.md; both gates stay green on formatter
-# output either way.
+# [formatter] owns layout; [linter] carries no layout rule, so code formatted
+# here is clean under cklint and --fix and --check never chase each other.
+# The image tests assert this on overlong-line fixtures.
 #
-# [linter] is cklint's second engine: the bug-pattern rules the phpcs standard
-# does not carry. The rule set is subtractive — mago's defaults minus anything
-# that overlaps another gate or fights the CiviCRM house idiom, one tool per
-# question. Single deliberate deviations in code are `// @mago-expect
-# lint:<rule>` lines, visible in the diff.
+# [linter] is cklint's engine: mago's defaults plus the CiviKitchen rules from
+# toolbelt/mago-ext, minus anything that overlaps another gate or fights the
+# CiviCRM house idiom, one tool per question. Single deliberate deviations in
+# code are `// @mago-expect lint:<rule>` lines, visible in the diff.
 #
 # No [source] section on purpose: mago's own file discovery finds nothing
 # without configured paths, so ckfmt/cklint always pass an explicit file list —
@@ -29,10 +22,10 @@ php-version = "8.1"
 
 [formatter]
 # Drupal preset: 2-space indent, same-line braces, uppercase TRUE/FALSE/NULL —
-# the shape the phpcs standard checks.
+# CiviCRM core's own layout.
 preset = "drupal"
-# The one thing the preset gets wrong for our gate: phpcs wants
-# `declare(strict_types = 1)`, the preset emits `strict_types=1`.
+# `declare(strict_types = 1)`, as core and the extensions write it; the preset
+# emits `strict_types=1`.
 space-around-assignment-in-declare = true
 
 [linter]
@@ -46,10 +39,10 @@ minimum-fail-level = "note"
 # (warning), which this minimum-fail-level makes a failure. Rule out ⇒ its
 # expect lines out, same commit.
 #
-# Formatting, layout, and naming: ckfmt and the phpcs Drupal standard own
-# these; a second opinion here could only agree or contradict.
+# Formatting and layout: ckfmt owns these; a second opinion here could only
+# agree or contradict. Naming follows CiviCRM's mixed idiom (CRM_Foo_BAO,
+# hook_civicrm_*, camelCase APIv4), which no naming rule here describes.
 array-style = { enabled = false }
-block-statement = { enabled = false }
 class-name = { enabled = false }
 constant-name = { enabled = false }
 enum-name = { enabled = false }

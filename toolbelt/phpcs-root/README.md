@@ -1,20 +1,15 @@
 # phpcs installation root
 
 This directory becomes the image's `COMPOSER_HOME` (`/opt/composer`), so
-`composer global install` reads exactly these two files. It carries phpcs and
-everything that rides on it: `cklint` (Drupal + CiviKitchen standards),
-`ckcompat` (PHPCompatibility) and `ckdeps`.
-
-The `civicrm/coder` fork is deliberately **not** here — it has no usable
-release tags and is cloned at a pinned commit, see
-`toolbelt/install-dev-tools.sh` for why a composer VCS repository is the wrong
-tool for it.
+`composer global install` reads exactly these two files. It carries phpcs as
+the engine of PHPCompatibility for `ckcompat`, and the dependency analyser
+behind `ckdeps`. `cklint` lints with mago, not phpcs.
 
 ## Why each pin
 
 | Package | Why |
 | --- | --- |
-| `squizlabs/php_codesniffer` | Stays on the 3 line — `civicrm/coder` needs it, and under 4.0 the Drupal standard aborts outright ("Referenced sniff Squiz.CSS.* does not exist", plus the CSS/JS scanning removal). SECURITY FLOOR: below 3.13.6 the image scan fails on CVE-2026-67434 (OS command injection), so a re-lock is the way to take a phpcs security fix. |
+| `squizlabs/php_codesniffer` | The engine PHPCompatibility runs on (it accepts 3.13.3+ and 4.x). SECURITY FLOOR: below 3.13.6 the image scan fails on CVE-2026-67434 (OS command injection), so a re-lock is the way to take a phpcs security fix. |
 | `dealerdirect/phpcodesniffer-composer-installer` | Registers installed standards with phpcs. A composer plugin, hence the `allow-plugins` entry. |
 | `phpcompatibility/php-compatibility` | Powers `ckcompat` — does this code RUN on the declared PHP floor, the question phpstan's `phpVersion` does not answer. Pinned to an alpha deliberately: the last stable is 9.3.5 from 2019, which predates every PHP version these extensions target. 10.x is the line that knows PHP 8. |
 | `phpcsstandards/phpcsutils` | PHPCompatibility's base. A direct pin keeps it from drifting with that alpha. |

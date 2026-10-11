@@ -9,12 +9,8 @@ use CiviKitchen\Ckconform\Context;
 use CiviKitchen\Ckconform\Reporter;
 
 /**
- * cklint needs a project anchor: without phpcs.xml.dist it falls back to
- * whatever standard happens to be configured, so a repo can look linted while
- * running rules nobody chose.
- *
- * The file is read as XML: a ref="CiviKitchen" inside a comment or an
- * <exclude> must not count.
+ * cklint lints with mago and no longer reads a phpcs config, so a leftover one
+ * holds project rules that nothing enforces any more.
  */
 final class PhpcsConfigCheck implements Check
 {
@@ -25,46 +21,15 @@ final class PhpcsConfigCheck implements Check
 
     public function run(Context $context, Reporter $reporter): void
     {
-        $file = null;
-        foreach (['phpcs.xml.dist', 'phpcs.xml'] as $candidate) {
-            if ($context->exists($candidate)) {
-                $file = $candidate;
-                break;
+        foreach (['phpcs.xml.dist', 'phpcs.xml'] as $file) {
+            if ($context->exists($file)) {
+                $reporter->fail("{$file} is no longer read: cklint lints with mago. Move project rules to a mago.toml "
+                    . 'that extends the CiviKitchen baseline (docs/extension-standards.md), then delete the file');
+
+                return;
             }
         }
 
-        if ($file === null) {
-            $reporter->fail('no phpcs.xml.dist (cklint has no project anchor)');
-
-            return;
-        }
-
-        if ($this->referencesCiviKitchen($context->read($file) ?? '')) {
-            $reporter->ok('phpcs config references the CiviKitchen standard');
-        } else {
-            $reporter->fail('phpcs config exists but does not <rule ref="CiviKitchen"/>');
-        }
-    }
-
-    private function referencesCiviKitchen(string $xml): bool
-    {
-        $previous = libxml_use_internal_errors(true);
-        $parsed = simplexml_load_string($xml);
-        libxml_use_internal_errors($previous);
-
-        if ($parsed === false) {
-            return false;
-        }
-
-        foreach ($parsed->xpath('//rule[@ref]') ?: [] as $rule) {
-            $ref = (string) $rule['ref'];
-            // 'CiviKitchen' or 'CiviKitchen.Some.Sniff' — but not a project
-            // standard that merely happens to start with those letters.
-            if ($ref === 'CiviKitchen' || str_starts_with($ref, 'CiviKitchen.')) {
-                return true;
-            }
-        }
-
-        return false;
+        $reporter->ok('no phpcs config (cklint lints with mago)');
     }
 }

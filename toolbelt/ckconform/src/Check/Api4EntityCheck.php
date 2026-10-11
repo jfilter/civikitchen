@@ -16,7 +16,7 @@ use CiviKitchen\Ckconform\Reporter;
  *
  * A `\Civi\Api4\Foo` reference resolves at runtime, so a migration can move code
  * onto an entity core never shipped — or shipped only @since a core newer than
- * the declared floor — and phpstan, phpcs and every test that does not load
+ * the declared floor — and phpstan, the linters and every test that does not load
  * that page stay green while the page fatals on every live site.
  *
  * Hence two questions, not one:

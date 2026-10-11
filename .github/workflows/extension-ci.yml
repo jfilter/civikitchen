@@ -871,7 +871,7 @@ jobs:
           if [ "$CK_TOOL_PATH" != "$CK_EXT_PATH" ]; then
             tool=" -e CK_TOOL_PATH=$CK_TOOL_PATH"
           fi
-          echo "::notice::docker compose -f .docker/docker-compose.yml exec -u www-data -w $CK_EXT_PATH$tool app ck ci runs these same gates in the dev stack; cklint --fix and ckfmt auto-fix most phpcs and formatting findings; ckcivix --update brings the civix scaffold forward."
+          echo "::notice::docker compose -f .docker/docker-compose.yml exec -u www-data -w $CK_EXT_PATH$tool app ck ci runs these same gates in the dev stack; cklint --fix and ckfmt auto-fix most lint and formatting findings; ckcivix --update brings the civix scaffold forward."
 
       # Same lifecycle block as the compat job below — deliberately duplicated
       # rather than factored out: a reusable workflow cannot share steps

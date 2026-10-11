@@ -27,7 +27,7 @@ printf '<?php\n// changed\n' > "$work/ext/keep.php"
 
 status=0
 err=$(cd "$work/ext" && PATH="$php_dir:$git_dir:/usr/bin:/bin" \
-  "$root/toolbelt/bin/cklint" 2>&1 >/dev/null) || status=$?
+  "$root/toolbelt/bin/ckcompat" --php 8.1 2>&1 >/dev/null) || status=$?
 test "$status" -ne 0
 # The program that is missing, and the PATH it was looked for on.
 grep -q 'ck: phpcs was not found on PATH (' <<<"$err"

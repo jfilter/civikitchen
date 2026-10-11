@@ -40,18 +40,27 @@ final class CiWorkflowCheckTest extends CheckTestCase
     public function testAGitlabPipelineWithoutLintWarns(): void
     {
         $context = $this->repo(['.gitlab-ci.yml' => "test:\n  script:\n    - echo hi\n"]);
-        $this->assertWarns($this->run_(new CiWorkflowCheck(), $context), 'CI has no lint step (cklint/phpcs)');
+        $this->assertWarns($this->run_(new CiWorkflowCheck(), $context), 'CI has no lint step (cklint)');
     }
 
-    public function testOkWithNoWarnWhenAWorkflowRunsPhpcs(): void
+    public function testOkWithNoWarnWhenAWorkflowRunsCklint(): void
     {
         $context = $this->repo([
-            '.github/workflows/ci.yml' => "name: CI\njobs:\n  lint:\n    steps:\n      - run: vendor/bin/phpcs\n",
+            '.github/workflows/ci.yml' => "name: CI\njobs:\n  lint:\n    steps:\n      - run: ck lint --all\n",
         ]);
         $reporter = $this->run_(new CiWorkflowCheck(), $context);
         self::assertSame(['CI workflow present'], $reporter->messages('ok'));
         $this->assertPasses($reporter);
         self::assertSame([], $reporter->messages('warn'));
+    }
+
+    /** A bare phpcs step runs none of the CiviKitchen lint rules, which live in mago. */
+    public function testAPhpcsStepIsNoLintStep(): void
+    {
+        $context = $this->repo([
+            '.github/workflows/ci.yml' => "name: CI\njobs:\n  lint:\n    steps:\n      - run: vendor/bin/phpcs\n",
+        ]);
+        $this->assertWarns($this->run_(new CiWorkflowCheck(), $context), 'CI has no lint step (cklint)');
     }
 
     public function testCallingTheSharedCiCountsAsALintStep(): void
@@ -70,7 +79,7 @@ final class CiWorkflowCheckTest extends CheckTestCase
             '.github/workflows/ci.yml' => "name: CI\njobs:\n  build:\n    steps:\n      - run: echo hi\n",
         ]);
         $reporter = $this->run_(new CiWorkflowCheck(), $context);
-        $this->assertWarns($reporter, 'CI has no lint step (cklint/phpcs)');
+        $this->assertWarns($reporter, 'CI has no lint step (cklint)');
     }
 
     public function testUsesRepositoryRootWorkflowForNestedExtension(): void
@@ -117,7 +126,7 @@ final class CiWorkflowCheckTest extends CheckTestCase
         ], [], ['Civi/Neighbour.php' => '<?php']);
         $reporter = $this->run_(new CiWorkflowCheck(), $context);
         $this->assertPasses($reporter);
-        $this->assertWarns($reporter, 'CI has no lint step (cklint/phpcs)');
+        $this->assertWarns($reporter, 'CI has no lint step (cklint)');
     }
 
     public function testAMentionOfTheSharedCiInACommentIsNoLintStep(): void

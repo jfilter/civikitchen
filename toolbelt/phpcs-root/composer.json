@@ -1,6 +1,6 @@
 {
     "name": "civikitchen/phpcs-root",
-    "description": "CiviKitchen phpcs installation root (the image's COMPOSER_HOME): phpcs itself plus the standards and analysers that ride on it \u2014 cklint, ckcompat and ckdeps. The civicrm/coder fork is not here; it is cloned at a pinned commit, see install-dev-tools.sh.",
+    "description": "CiviKitchen phpcs installation root (the image's COMPOSER_HOME): phpcs as the engine of PHPCompatibility for ckcompat, and the dependency analyser behind ckdeps.",
     "license": "AGPL-3.0-or-later",
     "require": {
         "dealerdirect/phpcodesniffer-composer-installer": "^1",

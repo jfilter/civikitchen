@@ -45,10 +45,6 @@ const SEEDED_FILES = [
   'civikitchen.yaml',
   '.docker/docker-compose.yml',
   'composer.json',
-  // The file calls itself a "project layer" and it means it: repos scope out
-  // generated code and tune severities there. The CiviKitchen STANDARD stays
-  // central (it ships in the image); the layer is the repo's.
-  'phpcs.xml.dist',
   'phpstan.neon.dist',
   // Opt-in test analysis. Seeded, never managed: its mere existence turns a
   // second CI gate on, so pushing it into existing repos would fail them.
@@ -129,8 +125,8 @@ renovate.json.
 Seeding preserves existing files unless --force is given. --update rewrites
 only the MANAGED files (CI caller, test bootstraps, CI compose stack — the
 ones meant to be identical everywhere) and creates whatever is missing;
-seeded files the repo has edited (composer.json, phpcs.xml.dist,
-phpstan.neon.dist, dev compose, .gitignore) are never touched. --check is
+seeded files the repo has edited (composer.json, phpstan.neon.dist, dev
+compose, .gitignore) are never touched. --check is
 the dry twin for CI.
 
 Some managed files carry marked blocks:

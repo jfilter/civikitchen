@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-// Port of CiviKitchen.Security.NoUnsafeUnserialize: the phpcs SniffsTest expectations.
 $message = 'unserialize() without an allowed_classes option instantiates arbitrary classes from the payload; pass [\'allowed_classes\' => FALSE] (or an explicit class list)';
 $fixtures = 'mago-ext/tests/fixtures/rules/';
 

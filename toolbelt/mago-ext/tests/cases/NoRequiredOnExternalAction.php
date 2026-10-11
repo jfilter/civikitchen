@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-// Port of CiviKitchen.Api.NoRequiredOnExternalAction: the phpcs SniffsTest expectations.
 $fixtures = 'mago-ext/tests/fixtures/rules/';
 $required = static fn (string $file, int $line): string => sprintf(
     '%s%s:%d @required is forbidden on the externally reachable action RequiredOnIntake — enforce requiredness as a rejected '

@@ -12,8 +12,8 @@
 #
 # What it checks:
 #   1. Every binary responds to --version
-#   2. phpcs has the Drupal + DrupalPractice + CiviKitchen standards registered
-#   3. phpcs actually lints a sample file (intentionally non-conforming)
+#   2. phpcs carries PHPCompatibility and nothing of the retired style standards
+#   3. ck scenario parses a canonical civikitchen.yaml
 #   3b. cklint's mago stage runs the CiviKitchen extension rules and its tests
 #   3c. ckmodernize boots rector and previews a CiviCRM footgun rewrite
 #   3d. ckrelease builds a dist zip and rejects a mismatched tag
@@ -68,7 +68,7 @@ for tool in "${TOOLBELT_BIN}"/ck*; do
         fail "${name} on PATH resolves to ${tool}"
     fi
 done
-for old in ckconform/bin/ckconform coder/CiviKitchen/ruleset.xml rector/rector.php \
+for old in ckconform/bin/ckconform rector/rector.php \
     phpstan/vendor/autoload.php phpstan-ext/composer.json phpstan-config/civicrm-disallowed.neon \
     psalm/psalm-taint.xml.dist oxlint/.oxlintrc.json oxfmt/oxfmtrc.json mago/mago.toml \
     composer-deps.php; do
@@ -144,16 +144,15 @@ if [ "${CIVICRM_UF:-}" = "Standalone" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 2. phpcs has Drupal + DrupalPractice + the bundled CiviKitchen standard
+# 2. phpcs is only PHPCompatibility's engine; cklint lints with mago
 echo "== phpcs standards =="
 STANDARDS="$(phpcs -i 2>&1)"
-if grep -q Drupal <<<"${STANDARDS}"; then ok "Drupal standard registered"; else fail "Drupal standard missing ($STANDARDS)"; fi
-if grep -q DrupalPractice <<<"${STANDARDS}"; then ok "DrupalPractice standard registered"; else fail "DrupalPractice standard missing"; fi
-if grep -q CiviKitchen <<<"${STANDARDS}"; then ok "CiviKitchen standard registered"; else fail "CiviKitchen standard missing"; fi
+if grep -q PHPCompatibility <<<"${STANDARDS}"; then ok "PHPCompatibility standard registered"; else fail "PHPCompatibility standard missing ($STANDARDS)"; fi
+if grep -qE 'Drupal|CiviKitchen' <<<"${STANDARDS}"; then fail "a retired style standard is still registered ($STANDARDS)"; else ok "no Drupal or CiviKitchen phpcs standard"; fi
 
 # ---------------------------------------------------------------------------
-# 3. phpcs lints a sample file
-echo "== phpcs run =="
+# 3. ck scenario parses a canonical civikitchen.yaml
+echo "== ck scenario =="
 WORKDIR="$(mktemp -d)"
 mkdir -p "${WORKDIR}/scenario/extension"
 cat > "${WORKDIR}/scenario/extension/info.xml" <<'XML'
@@ -175,23 +174,6 @@ if (cd "${WORKDIR}/scenario" && ck scenario validate >/dev/null && ck scenario p
 else
     fail "ck scenario could not parse canonical civikitchen.yaml in-image"
 fi
-cat > "${WORKDIR}/Bad.php" <<'PHP'
-<?php
-// Intentionally non-conforming code to force phpcs to find issues.
-class bad_name {
-    function    foo($x){return$x+1;}
-}
-PHP
-
-# phpcs exits non-zero when issues are found — that's the *success* path here.
-# We want to confirm it actually parses + reports, not that the code is clean.
-PHPCS_OUT="$(phpcs --standard=Drupal "${WORKDIR}/Bad.php" 2>&1 || true)"
-if grep -qiE "error|warning|FOUND" <<<"${PHPCS_OUT}"; then
-    ok "phpcs --standard=Drupal reports issues"
-else
-    fail "phpcs --standard=Drupal didn't report any issue (output: ${PHPCS_OUT:0:200})"
-fi
-
 # ---------------------------------------------------------------------------
 # 3b. cklint runs the CiviKitchen mago extension rules through the baseline
 echo "== CiviKitchen rules + cklint =="
@@ -278,93 +260,6 @@ else
     fail "cklint ignored the PHP floor (8.1: ${FLOOR_BASE:0:200} | 8.3: ${FLOOR_83:0:200})"
 fi
 
-# The declare spacing has to be the SAME shape in phpcs and in ckfmt, or every
-# file in the fleet is unfixable. Both spellings are asserted so a Drupal
-# standard bump that changes Drupal.WhiteSpace.OperatorSpacing cannot pass silently.
-cat > "${WORKDIR}/DeclSpaced.php" <<'PHP'
-<?php
-
-declare(strict_types = 1);
-
-namespace Acme;
-
-/**
- * A widget.
- */
-class Widget {
-
-  /**
-   * Go.
-   *
-   * @return int
-   *   The number.
-   */
-  public function go(): int {
-    return 1;
-  }
-
-}
-PHP
-sed 's/strict_types = 1/strict_types=1/' "${WORKDIR}/DeclSpaced.php" > "${WORKDIR}/DeclTight.php"
-if phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/DeclSpaced.php" >/dev/null 2>&1; then
-    ok "declare(strict_types = 1) is clean under the CiviKitchen standard"
-else
-    DECL_OUT="$(phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/DeclSpaced.php" 2>&1 || true)"
-    fail "CiviKitchen rejects the formatter's declare spelling (output: ${DECL_OUT:0:300})"
-fi
-if phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/DeclTight.php" >/dev/null 2>&1; then
-    fail "CiviKitchen accepts declare(strict_types=1) — it must match ckfmt's spacing"
-else
-    ok "CiviKitchen rejects the unspaced declare (ckfmt owns the spelling)"
-fi
-
-# Same contract for nested array literals, the other shape the two gates can
-# disagree about: ckfmt writes the first key on the opening line, and
-# Squiz.Arrays.ArrayDeclaration wants it on its own. A repo that runs both
-# would have no way to be green, so the sniff yields — layout is the
-# formatter's.
-cat > "${WORKDIR}/ArrayShape.php" <<'PHP'
-<?php
-
-declare(strict_types = 1);
-
-namespace Acme;
-
-/**
- * A widget.
- */
-class Widget {
-
-  /**
-   * Go.
-   *
-   * @return array
-   *   The rows.
-   */
-  public function go(): array {
-    return [
-      'rows' => ['a:1' => [
-        'id' => 1,
-        'label' => 'one',
-      ]],
-      // A wrapped value carries ckfmt's continuation indent, which
-      // Drupal.Arrays.Array.ArrayIndentation measures against the element.
-      'html' =>
-        '<p>one</p>'
-          . '<p>two</p>'
-          . '<p>three</p>',
-    ];
-  }
-
-}
-PHP
-if phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/ArrayShape.php" >/dev/null 2>&1; then
-    ok "CiviKitchen accepts ckfmt's nested-array layout"
-else
-    ARR_OUT="$(phpcs --standard=CiviKitchen --extensions=php "${WORKDIR}/ArrayShape.php" 2>&1 || true)"
-    fail "CiviKitchen rejects the formatter's array layout (output: ${ARR_OUT:0:300})"
-fi
-
 # A positional boolean takes judgement per call site, so the baseline leaves
 # name-boolean-arguments off: every level mago reports would fail the gate.
 BOOLDIR="${WORKDIR}/boolext"
@@ -385,55 +280,37 @@ else
     fail "cklint flagged or failed on a positional boolean (output: ${BOOL_OUT:0:300})"
 fi
 
-# Warning tier: a phpcs warning is reported but must not fail the gate, while
-# an error still does. Scoped to a two-sniff project ruleset so the assertion
-# is about cklint's exit code, not about the rest of the standard. Both files
-# are clean under the mago baseline, so only the phpcs stage decides.
-WARNDIR="${WORKDIR}/warnext"
-mkdir -p "${WARNDIR}"
-cat > "${WARNDIR}/phpcs.xml.dist" <<'XML'
-<?xml version="1.0"?>
-<ruleset name="WarnGate">
-  <rule ref="Generic.Commenting.Todo"/>
-  <rule ref="Generic.PHP.UpperCaseConstant"/>
-  <file>.</file>
-</ruleset>
-XML
-cat > "${WARNDIR}/Warn.php" <<'PHP'
+# The checks that replaced the Drupal standard's MethodScope, PropertyDeclaration
+# and InlineControlStructure sniffs: one from the extension, one mago rule.
+SCOPEDIR="${WORKDIR}/scopeext"
+mkdir -p "${SCOPEDIR}"
+cat > "${SCOPEDIR}/Scope.php" <<'PHP'
 <?php
 
 declare(strict_types = 1);
 
-// TODO: name the probe.
-function acme_probe(): void {
+class ScopeProbe {
+
+  var $legacy;
+
+  function probe(int $x): int {
+    if ($x) return 1;
+    return 0;
+  }
+
 }
 PHP
-cat > "${WARNDIR}/Err.php" <<'PHP'
-<?php
-
-declare(strict_types = 1);
-
-function acme_flag(): bool {
-  return true;
-}
-PHP
-(cd "${WARNDIR}" && git init -q . && git add -A) >/dev/null 2>&1
-if WARN_OUT="$( (cd "${WARNDIR}" && cklint Warn.php) 2>&1 )"; then
-    if grep -qi "warning" <<<"${WARN_OUT}"; then
-        ok "cklint reports a phpcs warning and still exits 0"
+(cd "${SCOPEDIR}" && git init -q . && git add -A) >/dev/null 2>&1
+SCOPE_OUT="$( (cd "${SCOPEDIR}" && cklint Scope.php) 2>&1 || true)"
+for code in civikitchen/explicit-visibility block-statement; do
+    if grep -q "${code}" <<<"${SCOPE_OUT}"; then
+        ok "cklint flags ${code}"
     else
-        fail "cklint exited 0 but swallowed the warning (output: ${WARN_OUT:0:300})"
+        fail "cklint didn't flag ${code} (output: ${SCOPE_OUT:0:300})"
     fi
-else
-    fail "cklint failed on a warning-only file (output: ${WARN_OUT:0:300})"
-fi
-if ERR_OUT="$( (cd "${WARNDIR}" && cklint Err.php) 2>&1 )"; then
-    fail "cklint exited 0 on a phpcs error (output: ${ERR_OUT:0:300})"
-else
-    ok "cklint still fails on a phpcs error"
-fi
+done
 
-# cklint's second engine: a mago bug-pattern rule fires, a house-idiom rule
+# cklint's mago stage: a bug-pattern rule fires, a house-idiom rule
 # stays disabled by the bundled baseline, and @mago-expect suppresses.
 MAGODIR="${WORKDIR}/magoext"
 mkdir -p "${MAGODIR}"
@@ -494,9 +371,9 @@ for f in Civi/RequestProd.php tests/phpunit/RequestTest.php; do
 done
 (cd "${MAGODIR}" && git add -A) >/dev/null 2>&1
 MAGO_OUT3="$( (cd "${MAGODIR}" && cklint --all) 2>&1 || true)"
-# mago prints the rule code and the file path on separate lines, and the phpcs
-# stage names both fixtures in the same output — so look only at the lines
-# belonging to the too-many-methods diagnostic itself.
+# mago prints the rule code and the file path on separate lines, and the output
+# names both fixtures — so look only at the lines belonging to the
+# too-many-methods diagnostic itself.
 TMM_CTX="$(echo "${MAGO_OUT3}" | grep -A3 'too-many-methods' || true)"
 if grep -q "BigProd.php" <<<"${TMM_CTX}"; then
     ok "cklint mago stage flags too-many-methods in production code"
@@ -914,9 +791,9 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3e2. ckfmt: both formatter halves fire, converge, and the mago output agrees
-#      with the phpcs standard cklint enforces — the property the whole gate
-#      rests on, so it is asserted here, not assumed.
+# 3e2. ckfmt: both formatter halves fire, converge, and the mago output passes
+#      the lint rules cklint enforces — the property the whole gate rests on,
+#      so it is asserted here, not assumed.
 echo "== ckfmt =="
 FMTDIR="${WORKDIR}/fmtext"
 mkdir -p "${FMTDIR}/js"
@@ -950,17 +827,16 @@ if FMT_OUT="$( (cd "${FMTDIR}" && ckfmt && ckfmt --check) 2>&1 )"; then
 else
     fail "ckfmt did not converge (output: ${FMT_OUT:0:300})"
 fi
-# The agreement property: formatted output is clean under the full cklint
-# gate — the phpcs standard AND the mago lint baseline.
+# The agreement property: formatted output is clean under the cklint gate.
 if CKLINT_FMT_OUT="$( (cd "${FMTDIR}" && cklint --all) 2>&1 )"; then
-    ok "ckfmt output is clean under the full cklint gate (phpcs + mago)"
+    ok "ckfmt output is clean under the cklint gate"
 else
     fail "cklint rejects ckfmt output (output: ${CKLINT_FMT_OUT:0:300})"
 fi
 
-# The same agreement property on the constructs where the two gates have
-# actually collided: whatever ckfmt does with an overlong line, phpcs must
-# accept. Each fixture is its own file so a regression names the construct.
+# The same agreement property on overlong lines, where the formatter makes
+# its largest layout decisions: whatever ckfmt does, cklint must accept.
+# Each fixture is its own file so a regression names the construct.
 AGREEDIR="${WORKDIR}/fmtagreeext"
 mkdir -p "${AGREEDIR}"
 cp "${FMTDIR}/info.xml" "${AGREEDIR}/info.xml"
@@ -1024,8 +900,7 @@ function acme_rows(): array {
   return [['id' => 1, 'label' => 'one', 'description' => 'the first widget row'], ['id' => 2, 'label' => 'two', 'description' => 'the second widget row']];
 }
 PHP
-# The conflict case: a multi-line inner array literal opening as `[[` — ckfmt
-# keeps the shared brackets, Squiz's CloseBraceNewLine used to reject the `]]`.
+# A multi-line inner array literal opening as `[[`: ckfmt keeps the shared brackets.
 cat > "${AGREEDIR}/nestedarrayliteral.php" <<'PHP'
 <?php
 
@@ -1041,9 +916,7 @@ function acme_grouped(): array {
   ];
 }
 PHP
-# The conflict case from the scope tracker's side: an array value ckfmt wraps
-# leaves every following sibling key looking one level too deep to
-# Drupal.WhiteSpace.ScopeIndent, which phpcbf and ckfmt then undo in turn.
+# An array value ckfmt wraps, followed by sibling keys at the same depth.
 cat > "${AGREEDIR}/arrayvaluewrap.php" <<'PHP'
 <?php
 
@@ -1066,18 +939,6 @@ function acme_columns(): array {
   ];
 }
 PHP
-mkdir -p "${AGREEDIR}/tests/phpunit"
-cat > "${AGREEDIR}/tests/phpunit/bootstrap.php" <<'PHP'
-<?php
-
-if (!function_exists('cv')) {
-
-  function cv(string $cmd) {
-    return $cmd;
-  }
-
-}
-PHP
 (cd "${AGREEDIR}" && git init -q . && git add -A) >/dev/null 2>&1
 if AGREE_FMT_OUT="$( (cd "${AGREEDIR}" && ckfmt) 2>&1 )"; then
     ok "ckfmt formats the overlong-line fixtures"
@@ -1085,11 +946,11 @@ else
     fail "ckfmt failed on the overlong-line fixtures (output: ${AGREE_FMT_OUT:0:300})"
 fi
 for fixture in extends extendsimplements implements echoconcat nestedarray \
-    nestedarrayliteral arrayvaluewrap tests/phpunit/bootstrap; do
-    if AGREE_OUT="$( (cd "${AGREEDIR}" && phpcs --standard=CiviKitchen --extensions=php -s "${fixture}.php") 2>&1 )"; then
-        ok "ckfmt output for ${fixture}.php is clean under the CiviKitchen standard"
+    nestedarrayliteral arrayvaluewrap; do
+    if AGREE_OUT="$( (cd "${AGREEDIR}" && cklint "${fixture}.php") 2>&1 )"; then
+        ok "ckfmt output for ${fixture}.php is clean under cklint"
     else
-        fail "phpcs rejects ckfmt output for ${fixture}.php (output: ${AGREE_OUT:0:400})"
+        fail "cklint rejects ckfmt output for ${fixture}.php (output: ${AGREE_OUT:0:400})"
     fi
 done
 

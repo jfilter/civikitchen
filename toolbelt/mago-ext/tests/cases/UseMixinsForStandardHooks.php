@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-// Port of CiviKitchen.Extension.UseMixinsForStandardHooks: the phpcs SniffsTest expectations.
 $fixtures = 'mago-ext/tests/fixtures/rules/';
 $guidance = [
     'managed' => 'move managed entity definitions to managed/*.mgd.php and enable the mgd-php mixin',

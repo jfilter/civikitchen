@@ -32,7 +32,7 @@ additionally needs Docker. `make e2e-ckcreate IMAGE=civikitchen:standalone`
 creates an extension with real civix and runs `ck ci` on it in the template's
 dev stack, the same check the image workflow runs before promoting.
 
-The build context is the repo root for both the standalone and buildkit-based images. The Dockerfiles copy from three trees: `toolbelt/` (the `ck*` tools, the phpcs standard, the phpstan/psalm/rector packages), `docker/` (the image's own entrypoints, provisioning and demo profiles) and `packages/` (the profile and scenario schemas). None has to live inside another, and `.dockerignore` keeps `.git` and host-built artifacts out.
+The build context is the repo root for both the standalone and buildkit-based images. The Dockerfiles copy from three trees: `toolbelt/` (the `ck*` tools, the mago baseline and extension, the phpstan/psalm/rector packages), `docker/` (the image's own entrypoints, provisioning and demo profiles) and `packages/` (the profile and scenario schemas). None has to live inside another, and `.dockerignore` keeps `.git` and host-built artifacts out.
 
 ```bash
 # Standalone (the Dockerfile's default CIVICRM_VERSION — pass the current one)
@@ -108,7 +108,7 @@ past the fix.
 What neither composer nor npm installs stays in `toolbelt/install-dev-tools.sh`
 and stays overridable per `--build-arg`: the civix and phpunit phars and the
 mago binary (each with a checksum — overriding a `*_VERSION` means overriding
-its `*_SHA256` too), npm, and the `civicrm/coder` commit ref. The phpunit pin
+its `*_SHA256` too) and npm. The phpunit pin
 itself sits in `toolbelt/versions.env`, because the Makefile runs the tool
 test suites on the same phar. infection is the one composer
 tool still pinned there, because it is applied as a ceiling: images for older
@@ -151,7 +151,7 @@ Budget roughly an hour for the full default run; profile legs add up to
 
 ## Verifying a built image
 
-`tests/images/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through phpcs, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, verifies the xdebug toggle, and holds the scaffold template to cklint and ckfmt. The same script runs in CI against both `:standalone` and the buildkit images. CI also boots each dev flavor's compose example and runs Playwright browser smoke tests before promoting stable tags.
+`tests/images/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through cklint, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, verifies the xdebug toggle, and holds the scaffold template to cklint and ckfmt. The same script runs in CI against both `:standalone` and the buildkit images. CI also boots each dev flavor's compose example and runs Playwright browser smoke tests before promoting stable tags.
 
 ```bash
 docker run --rm -v "$(pwd)/tests/images:/civikitchen-test:ro" \

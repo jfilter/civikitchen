@@ -23,26 +23,45 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `[extension-hosts.civikitchen]` table with worker options (`--disable`,
   `--exclude`, `--max-lines`, `--external-actions`; see
   [Extension standards](docs/extension-standards.md)).
+- Two lint rules in the baseline: `civikitchen/explicit-visibility` (every
+  method and property declares its visibility, no `var`, one property per
+  statement) and mago's `block-statement` (braces on every control
+  structure). Both carry over checks the phpcs standard ran, with the same
+  findings on real extension code.
 
 ### Changed
 
 - cklint no longer reports a mixin-only extension's main file as redundant:
   core includes the info.xml `<file>.php` of every module extension, so the
   file must exist even when the mixins register everything.
-- **Breaking**: the CiviKitchen phpcs sniffs and Slevomat leave the phpcs
-  standard; the same checks run as mago rules in `cklint`.
+- **Breaking**: `cklint` lints with `php -l` and mago only; phpcs no longer
+  runs in it, and the CiviKitchen phpcs standard, civicrm/coder and Slevomat
+  are gone from the images. The CiviKitchen sniffs became mago rules:
   `CiviKitchen.I18n.UseExtensionTs` → `civikitchen/use-extension-ts`, and
   likewise `use-mixins-for-standard-hooks`, `max-file-length`,
   `no-unsafe-unserialize`, `no-tautological-assertion`,
   `no-generic-var-on-action-param`, `no-required-on-external-action`,
   `name-boolean-arguments`; Slevomat's `DeclareStrictTypes` → mago's
-  `strict-types`. To migrate: a `<rule ref="CiviKitchen.…">` or an exclude
-  of one in `phpcs.xml.dist` now makes phpcs abort, so delete it and move
-  the setting to worker options; `externalActions` becomes
-  `--external-actions`, `maxLines` becomes `--max-lines`; a
-  `phpcs:ignore CiviKitchen.…` becomes `// @mago-expect lint:civikitchen/<rule>`.
-  Slevomat is no longer installed, so a project ruleset that references any
-  `SlevomatCodingStandard.…` sniff aborts the same way.
+  `strict-types`. To migrate:
+  - delete `phpcs.xml.dist` / `phpcs.xml`; `ckconform`'s `phpcs-config` check
+    now fails while one is left. Move CiviKitchen sniff settings to worker
+    options in a `mago.toml` that extends the baseline: `externalActions`
+    becomes `--external-actions`, `maxLines` becomes `--max-lines`.
+  - a `phpcs:ignore` for a check that still exists becomes
+    `// @mago-expect lint:<rule>`; other `phpcs:` comments can go.
+  - `ckinit --update` rewrites the managed test bootstrap, which drops its
+    `phpcs:disable` lines.
+  - drop a `phpcs.xml.dist` entry from `policy.template_custom`: ckinit,
+    `--check` in CI included, exits 2 on a path that is no longer a
+    template file.
+
+  Style checks without a mago counterpart are dropped on purpose (`else if`,
+  comment layout, PHP 4 constructor names, Drupal-only checks);
+  [Consolidating on mago](docs/mago-consolidation.md) lists each one. Layout
+  is `ckfmt`'s alone.
+- **Breaking**: `ckconform`'s CI check counts only a `cklint` step as the
+  lint step; a workflow that runs phpcs directly gets the "no lint step"
+  warning.
 - **Breaking**: `name-boolean-arguments` is off in the baseline. mago fails on
   every level it reports, so the former phpcs warning would fail the gate; a
   repo arms it by repeating the extension host table without the baseline's
@@ -61,6 +80,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   concatenation after `=` as a block. A repo with such code fails
   `ckfmt --check` until one `ckfmt` run. The new output passes `cklint`
   unchanged, and `cklint` reports nothing new.
+
+### Removed
+
+- The `/opt/civikitchen-coder` link and the `CODER_REF` build argument.
+  phpcs stays in the images as the engine of PHPCompatibility for `ckcompat`.
 
 ### Fixed
 

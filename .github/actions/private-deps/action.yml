@@ -110,9 +110,8 @@ runs:
     #     starts with a dot. Without that, a sibling would be discovered a
     #     second time *through the extension's own mount* and the same key
     #     would resolve to two paths.
-    #   * cklint ignores `.civikitchen-siblings/` explicitly — phpcs has no
-    #     such rule of its own, and a project phpcs.xml.dist scoped to
-    #     `<file>.</file>` would otherwise lint the sibling's code.
+    #   * the ck* linters ignore `.civikitchen-siblings/` explicitly; a
+    #     whole-tree run would otherwise lint the sibling's code.
     #
     # `git clone` in a loop rather than actions/checkout: an action cannot
     # run once per list entry, and keeping the action for the first repo

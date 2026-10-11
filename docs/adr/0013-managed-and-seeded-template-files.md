@@ -8,7 +8,7 @@ Every conforming extension repo starts from the template in
 `scaffold/template/extension/`. Some of its files must stay identical across
 the fleet for the shared pipeline to work: the CI caller, the test bootstraps,
 the CI compose stack. Others are the repo's to edit from the first day on,
-such as `composer.json` or the phpcs and PHPStan project layers.
+such as `composer.json` or the PHPStan project layer.
 
 ## Decision
 

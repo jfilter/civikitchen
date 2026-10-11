@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-// Port of CiviKitchen.I18n.UseExtensionTs: the phpcs SniffsTest expectations.
 $message = 'Bare ts() resolves in core\'s translation domain — use E::ts() (the civix CRM_<Ext>_ExtensionUtil helper) so the extension\'s own translations apply';
 $fixtures = 'mago-ext/tests/fixtures/rules/';
 

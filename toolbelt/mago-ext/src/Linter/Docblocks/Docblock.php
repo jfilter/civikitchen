@@ -9,8 +9,8 @@ use Mago\Sdk\Syntax\SourceFile;
 use Mago\Sdk\Syntax\TriviaKind;
 
 /**
- * A `/** … *\/` comment and its tags, read like phpcs tokenizes one: a tag
- * is an `@name` opening a line, its string the rest of that line.
+ * A `/** … *\/` comment and its tags: a tag is an `@name` opening a line,
+ * its string the rest of that line.
  */
 final class Docblock
 {

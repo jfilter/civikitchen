@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-// Port of CiviKitchen.Api.NoGenericVarOnActionParam: the phpcs SniffsTest expectations.
 $fixtures = 'mago-ext/tests/fixtures/rules/';
 $var = static fn (int $line, string $param, string $word): string => sprintf(
     '%sGenericActionVar.php:%d APIv4 action param $%s has @var "%s", which core cannot validate at runtime ("Unknown parameter type") '

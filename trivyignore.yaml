@@ -288,8 +288,9 @@ vulnerabilities:
       argument handling, reached only when a developer runs buildkit's phpcs by
       hand on a tree they mounted; nothing the images serve loads it. Scoped to
       buildkit's clone on purpose: the toolbelt copy resolves >= 3.13.6 (floor
-      in install-dev-tools.sh) and a regression there must NOT be hidden — the
-      standalone flavors, which carry only that copy, scan clean for this ID.
+      in toolbelt/phpcs-root/composer.json) and a regression there must NOT be
+      hidden — the standalone flavors, which carry only that copy, scan clean
+      for this ID.
       Recheck after a buildkit rebuild; upstream re-locking >= 3.13.6 drops it.
     expired_at: 2026-11-01
 

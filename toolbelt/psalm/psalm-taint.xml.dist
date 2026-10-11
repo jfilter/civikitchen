@@ -16,7 +16,7 @@
   absolute; they are the only paths here that belong to the image.
 
   A project's own psalm.xml/.dist wins (cktaint skips this file entirely) —
-  same rule as phpcs.xml for cklint and rector.php for ckmodernize.
+  same rule as mago.toml for cklint and rector.php for ckmodernize.
 -->
 <psalm
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -86,7 +86,7 @@
     <!-- HTML/text taint is off, not advisory-off: CiviCRM output goes through
          Smarty templates Psalm never sees, so what remains here is the escaping
          Psalm cannot follow rather than the escaping nobody wrote. The
-         phpcs/phpstan layers own output escaping. -->
+         lint/phpstan layers own output escaping. -->
     <TaintedHtml errorLevel="suppress" />
     <TaintedTextWithQuotes errorLevel="suppress" />
 

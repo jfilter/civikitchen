@@ -15,7 +15,7 @@ mago release.
 |---|---|---|
 | Syntax check of changed files (`cklint`) | `php -l` | `mago lint` + `mago analyze` |
 | Layout (`ckfmt`) | mago formatter | unchanged |
-| Style and footgun sniffs (`cklint`) | phpcs + civicrm/coder; strict types and the 8 CiviKitchen rules already on mago | mago linter + CiviKitchen rules as a mago extension |
+| Style and footgun sniffs (`cklint`) | mago linter + CiviKitchen rules as a mago extension (done) | unchanged |
 | Version compatibility (`ckcompat`) | mago floor parse + PHPCompatibility | mago lint + mago analyze at the floor |
 | Static analysis (`phpstan` gate) | phpstan, deprecation rules, disallowed-calls, phpat, CiviKitchen rules | `mago analyze` + CiviKitchen plugins as a mago extension |
 | Taint analysis (`cktaint`) | psalm | psalm (mago's `tainted-data-to-sink` is a syntactic rule without data flow) |
@@ -23,8 +23,9 @@ mago release.
 | Mutation testing (`ckmutate`) | infection | infection |
 | Unused and missing dependencies (`ckdeps`) | composer-dependency-analyser | composer-dependency-analyser |
 
-At the end, the `phpcs-root` and `phpstan-root` composer roots, the
-civicrm/coder clone and the phpstan extension package leave the images.
+At the end, the `phpcs-root` and `phpstan-root` composer roots and the
+phpstan extension package leave the images; the civicrm/coder clone is
+already gone.
 `ckdeps` moves to its own small composer root.
 
 ## Evidence so far
@@ -127,8 +128,7 @@ without its replacement.
 
 - Bump the pin to the newest release and keep bumping it. Each bump derives
   both checksums anew and checks two properties on the extension repos:
-  - formatter output still produces zero phpcs errors under the CiviKitchen
-    standard
+  - formatter output is still clean under `cklint`
   - the lint stage produces no new findings
 - Report the five compatibility gaps and the `analyze`-only compile errors
   upstream. They decide when `ckcompat` can drop PHPCompatibility.
@@ -138,19 +138,45 @@ conditions, which now open and close on their own lines, and for wrapped
 concatenations on the right of `=`. Repos with such code fail `ckfmt
 --check` until one `ckfmt` run. The new output is phpcs-clean.
 
-### 2. Replace phpcs with mago linter rules
+### 2. Replace phpcs with mago linter rules (done)
 
-- Done: the eight CiviKitchen sniffs and Slevomat (see Port status).
-- For every Drupal and Squiz check still active in the CiviKitchen
-  standard, find the mago rule or formatter setting that covers it. Write
-  down the checks with no counterpart, and drop each one deliberately or
-  port it.
-- `// phpcs:ignore` and `phpcs:disable` lines in consumer repos become
-  `@mago-expect` lines. Leftovers need no check of their own: a stale rule
-  reference makes phpcs abort, and a stale `phpcs:ignore` leaves the mago
-  finding standing.
-- Remove phpcs and civicrm/coder. PHPCompatibility keeps a minimal phpcs
-  until step 4.
+`cklint` runs `php -l` and `mago lint` only. phpcs stays in the image as the
+engine of PHPCompatibility until step 4; civicrm/coder and the CiviKitchen
+phpcs standard are gone, and `ckconform` fails on a leftover
+`phpcs.xml(.dist)`.
+
+Every check the CiviKitchen standard ran at error level, and what covers it
+now. Measured on a corpus of 1182 extension files, both tools over the same
+files:
+
+| phpcs check | Now |
+|---|---|
+| The eight CiviKitchen sniffs, Slevomat `DeclareStrictTypes` | `civikitchen/*` rules, `strict-types` (see Port status) |
+| `Drupal.Scope.MethodScope`, `Drupal.Classes.PropertyDeclaration` | `civikitchen/explicit-visibility`; every finding on the same line |
+| `Drupal.ControlStructures.InlineControlStructure` | `block-statement`; every finding on the same construct (21) |
+| `Drupal.Semantics.FunctionAlias` | `no-alias-function`; every finding on the same line (12) |
+| `Drupal.Classes.UnusedUseStatement` (a warning, never gating) | `no-redundant-use`, already gating; mago also reports an unused `ExtensionUtil as E` import, phpcs does not. phpcs counts a name that appears only in docblock prose as used, mago does not |
+| Closing tag, `new` without parentheses, line endings, `include` with parentheses, keyword and constant case, tabs, short open tag | `ckfmt` rewrites each of them |
+| Every whitespace, indentation, brace and array layout sniff | `ckfmt` |
+
+Dropped on purpose, with no counterpart:
+
+- `else if` against `elseif`, a leading backslash in `use`, function-name
+  case: style without a bug behind it.
+- Comment layout (`PostStatementComment`, `DocComment.*`, `ClassComment.*`,
+  `InlineComment`).
+- `ConstructorName`: a PHP 4 constructor is an ordinary method since PHP 8.
+- `DeprecatedFunctions`: `ckcompat` owns deprecations.
+- `DiscouragedFunctions`: Drupal's devel helpers; `eval` is `no-eval`.
+- Drupal-only checks (`t()`, `watchdog`, `hook_menu`, `.info` files,
+  `preg_replace` with `/e`).
+- `CommentedOutCode`: a warning, which never failed `cklint`.
+- A byte-order mark: mago reports it through `strict-types`, since no
+  `declare` can follow it.
+
+`// phpcs:ignore` and `phpcs:disable` lines in consumer repos become
+`@mago-expect` lines. Leftovers need no check of their own: phpcs no longer
+runs, so they are comments, and the mago finding they meant still stands.
 
 ### 3. Replace phpstan with mago analyze
 

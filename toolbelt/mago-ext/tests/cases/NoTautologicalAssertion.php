@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-// Port of CiviKitchen.Tests.NoTautologicalAssertion: the phpcs SniffsTest expectations.
 $fixtures = 'mago-ext/tests/fixtures/rules/';
 $names = [
     12 => 'assertTrue', 13 => 'assertTrue', 14 => 'assertFalse', 15 => 'assertNotFalse', 16 => 'assertTrue',

@@ -245,8 +245,7 @@ The template stays an interface after day one
 into two classes: **managed** files that are meant to be byte-identical in every
 repo (the thin CI caller, the test bootstraps, the CI compose stack) and
 **seeded** files the repo takes ownership of after the first copy
-(`composer.json`, `phpcs.xml.dist` — the project layer over the central
-CiviKitchen standard — `phpstan.neon.dist`, the dev compose file, `.gitignore`).
+(`composer.json`, `phpstan.neon.dist`, the dev compose file, `.gitignore`).
 Two more modes work with that split:
 
 ```bash
@@ -339,19 +338,12 @@ code touches them. The same `<requires>` list drives the
 ckx phpstan analyse
 ```
 
-**phpcs** is preinstalled with the [civicrm/coder](https://github.com/civicrm/coder) fork of `drupal/coder` on the `8.x-2.x-civi` branch. The ruleset registers itself as the standard `Drupal` and `DrupalPractice` standards (the civi fork relaxes a handful of rules but keeps the names).
-
-```bash
-ckx phpcs --standard=Drupal .
-ckx phpcbf --standard=Drupal .   # auto-fix
-```
-
-For the stricter CiviKitchen extension checks, use `cklint` instead. It wraps
-`php -l`, `phpcs` and `mago lint`, defaults to changed PHP files, and uses the
-bundled `CiviKitchen` standard when the extension does not provide its own
-`phpcs.xml(.dist)`. Most extensions ship a `phpcs.xml.dist` that scopes the run
-to the right files and excludes generated DAOs — see
-[`scaffold/template/extension/phpcs.xml.dist`](../scaffold/template/extension/phpcs.xml.dist).
+**cklint** wraps `php -l` and `mago lint`, defaults to changed PHP files, and
+skips generated code (`*.civix.php`, `DAO/`) and `policy.vendored_paths`. It
+uses the bundled CiviKitchen baseline (`toolbelt/mago/mago.toml` plus the rules
+in `toolbelt/mago-ext`) unless the extension commits its own `mago.toml`, which
+should extend the baseline — see
+[extension standards](extension-standards.md#tooling-every-repo-must-have).
 
 ```bash
 ckx cklint

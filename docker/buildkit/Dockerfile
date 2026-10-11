@@ -74,14 +74,13 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
 RUN pecl install pcov xdebug \
     && docker-php-ext-enable pcov
 
-# Shared dev-tools install (civix, phpunit, phpstan, phpcs+civicrm-coder,
-# rector/ckmodernize).
+# Shared dev-tools install (civix, phpunit, phpstan, phpcs+PHPCompatibility,
+# mago, rector/ckmodernize).
 # Lives in toolbelt/ so the standalone image uses the same script.
 # Composer-installable tools are pinned in committed lockfiles (toolbelt/*-root,
 # toolbelt/rector, toolbelt/psalm); what is left below is what needs a phar,
 # a binary release or a git ref, and those stay overridable per --build-arg.
 ENV PATH="/opt/composer/vendor/bin:${PATH}"
-ARG CODER_REF
 # Overriding a phar *_VERSION requires overriding its *_SHA256 too — the
 # install script fails a mismatch on purpose.
 ARG CIVIX_VERSION
@@ -103,8 +102,7 @@ COPY toolbelt/phpcs-root /opt/composer
 COPY toolbelt /opt/civikitchen/toolbelt
 RUN rm /opt/civikitchen/toolbelt/bin/cktestreset /opt/civikitchen/toolbelt/bin/ckcoretest \
         /opt/civikitchen/toolbelt/bin/ckboot \
-    && CODER_REF="${CODER_REF}" \
-        CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
+    && CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
         PHPUNIT_VERSION="${PHPUNIT_VERSION}" PHPUNIT_SHA256="${PHPUNIT_SHA256}" \
         INFECTION_VERSION="${INFECTION_VERSION}" \
         MAGO_VERSION="${MAGO_VERSION}" MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64}" \
@@ -312,7 +310,7 @@ ENTRYPOINT ["/home/buildkit/entrypoint.sh"]
 FROM base AS final
 
 # /opt/composer/vendor/bin is prepended ahead of /home/buildkit/buildkit/bin
-# so the dev-tools phpcs (with the civicrm/coder Drupal standard registered)
+# so the dev-tools phpcs (with PHPCompatibility registered)
 # wins over the plain phpcs that civi-download-tools installs into buildkit's
 # own bin dir.
 ARG DEFAULT_SITE_TYPE

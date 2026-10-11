@@ -16,7 +16,7 @@ use PHPStan\Type\Type;
  *
  * An APIv4 call is a string protocol: entity, action and field names are
  * literals that nothing checks until the call runs. A typo in a select
- * survives phpcs, phpstan and every test that does not execute that line,
+ * survives the linters, phpstan and every test that does not execute that line,
  * and then throws on a customer's site. The catalog makes the contract
  * checkable at analysis time.
  *

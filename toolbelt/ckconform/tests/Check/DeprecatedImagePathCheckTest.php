@@ -50,7 +50,6 @@ final class DeprecatedImagePathCheckTest extends CheckTestCase
         yield 'engine root' => ['/opt/civikitchen-phpstan/vendor/phpstan/phpstan-strict-rules/rules.neon', 'phpstan-root'];
         yield 'phpstan extension' => ['php /opt/civikitchen-phpstan-ext/tools/gen-route-catalog.php .', 'phpstan'];
         yield 'psalm stubs' => ['<file name="/opt/civikitchen-psalm/stubs/Guzzle.php" />', 'psalm'];
-        yield 'phpcs standard' => ['/opt/civikitchen-coder/CiviKitchen', 'phpcs'];
         yield 'deps config' => ["'/opt/civikitchen-composer-deps.php'", 'lib/composer-deps.php'];
     }
 

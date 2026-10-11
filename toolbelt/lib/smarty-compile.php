@@ -32,8 +32,6 @@
  * Exit: 0 clean, 1 on the first compile failure reported (all are printed).
  */
 
-// phpcs:disable Drupal.Commenting.InlineComment.DocBlock
-
 $root = rtrim(getenv('CK_SMARTY_ROOT') ?: getcwd(), '/');
 $key = getenv('CK_SMARTY_KEY') ?: '';
 

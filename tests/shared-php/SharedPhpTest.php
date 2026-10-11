@@ -719,30 +719,17 @@ final class SharedPhpTest extends TestCase
         self::assertSame(0, $result['status']);
     }
 
-    public function testLintPinsPhpExtensionsEvenWithAProjectPhpcsConfig(): void
+    public function testLintIgnoresALeftoverPhpcsConfig(): void
     {
-        file_put_contents($this->temporary . '/info.xml', '<extension key="org.example.safe"><file>safe</file></extension>');
         file_put_contents($this->temporary . '/phpcs.xml.dist', '<?xml version="1.0"?><ruleset name="p"><file>.</file><rule ref="CiviKitchen"/></ruleset>');
-        file_put_contents($this->temporary . '/README.md', str_repeat('long ', 60) . "\n");
         $before = getcwd();
         chdir($this->temporary);
         ob_start();
         try {
             $runner = new RecordingRunner();
-            (new Application(dirname(__DIR__, 2) . '/toolbelt/bin', dirname(__DIR__, 2), $runner))->run(['lint', '--all'], 'ck');
-            $phpcs = $this->firstCommand($runner, 'phpcs');
-            // The CiviKitchen ruleset refs Drupal, whose nested extensions arg
-            // adds md and yml; only the CLI flag overrides it.
-            self::assertContains('--extensions=php', $phpcs);
-            // A project config brings its own standard.
-            self::assertNotContains('--standard=CiviKitchen', $phpcs);
-
-            unlink($this->temporary . '/phpcs.xml.dist');
-            $bare = new RecordingRunner();
-            (new Application(dirname(__DIR__, 2) . '/toolbelt/bin', dirname(__DIR__, 2), $bare))->run(['lint', '--all'], 'ck');
-            $phpcs = $this->firstCommand($bare, 'phpcs');
-            self::assertContains('--extensions=php', $phpcs);
-            self::assertContains('--standard=CiviKitchen', $phpcs);
+            self::assertSame(0, (new LintCommand(dirname(__DIR__, 2), $runner))->run(['--all']));
+            $tools = array_map(static fn (array $command): string => basename($command[0]), $runner->commands);
+            self::assertSame([], array_intersect($tools, ['phpcs', 'phpcbf']));
         } finally {
             ob_end_clean();
             chdir($before === false ? dirname(__DIR__, 2) : $before);
@@ -822,17 +809,16 @@ final class SharedPhpTest extends TestCase
         }
     }
 
-    public function testLintFixSucceedsWhenPhpcbfFixedEverything(): void
+    public function testLintFailsExactlyWhenMagoReportsFindings(): void
     {
         $before = getcwd();
         chdir($this->temporary);
         ob_start();
         try {
-            // phpcbf: 1 = all fixed, 2 = some left; phpcs: 1 = findings.
-            foreach ([['phpcbf', 1, ['--fix', '--all'], 0], ['phpcbf', 2, ['--fix', '--all'], 1], ['phpcs', 1, ['--all'], 1]] as [$tool, $exit, $arguments, $expected]) {
+            foreach ([[['--all'], 0, 0], [['--all'], 1, 1], [['--fix', '--all'], 0, 0], [['--fix', '--all'], 1, 1]] as [$arguments, $exit, $expected]) {
                 $runner = new RecordingRunner();
-                $runner->exitCodes[$tool] = $exit;
-                self::assertSame($expected, (new LintCommand(dirname(__DIR__, 2), $runner))->run($arguments), "$tool exit $exit");
+                $runner->exitCodes['/fake/mago'] = $exit;
+                self::assertSame($expected, (new LintCommand(dirname(__DIR__, 2), $runner))->run($arguments), implode(' ', $arguments) . " mago exit {$exit}");
             }
         } finally {
             ob_end_clean();

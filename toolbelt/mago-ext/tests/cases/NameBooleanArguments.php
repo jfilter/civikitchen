@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-// Port of CiviKitchen.Modern.NameBooleanArguments: the phpcs SniffsTest expectations.
 $fixtures = 'mago-ext/tests/fixtures/rules/';
 $flagged = [
     9 => ['TRUE', 'civikitchen_save'], 10 => ['FALSE', 'civikitchen_save'], 18 => ['TRUE', 'setFlags'],

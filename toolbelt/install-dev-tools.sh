@@ -5,16 +5,13 @@
 #   - phpunit  (pinned to 9 for CiviCRM compatibility)
 #   - phpstan  (isolated; static analysis incl. the deprecation rules and
 #              CiviKitchen's `@ck-legacy` deprecated-scope resolver)
-#   - phpcs + the civicrm/coder fork of drupal/coder (the de-facto CiviCRM
-#              style guide — registers as the standard "Drupal" /
-#              "DrupalPractice" phpcs standards).
+#   - phpcs    (only as the engine of PHPCompatibility for `ckcompat`)
 #   - rector   (isolated; powers `ckmodernize` — rector's PHP-version + quality
 #              sets plus CiviKitchen's CiviCRM footgun rules)
 #   - psalm    (isolated; powers `cktaint` — used ONLY as a taint engine, with
 #              CiviCRM source/sink/escape stubs)
 #   - infection (isolated; powers `ckmutate` — mutation testing, opt-in floor)
-#   - mago     (Rust binary; PHP half of `ckfmt`, formats to the bundled
-#              phpcs standard's expectations)
+#   - mago     (Rust binary; PHP half of `ckfmt` and the linter of `cklint`)
 #   - oxlint   (npm toolchain + tsgolint Go binary; powers `ckeslint`)
 #   - oxfmt    (npm toolchain; JS/TS half of `ckfmt`)
 #
@@ -50,8 +47,6 @@ TOOLBELT="$(cd "$(dirname "$0")" && pwd)"
 # reviewable diff rather than a resolution that happens at build time. What
 # stays below is what composer cannot pin — phars, a binary release, a git ref
 # — plus infection, which has to follow the image's PHP version (see below).
-# civicrm/coder has no usable release tags, so pin to a commit on 8.x-2.x-civi.
-CODER_REF="${CODER_REF:-aa31dd918e302f6c01f6d28a495256e171abf581}"
 # download.civicrm.org also serves versioned civix phars next to the floating
 # civix.phar, so the scaffolding tool can be pinned like everything else.
 CIVIX_VERSION="${CIVIX_VERSION:-26.02.0}"
@@ -137,15 +132,7 @@ chmod +x /usr/local/bin/mago
 rm -rf /tmp/mago.tar.gz "/tmp/mago-${MAGO_VERSION}-${MAGO_ARCH}-unknown-linux-gnu"
 
 # ---------------------------------------------------------------------------
-# phpcs (from packagist) + civicrm/coder fork (cloned directly).
-#
-# Why we don't `composer require` civicrm/coder via a VCS repo:
-# Composer's GitHub VCS driver hits the REST API to enumerate branches.
-# Anonymous requests are rate-limited (60/hr per IP). When the API is
-# exhausted, composer falls back to plain `git clone`, which then defaults
-# to the SSH remote (git@github.com:…) and fails with "Host key verification
-# failed" in unauthenticated build environments (Docker, GHA matrix, etc.).
-# A direct `git clone https://…` avoids the API entirely and is deterministic.
+# phpcs + PHPCompatibility (from packagist), the engine behind `ckcompat`.
 #
 # COMPOSER_HOME is scoped to this script so it doesn't leak into the runtime
 # image — users who run `composer install` inside a container later
@@ -155,34 +142,16 @@ rm -rf /tmp/mago.tar.gz "/tmp/mago-${MAGO_VERSION}-${MAGO_ARCH}-unknown-linux-gn
 export COMPOSER_HOME=/opt/composer
 export COMPOSER_ALLOW_SUPERUSER=1
 
-# phpcs and everything riding on it (cklint, ckcompat, ckdeps) come from the
+# phpcs and everything riding on it (ckcompat, ckdeps) come from the
 # committed composer.json + lock the Dockerfile COPYs to COMPOSER_HOME — see
 # toolbelt/phpcs-root/README.md for what each pin is for. allow-plugins for the
 # phpcs installer is declared in that file, not set here.
 composer global install --no-interaction --no-progress
 
-# Clone the civicrm fork of drupal/coder (relaxed Drupal CS rules; ruleset
-# still registers as "Drupal" / "DrupalPractice" via phpcs). Pinned to
-# CODER_REF: clone the branch (small repo, no --depth so an older commit stays
-# checkout-able) and check out the exact ref for a reproducible ruleset.
-CODER_DIR=/opt/civicrm-coder
-git clone --branch 8.x-2.x-civi https://github.com/civicrm/coder.git "${CODER_DIR}"
-git -C "${CODER_DIR}" checkout --quiet "${CODER_REF}"
-rm -rf "${CODER_DIR}/.git"
-
-# Register with phpcs. --config-set writes to the CodeSniffer.conf alongside
-# the phpcs install (in /opt/composer/vendor/squizlabs/php_codesniffer/), so
-# the setting applies to every user that invokes phpcs in this image.
-# Two paths (comma-separated): the civicrm-coder fork (Drupal/DrupalPractice)
-# AND the bundled CiviKitchen standard (CiviCRM-tuned Drupal, what `cklint`
-# runs), toolbelt/phpcs/CiviKitchen.
-#
-# This SETS the list, so the paths the composer installer plugin registered for
-# PHPCompatibility (and the PHPCSUtils it is built on) have to be repeated here
-# or `ckcompat` loses its standard on the next build.
-CIVIKITCHEN_CODER_DIR="${TOOLBELT}/phpcs"
+# Register PHPCompatibility and the PHPCSUtils it is built on explicitly, so
+# `ckcompat` does not depend on what the composer installer plugin wrote.
 phpcs --config-set installed_paths \
-    "${CODER_DIR}/coder_sniffer,${CIVIKITCHEN_CODER_DIR},${COMPOSER_HOME}/vendor/phpcompatibility/php-compatibility,${COMPOSER_HOME}/vendor/phpcsstandards/phpcsutils"
+    "${COMPOSER_HOME}/vendor/phpcompatibility/php-compatibility,${COMPOSER_HOME}/vendor/phpcsstandards/phpcsutils"
 
 # ---------------------------------------------------------------------------
 # rector (isolated install in its own dir) — powers `ckmodernize`. Beside its
@@ -296,7 +265,7 @@ npm config set dangerously-allow-all-scripts true --location=global
 # resolve against the node_modules right beside it.
 #
 # In the IMAGE and not in a dozen package.json files, for the same reason the
-# phpcs standard lives here: an extension's frontend is a handful of files, and
+# mago lint baseline lives here: an extension's frontend is a handful of files, and
 # a linter devDependency block per repo is a dozen trees to keep in step and a
 # dozen dependabot PRs a month for a linter nobody chose per-repo. A repo that
 # wants its own rules writes an .oxlintrc.json and ckeslint steps aside.
@@ -333,7 +302,7 @@ npm ci --prefix "${OXFMT_DIR}" --no-audit --no-fund --loglevel=error
 # configs may still name or mount into; ckconform's deprecated-image-path warns
 # about them, and v2 drops them.
 ln -s "${TOOLBELT}"/bin/ck* /usr/local/bin/
-for link in ckconform:ckconform coder:phpcs rector:rector phpstan:phpstan-root \
+for link in ckconform:ckconform rector:rector phpstan:phpstan-root \
     phpstan-ext:phpstan phpstan-config:phpstan-config psalm:psalm oxlint:oxlint \
     oxfmt:oxfmt mago:mago composer-deps.php:lib/composer-deps.php; do
     ln -s "${TOOLBELT}/${link#*:}" "/opt/civikitchen-${link%%:*}"
@@ -342,4 +311,4 @@ mkdir -p /usr/local/share/civikitchen
 ln -s "$(dirname "${TOOLBELT}")/docker/profiles" /usr/local/share/civikitchen/profiles
 
 rm -rf /opt/composer/cache ~/.npm
-chmod -R a+rX /opt/composer "${CODER_DIR}" "${TOOLBELT}" "${INFECTION_DIR}" /usr/local/bin/mago
+chmod -R a+rX /opt/composer "${TOOLBELT}" "${INFECTION_DIR}" /usr/local/bin/mago

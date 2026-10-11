@@ -22,7 +22,7 @@ toolchain added:
 - **phpunit 9** (pinned for CiviCRM compatibility), **pcov** (always on) and
   **xdebug** (off until `XDEBUG_MODE` is set, see
   [IDE step debugging](extension-development.md#ide-step-debugging))
-- **phpstan, phpcs with civicrm/coder, psalm, rector, mago, oxlint, oxfmt**,
+- **phpstan, psalm, rector, mago, oxlint, oxfmt**, phpcs with PHPCompatibility,
   each pinned ([Bumping a dev tool](building.md#bumping-a-dev-tool))
 - **the `ck*` tools**: the CI gates `ck ci` runs
   ([Extension standards](extension-standards.md#tooling-every-repo-must-have)),

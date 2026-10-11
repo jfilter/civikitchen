@@ -50,19 +50,6 @@ final class LintCommand implements Command
                 return 0;
             }
         }
-        $ignore = ['*/.civikitchen-siblings/*'];
-        foreach ($repository->vendoredPrefixes() as $prefix) {
-            $ignore[] = "*/{$prefix}/*";
-            $ignore[] = "{$prefix}/*";
-        }
-        // --extensions on the CLI, always: the Drupal ruleset CiviKitchen refs
-        // adds md and yml, and its nested arg beats every ruleset.xml but this.
-        $phpcs = [$fix ? 'phpcbf' : 'phpcs', '-q', '--extensions=php',
-            '--ignore=' . implode(',', $ignore), '--runtime-set', 'ignore_warnings_on_exit', '1'];
-        $hasProjectConfig = is_file('phpcs.xml') || is_file('phpcs.xml.dist');
-        if (!$hasProjectConfig) {
-            $phpcs[] = '--standard=CiviKitchen';
-        }
         if (!$all) {
             foreach ($paths as $path) {
                 if (is_file($path) && str_ends_with($path, '.php')
@@ -71,14 +58,7 @@ final class LintCommand implements Command
                 }
             }
         }
-        if ($paths !== []) {
-            $phpcs = [...$phpcs, ...$paths];
-        } elseif (!$hasProjectConfig) {
-            $phpcs[] = '.';
-        }
-        $status = $this->runner->passthrough($phpcs);
-        // phpcbf exits 1 when it fixed everything it found, 2 when it could not.
-        $failed = $fix ? $status > 1 : $status !== 0;
+        $failed = false;
 
         $mago = $this->findExecutable('mago');
         if ($mago === null) {
@@ -152,7 +132,7 @@ final class LintCommand implements Command
     private function usage(): string
     {
         return <<<'TXT'
-cklint - PHP linting for CiviCRM extensions (phpcs + mago lint).
+cklint - PHP linting for CiviCRM extensions (php -l + mago lint).
 
   cklint                  lint PHP files with uncommitted git changes
   cklint --all            lint the whole project

@@ -1,6 +1,6 @@
 # Extension standards: what a modern extension looks like
 
-The checklist the civikitchen tooling (cklint / CiviKitchen phpcs standard,
+The checklist the civikitchen tooling (cklint / the CiviKitchen mago baseline,
 ckmodernize, phpstan, the extension template) enforces or expects. Use it for
 audits and as the target state when modernizing an existing extension.
 
@@ -42,7 +42,7 @@ up; see
 ## Code
 
 - APIv4 only (`civicrm_api4()` / OO builders) — no `civicrm_api3()`. Enforced
-  by phpstan, not phpcs: the bans live in
+  by phpstan, not the linter: the bans live in
   `/opt/civikitchen/toolbelt/phpstan-config/civicrm-disallowed.neon`
   (spaze/phpstan-disallowed-calls) and the template's `phpstan.neon.dist`
   includes it. The same file bans removed or deprecated core helpers
@@ -275,20 +275,15 @@ up; see
 
 ## Tooling every repo must have
 
-- `phpcs.xml.dist` referencing `<rule ref="CiviKitchen"/>` (project layer on
-  top is yours) — `cklint` picks it up automatically. The standard is the
-  Drupal base minus the doc-comment sniffs that fight PHPStan array-shape
-  PHPDocs (`Drupal.Commenting.FunctionComment` and siblings).
-- Warnings vs errors in the phpcs layer is a real distinction, not decoration:
-  `cklint` prints phpcs warnings and exits 0 on them — only phpcs *errors* and
-  every mago finding fail the gate. Ship warnings down over time; don't let
-  them block a release.
-- `cklint` also runs `mago lint` as a second engine: bug-pattern rules the
-  phpcs standard does not carry (loose `==`, empty catch blocks, `@`,
-  complexity ceilings). The rule set ships in the bundled `mago.toml` —
-  subtractive, mago's defaults minus everything another gate already owns
-  (phpcs/Rector/cktaint/spaze) and minus the CiviCRM house idiom
-  (`isset()`/`empty()` on API arrays). A deliberate single deviation is a
+- `cklint` runs `php -l` on changed files and `mago lint` with the bundled
+  baseline: bug patterns (loose `==`, empty catch blocks, `@`, complexity
+  ceilings, aliased functions, unused imports), declared visibility on every
+  method and property, braces on every control structure. Every finding fails
+  the gate. The rule set ships in the bundled `mago.toml` — mago's defaults
+  minus everything another gate already owns (ckfmt/Rector/cktaint/spaze) and
+  minus the CiviCRM house idiom (`isset()`/`empty()` on API arrays). There is
+  no phpcs config any more; `ckconform` fails on a leftover
+  `phpcs.xml(.dist)`. A deliberate single deviation is a
   `// @mago-expect lint:<rule>` line in the code, visible in the diff. With the
   baseline, mago lints at the floor in `composer.json` `require.php`; a
   committed `mago.toml` replaces it unless it starts with
@@ -378,7 +373,7 @@ up; see
 - `ckfmt` formats the repo — [mago](https://mago.carthage.software/) for PHP,
   [oxfmt](https://oxc.rs/) for JS/TS — and `ckfmt --check` is a hard gate in
   `ci`. The bundled mago baseline (`preset = "drupal"` plus one declare-spacing
-  setting) is tuned so its output is clean under the bundled phpcs standard:
+  setting) owns layout and the linter carries no layout rule:
   formatter and lint gate agree by construction, so a red check means "run
   `ckfmt` and commit", never a style debate. Vendored trees, minified bundles
   and civix/DAO-generated PHP are excluded — civix regenerates those files
@@ -388,10 +383,10 @@ up; see
   new file is invisible to both until it is `git add`ed. `cklint` also reads
   untracked files.
 - **Rule packs come from the image, not from each repo's `composer.json`.**
-  phpcs standards (civicrm/coder, PHPCompatibility) and phpstan
-  extensions (deprecation rules, disallowed-calls, strict-rules) are installed
-  once from the image's committed lockfiles (`toolbelt/phpcs-root`,
-  `toolbelt/phpstan-root`) — an extension carries no dev dependencies at all. Third-party rules are cherry-picked, never a
+  The mago baseline and its CiviKitchen rules ship under `toolbelt/mago*`;
+  PHPCompatibility and the phpstan extensions (deprecation rules,
+  disallowed-calls, strict-rules) are installed once from the image's committed
+  lockfiles (`toolbelt/phpcs-root`, `toolbelt/phpstan-root`) — an extension carries no dev dependencies at all. Third-party rules are cherry-picked, never a
   whole foreign standard, and every pack that would turn the fleet red at once
   (`phpstan-strict-rules`) is installed but left out of the auto-registration
   so a repo opts in with one `includes:` line when it is ready.
@@ -569,44 +564,20 @@ policy:
       reason: Unmodified SYSTOPIA CiviProxy 1.0.0-beta
 ```
 
-`cklint` (both engines), `ckfmt` and `ckeslint` then skip it. The key is
+`cklint`, `ckfmt` and `ckeslint` then skip it. The key is
 repeatable, one path per line, and each prefix is anchored at the repo root — it
 names one directory, not every directory that happens to share its name. It is
 not an escape hatch for the repo's own code: `phpstan` keeps its own `paths:`,
 and everything you actually wrote stays in scope.
 
-### Known formatter/phpcs stand-offs
+### Formatter and linter
 
-`ckfmt` and `cklint` are tuned to agree, and where they cannot the ruleset
-yields: the formatter owns layout. Anything else would leave a repo with no
-green state at all — `phpcbf` reindents, the next `ckfmt` puts it back, and the
-two gates oscillate forever. The sniffs that yield, each with the construct
-that forced it:
-
-- **Wrapped `extends` / `implements` lists** — `Drupal.Classes.ClassDeclaration`
-  (`InterfaceWrongIndent`, `SpaceBeforeName`, `ImplementsLine`).
-- **`echo` with a long concatenation chain** —
-  `Squiz.WhiteSpace.LanguageConstructSpacing.IncorrectSingle` and
-  `Squiz.WhiteSpace.SemicolonSpacing.Incorrect`.
-- **A nested array literal opening as `[[`, or a key whose value is an array** —
-  `Squiz.Arrays.ArrayDeclaration` (`CloseBraceNewLine`, `IndexNoNewline`).
-- **An array value the formatter wraps across lines** —
-  `Drupal.Arrays.Array.ArrayIndentation` for the value itself, and
-  `Drupal.WhiteSpace.ScopeIndent.IncorrectExact` for the sibling keys that
-  follow it.
-- **The `function_exists('cv')` block in the test bootstrap** —
-  `Squiz.WhiteSpace.FunctionSpacing`, scoped to that one file.
-
-Indentation therefore has exactly one owner: `ckfmt` rewrites a wrong indent on
-the same file set the standard covers, so nothing goes unchecked.
-
-To tell a new stand-off from an ordinary finding, run `ckfmt`, then `phpcbf`,
-then `ckfmt` again. What the second `ckfmt` changes back is a stand-off; what
-stays fixed was a finding.
-
-Every one of these is asserted in `tests/images/test-dev-tools.sh`: the fixture
-is written unformatted, `ckfmt` formats it, and `phpcs` must accept the result.
-A new stand-off ships with its fixture, or the next release re-opens it.
+`ckfmt` owns layout and `cklint` carries no layout rule, so formatted code is
+always lint-clean and the two never undo each other.
+`tests/images/test-dev-tools.sh` asserts this on the overlong-line constructs
+where the formatter makes its largest decisions (wrapped `extends`/`implements`
+lists, long `echo` concatenations, nested array literals): each fixture is
+written unformatted, `ckfmt` formats it, and `cklint` must accept the result.
 
 Suppression placement matters for the mago engine. A class-level
 `@mago-expect` goes either **above the docblock**, separated from it by a blank
@@ -850,7 +821,7 @@ policy:
   copyright: Example Ltd
   template_custom:
     paths:
-      - phpcs.xml.dist
+      - phpstan.neon.dist
     reason: Deliberate template deviation
   renovate_preset: github>example/renovate
   extension_sources:
@@ -902,7 +873,7 @@ are `errorLevel="info"` in the bundled config: printed in the report, never
 part of the exit code (visible via `--show-info`). CI runs it as one of the
 `ck ci` gates. A repo that wants its own rules ships a
 `psalm.xml`/`psalm.xml.dist`; `cktaint` uses it instead of the bundled config,
-same as `phpcs.xml` for `cklint`.
+same as `mago.toml` for `cklint`.
 
 ```
 cktaint                 # whole extension

@@ -2,9 +2,7 @@
 
 declare(strict_types = 1);
 
-// phpcs:disable PSR1.Files.SideEffects
 require_once 'ckmonobase.civix.php';
-// phpcs:enable
 
 function ckmonobase_civicrm_config(\CRM_Core_Config $config): void {
   _ckmonobase_civix_civicrm_config($config);

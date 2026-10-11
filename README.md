@@ -33,7 +33,7 @@ git add -A && git commit -m "Scaffold myext"   # after reviewing it
 
 `ckcreate` runs `civix generate:module` in a throwaway stack, then adds the
 template: dev and CI compose files under `.docker/`, the CI and release
-workflows, phpcs/phpstan/phpunit config, the test bootstrap and a first test,
+workflows, phpstan/phpunit config, the test bootstrap and a first test,
 in a fresh git repository that passes `ck ci`. `ckup` writes free host ports to
 `.docker/.env` and runs `docker compose up -d`. `ckx <command>` runs a command
 in that stack as `www-data`, in the extension's directory; without a command it
@@ -70,7 +70,7 @@ docker compose exec -e CIVICRM_UF=UnitTests app \
 They run against a separate `civicrm_test` database, not the dev site
 ([Headless tests](docs/extension-development.md#headless-tests)).
 
-The image includes cv, civix, composer, node/npm, phpunit, phpstan, phpcs,
+The image includes cv, civix, composer, node/npm, phpunit, phpstan, mago,
 pcov, xdebug and the `ck*` tools; see [Images](docs/images.md#standalone-dev).
 
 The `:drupal10`, `:drupal11`, `:wordpress` and `:joomla` images work the same
@@ -120,7 +120,7 @@ workflow calls the same command
 
 | Gate | What it checks |
 |------|----------------|
-| `cklint` | `php -l`, phpcs with the bundled `CiviKitchen` standard (civicrm/coder base plus CiviCRM-specific sniffs), and `mago lint` bug patterns |
+| `cklint` | `php -l` and `mago lint` with the CiviKitchen baseline: mago's bug patterns plus CiviCRM-specific rules |
 | `ckconform` | Repository conventions: required config files, licence and PHP-floor coherence between `info.xml` and `composer.json`, test bootstrap guards, workflow permissions, managed entities and more |
 | `ckcivix` | civix format is current |
 | `ckfmt` | Formatting: mago for PHP, oxfmt for JS/TS |
