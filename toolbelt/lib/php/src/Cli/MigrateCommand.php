@@ -9,14 +9,16 @@ use CiviKitchen\Toolbelt\Repository\Files;
 
 final class MigrateCommand implements Command
 {
-    /** phpcs sniff (standard.category.sniff, any message suffix stripped) => the mago rule that took it over. */
+    /**
+     * phpcs sniff (standard.category.sniff, any message suffix stripped) => the mago rule that took it over.
+     * name-boolean-arguments is missing on purpose: off in the baseline, a pragma for it would go unfulfilled.
+     */
     private const PHPCS_TO_MAGO = [
         'CiviKitchen.Api.NoGenericVarOnActionParam' => 'civikitchen/no-generic-var-on-action-param',
         'CiviKitchen.Api.NoRequiredOnExternalAction' => 'civikitchen/no-required-on-external-action',
         'CiviKitchen.Extension.UseMixinsForStandardHooks' => 'civikitchen/use-mixins-for-standard-hooks',
         'CiviKitchen.Files.MaxFileLength' => 'civikitchen/max-file-length',
         'CiviKitchen.I18n.UseExtensionTs' => 'civikitchen/use-extension-ts',
-        'CiviKitchen.Modern.NameBooleanArguments' => 'civikitchen/name-boolean-arguments',
         'CiviKitchen.Security.NoUnsafeUnserialize' => 'civikitchen/no-unsafe-unserialize',
         'CiviKitchen.Tests.NoTautologicalAssertion' => 'civikitchen/no-tautological-assertion',
         'Drupal.Scope.MethodScope' => 'civikitchen/explicit-visibility',
@@ -221,8 +223,10 @@ final class MigrateCommand implements Command
             // The open tag's own whitespace is part of `<?php `, so only whitespace tokens shrink.
             $trimBefore();
             $joined = $previous . implode('', array_map($text, array_reverse($before)));
-            // `return /* x */true` must not become `returntrue`.
-            $tokens[$index] = $block && preg_match('/[\w\x80-\xff]$/', $joined) === 1 && preg_match('/^[\w\x80-\xff$\\\\]/', $next) === 1 ? ' ' : '';
+            // `return /* x */true` must not become `returntrue`, and a close tag keeps its space.
+            $merges = $block && preg_match('/[\w\x80-\xff]$/', $joined) === 1 && preg_match('/^[\w\x80-\xff$\\\\]/', $next) === 1;
+            $closeTag = str_starts_with($next, '?>') && preg_match('/\S$/', $joined) === 1;
+            $tokens[$index] = $merges || $closeTag ? ' ' : '';
         }
     }
 

@@ -7,7 +7,8 @@
 #     - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml
 #
 # The jobs run inside the civikitchen image with the database as a service, so
-# a docker executor is enough; nothing needs a privileged runner. ckboot
+# a docker executor is enough; nothing needs a privileged runner. The e2e job
+# starts as root through `image:docker:user`, which the runner must support. ckboot
 # provisions the site in the job container, then the gates run as the web user,
 # the same `ck ci` a developer runs in the dev stack. The @v1 ref and CK_IMAGE
 # move together, like the GitHub caller and its image (docs/releases.md).
@@ -48,9 +49,14 @@ variables:
     CK_IN_IMAGE: "1"
     npm_config_cache: /tmp/npm-cache
   before_script:
+    # The image runs as the web user; only the e2e job starts as root.
+    - as_web() { if [ "$(id -u)" = 0 ]; then runuser -u www-data -- "$@"; else "$@"; fi; }
     # Before provisioning, as on GitHub: enabling the extension may read the
     # bundle. Install hooks never run; the web user owns the tree.
-    - if [ "$CK_NPM_CI" = "1" ] || [ "$CK_JS_TESTS" = "1" ] || [ -n "${CK_E2E:-}" ]; then runuser -u www-data -- npm ci --ignore-scripts; fi
+    - if [ "$CK_NPM_CI" = "1" ] || [ "$CK_JS_TESTS" = "1" ] || [ -n "${CK_E2E:-}" ]; then as_web npm ci --ignore-scripts; fi
+    # vendor/ before ckboot enables the extension; the checkout is writable
+    # for the web user through the umask above.
+    - as_web ck internal composer-install .
     - ext_dir=$(ckboot)
     - cd "$ext_dir"
 
@@ -61,9 +67,9 @@ civikitchen-ci:
   rules:
     - when: on_success
   script:
-    - runuser -u www-data -- ck ci
-    - if [ "$CK_JS_TESTS" = "1" ]; then runuser -u www-data -- npm test; fi
-    - if [ "$CK_LIFECYCLE" = "1" ]; then runuser -u www-data -- cklifecycle; fi
+    - ck ci
+    - if [ "$CK_JS_TESTS" = "1" ]; then npm test; fi
+    - if [ "$CK_LIFECYCLE" = "1" ]; then cklifecycle; fi
 
 civikitchen-e2e:
   extends: .civikitchen
@@ -71,10 +77,13 @@ civikitchen-e2e:
     - exists:
         - playwright.config.ts
         - playwright.config.js
+  # Browsers and their system packages install as root; the suite then drops
+  # to the web user so its cv calls leave no root-owned caches in the site.
+  image:
+    docker:
+      user: root
   variables:
     CK_E2E: "1"
-    # Browsers and system packages install as root; the suite runs as the web
-    # user so its cv calls leave no root-owned caches in the site.
     PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
     # The image creates this login only when asked; the suite reads it back.
     CIVIKITCHEN_DEMO_USER: admin
@@ -84,7 +93,7 @@ civikitchen-e2e:
     CIVICRM_BASE_URL: http://localhost:8080
   script:
     - npx playwright install --with-deps
-    - runuser -u www-data -- npm run test:e2e
+    - as_web npm run test:e2e
   artifacts:
     when: always
     expire_in: 2 weeks

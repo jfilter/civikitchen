@@ -20,16 +20,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # vendor/ as the runner user, who owns the checkout, before the boot
+      # enables the extension (skips an extension without composer.json).
+      - name: Install vendor/
+        run: >-
+          docker compose -f docker-compose.ci.yml run --rm --no-deps -T
+          -u "$(id -u):$(id -g)" -e HOME=/tmp --entrypoint sh app
+          -c 'exec ck internal composer-install /var/www/html/ext/*/'
+
       # --wait blocks until the image's healthcheck passes, which needs the
-      # first-boot auto-install (and the composer install of a mounted
-      # extension with a lock file) to have finished.
+      # first-boot auto-install to have finished.
       - name: Boot CiviCRM (civikitchen standalone)
         run: docker compose -f docker-compose.ci.yml up -d --pull always --wait --wait-timeout 900
 
-      # vendor/ is installed automatically on container start when your
-      # extension ships a composer.json (CIVIKITCHEN_AUTO_COMPOSER=1 default).
       - name: Enable the extension
-        run: docker compose -f docker-compose.ci.yml exec -T app cv ext:enable myextension
+        run: docker compose -f docker-compose.ci.yml exec -T -u www-data app cv ext:enable myextension
 
       # CIVICRM_UF=UnitTests runs against the isolated <db>_test scratch
       # database the image configured at install — not the dev site. Prefers
@@ -37,7 +42,7 @@ jobs:
       # image-global phpunit 9.
       - name: Run headless phpunit
         run: |
-          docker compose -f docker-compose.ci.yml exec -T -e CIVICRM_UF=UnitTests app \
+          docker compose -f docker-compose.ci.yml exec -T -u www-data -e CIVICRM_UF=UnitTests app \
             bash -c "cd /var/www/html/ext/myextension && { [ -x vendor/bin/phpunit ] && vendor/bin/phpunit || phpunit; }"
 
       - name: Logs on failure

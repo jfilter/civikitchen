@@ -300,7 +300,8 @@ up; see
   `toolbelt/mago-ext` (codes `civikitchen/<rule>`): `use-extension-ts`,
   `use-mixins-for-standard-hooks`, `max-file-length`, `no-unsafe-unserialize`,
   `no-tautological-assertion`, `no-generic-var-on-action-param`,
-  `no-required-on-external-action` and the off-by-default
+  `no-required-on-external-action`, `curl-ssl-verify`, `remote-address`
+  (outside `tests/`), `case-fall-through` and the off-by-default
   `name-boolean-arguments`. A repo configures them through worker options on
   the extension host command, in a `mago.toml` that extends the baseline:
 
@@ -1177,16 +1178,14 @@ to off; a caller that sets neither gets exactly the run it has today.
 | `composer_app_repositories` | Comma- or newline-separated repository names within the caller's owner. Required with the App secrets and scopes the minted token to exactly these private dependencies. |
 | `composer_app_id`, `composer_app_private_key` (secrets) | A GitHub App with `contents: read`, installed on the private dependency repos. The workflow mints a short-lived installation token restricted by `composer_app_repositories` and uses it for both the composer install and the sibling checkout. |
 
-**`composer_install` is not an optimization — for a repo without a committed
-`vendor/` it is the precondition for everything else.** The extension's main
-`.php` file requires the autoloader at the top, so the entrypoint cannot even
-enable the mounted extension: the stack boot fails before a test runs. Commit
-`vendor/` or set this input; there is no third option.
-
-It runs on the **runner**, not through the image's own
-`CIVIKITCHEN_AUTO_COMPOSER`, and that is the whole point: the read token never
-enters a container. The container-side auto-composer then sees `vendor/`
-through the bind mount and skips the directory, so the two do not collide.
+**A repo without a committed `vendor/` needs it before the stack boots.** The
+extension's main `.php` file requires the autoloader at the top, so the
+entrypoint cannot even enable the mounted extension otherwise. Before every
+boot the workflow runs `ck internal composer-install` as the runner user, in
+the image, over the mounted extensions: public packages need nothing more.
+Private packages need this input, which installs on the **runner** first, so
+the read token never enters a container; the later step then sees `vendor/`
+and skips the directory.
 CI installs the locked development tree because static analysis covers tests
 and therefore must resolve their framework classes. Release packaging remains
 strictly `--no-dev`, so test-only packages never enter the shipped archive.

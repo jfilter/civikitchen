@@ -93,7 +93,8 @@ if [[ ! -f "${MARKER_FILE}" ]]; then
 
     echo "First run: installing ${CIVICRM_SITE_TYPE} site against ${CIVICRM_DB_HOST}..."
 
-    BK="su -s /bin/bash buildkit -c"
+    # The image runs as buildkit; `docker run -u root` still gets there via su.
+    bk() { if [[ "$(id -u)" == 0 ]]; then su -s /bin/bash buildkit -c "$1"; else bash -c "$1"; fi; }
 
     # Point amp/civibuild at the external DB (root creds for GRANT-level access:
     # reinstall recreates the per-site databases + users).
@@ -107,7 +108,7 @@ MYCNF
     chown buildkit:buildkit /home/buildkit/.my.cnf
     chmod 600 /home/buildkit/.my.cnf
 
-    ${BK} "export PATH=$(printf '%q' "${PATH}") && amp config:set --mysql_type=mycnf --httpd_type=none --perm_type=none"
+    bk "export PATH=$(printf '%q' "${PATH}") && amp config:set --mysql_type=mycnf --httpd_type=none --perm_type=none"
 
     # The site was baked against a throwaway MariaDB on 127.0.0.1 (see bake.sh),
     # so the civibuild build config + amp instance registry still point there.
@@ -117,14 +118,14 @@ MYCNF
     # 127.0.0.1 inside the container and get "[2002] Connection refused".
     # Escape sed-replacement metacharacters in the host (/, &, \).
     DB_HOST_SED=$(printf '%s' "${CIVICRM_DB_HOST}" | sed 's/[\/&\\]/\\&/g')
-    ${BK} "sed -i 's/127\.0\.0\.1/${DB_HOST_SED}/g' \
+    bk "sed -i 's/127\.0\.0\.1/${DB_HOST_SED}/g' \
         /home/buildkit/buildkit/build/*.sh \
         /home/buildkit/.amp/instances.yml \
         /home/buildkit/.amp/my.cnf.d/* 2>/dev/null || true"
 
     # reinstall (not create): reuse the baked codebase, recreate the DBs on the
     # external host, regenerate settings for ${CIVIKITCHEN_SITE_URL}.
-    ${BK} "export PATH=$(printf '%q' "${PATH}") && civibuild reinstall site --url $(printf '%q' "${CIVIKITCHEN_SITE_URL}")"
+    bk "export PATH=$(printf '%q' "${PATH}") && civibuild reinstall site --url $(printf '%q' "${CIVIKITCHEN_SITE_URL}")"
 
     # joomla-demo's civibuild install is deliberately incomplete (component
     # registration left as a #fixme, only civi_contribute enabled). The demo
@@ -136,7 +137,7 @@ MYCNF
     # script self-guards); runs as buildkit, before the profile apply in
     # entrypoint-common.sh below.
     if [[ "${CIVICRM_SITE_TYPE}" == joomla* ]]; then
-        ${BK} "export PATH=$(printf '%q' "${PATH}") && bash /usr/local/share/civikitchen/joomla-finish.sh"
+        bk "export PATH=$(printf '%q' "${PATH}") && bash /usr/local/share/civikitchen/joomla-finish.sh"
     fi
 
     # Sentinel for the fresh-container guard above: mark the external DB as
@@ -150,12 +151,12 @@ else
     echo "Site already installed (skipping)."
 fi
 
-# Shared first-boot provisioning (auto-composer, SMTP, CIVIKITCHEN_PROFILE,
+# Shared first-boot provisioning (SMTP, CIVIKITCHEN_PROFILE,
 # extension knobs, init.d hooks, readiness marker) — identical for the dev and
 # demo images, so it lives in entrypoint-common.sh.
 . /usr/local/share/civikitchen/entrypoint-common.sh
 
-# Start Apache (needs root for port 80)
+# Docker lets the image user bind port 80 (ip_unprivileged_port_start=0).
 echo "Starting Apache..."
 echo "Access: ${CIVIKITCHEN_SITE_URL}"
 echo "Login: admin / admin"

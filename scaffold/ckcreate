@@ -187,7 +187,7 @@ docker compose -p "$project" -f "$work/compose.yml" up -d --wait >/dev/null \
 # civix locates CiviCRM by walking UP from the working directory, and /out is
 # deliberately outside the site tree — so point it at the settings file instead.
 echo "$tool: generating the civix scaffold …"
-docker compose -p "$project" -f "$work/compose.yml" exec -T -w /out \
+docker compose -p "$project" -f "$work/compose.yml" exec -T -u root -w /out \
   -e CIVICRM_SETTINGS=/var/www/html/civicrm.standalone.php app \
   civix generate:module "$key" \
     --author "$author" --email "$email" \
@@ -196,9 +196,9 @@ docker compose -p "$project" -f "$work/compose.yml" exec -T -w /out \
 [ -d "$mount_root/$key" ] || die "civix produced no $key/ directory"
 generated="$mount_root/$key"
 
-# Files come out owned by the container user; take them over before anything
-# else touches them.
-docker compose -p "$project" -f "$work/compose.yml" exec -T app \
+# civix and cklint run as root, since only root may write a host user's mount
+# on Linux; the caller takes the files over before anything else touches them.
+docker compose -p "$project" -f "$work/compose.yml" exec -T -u root app \
   chown -R "$(id -u):$(id -g)" "/out/$key" 2>/dev/null || true
 
 # This checkout's PHP steps, run in the stack as the calling user.
@@ -272,9 +272,9 @@ EOF
 
 # civix's own files do not meet the CiviKitchen standard.
 echo "$tool: fixing lint findings in the civix output …"
-docker compose -p "$project" -f "$work/compose.yml" exec -T -w "/out/$key" app cklint --fix --all >/dev/null \
+docker compose -p "$project" -f "$work/compose.yml" exec -T -u root -w "/out/$key" app cklint --fix --all >/dev/null \
   || echo "$tool: cklint --fix could not fix everything; run cklint --all in the new extension" >&2
-docker compose -p "$project" -f "$work/compose.yml" exec -T app \
+docker compose -p "$project" -f "$work/compose.yml" exec -T -u root app \
   chown -R "$(id -u):$(id -g)" "/out/$key" 2>/dev/null || true
 
 CKINIT_IMAGE="$image" "$here/ckinit" --check "$generated" >/dev/null

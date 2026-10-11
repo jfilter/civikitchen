@@ -4,9 +4,8 @@
 # Sourced by both entrypoints AFTER their CiviCRM site exists (standalone:
 # `cv core:install`; buildkit: `civibuild create site`). It holds the
 # CMS-agnostic first-boot provisioning so the standalone and buildkit images
-# behave the same: auto-composer for bind-mounted extensions, dev settings,
-# SMTP backend, an isolated test DB, no calls to civicrm.org, core language
-# files, registry + mounted extension enabling (with the mounted extensions'
+# behave the same: dev settings, SMTP backend, an isolated test DB, no calls
+# to civicrm.org, core language files, registry + mounted extension enabling (with the mounted extensions'
 # <requires> resolved), named profiles (CIVIKITCHEN_PROFILE), and
 # /civikitchen-init.d hooks.
 #
@@ -14,8 +13,8 @@
 #
 #   ck_as_web CMD...   Run CMD as the image's web user, against its CiviCRM
 #                      site. cv must auto-detect the site.
-#                        standalone: ck_as_web() { runuser -u www-data -- "$@"; }
-#                        buildkit:   cd into the site docroot + su to buildkit.
+#                        standalone: the command itself, runuser from root.
+#                        buildkit:   cd into the site docroot, su from root.
 #
 # The CK_* parameters below default to the standalone image's layout; the
 # buildkit entrypoint overrides them before sourcing.
@@ -105,52 +104,12 @@ ck_attach_scenario_extension() {
     fi
 }
 
-# Auto-run composer install for bind-mounted extensions under CK_EXT_DIR.
-# An extension's composer.json usually pulls dev tooling (phpunit, phpstan)
-# that's not in the image; doing it here saves the manual gate before
-# `vendor/bin/phpunit` works. Idempotent (skips when vendor/ exists),
-# non-fatal on failure. Opt out with CIVIKITCHEN_AUTO_COMPOSER=0.
-ck_auto_composer() {
-    [[ "${CIVIKITCHEN_AUTO_COMPOSER:-1}" == "1" ]] || return 0
-    [[ -d "${CK_EXT_DIR}" ]] || return 0
-    local composer_json ext_dir ext_name
-    shopt -s nullglob
-    for composer_json in "${CK_EXT_DIR}"/*/composer.json; do
-        ext_dir="$(dirname "${composer_json}")"
-        ext_name="$(basename "${ext_dir}")"
-        if [[ -d "${ext_dir}/vendor" ]]; then
-            continue
-        fi
-        # Extensions whose lock file vendors civicrm-core (the systopia
-        # dev-tooling pattern) must NOT get that vendor/ inside a running
-        # CiviCRM — their autoloader would load a second core. They need a
-        # runtime vendor/ built with their own tooling instead.
-        if grep -q '"name": "civicrm/civicrm-core"' "${ext_dir}/composer.lock" 2>/dev/null; then
-            echo "[civikitchen] WARN: skipping composer install in ext/${ext_name} — its lock file vendors civicrm/civicrm-core. Build a runtime vendor/ outside the container (composer update --no-dev) instead." >&2
-            continue
-        fi
-        echo "[civikitchen] composer install in ext/${ext_name}..."
-        if ! ( cd "${ext_dir}" && composer install --no-interaction --no-progress --prefer-dist ); then
-            echo "[civikitchen] WARN: composer install failed in ext/${ext_name} — set CIVIKITCHEN_AUTO_COMPOSER=0 or fix composer.json" >&2
-        fi
-        # Bind mounts belong to the host user; match what composer wrote to
-        # the mount owner so nothing is left root-owned on Linux hosts — also
-        # after a failed install, whose half-written vendor/ would otherwise
-        # block the host user (a CI runner's next checkout) from removing it.
-        ck_match_mount_owner "${ext_dir}" "${ext_dir}/vendor" "${ext_dir}/composer.lock"
-    done
-    shopt -u nullglob
-}
-
-# chown PATHS (recursively, when they exist) to the owner of DIR, which is
-# the host user of a bind mount. Silent when there is nothing to do.
-ck_match_mount_owner() {
-    local dir="$1" path
-    shift
-    for path in "$@"; do
-        [[ -e "${path}" ]] || continue
-        chown -R --reference="${dir}" "${path}" 2>/dev/null || true
-    done
+# vendor/ comes from the checkout's owner before the stack starts (ckup, the CI
+# workflows): written from here it would belong to the image user, not the host.
+ck_warn_removed_auto_composer() {
+    if [[ -n "${CIVIKITCHEN_AUTO_COMPOSER+x}${CIVICRM_AUTO_COMPOSER+x}" ]]; then
+        echo "[civikitchen] WARN: CIVIKITCHEN_AUTO_COMPOSER is gone; ckup and the CI workflows install vendor/ before the stack starts" >&2
+    fi
 }
 
 # Dev-mode defaults — there's no reason a dev image would want them off.
@@ -295,7 +254,8 @@ ck_json_member() {
 # Serve the site on the port of a localhost site URL as well, so a browser in this
 # container's network (the compose browser service) opens the URL CiviCRM generates.
 ck_listen_on_site_port() {
-    rm -f "${CK_APACHE_CONF}"
+    # The image creates the file for the web user, who cannot write the directory.
+    : > "${CK_APACHE_CONF}"
     [[ "${CIVIKITCHEN_SITE_URL:-}" =~ ^http://(localhost|127\.0\.0\.1):([0-9]+)(/|$) ]] || return 0
     local port="${BASH_REMATCH[2]}"
     [[ "${port}" != "80" ]] || return 0
@@ -310,10 +270,10 @@ ck_wire_test_db_boot() {
     local test_db_dsn="mysql://${CIVICRM_DB_USER}:${CIVICRM_DB_PASSWORD}@${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}/${CIVICRM_DB_NAME}_test?new_link=true"
     # cv merges ~/.cv.json into $GLOBALS['_CV'], keyed by the site bootstrap
     # path; civicrm.settings.php reads _CV['TEST_DB_DSN'] under
-    # CIVICRM_UF=UnitTests. Write it for root (docker exec default) and the web
-    # user. Don't clobber an existing ~/.cv.json (a project may have set its own).
+    # CIVICRM_UF=UnitTests. Write it for the web user, and for root when the
+    # container started as root. Don't clobber an existing ~/.cv.json (a project may have set its own).
     # JSON-escape the DSN (the DB password may contain \ or ") and write both
-    # files as root — interpolating the payload into a `bash -c` string would
+    # files from this shell — interpolating the payload into a `bash -c` string would
     # let a password containing quotes execute as shell.
     local site_json
     site_json="$(ck_json_member TEST_DB_DSN "${test_db_dsn}")"
@@ -325,7 +285,7 @@ ck_wire_test_db_boot() {
     fi
     local cv_json
     cv_json=$(printf '{\n  "sites": {\n    "%s": {\n      %s\n    }\n  }\n}' "${CK_TEST_DB_CV_KEY}" "${site_json}")
-    if [[ ! -f "${CK_ROOT_HOME}/.cv.json" ]]; then
+    if [[ -w "${CK_ROOT_HOME}" && ! -f "${CK_ROOT_HOME}/.cv.json" ]]; then
         printf '%s\n' "${cv_json}" > "${CK_ROOT_HOME}/.cv.json"
         chmod 600 "${CK_ROOT_HOME}/.cv.json"
     fi
@@ -372,7 +332,7 @@ ck_install_pinned_archive() {
         echo "[civikitchen] ERROR: checksum mismatch for ${ext_key}" >&2
         return 2
     fi
-    # Hash and extract as root without handing the verified file
+    # Hash and extract in this shell without handing the verified file
     # to the web process between those two operations.
     chmod 600 "${archive}"
     ck_install_verified_archive "${archive}" "${ext_key}" "${version_constraint}"
@@ -989,8 +949,8 @@ ck_apply_profile() {
 }
 
 # First-boot provisioning hooks mounted into CK_INIT_D, run in lexical order:
-# *.sh via bash (as root, for system setup), *.php via `cv scr` (as the web
-# user, for Civi settings / seed data). A failing hook aborts the boot.
+# *.sh via bash (as the container user; system setup needs `user: root`),
+# *.php via `cv scr` (as the web user, for Civi settings / seed data). A failing hook aborts the boot.
 ck_run_init_hooks() {
     [[ -d "${CK_INIT_D}" ]] || return 0
     local hook

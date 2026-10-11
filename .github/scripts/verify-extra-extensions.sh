@@ -6,7 +6,7 @@ set -euo pipefail
 
 for key in $EXT_KEYS; do
   status=$(docker compose -f "$COMPOSE_FILE" exec -T app \
-    runuser -u www-data -- cv api4 Extension.get \
+    cv api4 Extension.get \
     "{\"where\":[[\"key\",\"=\",\"${key}\"]],\"select\":[\"status\"]}" \
     --out=json)
   echo "${key}: ${status}"

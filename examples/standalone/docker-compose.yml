@@ -4,14 +4,15 @@
 # 2. docker compose up -d
 #    On first start the app container runs cv core:install and creates a demo
 #    login user (admin / admin) — open http://localhost:8080 and log in.
-# 3. (If your extension uses composer) install vendor deps:
-#      docker compose exec app bash -c "cd /var/www/html/ext/myextension && composer install"
+# 3. (If your extension uses composer) install vendor deps as your user:
+#      docker compose run --rm --no-deps -u "$(id -u):$(id -g)" -e HOME=/tmp \
+#        --entrypoint composer app install -d /var/www/html/ext/myextension
 # 4. Enable + test:
 #      docker compose exec app cv ext:enable myextension
 #      docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpunit"
 #
 # Tools in the image: cv, civix, composer, node/npm, phpunit, phpstan, mago,
-# phpcs (PHPCompatibility), pcov, xdebug (opt-in via XDEBUG_MODE).
+# pcov, xdebug (opt-in via XDEBUG_MODE).
 #
 # URLs:
 #   CiviCRM:    http://localhost:8080

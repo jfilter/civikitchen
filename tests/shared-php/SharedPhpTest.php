@@ -19,6 +19,7 @@ use CiviKitchen\Toolbelt\Repository\PhpFloor;
 use CiviKitchen\Toolbelt\Runtime\ExtensionInspector;
 use CiviKitchen\Toolbelt\Runtime\ExtensionArchiveInstaller;
 use CiviKitchen\Toolbelt\Runtime\ProfileData;
+use CiviKitchen\Toolbelt\Runtime\VendorInstaller;
 use CiviKitchen\Toolbelt\Scaffold\ExtensionEditor;
 use PHPUnit\Framework\TestCase;
 
@@ -477,7 +478,10 @@ final class SharedPhpTest extends TestCase
             ],
             'CRLF lines go whole' => ["<?php\r\n    // phpcs:disable X\r\n    \$a = 1;\r\n", "<?php\r\n    \$a = 1;\r\n"],
             'no space where no token could merge' => ["<?php\nfoo(/* phpcs:ignore X.Y.Z */\$b);\n", "<?php\nfoo(\$b);\n"],
+            'a rule off in the baseline gets no pragma' => ["<?php\nf(TRUE); // phpcs:ignore CiviKitchen.Modern.NameBooleanArguments.UnnamedBoolean -- magic setter\n", "<?php\nf(TRUE);\n"],
             'a comment as the last token' => ["<?php\n\$a = 1;\n// phpcs:enable", "<?php\n\$a = 1;\n"],
+            'the close tag keeps its space' => ["<?php echo f(); // phpcs:ignore X.Y.Z ?>\n", "<?php echo f(); ?>\n"],
+            'and a block before it too' => ["<p><?= f() /* phpcs:ignore X.Y.Z */ ?></p>", "<p><?= f() ?></p>"],
         ];
         foreach ($cases as $name => [$source, $expected]) {
             self::assertSame([$expected, []], $migrate->migrateComments($source), $name);
@@ -494,7 +498,7 @@ final class SharedPhpTest extends TestCase
             file_put_contents('phpcs.xml.dist', <<<'XML'
                 <?xml version="1.0"?>
                 <ruleset name="widget">
-                  <rule ref="CiviKitchen"><exclude name="CiviKitchen.Modern.NameBooleanArguments"/></rule>
+                  <rule ref="CiviKitchen"><exclude name="CiviKitchen.I18n.UseExtensionTs.BareTs"/><exclude name="CiviKitchen.Modern.NameBooleanArguments"/></rule>
                   <exclude-pattern>*/frontend/*</exclude-pattern>
                   <rule ref="CiviKitchen.Files.MaxFileLength"><exclude-pattern>*/tests/*</exclude-pattern></rule>
                   <rule ref="Drupal.Files.TxtFileLineLength"><exclude-pattern>*.md</exclude-pattern></rule>
@@ -506,7 +510,9 @@ final class SharedPhpTest extends TestCase
             self::assertSame(1, $status);
             self::assertFileDoesNotExist('phpcs.xml.dist');
             self::assertSame("<?php\n\$a = 1;\n", file_get_contents('Civi/Widget.php'));
-            self::assertStringContainsString('turned off CiviKitchen.Modern.NameBooleanArguments: disable civikitchen/name-boolean-arguments', $output);
+            self::assertStringContainsString('turned off CiviKitchen.I18n.UseExtensionTs.BareTs: disable civikitchen/use-extension-ts', $output);
+            // Off in the baseline already.
+            self::assertStringNotContainsString('NameBooleanArguments', $output);
             self::assertStringContainsString('configured CiviKitchen.Files.MaxFileLength (now civikitchen/max-file-length): <exclude-pattern>*/tests/*</exclude-pattern>', $output);
             self::assertStringContainsString('drop the phpcs.xml.dist entry from policy.template_custom', $output);
             // Ruleset-wide path excludes and sniffs without a mago rule are no work for a person.
@@ -1183,6 +1189,69 @@ final class SharedPhpTest extends TestCase
      *
      * @return list<string>
      */
+    public function testVendorInstallerInstallsOnlyCheckoutsThatNeedAndMayWriteVendor(): void
+    {
+        $lock = static fn(string $name): string => json_encode(['packages' => [['name' => $name]], 'packages-dev' => []], JSON_THROW_ON_ERROR);
+        $names = ['needs', 'fails', 'vendored', 'half', 'plain', 'core', 'devcore', 'badlock', 'readonly', 'readonlyneeds'];
+        foreach ($names as $name) {
+            mkdir($this->temporary . '/' . $name);
+        }
+        foreach (array_diff($names, ['plain']) as $name) {
+            file_put_contents($this->temporary . "/{$name}/composer.json", '{"require":{"php":">=8.1","ext-json":"*"}}');
+        }
+        file_put_contents($this->temporary . '/readonlyneeds/composer.json', '{"require":{"php":">=8.1","guzzlehttp/guzzle":"^7"}}');
+        // Core as a dev requirement without a lock still resolves into vendor/.
+        file_put_contents($this->temporary . '/devcore/composer.json', '{"require-dev":{"civicrm/civicrm-core":"^6"}}');
+        mkdir($this->temporary . '/vendored/vendor');
+        touch($this->temporary . '/vendored/vendor/autoload.php');
+        // An interrupted install leaves vendor/ without its autoloader.
+        mkdir($this->temporary . '/half/vendor');
+        file_put_contents($this->temporary . '/needs/composer.lock', $lock('guzzlehttp/guzzle'));
+        file_put_contents($this->temporary . '/core/composer.lock', $lock('civicrm/civicrm-core'));
+        file_put_contents($this->temporary . '/badlock/composer.lock', '{"packages": [');
+        chmod($this->temporary . '/readonly', 0555);
+        chmod($this->temporary . '/readonlyneeds', 0555);
+        $runner = new class () extends Runner {
+            /** @var list<string> */
+            public array $calls = [];
+
+            public function passthrough(array $command, ?array $environment = null, ?string $workingDirectory = null): int
+            {
+                $this->calls[] = basename((string) $workingDirectory) . ': ' . implode(' ', $command);
+                return basename((string) $workingDirectory) === 'fails' ? 1 : 0;
+            }
+        };
+        try {
+            ob_start();
+            $status = (new VendorInstaller($runner))->install(array_map(
+                fn(string $name): string => $this->temporary . '/' . $name . '/',
+                [...$names, 'missing'],
+            ));
+            ob_end_clean();
+        } finally {
+            chmod($this->temporary . '/readonly', 0755);
+            chmod($this->temporary . '/readonlyneeds', 0755);
+        }
+        self::assertSame(1, $status);
+        self::assertSame([
+            'needs: composer install --no-interaction --no-progress --prefer-dist',
+            'fails: composer install --no-interaction --no-progress --prefer-dist',
+            'half: composer install --no-interaction --no-progress --prefer-dist',
+        ], $runner->calls);
+        self::assertSame(0, (new VendorInstaller($runner))->install([]));
+        // Read-only mounts are the caller's choice: a note, not a failure.
+        chmod($this->temporary . '/readonlyneeds', 0555);
+        try {
+            self::assertSame(0, (new VendorInstaller($runner))->install([
+                $this->temporary . '/readonly', $this->temporary . '/readonlyneeds', $this->temporary . '/vendored',
+                $this->temporary . '/plain', $this->temporary . '/devcore',
+            ]));
+        } finally {
+            chmod($this->temporary . '/readonlyneeds', 0755);
+        }
+        self::assertSame(1, (new VendorInstaller($runner))->install([$this->temporary . '/badlock']));
+    }
+
     private function firstCommand(RecordingRunner $runner, string $program): array
     {
         foreach ($runner->commands as $command) {

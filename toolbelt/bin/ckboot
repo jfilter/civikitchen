@@ -8,7 +8,7 @@
 # entrypoint does the work, exactly as on a compose boot; the extension is
 # attached through CIVIKITCHEN_EXTENSION_PATH because the job has no bind mount.
 #
-# Usage (as root, from the extension root):  ext_dir=$(ckboot) && cd "$ext_dir"
+# Usage (from the extension root):  ext_dir=$(ckboot) && cd "$ext_dir"
 set -euo pipefail
 
 # shellcheck source=../lib/ckcommon.sh
@@ -18,14 +18,13 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   cat <<'USAGE'
 ckboot - provision the CiviCRM site in this container with the extension in the
 current directory attached, start Apache, and print the extension's directory
-under the ext dir. Run as root from the extension root; the database must be
+under the ext dir. Run from the extension root; the database must be
 reachable as CIVICRM_DB_HOST (default db). Logs go to stderr.
 USAGE
   exit 0
 fi
 
 ck_require_extension_root
-[ "$(id -u)" = 0 ] || ck_die "must run as root: the image entrypoint provisions the site"
 
 key="$(ck_xml_field info.xml key)"
 [ -n "${key}" ] || ck_die "info.xml declares no extension key"

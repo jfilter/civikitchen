@@ -231,7 +231,6 @@ test-provision: ## provision.sh: <requires>, mounted extensions, core locales, t
 	bash tests/toolbelt/test-provision-requires.sh
 	bash tests/toolbelt/test-provision-mounts.sh
 	bash tests/toolbelt/test-provision-locales.sh
-	bash tests/toolbelt/test-provision-composer.sh
 	bash tests/toolbelt/test-provision-test-db.sh
 	bash tests/toolbelt/test-provision-phone-home.sh
 	bash tests/toolbelt/test-provision-db-marker.sh

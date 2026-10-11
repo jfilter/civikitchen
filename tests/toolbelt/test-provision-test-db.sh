@@ -49,7 +49,7 @@ grep -q 'ck_provision_test_db "${test_db_name}" || return 1' "$root/docker/runti
 
 # The install itself creates triggers and functions, so the server-level
 # trust is set as root before `cv core:install`, not only for the test DB.
-grep -B1 -- '-- cv core:install' "$root/docker/standalone/entrypoint.sh" | grep -q 'ck_trust_function_creators' \
+grep -B1 -- 'ck_as_web cv core:install' "$root/docker/standalone/entrypoint.sh" | grep -q 'ck_trust_function_creators' \
   || fail "the standalone entrypoint must call ck_trust_function_creators before cv core:install"
 : > "$MYSQL_LOG"
 ck_trust_function_creators >/dev/null 2>"$work/err.log" || fail "ck_trust_function_creators failed on the happy path"

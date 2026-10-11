@@ -545,7 +545,7 @@ jobs:
           YAML
           docker compose -f smoke-compose.yml up -d --wait --quiet-pull
 
-          # Unzip as root: the extension directory is the image's, not ours.
+          # Unzip as the image user: the extension directory is the image's, not ours.
           # CK_EXT_DIR is where the image puts extensions (docker/runtime/provision.sh).
           docker compose -f smoke-compose.yml exec -T \
             -e "CK_EXT_KEY=$CK_EXT_KEY" app bash -c '

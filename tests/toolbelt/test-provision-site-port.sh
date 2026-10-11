@@ -19,7 +19,7 @@ grep -qx '    DocumentRoot /var/www/html' "$CK_APACHE_CONF" || fail "the extra v
 
 for url in "http://localhost" "http://localhost:80" "http://civi.example.org:8095" "https://localhost:8443" ""; do
   CIVIKITCHEN_SITE_URL="$url" ck_listen_on_site_port
-  [[ ! -e "$CK_APACHE_CONF" ]] || fail "site URL '$url' must not add a port (and must drop a stale one)"
+  [[ ! -s "$CK_APACHE_CONF" ]] || fail "site URL '$url' must not add a port (and must empty a stale one)"
 done
 
 echo "site port: ok"

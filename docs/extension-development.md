@@ -28,8 +28,12 @@ is under `CIVIKITCHEN_ENABLE_EXTENSIONS` in [Configuration](configuration.md).
 **3. Install vendor deps (if your extension uses composer):**
 
 ```bash
-docker compose exec app bash -c "cd /var/www/html/ext/myextension && composer install"
+docker compose run --rm --no-deps -u "$(id -u):$(id -g)" -e HOME=/tmp \
+  --entrypoint composer app install -d /var/www/html/ext/myextension
 ```
+
+As your user, so `vendor/` in your checkout belongs to you. `ckup` does this
+for every mounted extension before it starts the stack.
 
 **4. Enable + test:**
 
@@ -62,8 +66,10 @@ when there is no terminal and, for an extension below the git root, the
 `CK_TOOL_PATH` described under [Running the CI gates locally](#running-the-ci-gates-locally).
 Without a command it opens a shell. `CKX_USER=root` switches the user, for a
 command that has to write where the bind mount does not let `www-data` write.
+Keep it to such commands: a root run that boots CiviCRM (`cv`, the gates)
+leaves caches the web server cannot write until the container is recreated.
 The examples below use it; outside the template layout, spell out
-`docker compose exec -u www-data -w /var/www/html/ext/<file> app …`.
+`docker compose exec -w /var/www/html/ext/<file> app …`.
 
 All first-boot knobs (SMTP, extra extensions, demo users, …) are listed in the
 [configuration reference](configuration.md).
@@ -157,13 +163,17 @@ further steps chain as before (`ck_headless()->sqlFile(...)->apply()`).
 Anything a test setup needs beyond `cv ext:enable` — renderer config, seed
 data, system packages — can run automatically on first boot. Mount scripts
 into `/civikitchen-init.d/`; after a fresh auto-install they run in lexical
-order: `*.sh` via bash (as root), `*.php` via `cv scr` (as the web user: www-data
-on standalone, buildkit on the CMS images). A
-failing hook aborts the boot, so broken provisioning is loud.
+order: `*.sh` via bash, `*.php` via `cv scr`, both as the image's web user
+(www-data on standalone, buildkit on the CMS images). A hook that needs root,
+like `CIVIKITCHEN_EXTRA_PACKAGES`, needs `user: root` on the service; `docker
+compose exec` then defaults to root too, so pass `-u www-data` to `cv` and
+`ck*`, or a root run leaves caches the web server cannot write. A failing
+hook aborts the boot, so broken provisioning is loud.
 
 ```yaml
 services:
   app:
+    user: root  # apt for CIVIKITCHEN_EXTRA_PACKAGES
     environment:
       CIVIKITCHEN_EXTRA_PACKAGES: "libreoffice-writer,unoconv"
     volumes:

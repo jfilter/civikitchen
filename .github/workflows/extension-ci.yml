@@ -179,10 +179,9 @@ on:
         default: '24'
       composer_install:
         description: >-
-          `composer install` on the runner before the stack boots —
-          a repo without committed vendor/ cannot even enable the extension
-          otherwise. On the runner (not in-container) so the read token never
-          enters a container; the image's auto-composer sees vendor/ and skips.
+          `composer install` on the runner with a read token, for private
+          packages. Public ones need no input: every stack boot first installs
+          vendor/ as the runner user. The token never enters a container.
         type: boolean
         default: false
       policy_defaults:
@@ -831,6 +830,10 @@ jobs:
           # Self-hosted runners keep the previous run's stack; without -v the
           # anonymous mariadb volume reattaches and the entrypoint skips install.
           docker compose "${compose[@]}" down -v --remove-orphans
+          # vendor/ as the runner user, who owns the checkout; written by the stack
+          # it would belong to the image's web user.
+          docker compose "${compose[@]}" run --rm --no-deps -T -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            --entrypoint sh app -c 'exec ck internal composer-install /var/www/html/ext/*/'
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       # Every in-container gate via ck ci, the gate list developers run locally.
@@ -1003,14 +1006,13 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Check the previous release into the mount
-        run: git checkout --force --detach "$PREV"
+        # vendor/ is untracked and belongs to the tree just left; the boot below reinstalls it.
+        run: git checkout --force --detach "$PREV" && git clean -ffdxq -- vendor
         env:
           PREV: ${{ steps.prev.outputs.prev }}
 
-      # vendor/ is untracked, so it survives the tree move as the one built for
-      # HEAD — the wrong tree for the release about to be installed. The
-      # github-oauth config the step above wrote is global to the runner, so no
-      # second token is minted here. Same after the move back to HEAD.
+      # The github-oauth config the step above wrote is global to the runner, so
+      # no second token is minted here. Same after the move back to HEAD.
       - name: Composer install for the previous release
         if: ${{ inputs.composer_install }}
         run: composer install --no-interaction --no-progress
@@ -1031,18 +1033,30 @@ jobs:
             compose+=(-f "$CK_SIBLING_OVERRIDE")
           fi
           docker compose "${compose[@]}" down -v --remove-orphans
+          # vendor/ as the runner user, who owns the checkout; written by the stack
+          # it would belong to the image's web user.
+          docker compose "${compose[@]}" run --rm --no-deps -T -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            --entrypoint sh app -c 'exec ck internal composer-install /var/www/html/ext/*/'
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       # The container sees the checkout through the bind mount, so this alone
       # puts the new code in front of the installed old schema.
       - name: Move the mount to this commit
-        run: git checkout --force --detach "$HEAD_REF"
+        # vendor/ is untracked and belongs to the release just left.
+        run: git checkout --force --detach "$HEAD_REF" && git clean -ffdxq -- vendor
         env:
           HEAD_REF: ${{ steps.prev.outputs.head }}
 
       - name: Composer install for this commit
         if: ${{ inputs.composer_install }}
         run: composer install --no-interaction --no-progress
+
+      # No boot follows the move, so public packages go in here, as the runner
+      # user; after the private install above this finds vendor/ complete.
+      - name: Install vendor/ for this commit
+        run: >-
+          docker compose -f "$CK_COMPOSE_FILE" run --rm --no-deps -T -u "$(id -u):$(id -g)" -e HOME=/tmp
+          --entrypoint sh app -c 'exec ck internal composer-install /var/www/html/ext/*/'
 
       - name: Upgrade the extension schema
         run: |
@@ -1208,14 +1222,13 @@ jobs:
       # --- B: the last release, upgraded to HEAD ---------------------------
       - name: Check the previous release into the mount
         if: ${{ steps.gate.outputs.run == 'true' }}
-        run: git checkout --force --detach "$PREV"
+        # vendor/ is untracked and belongs to the tree just left; the boot below reinstalls it.
+        run: git checkout --force --detach "$PREV" && git clean -ffdxq -- vendor
         env:
           PREV: ${{ steps.gate.outputs.prev }}
 
-      # vendor/ is untracked and survives the tree move as the one built for
-      # HEAD — the wrong tree for the release about to be installed. Same after
-      # the move back, and no second token: the github-oauth config the
-      # private-dependency steps wrote is global to the runner.
+      # No second token, here or after the move back: the github-oauth config
+      # the private-dependency steps wrote is global to the runner.
       - name: Composer install for the previous release
         if: ${{ inputs.composer_install && steps.gate.outputs.run == 'true' }}
         run: composer install --no-interaction --no-progress
@@ -1233,17 +1246,30 @@ jobs:
             compose+=(-f "$CK_SIBLING_OVERRIDE")
           fi
           docker compose "${compose[@]}" down -v --remove-orphans
+          # vendor/ as the runner user, who owns the checkout; written by the stack
+          # it would belong to the image's web user.
+          docker compose "${compose[@]}" run --rm --no-deps -T -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            --entrypoint sh app -c 'exec ck internal composer-install /var/www/html/ext/*/'
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       - name: Move the mount to this commit
         if: ${{ steps.gate.outputs.run == 'true' }}
-        run: git checkout --force --detach "$HEAD_REF"
+        # vendor/ is untracked and belongs to the release just left.
+        run: git checkout --force --detach "$HEAD_REF" && git clean -ffdxq -- vendor
         env:
           HEAD_REF: ${{ steps.gate.outputs.head }}
 
       - name: Composer install for this commit
         if: ${{ inputs.composer_install && steps.gate.outputs.run == 'true' }}
         run: composer install --no-interaction --no-progress
+
+      # No boot follows the move, so public packages go in here, as the runner
+      # user; after the private install above this finds vendor/ complete.
+      - name: Install vendor/ for this commit
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        run: >-
+          docker compose -f "$CK_COMPOSE_FILE" run --rm --no-deps -T -u "$(id -u):$(id -g)" -e HOME=/tmp
+          --entrypoint sh app -c 'exec ck internal composer-install /var/www/html/ext/*/'
 
       # `cv flush` first for the same reason the upgrade job does it: the boot
       # cached the OLD release's class and container maps, and the upgrader
@@ -1283,6 +1309,10 @@ jobs:
             compose+=(-f "$CK_SIBLING_OVERRIDE")
           fi
           docker compose "${compose[@]}" down -v
+          # vendor/ as the runner user, who owns the checkout; written by the stack
+          # it would belong to the image's web user.
+          docker compose "${compose[@]}" run --rm --no-deps -T -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            --entrypoint sh app -c 'exec ck internal composer-install /var/www/html/ext/*/'
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       # The upgraded dump goes back INTO the new container rather than the diff
@@ -1409,6 +1439,10 @@ jobs:
             compose+=(-f "$CK_SIBLING_OVERRIDE")
           fi
           docker compose "${compose[@]}" down -v --remove-orphans
+          # vendor/ as the runner user, who owns the checkout; written by the stack
+          # it would belong to the image's web user.
+          docker compose "${compose[@]}" run --rm --no-deps -T -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            --entrypoint sh app -c 'exec ck internal composer-install /var/www/html/ext/*/'
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       # safe.directory first: the mount belongs to the runner user, and the
@@ -1573,6 +1607,9 @@ jobs:
       - name: Start the CiviCRM stack on the old core
         env:
           CIVIKITCHEN_IMAGE: ${{ inputs.core_upgrade_from }}
+          # The old core's image may predate `ck internal composer-install`, and
+          # the site ends on the run's image, whose PHP vendor/ has to fit.
+          CK_VENDOR_IMAGE: ${{ inputs.image }}
           CK_SIBLING_OVERRIDE: ${{ steps.deps.outputs.sibling_override }}
         run: |
           set -euo pipefail
@@ -1584,6 +1621,10 @@ jobs:
             compose+=(-f "$CK_SIBLING_OVERRIDE")
           fi
           docker compose "${compose[@]}" down -v --remove-orphans
+          # vendor/ as the runner user, who owns the checkout; written by the stack
+          # it would belong to the image's web user.
+          CIVIKITCHEN_IMAGE="$CK_VENDOR_IMAGE" docker compose "${compose[@]}" run --rm --no-deps -T -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            --entrypoint sh app -c 'exec ck internal composer-install /var/www/html/ext/*/'
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       # `cv scr`, not a PHPUnit class, and deliberately so: these assertions have
@@ -1871,6 +1912,10 @@ jobs:
             compose+=(-f "$CK_SIBLING_OVERRIDE")
           fi
           docker compose "${compose[@]}" down -v --remove-orphans
+          # vendor/ as the runner user, who owns the checkout; written by the stack
+          # it would belong to the image's web user.
+          docker compose "${compose[@]}" run --rm --no-deps -T -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            --entrypoint sh app -c 'exec ck internal composer-install /var/www/html/ext/*/'
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       - name: PHPUnit
@@ -2053,6 +2098,10 @@ jobs:
             compose+=(-f "$CK_SIBLING_OVERRIDE")
           fi
           docker compose "${compose[@]}" down -v --remove-orphans
+          # vendor/ as the runner user, who owns the checkout; written by the stack
+          # it would belong to the image's web user.
+          docker compose "${compose[@]}" run --rm --no-deps -T -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            --entrypoint sh app -c 'exec ck internal composer-install /var/www/html/ext/*/'
           docker compose "${compose[@]}" up -d --wait --quiet-pull
 
       # Same --ignore-scripts rule as the ci job: this job installs the

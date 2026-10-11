@@ -99,12 +99,14 @@ no-request-variable = { enabled = true, exclude = ["tests/**", "**/tests/**"] }
 
 # CiviKitchen's own rules (toolbelt/mago-ext): bare ts(), standard-hook mixins,
 # the @required trap, file length, positional booleans, unserialize,
-# tautological assertions. Codes are civikitchen/<rule>. A repo deviates with
+# tautological assertions, TLS verification, raw client address, case fall-through. Codes are civikitchen/<rule>. A repo deviates with
 # its own mago.toml: `extends` this file and repeat this table with worker
 # options — --disable=<code>,… --exclude=<code>:<glob>,… --max-lines=<n>
 # --external-actions=<ActionClass>,… (docs/extension-standards.md).
 # cklint exports CK_MAGO_WORKSPACE, the repo root the rules resolve paths from.
 # Every reported level fails, so name-boolean-arguments (fixing it takes judgement
 # per call site) starts disabled; a repo arms it by repeating the table without it.
+# Tests read REMOTE_ADDR to save and restore the request they fake.
 [extension-hosts.civikitchen]
-command = ["php", "/opt/civikitchen/toolbelt/mago-ext/worker.php", "--disable=civikitchen/name-boolean-arguments"]
+command = ["php", "/opt/civikitchen/toolbelt/mago-ext/worker.php", "--disable=civikitchen/name-boolean-arguments",
+  "--exclude=civikitchen/remote-address:tests/**,civikitchen/remote-address:**/tests/**"]

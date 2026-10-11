@@ -7,6 +7,7 @@ namespace CiviKitchen\Toolbelt\Cli;
 use CiviKitchen\Toolbelt\Runtime\ExtensionArchiveInstaller;
 use CiviKitchen\Toolbelt\Runtime\ExtensionInspector;
 use CiviKitchen\Toolbelt\Runtime\ProfileData;
+use CiviKitchen\Toolbelt\Runtime\VendorInstaller;
 use CiviKitchen\Toolbelt\Scaffold\ExtensionEditor;
 use Throwable;
 
@@ -30,6 +31,9 @@ final class InternalRuntimeCommand implements Command
                 $xml = $inspector->load($arguments[0], $arguments[1]);
                 $inspector->assertVersion($xml, $arguments[2]);
                 return 0;
+            }
+            if ($operation === 'composer-install') {
+                return (new VendorInstaller())->install(array_values($arguments));
             }
             if ($operation === 'extension-key' && count($arguments) === 1) {
                 echo $inspector->key($arguments[0]);

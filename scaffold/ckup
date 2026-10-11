@@ -7,7 +7,8 @@
 # CIVIKITCHEN_SITE_URL from the HTTP one. This writes a missing variable with
 # the first free port at or above its default, keeps what is already there
 # (a stack keeps its ports across restarts), then runs `docker compose up -d`
-# with any further arguments passed through.
+# with any further arguments passed through. Before that it installs vendor/
+# in every mounted extension that ships a composer.json without one.
 #
 # Usage, from anywhere inside the extension repo:  ckup [compose up args]
 set -euo pipefail
@@ -56,6 +57,11 @@ assign CK_SMTP_PORT 1025
 assign CK_PMA_PORT 8081
 
 cd "$dir/.docker"
+# As the calling user, with the image's PHP and composer: vendor/ lands in the
+# host checkout and must belong to its owner, not to the image's web user.
+docker compose run --rm --no-deps -T -u "$(id -u):$(id -g)" -e HOME=/tmp \
+  --entrypoint sh app -c 'exec ck internal composer-install /var/www/html/ext/*/' \
+  || die "composer install failed in a mounted extension (output above)"
 docker compose up -d "$@"
 http_port="$(sed -n 's/^CK_HTTP_PORT=//p' "$env_file" | tail -1)"
 echo "$tool: CiviCRM at http://localhost:${http_port}"

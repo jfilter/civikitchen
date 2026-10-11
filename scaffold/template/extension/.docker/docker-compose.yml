@@ -2,8 +2,8 @@
 # + phpMyAdmin.
 #
 # Usage:
-#   /path/to/civikitchen/scaffold/ckup     # picks free host ports, then `up -d`
-#   cd .docker && docker compose up -d     # same, on the default ports below
+#   /path/to/civikitchen/scaffold/ckup     # composer install, free host ports, `up -d`
+#   cd .docker && docker compose up -d     # default ports below; no composer install
 #
 # URLs:  CiviCRM http://localhost:${CK_HTTP_PORT:-8080} (admin/admin)
 #        maildev :${CK_MAILDEV_PORT:-1080} · phpMyAdmin :${CK_PMA_PORT:-8081}

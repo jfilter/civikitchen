@@ -254,6 +254,12 @@ config names files there, for example
 `/opt/civikitchen/toolbelt/phpstan-config/civicrm-disallowed.neon` in
 `phpstan.neon.dist`.
 
+The dev images run as the web user (`www-data`; buildkit flavors: `buildkit`),
+and so does `docker exec`: `cv` and the `ck*` tools leave caches the web
+server can write. Docker lets that user bind port 80
+(`net.ipv4.ip_unprivileged_port_start=0`, set since Docker 20.10). The demo
+images run as root, because they start an embedded MariaDB.
+
 The v1 paths `/opt/civikitchen-<tool>` and the v1 profile directory
 `/usr/local/share/civikitchen/profiles` are links to the same directories and
 are **deprecated**: they go away in v2. A profile a stack mounts below the old

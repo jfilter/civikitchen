@@ -88,7 +88,10 @@ jobs:
 
 The `playwright` input on `extension-ci.yml` is still preferable when the suite
 uses the standard CiviKitchen compose stack. This standalone workflow exists
-for suites with their own setup and teardown contract.
+for suites with their own setup and teardown contract. The images do not run
+`composer install` on a mounted extension, so a `prepare_command` that boots
+one installs `vendor/` first, as the runner user — `ckup` does, or the
+`docker compose run` line from [Extension development](extension-development.md).
 
 ## Repository command checks
 

@@ -162,9 +162,8 @@ runs:
     # project directory — the directory of the FIRST -f file, i.e. .docker/,
     # not the workspace this override was written from.
     #
-    # Read-only and as is: no composer install runs in the siblings. One that
-    # ships no vendor/ makes CIVIKITCHEN_AUTO_COMPOSER log a warning — not a
-    # failed boot.
+    # Read-only and as is: no composer install runs in the siblings, and the
+    # stack's composer step skips their read-only mounts.
     - name: Compose override — mount and enable the siblings
       id: override
       if: ${{ inputs.sibling_repo != '' }}

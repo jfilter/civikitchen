@@ -28,6 +28,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
   statement) and mago's `block-statement` (braces on every control
   structure). Both carry over checks the phpcs standard ran, with the same
   findings on real extension code.
+- Three lint rules ported from mago-drupal (MIT): `civikitchen/curl-ssl-verify`
+  (`CURLOPT_SSL_VERIFYPEER` or `CURLOPT_SSL_VERIFYHOST` turned off in
+  `curl_setopt()` or a literal `curl_setopt_array()`),
+  `civikitchen/remote-address` (a read of `$_SERVER['REMOTE_ADDR']` outside
+  `tests/`; use `CRM_Utils_System::ipAddress()`) and
+  `civikitchen/case-fall-through` (a non-empty `case` that runs into the next
+  one without a comment saying so).
 - `ckmigrate` (`ck migrate`) moves an extension repository off a retired
   CiviKitchen tool in place, starting with phpcs; it exits 1 with a list of
   what needs a person.
@@ -61,7 +68,7 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `strict-types`. To migrate:
   - run `ckmigrate`. It deletes `phpcs.xml.dist` / `phpcs.xml` (`ckconform`'s
     `phpcs-config` check now fails while one is left), turns a `phpcs:ignore`
-    for a check that still exists into `// @mago-expect lint:<rule>`, drops
+    for a check the baseline still runs into `// @mago-expect lint:<rule>`, drops
     the other `phpcs:` comments and lists what needs a person. Move a
     CiviKitchen sniff setting it lists to worker options in a `mago.toml` that
     extends the baseline: `externalActions` becomes `--external-actions`,

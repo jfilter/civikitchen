@@ -7,9 +7,9 @@
 # standalone image shares.
 #
 # Wires up docker/runtime/provision.sh for the civibuild site and runs the shared
-# first-boot provisioning: auto-composer for bind-mounted extensions, SMTP,
-# profiles (CIVIKITCHEN_PROFILE), extension knobs, /civikitchen-init.d hooks,
-# and the readiness marker the HEALTHCHECK looks for.
+# first-boot provisioning: SMTP, profiles (CIVIKITCHEN_PROFILE), extension
+# knobs, /civikitchen-init.d hooks, and the readiness marker the HEALTHCHECK
+# looks for.
 
 SITE_WEB="/home/buildkit/buildkit/build/site/web"
 if [[ "${CIVICRM_SITE_TYPE:-}" == joomla* ]]; then
@@ -28,14 +28,16 @@ _ck_legacy CIVIKITCHEN_SMTP_HOST         CIVICRM_SMTP_HOST
 _ck_legacy CIVIKITCHEN_SMTP_PORT         CIVICRM_SMTP_PORT
 _ck_legacy CIVIKITCHEN_EXTRA_EXTENSIONS  CIVICRM_EXTRA_EXTENSIONS
 _ck_legacy CIVIKITCHEN_ENABLE_EXTENSIONS CIVICRM_ENABLE_EXTENSIONS
-_ck_legacy CIVIKITCHEN_AUTO_COMPOSER     CIVICRM_AUTO_COMPOSER
 
 # Run a command as the buildkit user from the site docroot so cv auto-detects
-# the civibuild site. PATH and SITE_WEB are expanded in THIS (root) shell — the
-# entrypoint's PATH already has cv + the dev tools — and printf %q preserves
-# both the PATH and each argument's quoting through `su -c`. (Single-quoting the
-# PATH here would pass a literal ${PATH} to the inner shell and drop /usr/bin.)
+# the civibuild site. Under root (the demo image), PATH and SITE_WEB are
+# expanded in THIS shell and printf %q carries them and each argument's quoting
+# through `su -c`; single-quoting PATH would hand the inner shell a literal ${PATH}.
 ck_as_web() {
+    if [[ "$(id -u)" != 0 ]]; then
+        (cd "${SITE_WEB}" && "$@")
+        return
+    fi
     su -s /bin/bash buildkit -c "export PATH=$(printf '%q' "${PATH}") && cd $(printf '%q' "${SITE_WEB}") && $(printf '%q ' "$@")"
 }
 
@@ -60,9 +62,8 @@ export CK_EXT_DIR
 
 . /usr/local/share/civikitchen/provision.sh
 
-# Auto-composer runs every boot (picks up newly bind-mounted extensions).
 ck_attach_scenario_extension
-ck_auto_composer
+ck_warn_removed_auto_composer
 
 if [[ ! -f "${CK_PROVISIONED_MARKER}" ]]; then
     echo "[civikitchen] First-boot provisioning (${CIVICRM_SITE_TYPE})..."
@@ -75,4 +76,6 @@ if [[ ! -f "${CK_PROVISIONED_MARKER}" ]]; then
 fi
 
 # Heal any root-owned files left in the site tree (runs every boot, cheap).
-ck_heal_perms
+if [[ "$(id -u)" == 0 ]]; then
+    ck_heal_perms
+fi

@@ -259,6 +259,7 @@ ENV PATH="/opt/composer/vendor/bin:/home/buildkit/buildkit/bin:${PATH}" \
     CIVIBUILD_ADMIN_PASS="admin" \
     CIVICRM_SITE_TYPE_DEFAULT="${DEFAULT_SITE_TYPE}"
 
+# The demo stays root: its entrypoint starts the embedded MariaDB service.
 USER root
 
 # Standalone serves CiviCRM directly: anonymous `/` (→ /civicrm/home) returns
@@ -348,7 +349,11 @@ COPY docker/profiles /opt/civikitchen/docker/profiles
 COPY packages/civicrm-profile-schema /opt/civikitchen/packages/civicrm-profile-schema
 
 COPY docker/buildkit/entrypoint.sh /home/buildkit/entrypoint.sh
-RUN chmod +x /home/buildkit/entrypoint.sh
+# The dev image runs as buildkit (USER below): Docker lets it bind port 80
+# (ip_unprivileged_port_start=0), and the xdebug toggle's conf file is its own.
+RUN chmod +x /home/buildkit/entrypoint.sh \
+    && touch /usr/local/etc/php/conf.d/xdebug.ini \
+    && chown buildkit:buildkit /usr/local/etc/php/conf.d/xdebug.ini
 
 EXPOSE 80
 
@@ -362,4 +367,5 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=600s --retries=18 \
     CMD test -f /home/buildkit/.civikitchen-provisioned \
         && curl -fsS -o /dev/null http://localhost/ || exit 1
 
+USER buildkit
 ENTRYPOINT ["/home/buildkit/entrypoint.sh"]

@@ -42,6 +42,16 @@ ok()   { echo "  ✓ $1"; PASS=$((PASS+1)); }
 fail() { echo "  ✗ $1"; FAIL=$((FAIL+1)); FAILURES+=("$1"); }
 
 # ---------------------------------------------------------------------------
+# The image runs as its web user; Docker lets that user bind port 80.
+echo "== image user =="
+if [ "$(id -u)" != 0 ]; then ok "runs as $(id -un), not root"; else fail "the image runs as root"; fi
+if php -r 'exit(stream_socket_server("tcp://0.0.0.0:80") ? 0 : 1);' 2>/dev/null; then
+    ok "the web user may bind port 80"
+else
+    fail "the web user cannot bind port 80"
+fi
+
+# ---------------------------------------------------------------------------
 # 1. Binaries respond to --version
 echo "== versions =="
 for bin in composer composer-dependency-analyser node npm civix phpunit phpstan cv infection; do
@@ -1452,21 +1462,19 @@ else
     ok "xdebug off by default"
 fi
 
-# Both images now use the same php:apache layout: writing xdebug.ini to
-# /usr/local/etc/php/conf.d/ enables it on next php invocation. Simulate
-# the entrypoint toggle inline (entrypoints would otherwise spawn apache /
-# civibuild, which we don't want here).
-XDEBUG_INI="/usr/local/etc/php/conf.d/xdebug.ini"
-cat > "${XDEBUG_INI}" <<EOF
-zend_extension=xdebug.so
-xdebug.mode=develop
-EOF
-if XDEBUG_MODULES="$(php -m 2>&1)" && grep -qi "^xdebug$" <<<"${XDEBUG_MODULES}"; then
+# The entrypoints' own toggle, run as the image user: it rewrites a conf.d
+# file the image hands that user, so XDEBUG_MODE works without root.
+toggle() { (export XDEBUG_MODE="$1"; . /usr/local/share/civikitchen/xdebug-toggle.sh) >/dev/null 2>&1; }
+if toggle develop && XDEBUG_MODULES="$(php -m 2>&1)" && grep -qi "^xdebug$" <<<"${XDEBUG_MODULES}"; then
     ok "XDEBUG_MODE enables xdebug"
 else
     fail "XDEBUG_MODE didn't enable xdebug"
 fi
-rm -f "${XDEBUG_INI}"
+if toggle '' && ! php -m 2>&1 | grep -qi '^xdebug$'; then
+    ok "an unset XDEBUG_MODE turns xdebug off again"
+else
+    fail "xdebug stayed on after XDEBUG_MODE was unset"
+fi
 
 # ---------------------------------------------------------------------------
 # 5d. ckmutate: the point of mutation testing in one fixture — a test that

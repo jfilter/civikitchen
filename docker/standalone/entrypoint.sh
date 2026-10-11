@@ -41,21 +41,28 @@ _ck_legacy CIVIKITCHEN_SMTP_HOST         CIVICRM_SMTP_HOST
 _ck_legacy CIVIKITCHEN_SMTP_PORT         CIVICRM_SMTP_PORT
 _ck_legacy CIVIKITCHEN_EXTRA_EXTENSIONS  CIVICRM_EXTRA_EXTENSIONS
 _ck_legacy CIVIKITCHEN_ENABLE_EXTENSIONS CIVICRM_ENABLE_EXTENSIONS
-_ck_legacy CIVIKITCHEN_AUTO_COMPOSER     CIVICRM_AUTO_COMPOSER
 _ck_legacy CIVIKITCHEN_SITE_URL          SITE_URL
 
 # ---------------------------------------------------------------------------
 # Shared provisioning library. ck_as_web runs a command as the web user
-# (www-data) against the standalone CiviCRM site. The CK_* parameters default
-# to the standalone layout, so nothing else needs overriding here.
-ck_as_web() { runuser -u www-data -- "$@"; }
+# (www-data) against the standalone CiviCRM site: the image's own user, or a
+# drop from root when a stack starts it with `user: root`. The CK_* parameters
+# default to the standalone layout, so nothing else needs overriding here.
+ck_as_web() {
+    if [[ "$(id -u)" == 0 ]]; then runuser -u www-data -- "$@"; else "$@"; fi
+}
 . /usr/local/share/civikitchen/provision.sh
 
 # ---------------------------------------------------------------------------
 # Extra OS packages (e.g. libreoffice-writer + unoconv for CiviOffice
 # rendering) without baking them into the image. Comma- or space-separated.
 # Installed once per container; restarts skip already-present packages.
+# apt needs root, so the stack runs this service with `user: root`.
 if [[ -n "${CIVIKITCHEN_EXTRA_PACKAGES}" ]]; then
+    if [[ "$(id -u)" != 0 ]]; then
+        echo "[civikitchen] ERROR: CIVIKITCHEN_EXTRA_PACKAGES needs the container to start as root (compose: user: root)" >&2
+        exit 1
+    fi
     _ck_missing=()
     for pkg in ${CIVIKITCHEN_EXTRA_PACKAGES//,/ }; do
         dpkg -s "${pkg}" >/dev/null 2>&1 || _ck_missing+=("${pkg}")
@@ -69,11 +76,8 @@ if [[ -n "${CIVIKITCHEN_EXTRA_PACKAGES}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Auto-run composer install for bind-mounted extensions. Runs before the
-# auto-install so extensions enabled during install (e.g. via
-# CIVIKITCHEN_ENABLE_EXTENSIONS) already have their vendor/ in place.
 ck_attach_scenario_extension
-ck_auto_composer
+ck_warn_removed_auto_composer
 
 # ---------------------------------------------------------------------------
 # Auto-install.
@@ -139,7 +143,7 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && ! -f "${SETTINGS_FILE}" ]]; then
     # step would fail against the half-installed DB with nothing self-healing.
     # Remove the settings file on failure so the next start retries cleanly.
     ck_trust_function_creators || true
-    if ! runuser -u www-data -- cv core:install -n -K --url="${CIVIKITCHEN_SITE_URL}" --db="${DB_URL}" "${INSTALL_OPTS[@]}"; then
+    if ! ck_as_web cv core:install -n -K --url="${CIVIKITCHEN_SITE_URL}" --db="${DB_URL}" "${INSTALL_OPTS[@]}"; then
         echo "[civikitchen] ERROR: cv core:install failed — removing the partial settings file so the next start retries" >&2
         rm -f "${SETTINGS_FILE}"
         exit 1
@@ -174,8 +178,10 @@ if [[ "${CIVICRM_AUTO_INSTALL}" == "1" && -f "${SETTINGS_FILE}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Heal root-owned files in the CiviCRM data dirs so the www-data web workers
-# can write caches/locks/uploads. Cheap no-op when ownership is already correct.
-ck_heal_perms
+# Heal root-owned files a root start left in the CiviCRM data dirs so the
+# www-data web workers can write caches/locks/uploads. Only root can chown.
+if [[ "$(id -u)" == 0 ]]; then
+    ck_heal_perms
+fi
 
 exec docker-php-entrypoint "$@"

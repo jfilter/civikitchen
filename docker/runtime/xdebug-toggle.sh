@@ -16,6 +16,7 @@ xdebug.discover_client_host=${XDEBUG_DISCOVER_CLIENT_HOST:-0}
 xdebug.idekey=${XDEBUG_IDEKEY:-VSCODE}
 EOF
     echo "[civikitchen] xdebug enabled (mode=${XDEBUG_MODE}, client=${XDEBUG_CLIENT_HOST:-host.docker.internal}:${XDEBUG_CLIENT_PORT:-9003})"
-elif [[ -f "${XDEBUG_INI}" ]]; then
-    rm -f "${XDEBUG_INI}"
+elif [[ -s "${XDEBUG_INI}" ]]; then
+    # Emptied, not removed: the web user owns the file, not conf.d.
+    : > "${XDEBUG_INI}"
 fi

@@ -192,13 +192,11 @@ LABEL org.opencontainers.image.version="${CIVICRM_VERSION}"
 COPY docker/standalone/apache/civikitchen.conf /etc/apache2/conf-available/civikitchen.conf
 RUN a2enconf civikitchen
 
-# Wrap cv so it runs as www-data even when invoked as root (the default for
-# `docker compose exec`). Root-run cv leaves root-owned caches/locks that the
-# web workers can't write. Opt out with CIVIKITCHEN_CV_AS_ROOT=1.
-COPY docker/standalone/cv-wrapper.sh /usr/local/bin/cv-wrapper
-RUN mv /usr/local/bin/cv /usr/local/bin/cv.real \
-    && mv /usr/local/bin/cv-wrapper /usr/local/bin/cv \
-    && chmod +x /usr/local/bin/cv
+# The container runs as www-data (USER below), so `docker exec` and cv run as
+# the web user too. Docker lets it bind port 80 (ip_unprivileged_port_start=0);
+# the conf files the entrypoint rewrites are handed to www-data here.
+RUN touch /usr/local/etc/php/conf.d/xdebug.ini /etc/apache2/conf-enabled/civikitchen-site-port.conf \
+    && chown www-data:www-data /usr/local/etc/php/conf.d/xdebug.ini /etc/apache2/conf-enabled/civikitchen-site-port.conf
 
 # Post-install demo-user script (run via `cv scr` from the entrypoint when
 # CIVIKITCHEN_DEMO_USER is set). Lives outside the docroot so it's not web-served.
@@ -234,5 +232,6 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=600s --retries=18 \
     CMD test -f /var/www/html/private/.civikitchen-provisioned \
         && curl -fsS -o /dev/null http://localhost/ || exit 1
 
+USER www-data
 ENTRYPOINT ["/usr/local/bin/civikitchen-entrypoint"]
 CMD ["apache2-foreground"]

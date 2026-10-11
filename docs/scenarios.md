@@ -63,6 +63,10 @@ Render a Docker Compose model and boot it:
 ck scenario compose > civikitchen.compose.json
 # or write it directly:
 ck scenario materialize civikitchen.yaml civikitchen.compose.json
+# vendor/ for an extension with Composer dependencies, as its owner:
+docker compose -f civikitchen.compose.json run --rm --no-deps -T \
+  -u "$(id -u):$(id -g)" -e HOME=/tmp --entrypoint ck app \
+  internal composer-install /civikitchen-extension
 docker compose -f civikitchen.compose.json up -d --wait
 ```
 
@@ -76,7 +80,9 @@ model works across Standalone, Drupal, WordPress and Joomla image layouts.
 The extension directory must contain `info.xml`, and `extension.key` must match
 the root `<extension key="…">` attribute (not the usually shorter `<file>`
 prefix). Bind mounts are read-only by default; `extension.writable` is an
-explicit opt-in. An extension path outside the config directory additionally
+explicit opt-in. The images never run `composer install` on the mount: an
+extension without a committed `vendor/` gets it from the `run` line above,
+which needs the mount writable. An extension path outside the config directory additionally
 requires `trust_external_extension: true`. External profile paths likewise
 require `trust_external_profiles: true` because
 their drivers and seeds execute as trusted application code.

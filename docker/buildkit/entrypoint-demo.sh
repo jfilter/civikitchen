@@ -90,7 +90,7 @@ ck_demo_apply_site_url() {
 }
 ck_demo_apply_site_url
 
-# Shared first-boot provisioning (auto-composer, SMTP, CIVIKITCHEN_PROFILE,
+# Shared first-boot provisioning (SMTP, CIVIKITCHEN_PROFILE,
 # extension knobs, init.d hooks, readiness marker) — identical for the dev and
 # demo images, so it lives in entrypoint-common.sh. For a demo the base site is
 # already baked, so these are mostly opt-in knobs; a CIVIKITCHEN_PROFILE apply
