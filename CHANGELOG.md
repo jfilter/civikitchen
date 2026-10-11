@@ -26,6 +26,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Changed
 
+- cklint no longer reports a mixin-only extension's main file as redundant:
+  core includes the info.xml `<file>.php` of every module extension, so the
+  file must exist even when the mixins register everything.
 - **Breaking**: the CiviKitchen phpcs sniffs and Slevomat leave the phpcs
   standard; the same checks run as mago rules in `cklint`.
   `CiviKitchen.I18n.UseExtensionTs` → `civikitchen/use-extension-ts`, and

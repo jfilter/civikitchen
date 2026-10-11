@@ -84,6 +84,10 @@ disallowed-functions = { enabled = false }
 no-empty = { enabled = false }
 no-isset = { enabled = false }
 
+# Core includes every module extension's info.xml <file>.php on each request and
+# warns when it is missing, so a mixin-only extension's main file has no code.
+no-redundant-file = { enabled = false }
+
 # There is no TODO(#ticket) convention in these repos to enforce.
 tagged-todo = { enabled = false }
 tagged-fixme = { enabled = false }
