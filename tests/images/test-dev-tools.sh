@@ -1856,7 +1856,13 @@ else
         composer install --no-interaction --no-progress --quiet \
             --working-dir "${TPL_SCHEMA}" >/dev/null 2>&1 || true
     fi
+    # extra.strauss opts the extension into the files ckinit writes only on request.
     if TPL_OUT="$("${TPL_SRC}/scaffold/ckinit.php" "${TPL_EXT}" 2>&1)" \
+        && php -r '$f = $argv[1]; $j = json_decode(file_get_contents($f), true); $j["extra"]["strauss"] = ["packages" => []];
+            file_put_contents($f, json_encode($j, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");' "${TPL_EXT}/composer.json" \
+        && TPL_OUT="$("${TPL_SRC}/scaffold/ckinit.php" --update "${TPL_EXT}" 2>&1)" \
+        && { test -f "${TPL_EXT}/.civikitchen/strauss.php" \
+            || { TPL_OUT="--update wrote no .civikitchen/strauss.php: ${TPL_OUT}"; false; }; } \
         && git -C "${TPL_EXT}" init -q \
         && git -C "${TPL_EXT}" add -A; then
         ok "ckinit stamps the template into a fresh extension"

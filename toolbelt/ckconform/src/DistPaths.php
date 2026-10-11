@@ -50,6 +50,7 @@ final class DistPaths
     public const DIRS = [
         '.github',
         '.docker',
+        '.civikitchen',
         '.claude',
         'tests',
         'node_modules',

@@ -32,6 +32,7 @@ const MANAGED_FILES = [
   'tests/phpunit/bootstrap.php',
   'tests/phpunit/ckHeadless.php',
   'tests/e2e/lib.sh',
+  '.civikitchen/strauss.php',
 ];
 
 /**
@@ -83,6 +84,11 @@ const GITHUB_FILES = [
 ];
 const GITLAB_FILES = [
   '.gitlab-ci.yml',
+];
+
+/** Written only where composer.json declares extra.strauss. */
+const STRAUSS_FILES = [
+  '.civikitchen/strauss.php',
 ];
 
 /** The managed release caller and the reusable workflow it calls. */
@@ -295,6 +301,15 @@ if ($onGitlab && $belowRoot) {
   exit(2);
 }
 
+// Seeding writes the template's composer.json, which declares no extra.strauss.
+$composerPath = $target . '/composer.json';
+$composer = $mode !== 'seed' && is_file($composerPath) ? json_decode((string) file_get_contents($composerPath), TRUE) : [];
+if (!is_array($composer)) {
+  fwrite(STDERR, "ckinit: cannot parse {$composerPath}\n");
+  exit(2);
+}
+$usesStrauss = isset($composer['extra']) && is_array($composer['extra']) && isset($composer['extra']['strauss']);
+
 // The Renovate preset the managed renovate.json extends. An organisation
 // sets it once in the CK_DEFAULT_CONFIG file rather than per repo, which is
 // why this goes through the layered view; the repo file can still override.
@@ -321,7 +336,8 @@ foreach ($iterator as $item) {
   }
   $inventory[] = $relative;
   if (($belowRoot && in_array($relative, ROOT_ONLY_FILES, TRUE)) || ($releasesNothing && $relative === RELEASE_CALLER)
-    || in_array($relative, $onGitlab ? GITHUB_FILES : GITLAB_FILES, TRUE)) {
+    || in_array($relative, $onGitlab ? GITHUB_FILES : GITLAB_FILES, TRUE)
+    || (!$usesStrauss && in_array($relative, STRAUSS_FILES, TRUE))) {
     continue;
   }
   $rendered = str_replace(
