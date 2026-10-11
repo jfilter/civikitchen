@@ -42,23 +42,29 @@ final class CurlSslVerifyRule implements Rule
         if ($name === 'curl_setopt') {
             $option = Syntax::parameter($arguments, 2, 'option');
             $value = Syntax::parameter($arguments, 3, 'value');
-            if ($option !== null && $value !== null && !$option['spread'] && self::turnsOff($source, $option['value'], $value['value'])) {
+            if ($option !== null && $value !== null && !$option['spread'] && self::option($source, $option['value']) !== null
+                && $value['value'] !== null && self::isOff($source, $value['value'])) {
                 self::report($context, $value['value']);
             }
             return;
         }
         $options = $name === 'curl_setopt_array' ? Syntax::parameter($arguments, 2, 'options') : null;
-        $array = $options === null || $options['spread'] ? null : $options['value'];
+        $array = $options === null || $options['spread'] || $options['value'] === null ? null : self::unparenthesize($source, $options['value']);
         if ($array === null || !in_array($array->kind, [NodeKind::Array, NodeKind::LegacyArray], true)) {
             return;
         }
+        // A later duplicate key wins before curl sees the array.
+        $effective = [];
         foreach ($source->getChildren($array) as $element) {
             $pair = $source->getChildren($element)[0] ?? null;
-            if ($pair?->kind !== NodeKind::KeyValueArrayElement) {
-                continue;
+            [$key, $value] = $pair?->kind === NodeKind::KeyValueArrayElement ? $source->getChildren($pair) + [1 => null] : [null, null];
+            $option = $key === null ? null : self::option($source, $key);
+            if ($option !== null && $value !== null) {
+                $effective[$option] = $value;
             }
-            [$key, $value] = $source->getChildren($pair) + [1 => null];
-            if ($value !== null && self::turnsOff($source, $key, $value)) {
+        }
+        foreach ($effective as $value) {
+            if (self::isOff($source, $value)) {
                 self::report($context, $value);
             }
         }
@@ -70,23 +76,18 @@ final class CurlSslVerifyRule implements Rule
             ->withHelp('Leave the option at its default; for a private CA, point CURLOPT_CAINFO at its certificate.'));
     }
 
-    private static function turnsOff(SourceFile $source, ?Node $option, ?Node $value): bool
+    /** The verification option a node names, else null. */
+    private static function option(SourceFile $source, ?Node $option): ?string
     {
-        if ($option === null || $value === null) {
-            return false;
-        }
-        $option = Syntax::unwrap($source, $option);
-        if ($option->kind !== NodeKind::ConstantAccess || !in_array(ltrim($source->getText($option), '\\'), self::OPTIONS, true)) {
-            return false;
-        }
-        $value = Syntax::unwrap($source, $value);
-        while ($value->kind === NodeKind::Parenthesized) {
-            $inner = $source->getChildren($value)[0] ?? null;
-            if ($inner === null) {
-                return false;
-            }
-            $value = Syntax::unwrap($source, $inner);
-        }
+        $option = $option === null ? null : self::unparenthesize($source, $option);
+        $name = $option?->kind === NodeKind::ConstantAccess ? ltrim($source->getText($option), '\\') : null;
+
+        return in_array($name, self::OPTIONS, true) ? $name : null;
+    }
+
+    private static function isOff(SourceFile $source, Node $value): bool
+    {
+        $value = self::unparenthesize($source, $value);
         if (Syntax::booleanValue($source, $value) === false) {
             return true;
         }
@@ -95,5 +96,15 @@ final class CurlSslVerifyRule implements Rule
         // Zero in any base: 0, 00, 0x0, 0b0, 0o0.
         return $literal?->kind === NodeKind::LiteralInteger
             && preg_match('/^0[xXbBoO]?0*$/', str_replace('_', '', $source->getText($literal))) === 1;
+    }
+
+    private static function unparenthesize(SourceFile $source, Node $node): Node
+    {
+        $node = Syntax::unwrap($source, $node);
+        while ($node->kind === NodeKind::Parenthesized && ($inner = $source->getChildren($node)[0] ?? null) !== null) {
+            $node = Syntax::unwrap($source, $inner);
+        }
+
+        return $node;
     }
 }

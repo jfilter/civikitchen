@@ -54,3 +54,49 @@ function route(int $kind, array $items): int {
   }
   return $total;
 }
+
+function leaving(int $x, int $y): void {
+  // Silent: a parenthesized throw, a throwing match, a nested switch running on into a returning default, a returning finally.
+  // Reported: a tool directive is no fall-through note, and an inner break leaves only the inner switch.
+  switch ($x) {
+    case 1:
+      (throw new \RuntimeException('one'));
+    case 2:
+      match ($y) {
+        1 => throw new \RuntimeException('a'),
+        default => throw new \RuntimeException('b'),
+      };
+    case 3:
+      switch ($y) {
+        case 1:
+          $y++;
+          // Falls through.
+        default:
+          return;
+      }
+    case 4:
+      break;
+  }
+  switch ($x) {
+    case 1:
+      $y++;
+      // phpcs:ignore Generic.Example
+    case 2:
+      try {
+        $y++;
+      }
+      finally {
+        return;
+      }
+    case 3:
+      switch ($y) {
+        case 1:
+          $y++;
+          break;
+        default:
+          return;
+      }
+    case 4:
+      break;
+  }
+}

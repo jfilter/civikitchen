@@ -19,3 +19,14 @@ function fetch(\CurlHandle $handle, bool $verify): void {
   curl_setopt_array($handle, [CURLOPT_SSL_VERIFYPEER => TRUE, CURLOPT_FOLLOWLOCATION => FALSE]);
   Acme\curl_setopt($handle, CURLOPT_SSL_VERIFYPEER, FALSE);
 }
+
+function parenthesized(\CurlHandle $handle): void {
+  curl_setopt($handle, (CURLOPT_SSL_VERIFYPEER), false);
+  curl_setopt_array($handle, ([CURLOPT_SSL_VERIFYPEER => false]));
+  // A later duplicate key decides: silent, then reported on its second entry.
+  curl_setopt_array($handle, [CURLOPT_SSL_VERIFYPEER => FALSE, CURLOPT_SSL_VERIFYPEER => TRUE]);
+  curl_setopt_array($handle, [
+    CURLOPT_SSL_VERIFYPEER => TRUE,
+    CURLOPT_SSL_VERIFYPEER => FALSE,
+  ]);
+}

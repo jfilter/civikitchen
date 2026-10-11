@@ -10,5 +10,5 @@ return [[
     'command' => 'lint',
     'code' => 'civikitchen/remote-address',
     'paths' => [$fixtures . 'RemoteAddress.php', $fixtures . 'CleanModern.php'],
-    'expect' => array_map(static fn (int $line): string => "{$fixtures}RemoteAddress.php:{$line} {$message}", range(8, 11)),
+    'expect' => array_map(static fn (int $line): string => "{$fixtures}RemoteAddress.php:{$line} {$message}", [...range(8, 11), 32]),
 ]];

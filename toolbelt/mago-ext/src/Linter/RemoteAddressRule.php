@@ -65,7 +65,7 @@ final class RemoteAddressRule implements Rule
             ->withHelp('It asks the CMS, which honours reverse-proxy settings on Drupal and Backdrop, and maps IPv4-mapped IPv6 addresses.'));
     }
 
-    /** Assignment target, unset() argument or destructuring target; a key or subscript is a read. */
+    /** Assignment, unset(), destructuring or foreach target, by value or reference; a key or subscript is a read. */
     private static function isWrite(SourceFile $source, Node $node): bool
     {
         $child = $node;
@@ -74,10 +74,14 @@ final class RemoteAddressRule implements Rule
             if ($parent->kind === NodeKind::Assignment || $parent->kind === NodeKind::Unset) {
                 return $parent->kind === NodeKind::Unset || $first;
             }
+            if ($parent->kind === NodeKind::ForeachValueTarget || $parent->kind === NodeKind::ForeachKeyValueTarget) {
+                return true;
+            }
             if (($parent->kind === NodeKind::KeyValueArrayElement && $first) || ($parent->kind === NodeKind::ArrayAccess && !$first)) {
                 return false;
             }
-            if ($parent->kind !== NodeKind::ArrayAccess && !in_array($parent->kind, self::WRAPPERS, true)) {
+            $reference = $parent->kind === NodeKind::UnaryPrefix && Syntax::prefixOperator($source, $parent) === '&';
+            if ($parent->kind !== NodeKind::ArrayAccess && !$reference && !in_array($parent->kind, self::WRAPPERS, true)) {
                 return false;
             }
             $child = $parent;

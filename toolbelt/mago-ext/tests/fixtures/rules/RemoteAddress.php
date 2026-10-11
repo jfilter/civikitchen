@@ -20,3 +20,15 @@ function client(): ?string {
 
 function log(?string $value): void {
 }
+
+function seed(array $request, array $addresses): void {
+  // Silent: reference destructuring and foreach targets write it.
+  [&$_SERVER['REMOTE_ADDR']] = $request;
+  foreach ($addresses as $_SERVER['REMOTE_ADDR']) {
+  }
+  foreach ($addresses as $_SERVER['REMOTE_ADDR'] => $value) {
+  }
+  // Iterating over it reads it.
+  foreach ($_SERVER['REMOTE_ADDR'] as $part) {
+  }
+}

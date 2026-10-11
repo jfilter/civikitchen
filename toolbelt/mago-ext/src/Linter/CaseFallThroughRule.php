@@ -12,25 +12,29 @@ use Mago\Sdk\Reporting\Level;
 use Mago\Sdk\Syntax\Node;
 use Mago\Sdk\Syntax\NodeKind;
 use Mago\Sdk\Syntax\SourceFile;
+use Mago\Sdk\Syntax\TriviaKind;
 
 /**
- * A non-empty `case` that runs into the next label without a statement that leaves it or a comment saying so.
+ * A non-empty `case` that runs into the next label without a statement that leaves it or a comment before
+ * that label; any comment marks the fall-through as meant, and `goto` counts as leaving wherever its label is.
  * Ported from amateescu/mago-drupal's drupal/case-fall-through (MIT, LICENSE-mago-drupal.txt).
  */
 final class CaseFallThroughRule implements Rule
 {
     private const LEAVE = [NodeKind::Return, NodeKind::Goto, NodeKind::Throw, NodeKind::ExitConstruct, NodeKind::DieConstruct];
     private const LOOP_EXITS = [NodeKind::Break, NodeKind::Continue];
-    private const WRAPPERS = [NodeKind::ExpressionStatement, NodeKind::Expression, NodeKind::Construct];
+    private const WRAPPERS = [NodeKind::ExpressionStatement, NodeKind::Expression, NodeKind::Construct, NodeKind::Parenthesized];
     private const ELSE_CLAUSES = [NodeKind::IfStatementBodyElseClause, NodeKind::IfColonDelimitedBodyElseClause];
     private const CLAUSES = [...self::ELSE_CLAUSES, NodeKind::IfStatementBodyElseIfClause, NodeKind::IfColonDelimitedBodyElseIfClause];
+    /** Tool directives are not a note to the reader. */
+    private const DIRECTIVE = '/^[\/#* \t]*(?:@mago-|phpcs:|@codingStandardsIgnore|@phpstan-|@psalm-)/';
 
     public function getDefinition(): RuleDefinition
     {
         return new RuleDefinition(
             code: 'civikitchen/case-fall-through',
             name: 'Case fall through',
-            description: 'A non-empty switch case ends with break, return, throw, continue or exit, or a comment says it falls through.',
+            description: 'A non-empty switch case ends with break, return, throw, continue or exit, or a comment before the next case marks the fall-through.',
             defaultLevel: Level::Error,
             defaultEnabled: true,
             targets: [NodeKind::Switch],
@@ -50,7 +54,7 @@ final class CaseFallThroughRule implements Rule
                 || self::hasComment($source, $last->span->end, $next->span->start) || self::leaves($source, $statements)) {
                 continue;
             }
-            $context->report(Issue::new('End the case with break, or add a comment that says it falls through.', ($source->getChildren($label)[0] ?? $label)->span));
+            $context->report(Issue::new('End the case with break, or put a comment before the next case to mark the fall-through as meant.', ($source->getChildren($label)[0] ?? $label)->span));
         }
     }
 
@@ -79,7 +83,8 @@ final class CaseFallThroughRule implements Rule
     private static function hasComment(SourceFile $source, int $start, int $end): bool
     {
         foreach ($source->getTrivia() as $trivia) {
-            if ($trivia->span->start >= $start && $trivia->span->end <= $end) {
+            if ($trivia->span->start >= $start && $trivia->span->end <= $end
+                && ($trivia->kind === TriviaKind::DocBlockComment || preg_match(self::DIRECTIVE, $source->getText($trivia->span)) !== 1)) {
                 return true;
             }
         }
@@ -106,7 +111,7 @@ final class CaseFallThroughRule implements Rule
     {
         foreach ($statements as $statement) {
             $inner = self::inner($source, $statement);
-            if (in_array($inner->kind, [...self::LEAVE, ...self::LOOP_EXITS], true)
+            if (in_array($inner->kind, [...self::LEAVE, ...self::LOOP_EXITS], true) || self::matchThrows($source, $inner)
                 || ($inner->kind === NodeKind::Block && self::leaves($source, self::statements($source, $inner)))) {
                 return true;
             }
@@ -134,8 +139,32 @@ final class CaseFallThroughRule implements Rule
             NodeKind::If => self::ifEnds($source, $inner, $depth),
             NodeKind::Try => self::tryEnds($source, $inner, $depth),
             NodeKind::Switch => self::switchEnds($source, $inner, $depth),
+            NodeKind::Match => self::matchThrows($source, $inner),
             default => in_array($inner->kind, self::LEAVE, true),
         };
+    }
+
+    /** A match whose every arm throws or exits; one without a default throws when nothing matches. */
+    private static function matchThrows(SourceFile $source, Node $match): bool
+    {
+        if ($match->kind !== NodeKind::Match) {
+            return false;
+        }
+        $arms = 0;
+        foreach ($source->getChildren($match) as $arm) {
+            $variant = $arm->kind === NodeKind::MatchArm ? $source->getChildren($arm)[0] ?? null : null;
+            $parts = $variant === null ? [] : $source->getChildren($variant);
+            $result = end($parts);
+            if ($result === false) {
+                continue;
+            }
+            $arms++;
+            if (!in_array(self::inner($source, $result)->kind, self::LEAVE, true)) {
+                return false;
+            }
+        }
+
+        return $arms > 0;
     }
 
     private static function ifEnds(SourceFile $source, Node $if, int $depth): bool
@@ -162,7 +191,7 @@ final class CaseFallThroughRule implements Rule
         return $hasElse;
     }
 
-    /** A `finally` that ends, or a `try` block and every `catch` that end. */
+    /** A `finally` that leaves decides; otherwise the `try` block and every `catch` must end. */
     private static function tryEnds(SourceFile $source, Node $try, int $depth): bool
     {
         $ends = true;
@@ -174,32 +203,40 @@ final class CaseFallThroughRule implements Rule
             if ($block === null) {
                 continue;
             }
-            $blockEnds = self::ends($source, self::statements($source, $block), $depth);
-            if ($child->kind === NodeKind::TryFinallyClause && $blockEnds) {
-                return true;
+            $statements = self::statements($source, $block);
+            if ($child->kind === NodeKind::TryFinallyClause) {
+                // PHP rejects break and continue out of a finally, so only a leaving statement can end it.
+                if (self::ends($source, $statements, $depth)) {
+                    return true;
+                }
+                continue;
             }
-            if ($child->kind !== NodeKind::TryFinallyClause) {
-                $ends = $ends && $blockEnds;
-            }
+            $ends = $ends && self::ends($source, $statements, $depth);
         }
 
         return $ends;
     }
 
-    /** A nested switch with a `default`, whose non-empty cases all end, the last one included. */
+    /**
+     * A nested switch with a `default` that leaves from every label: each case
+     * ends, or runs on, without a break of its own, into one that does.
+     */
     private static function switchEnds(SourceFile $source, Node $switch, int $depth): bool
     {
         $labels = self::labels($source, $switch);
-        $statements = [];
-        foreach ($labels as $label) {
+        $defaults = array_filter($labels, static fn (Node $label): bool => $label->kind === NodeKind::SwitchDefaultCase);
+        $rest = false;
+        foreach (array_reverse($labels) as $label) {
             $statements = self::statements($source, $label);
-            if ($statements !== [] && !self::ends($source, $statements, $depth + 1)) {
+            $last = end($statements);
+            $runsOn = $last === false || !in_array(self::inner($source, $last)->kind, self::LOOP_EXITS, true);
+            $rest = self::ends($source, $statements, $depth + 1) || ($runsOn && $rest);
+            if (!$rest) {
                 return false;
             }
         }
-        $defaults = array_filter($labels, static fn (Node $label): bool => $label->kind === NodeKind::SwitchDefaultCase);
 
-        return $defaults !== [] && $statements !== [];
+        return $defaults !== [] && $labels !== [];
     }
 
     /** The number of levels a `break` or `continue` leaves. */
