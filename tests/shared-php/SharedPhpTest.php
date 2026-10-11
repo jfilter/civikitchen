@@ -374,7 +374,9 @@ final class SharedPhpTest extends TestCase
             self::assertSame(['mago', '--workspace', '.', '--config', $runner->configPath, '--php-version', '8.2', 'analyze'], $runner->command);
             self::assertSame(
                 'extends = ["' . dirname(__DIR__, 2) . "/toolbelt/mago/mago.toml\"]\n\n[source]\npaths = [\"Civi/Widget.php\"]\n"
-                . 'includes = ["' . $core . "\", \"CRM/Widget/DAO/Thing.php\", \"widget.civix.php\", \"lib\"]\n\n[analyzer]\nminimum-fail-level = \"note\"\n",
+                . 'includes = ["' . $core . '", "' . dirname(__DIR__, 2) . "/toolbelt/mago/stubs\", \"CRM/Widget/DAO/Thing.php\", \"widget.civix.php\", \"lib\"]\n"
+                . 'excludes = ["' . $core . "/Civi/Api4/Generic/Result.php\"]\n"
+                . 'patches = ["' . dirname(__DIR__, 2) . "/toolbelt/mago/patches\"]\n\n[analyzer]\nminimum-fail-level = \"note\"\n",
                 $runner->config,
             );
             self::assertSame(getcwd(), $runner->environment['CK_MAGO_WORKSPACE'] ?? null);

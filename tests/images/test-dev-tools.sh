@@ -1231,8 +1231,13 @@ fi
 
 # ---------------------------------------------------------------------------
 # 4c. ckanalyze: mago analyze against the image's CiviCRM core, with civix
-#     code read for its symbols and the APIv4 Result false positive filtered.
+#     code read for its symbols and APIv4 Result rows typed as field maps.
 echo "== ckanalyze =="
+if PARITY_OUT="$(php /opt/civikitchen/toolbelt/mago/stub-parity.php /var/www/html/core 2>&1)"; then
+    ok "the mago stubs declare every member of the image's core"
+else
+    fail "the mago stubs drifted from the image's core (output: ${PARITY_OUT:0:600})"
+fi
 ANADIR="${WORKDIR}/analyzeext"
 mkdir -p "${ANADIR}/Civi/Widget" "${ANADIR}/tests/phpunit"
 cat > "${ANADIR}/info.xml" <<'XML'
@@ -1276,6 +1281,21 @@ final class Rows {
     return $result[0]['id'] ?? NULL;
   }
 
+  public function firstRow(): string {
+    foreach (\Civi\Api4\Contact::get(FALSE)->execute() as $row) {
+      return $row;
+    }
+    return '';
+  }
+
+  public function fill(\Civi\Api4\Generic\Result $result): void {
+    $result['run_id'] = 5;
+  }
+
+  public function fields(): string {
+    return civicrm_api4('Contact', 'get', ['select' => ['display_name']], 0)['display_name'];
+  }
+
   public function count(): int {
     return 'many';
   }
@@ -1298,10 +1318,15 @@ else
     fail "ckanalyze missed the wrong return type (output: ${ANA_OUT:0:400})"
 fi
 if ! grep -q 'invalid-return-statement' <<<"${ANA_OUT}" \
-    || grep -qE 'non-existent-(method|class)|extension-boundary|Civi\\Api4\\Generic\\Result|RowsTest' <<<"${ANA_OUT}"; then
+    || grep -qE 'non-existent-(method|class)|extension-boundary|Civi\\Api4\\Generic\\Result|assignment-value|Rows::fields`: expected|RowsTest' <<<"${ANA_OUT}"; then
     fail "ckanalyze reported core, civix symbols, Result access or tests/ (output: ${ANA_OUT:0:600})"
 else
-    ok "ckanalyze resolves core and civix symbols, filters Result access, skips tests/"
+    ok "ckanalyze resolves core and civix symbols, accepts Result access and writes, skips tests/"
+fi
+if grep -q 'Rows::firstRow`: expected `string`, but found `array<string, mixed>`' <<<"${ANA_OUT}"; then
+    ok "ckanalyze types the rows execute() returns as field maps"
+else
+    fail "ckanalyze did not type the Result rows (output: ${ANA_OUT:0:600})"
 fi
 if ANA_CI_OUT="$( (cd "${ANADIR}" && ck ci --only ckanalyze) 2>&1 )" \
     && grep -qE 'ckanalyze +shadow' <<<"${ANA_CI_OUT}" \

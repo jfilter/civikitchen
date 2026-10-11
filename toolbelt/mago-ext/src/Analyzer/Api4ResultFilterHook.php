@@ -9,14 +9,13 @@ use Mago\Sdk\Analyzer\IssueFilterDecision;
 use Mago\Sdk\Analyzer\IssueFilterHook;
 
 /**
- * Drops index and array-cast findings on core's APIv4 Result: it extends
- * ArrayObject without template types, so mago rejects every row access.
+ * Drops mago's finding on the array cast of core's APIv4 Result: casting an
+ * ArrayObject yields its rows, not its properties.
  */
 final class Api4ResultFilterHook implements IssueFilterHook
 {
     private const PATTERNS = [
-        'invalid-array-index' => '/ used for array access on `Civi\\\\Api4\\\\Generic\\\\Result`\.$/',
-        'invalid-type-cast' => '/^Object of type `Civi\\\\Api4\\\\Generic\\\\Result` cast to `array`\./',
+        'invalid-type-cast' => '/^Object of type `(\$this\()?Civi\\\\Api4\\\\Generic\\\\Result(<[^`]*>)?(?(1)\))` cast to `array`\./',
     ];
 
     public function getCodes(): array

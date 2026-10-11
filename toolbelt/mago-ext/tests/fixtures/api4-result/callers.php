@@ -14,17 +14,24 @@ final class WidgetRows {
     return (array) $result;
   }
 
+  public function indexedRows(Result $result): array {
+    return (array) $result->indexBy('id');
+  }
+
   public function append(Result $result): void {
     $result[] = ['id' => 1];
   }
 
-  public function plain(\stdClass $object): array {
-    return (array) $object;
-  }
+}
 
+final class WidgetResult extends Result {
 }
 
 final class Ledger extends \ArrayObject {
+}
+
+function ledger_rows(Ledger $ledger): array {
+  return (array) $ledger;
 }
 
 function ledger_first(Ledger $ledger): mixed {

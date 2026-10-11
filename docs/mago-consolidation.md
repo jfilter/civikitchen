@@ -72,7 +72,8 @@ phpstan. It reported 25 issues:
 - 20× `mixed-assignment`, a check stricter than phpstan's level 10
 - 2× `invalid-array-index` on `$result[] = …` against `Civi\Api4\Generic\Result`.
   These are false positives, because `Result` is an `ArrayObject`.
-- 2× `invalid-type-cast` on an array cast of `Result`, not yet triaged
+- 2× `invalid-type-cast` on an array cast of `Result`, also false positives:
+  casting an `ArrayObject` returns its rows.
 - 1× `incompatible-return-type`: an entity's `create()` returns an action
   that does not extend the parent's `DAOCreateAction`. phpstan misses this
   real defect.
@@ -188,7 +189,8 @@ runs, so they are comments, and the mago finding they meant still stands.
 ### 3. Replace phpstan with mago analyze
 
 - Done: the analyzer baseline in `ckanalyze` — core and civix files as
-  includes, the `Result` false positive filtered by a plugin. mago's default
+  includes, core's APIv4 `Result` read from a stub, its rows typed by a
+  return-type provider and a patch ([Typing CiviCRM core from outside](core-types.md)). mago's default
   strictness already reports `mixed` (`mixed-assignment` and friends), which
   phpstan level 10 does not.
 - Done: the phpstan rules, the disallowed bans and the phpat architecture
@@ -200,8 +202,7 @@ runs, so they are comments, and the mago finding they meant still stands.
 - Shadow phase: `ckanalyze` runs `mago analyze` in `ck ci` after phpstan,
   non-gating (findings report as `shadow`, a crash still fails). It analyzes
   what phpstan's main pass analyzes and reads core, civix files, `vendor/`,
-  siblings and `policy.vendored_paths` for their symbols. The `Result` false
-  positive is filtered by a plugin. A first run over 38 extension repos
+  siblings and `policy.vendored_paths` for their symbols. A first run over 38 extension repos
   (2026-10-11) completed on every one; `mixed-assignment` and the other
   `mixed-*` codes make up most findings, followed by classes of required
   extensions that were not checked out beside the repo. Triage every
