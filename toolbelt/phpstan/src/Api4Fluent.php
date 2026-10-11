@@ -37,6 +37,13 @@ final class Api4Fluent
         $class = $scope->resolveName($node->class);
         // Class names resolve case-insensitively; the reflection has the declared spelling.
         $class = ((new ObjectType($class))->getObjectClassReflections()[0] ?? null)?->getName() ?? $class;
+
+        return self::entityFromClass($class);
+    }
+
+    /** The entity a declared class name directly under Civi\Api4\ stands for, or null. */
+    public static function entityFromClass(string $class): ?string
+    {
         if (!str_starts_with($class, 'Civi\\Api4\\')) {
             return null;
         }

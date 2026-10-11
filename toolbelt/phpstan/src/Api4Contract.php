@@ -6,7 +6,6 @@ namespace CiviKitchen\PHPStan;
 
 use PhpParser\Node\Expr;
 use PHPStan\Analyser\Scope;
-use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\Type\Constant\ConstantArrayType;
@@ -38,15 +37,15 @@ final class Api4Contract
 
     private string $extensionDir;
 
-    private ReflectionProvider $reflectionProvider;
+    private ClassLookup $classes;
 
     /** @var list<string>|null */
     private ?array $ownEntities = null;
 
-    public function __construct(string $currentWorkingDirectory, ReflectionProvider $reflectionProvider)
+    public function __construct(string $currentWorkingDirectory, ClassLookup $classes)
     {
         $this->extensionDir = $currentWorkingDirectory;
-        $this->reflectionProvider = $reflectionProvider;
+        $this->classes = $classes;
     }
 
     /**
@@ -69,8 +68,46 @@ final class Api4Contract
      */
     public function checkEntity(string $entity, string $context): array
     {
+        return self::errors($this->entityProblem($entity, $context), 'ck.api4.unknownEntity');
+    }
+
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    public function checkAction(string $entity, string $action, string $context): array
+    {
+        return self::errors($this->actionProblem($entity, $action, $context), 'ck.api4.unknownAction');
+    }
+
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    public function checkField(string $entity, string $field, string $clause): array
+    {
+        return self::errors(self::fieldProblem($entity, $field, $clause), 'ck.api4.unknownField');
+    }
+
+    /**
+     * @param list<string> $shadowedAliases aliases an explicit join rebound
+     *
+     * @return list<IdentifierRuleError>
+     */
+    public function checkJoinField(string $entity, string $path, string $clause, array $shadowedAliases): array
+    {
+        return self::errors(self::joinFieldProblem($entity, $path, $clause, $shadowedAliases), 'ck.api4.unknownField');
+    }
+
+    /** @return list<IdentifierRuleError> */
+    private static function errors(?string $message, string $identifier): array
+    {
+        return $message === null ? [] : [RuleErrorBuilder::message($message)->identifier($identifier)->build()];
+    }
+
+    /** The unknown-entity message, or null when the name is fine or not provably wrong. */
+    public function entityProblem(string $entity, string $context): ?string
+    {
         if ($this->entityIsKnown($entity)) {
-            return [];
+            return null;
         }
 
         // An unknown name is only reportable when it is a near-miss of a core
@@ -80,76 +117,66 @@ final class Api4Contract
         // typo of a real one.
         $suggestion = self::nearestEntity($entity);
         if ($suggestion === null) {
-            return [];
+            return null;
         }
 
-        return [
-            RuleErrorBuilder::message(sprintf(
-                'APIv4 entity %s does not exist in CiviCRM %s — did you mean %s? (%s)',
-                $entity,
-                Api4Catalog::CORE_VERSION,
-                $suggestion,
-                $context,
-            ))->identifier('ck.api4.unknownEntity')->build(),
-        ];
+        return sprintf(
+            'APIv4 entity %s does not exist in CiviCRM %s — did you mean %s? (%s)',
+            $entity,
+            Api4Catalog::CORE_VERSION,
+            $suggestion,
+            $context,
+        );
     }
 
-    /**
-     * @return list<IdentifierRuleError>
-     */
-    public function checkAction(string $entity, string $action, string $context): array
+    /** The unknown-action message, or null. */
+    public function actionProblem(string $entity, string $action, string $context): ?string
     {
         // Only core's actions are catalogued. An entity from another
         // extension brings its own, unknown, set.
         if (!Api4Catalog::knowsEntity($entity)) {
-            return [];
+            return null;
         }
         // Request::create() resolves the action through is_callable(), and php
         // method names are case-insensitive: `User::Update` runs `update`.
         if (in_array(strtolower($action), array_map(strtolower(...), Api4Catalog::actions($entity)), true)) {
-            return [];
+            return null;
         }
         // Extensions add actions to core entities by dropping a class into
         // Civi\Api4\Action\<Entity>\, which AbstractEntity::__callStatic
         // then resolves.
-        if ($this->reflectionProvider->hasClass(sprintf(
+        if ($this->classes->declaredName(sprintf(
             'Civi\\Api4\\Action\\%s\\%s',
-            $this->entityClass($entity),
+            self::entityClass($entity),
             ucfirst($action),
-        ))) {
-            return [];
+        )) !== null) {
+            return null;
         }
 
-        return [
-            RuleErrorBuilder::message(sprintf(
-                'APIv4 action %s::%s does not exist in CiviCRM %s — %s',
-                $entity,
-                $action,
-                Api4Catalog::CORE_VERSION,
-                $context,
-            ))->identifier('ck.api4.unknownAction')->build(),
-        ];
+        return sprintf(
+            'APIv4 action %s::%s does not exist in CiviCRM %s — %s',
+            $entity,
+            $action,
+            Api4Catalog::CORE_VERSION,
+            $context,
+        );
     }
 
-    /**
-     * @return list<IdentifierRuleError>
-     */
-    public function checkField(string $entity, string $field, string $clause): array
+    /** The unknown-field message, or null. */
+    public static function fieldProblem(string $entity, string $field, string $clause): ?string
     {
         if (!self::rejectsField($entity, $field, $clause)) {
-            return [];
+            return null;
         }
         [$name] = explode(':', $field, 2);
 
-        return [
-            RuleErrorBuilder::message(sprintf(
-                'APIv4 field %s.%s does not exist in CiviCRM %s — %s',
-                $entity,
-                $name,
-                Api4Catalog::CORE_VERSION,
-                $clause,
-            ))->identifier('ck.api4.unknownField')->build(),
-        ];
+        return sprintf(
+            'APIv4 field %s.%s does not exist in CiviCRM %s — %s',
+            $entity,
+            $name,
+            Api4Catalog::CORE_VERSION,
+            $clause,
+        );
     }
 
     /**
@@ -162,25 +189,23 @@ final class Api4Contract
      * can resolve, and is passed over without a word.
      *
      * @param list<string> $shadowedAliases aliases an explicit join rebound
-     *
-     * @return list<IdentifierRuleError>
      */
-    public function checkJoinField(string $entity, string $path, string $clause, array $shadowedAliases): array
+    public static function joinFieldProblem(string $entity, string $path, string $clause, array $shadowedAliases): ?string
     {
         $parts = explode('.', $path);
         if (count($parts) !== 2) {
-            return [];
+            return null;
         }
         [$alias, $field] = $parts;
         if (in_array($alias, $shadowedAliases, true)) {
-            return [];
+            return null;
         }
         $target = Api4Catalog::joins($entity)[$alias] ?? null;
         if ($target === null) {
-            return [];
+            return null;
         }
 
-        return $this->checkField($target, $field, $path . ' in ' . $clause);
+        return self::fieldProblem($target, $field, $path . ' in ' . $clause);
     }
 
     /**
@@ -292,8 +317,8 @@ final class Api4Contract
         // Anything the analysis can see a class for: the extension's own
         // entities, and those of the extensions it declares a dependency on.
         // Core looks entities up by exact name, so `contact` is not Contact.
-        $class = 'Civi\\Api4\\' . $this->entityClass($entity);
-        if ($this->reflectionProvider->hasClass($class) && $this->reflectionProvider->getClass($class)->getName() === $class) {
+        $class = 'Civi\\Api4\\' . self::entityClass($entity);
+        if ($this->classes->declaredName($class) === $class) {
             return true;
         }
 
@@ -301,7 +326,7 @@ final class Api4Contract
     }
 
     /** The php class behind an entity name — `Case` lives in CiviCase. */
-    private function entityClass(string $entity): string
+    private static function entityClass(string $entity): string
     {
         $class = array_search($entity, Api4Catalog::CLASS_ALIASES, true);
 

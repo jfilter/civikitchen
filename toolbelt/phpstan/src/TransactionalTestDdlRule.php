@@ -35,25 +35,6 @@ use PHPStan\Rules\RuleErrorBuilder;
  */
 final class TransactionalTestDdlRule implements Rule
 {
-    private const TRANSACTIONAL_INTERFACE = 'Civi\\Test\\TransactionalInterface';
-
-    /** APIv4 and APIv3 actions that run DDL on each entity above. */
-    private const WRITE_ACTIONS = [
-        'CustomField' => ['create', 'save', 'update', 'delete', 'replace', 'setvalue'],
-        // An update alters the table only when it flips is_multiple, see namesIsMultiple().
-        'CustomGroup' => ['create', 'save', 'delete', 'replace'],
-    ];
-
-    /** BAO entry points that create, alter or drop the custom-value table. */
-    private const DDL_BAO_METHODS = [
-        'create', 'writerecord', 'writerecords', 'deleterecord', 'deleterecords',
-        'createtable', 'createfield', 'deletefield', 'deletegroup',
-    ];
-
-    private const EXTENSION_ACTIONS = ['install', 'enable', 'disable', 'uninstall'];
-
-    private const ADVICE = 'MySQL commits implicitly on DDL, which ends the test transaction and leaves the rows behind — move it to setUpHeadless().';
-
     public function getNodeType(): string
     {
         return InClassNode::class;
@@ -166,7 +147,7 @@ final class TransactionalTestDdlRule implements Rule
 
         // CRM_Core_BAO_CustomField::create() is what the API runs underneath.
         if (preg_match('/^CRM_Core_(BAO|DAO)_Custom(Field|Group)$/i', $class) === 1
-            && in_array(strtolower($method), self::DDL_BAO_METHODS, true)) {
+            && in_array(strtolower($method), TransactionalDdl::DDL_BAO_METHODS, true)) {
             return [self::error(
                 sprintf('%s::%s() in a transactional test', $class, $method),
                 'ck.test.customFieldInTransaction',
@@ -209,7 +190,7 @@ final class TransactionalTestDdlRule implements Rule
                 $expr,
             )];
         }
-        if (strcasecmp($entity, 'Extension') === 0 && in_array(strtolower($action), self::EXTENSION_ACTIONS, true)) {
+        if (strcasecmp($entity, 'Extension') === 0 && in_array(strtolower($action), TransactionalDdl::EXTENSION_ACTIONS, true)) {
             return [self::error(
                 sprintf("%s('Extension', '%s') in a transactional test", $function, $action),
                 'ck.test.extensionInTransaction',
@@ -225,10 +206,8 @@ final class TransactionalTestDdlRule implements Rule
      */
     private static function customFieldWrite(string $entity, string $action, string $callFormat, Node $expr): array
     {
-        // Names resolve case-insensitively, and APIv3 also takes `custom_field`.
-        $normalised = str_replace('_', '', $entity);
-        $ddlEntity = array_values(array_filter(array_keys(self::WRITE_ACTIONS), static fn (string $e): bool => strcasecmp($e, $normalised) === 0))[0] ?? null;
-        if ($ddlEntity === null || !in_array(strtolower($action), self::WRITE_ACTIONS[$ddlEntity], true)) {
+        $ddlEntity = TransactionalDdl::ddlEntity($entity, $action);
+        if ($ddlEntity === null) {
             return [];
         }
 
@@ -260,7 +239,7 @@ final class TransactionalTestDdlRule implements Rule
 
         // An extension manager is the only thing in a test whose install()
         // means "run this extension's SQL"; the receiver has to say so.
-        if (in_array($method, self::EXTENSION_ACTIONS, true) && self::isExtensionManager($expr->var)) {
+        if (in_array($method, TransactionalDdl::EXTENSION_ACTIONS, true) && self::isExtensionManager($expr->var)) {
             return [self::error(
                 sprintf('extension %s() in a transactional test', $method),
                 'ck.test.extensionInTransaction',
@@ -283,9 +262,10 @@ final class TransactionalTestDdlRule implements Rule
     {
         foreach ($args as $arg) {
             $sql = self::literal($arg->value);
-            if ($sql !== null && Sql::isDdlLiteral($sql)) {
+            $verb = $sql === null ? null : TransactionalDdl::ddlVerb($sql);
+            if ($verb !== null) {
                 return [self::error(
-                    sprintf('%s statement in a transactional test', strtoupper(strtok(ltrim($sql), " \n\t") ?: 'DDL')),
+                    sprintf('%s statement in a transactional test', $verb),
                     'ck.test.ddlInTransaction',
                     $expr,
                 )];
@@ -343,7 +323,7 @@ final class TransactionalTestDdlRule implements Rule
     private static function isTransactional(ClassReflection $class): bool
     {
         foreach ($class->getNativeReflection()->getInterfaceNames() as $interface) {
-            if ($interface === self::TRANSACTIONAL_INTERFACE) {
+            if ($interface === TransactionalDdl::TRANSACTIONAL_INTERFACE) {
                 return true;
             }
         }
@@ -371,7 +351,7 @@ final class TransactionalTestDdlRule implements Rule
 
     private static function error(string $what, string $identifier, Node $node): \PHPStan\Rules\IdentifierRuleError
     {
-        return RuleErrorBuilder::message($what . ' — ' . self::ADVICE)
+        return RuleErrorBuilder::message(TransactionalDdl::message($what))
             ->identifier($identifier)
             ->line($node->getStartLine())
             ->build();

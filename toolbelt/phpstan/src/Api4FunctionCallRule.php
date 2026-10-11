@@ -7,6 +7,7 @@ namespace CiviKitchen\PHPStan;
 use PhpParser\Node;
 use PhpParser\Node\Expr\FuncCall;
 use PHPStan\Analyser\Scope;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\Rule;
 
 /**
@@ -18,9 +19,12 @@ final class Api4FunctionCallRule implements Rule
 {
     private Api4Contract $contract;
 
-    public function __construct(Api4Contract $contract)
+    private ReflectionProvider $reflection;
+
+    public function __construct(Api4Contract $contract, ReflectionProvider $reflection)
     {
         $this->contract = $contract;
+        $this->reflection = $reflection;
     }
 
     public function getNodeType(): string
@@ -30,7 +34,8 @@ final class Api4FunctionCallRule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
-        if (!$node->name instanceof Node\Name || $node->name->toLowerString() !== 'civicrm_api4') {
+        // Resolved as PHP does: an alias counts, a namespace's own civicrm_api4() does not.
+        if (!$node->name instanceof Node\Name || strtolower((string) $this->reflection->resolveFunctionName($node->name, $scope)) !== 'civicrm_api4') {
             return [];
         }
         // civicrm_api4(string $entity, string $action, array $params = [], $index = NULL)

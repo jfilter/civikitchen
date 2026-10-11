@@ -1,35 +1,10 @@
 # CiviCRM call sites that have modern, mandatory replacements, as
 # spaze/phpstan-disallowed-calls config rather than a sniff: phpstan resolves
 # types, so a ban also holds through a variable (`$class::value()`) and an alias.
+# The list itself is civicrm-disallowed.php, which the mago extension reads too.
 #
 # Shipped at /opt/civikitchen/toolbelt/phpstan-config/civicrm-disallowed.neon;
 # a project opts in with one `includes:` line (the template's phpstan.neon.dist
 # has it).
-parameters:
-	disallowedFunctionCalls:
-		-
-			function: 'civicrm_api3()'
-			message: 'use civicrm_api4() / the APIv4 OO builders'
-		-
-			function: 'civicrm_api()'
-			message: 'use civicrm_api4() / the APIv4 OO builders'
-
-	disallowedStaticCalls:
-		-
-			method: 'CRM_Utils_Array::value()'
-			message: 'use the null-coalescing operator: $array[$key] ?? $default'
-		-
-			method: 'CRM_Core_Error::fatal()'
-			message: 'throw an exception — fatal() is gone from core'
-		-
-			method: 'CRM_Core_Error::debug_log_message()'
-			message: 'use \Civi::log()'
-		-
-			method: 'CRM_Core_Error::debug_var()'
-			message: 'use \Civi::log() with a context array'
-		-
-			method: 'PEAR::raiseError()'
-			message: 'construct new \PEAR_Error(...) — raiseError THROWS under the UnitTests UF'
-			# Test doubles are the one place raising is the point being tested.
-			allowIn:
-				- tests/*
+includes:
+	- civicrm-disallowed.php

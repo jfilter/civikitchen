@@ -18,13 +18,13 @@ use PhpParser\Node;
 final class Mutation
 {
     /** APIv4 actions that write. */
-    private const API4_WRITE_ACTIONS = ['create', 'save', 'update', 'delete', 'replace'];
+    public const API4_WRITE_ACTIONS = ['create', 'save', 'update', 'delete', 'replace'];
 
     /** APIv3 actions that write. */
-    private const API3_WRITE_ACTIONS = ['create', 'delete', 'setvalue', 'replace', 'update'];
+    public const API3_WRITE_ACTIONS = ['create', 'delete', 'setvalue', 'replace', 'update'];
 
     /** BAO/DAO methods that write a row. */
-    private const DAO_WRITE_METHODS = [
+    public const DAO_WRITE_METHODS = [
         'save', 'delete', 'create', 'add', 'del', 'writerecord', 'deleterecord', 'setisactive',
     ];
 
@@ -115,10 +115,10 @@ final class Mutation
 
     /**
      * create/save/update/delete/replace, plus the custom actions built on
-     * them — `EmailBuilderDraft::createMailing()` writes as surely as
+     * them — `Widget::createDraft()` writes as surely as
      * `create()` does.
      */
-    private static function isApi4WriteAction(string $action): bool
+    public static function isApi4WriteAction(string $action): bool
     {
         if (in_array(strtolower($action), self::API4_WRITE_ACTIONS, true)) {
             return true;
@@ -139,14 +139,22 @@ final class Mutation
     {
         foreach ($args as $arg) {
             $sql = Sql::literalString($arg->value);
-            if ($sql === null) {
-                continue;
+            $keyword = $sql === null ? null : self::dmlKeyword($sql);
+            if ($keyword !== null) {
+                return $keyword;
             }
-            $trimmed = ltrim($sql);
-            foreach (self::DML_KEYWORDS as $keyword) {
-                if (preg_match('/^' . $keyword . '\b/i', $trimmed) === 1) {
-                    return strtoupper($keyword);
-                }
+        }
+
+        return null;
+    }
+
+    /** INSERT, UPDATE, DELETE or REPLACE when a statement starts with one. */
+    public static function dmlKeyword(string $sql): ?string
+    {
+        $trimmed = ltrim($sql);
+        foreach (self::DML_KEYWORDS as $keyword) {
+            if (preg_match('/^' . $keyword . '\b/i', $trimmed) === 1) {
+                return strtoupper($keyword);
             }
         }
 

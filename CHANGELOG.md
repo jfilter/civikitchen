@@ -14,6 +14,18 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- The GET-mutation finding names an anonymous page class `class@anonymous`
+  instead of phpstan's path hash. A class declared inside a handler no longer
+  counts as the handler's code: its writes are no longer reported a second
+  time against the handler, and its request-method check no longer silences
+  the handler. A baseline entry for a hashed name or such a second report
+  goes stale.
+- The APIv4 check of `civicrm_api4()` follows the function PHP calls: a
+  `use function civicrm_api4 as …` alias is checked, and a namespace's own
+  function of that name is not.
+
 ## [1.35.0] - 2026-10-10
 
 ### Added
@@ -77,7 +89,6 @@ except that a break the consumers are adjusted for ships as a minor, marked
   Such a core has no `civicrm-<version>-l10n.tar.gz`, so the first boot
   stopped with "no CiviCRM version"; its language files now come from core's
   daily catalogue.
-
 
 ## [1.34.0] - 2026-10-09
 

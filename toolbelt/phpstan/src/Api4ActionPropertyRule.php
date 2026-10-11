@@ -64,28 +64,9 @@ final class Api4ActionPropertyRule implements Rule
             if (str_starts_with($name, '_') || isset($initialized[$name]) || self::hasGuardedGetter($class, $name)) {
                 continue;
             }
-            // `@required` is deliberately not an escape here: the kernel
-            // reads the parameter before it checks the requirement.
-            if ($type !== null && !$hasDefault) {
-                $errors[] = RuleErrorBuilder::message(sprintf(
-                    'APIv4 action parameter $%s is typed %s with no default — a caller that omits it gets '
-                    . '"must not be accessed before initialization" instead of an API validation error, because '
-                    . 'ValidateFieldsSubscriber reads every parameter through its getter before it checks '
-                    . '@required.%s Declare it untyped with an @var docblock and @required (core\'s own form for a '
-                    . 'mandatory parameter), or give it a default.',
-                    $name,
-                    $type,
-                    $required ? ' @required does not prevent this.' : '',
-                ))->identifier('ck.api4.uninitializedActionParam')->line($line)->build();
-
-                continue;
-            }
-            if ($required && $hasDefault && !$emptyDefault) {
-                $errors[] = RuleErrorBuilder::message(sprintf(
-                    'APIv4 action parameter $%s is marked @required but has a default, so the kernel never sees '
-                    . 'it missing and the requirement is never enforced.',
-                    $name,
-                ))->identifier('ck.api4.requiredActionParamWithDefault')->line($line)->build();
+            $problem = Api4ActionParameter::problem($name, $type, $hasDefault, $emptyDefault, $required);
+            if ($problem !== null) {
+                $errors[] = RuleErrorBuilder::message($problem[1])->identifier('ck.api4.' . $problem[0])->line($line)->build();
             }
         }
 
@@ -112,7 +93,7 @@ final class Api4ActionPropertyRule implements Rule
                         $stmt->type === null ? null : self::typeToString($stmt->type),
                         $default !== null,
                         $default !== null && self::isEmptyDefault($default),
-                        self::hasRequiredTag($stmt->getDocComment()?->getText()),
+                        Api4ActionParameter::hasRequiredTag($stmt->getDocComment()?->getText()),
                         $stmt->getStartLine(),
                     ];
                 }
@@ -131,7 +112,7 @@ final class Api4ActionPropertyRule implements Rule
                         $property->hasType() ? (string) $property->getType() : null,
                         $property->hasDefaultValue(),
                         $property->hasDefaultValue() && in_array($property->getDefaultValue(), [null, '', [], false], true),
-                        self::hasRequiredTag($property->getDocComment() ?: null),
+                        Api4ActionParameter::hasRequiredTag($property->getDocComment() ?: null),
                         $stmt->getStartLine(),
                     ];
                 }
@@ -448,15 +429,8 @@ final class Api4ActionPropertyRule implements Rule
         if (!$original instanceof Node\Stmt\Class_ || $original->extends === null) {
             return false;
         }
-        $parentName = $original->extends->toString();
 
-        return str_starts_with($parentName, 'Civi\\Api4\\Generic\\Abstract')
-            && str_ends_with($parentName, 'Action');
-    }
-
-    private static function hasRequiredTag(?string $doc): bool
-    {
-        return $doc !== null && preg_match('/@required\b/', $doc) === 1;
+        return Api4ActionParameter::isGenericActionBase($original->extends->toString());
     }
 
     private static function typeToString(Node $type): string

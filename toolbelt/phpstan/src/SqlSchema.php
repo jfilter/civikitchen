@@ -74,20 +74,22 @@ final class SqlSchema
      */
     public function checkSql(string $sql, string $context): array
     {
-        $errors = [];
+        return self::errors($this->sqlMessages($sql, $context));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function sqlMessages(string $sql, string $context): array
+    {
+        $messages = [];
         foreach (self::tablesIn($sql) as $table) {
-            if ($this->isKnown($table)) {
-                continue;
+            if (!$this->isKnown($table)) {
+                $messages[] = self::message($table, $context);
             }
-            $errors[] = RuleErrorBuilder::message(sprintf(
-                'SQL table %s does not exist in CiviCRM %s — %s',
-                $table,
-                SchemaCatalog::CORE_VERSION,
-                $context,
-            ))->identifier('ck.sql.unknownTable')->build();
         }
 
-        return $errors;
+        return $messages;
     }
 
     /**
@@ -97,23 +99,38 @@ final class SqlSchema
      */
     public function checkTableClause(string $clause, string $context): array
     {
+        return self::errors($this->tableClauseMessages($clause, $context));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function tableClauseMessages(string $clause, string $context): array
+    {
         $name = strtok(trim($clause), " \t\n");
         if ($name === false) {
             return [];
         }
         $name = trim($name, '`');
-        if (!self::isPlainName($name) || $this->isKnown($name)) {
-            return [];
-        }
 
-        return [
-            RuleErrorBuilder::message(sprintf(
-                'SQL table %s does not exist in CiviCRM %s — %s',
-                $name,
-                SchemaCatalog::CORE_VERSION,
-                $context,
-            ))->identifier('ck.sql.unknownTable')->build(),
-        ];
+        return !self::isPlainName($name) || $this->isKnown($name) ? [] : [self::message($name, $context)];
+    }
+
+    private static function message(string $table, string $context): string
+    {
+        return sprintf('SQL table %s does not exist in CiviCRM %s — %s', $table, SchemaCatalog::CORE_VERSION, $context);
+    }
+
+    /**
+     * @param  list<string>              $messages
+     * @return list<IdentifierRuleError>
+     */
+    private static function errors(array $messages): array
+    {
+        return array_map(
+            static fn (string $message): IdentifierRuleError => RuleErrorBuilder::message($message)->identifier('ck.sql.unknownTable')->build(),
+            $messages,
+        );
     }
 
     /**

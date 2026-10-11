@@ -20,12 +20,12 @@ use PHPStan\Type\ObjectType;
 final class Sql
 {
     /** DAO entry points that put a statement on the wire. */
-    private const DAO_QUERY_METHODS = [
+    public const DAO_QUERY_METHODS = [
         'executequery', 'singlevaluequery', 'executeunbufferedquery', 'executeswitchquery',
         'query', 'executeconstantquery',
     ];
 
-    private const SQL_SELECT = 'CRM_Utils_SQL_Select';
+    public const SQL_SELECT = 'CRM_Utils_SQL_Select';
 
     /** Statements MySQL commits implicitly, ending any open transaction. */
     private const DDL_KEYWORDS = ['CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'RENAME'];

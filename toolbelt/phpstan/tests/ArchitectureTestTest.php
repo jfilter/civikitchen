@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CiviKitchen\PHPStan\Tests;
 
-use CiviKitchen\PHPStan\ArchitectureTest;
+use CiviKitchen\PHPStan\ExtensionBoundary;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -51,10 +51,10 @@ final class ArchitectureTestTest extends TestCase
     {
         self::assertSame(
             ['de.example.provider', 'de.example.cisibling', 'de.example.mounted', 'de.example.missing', 'de.example.mismatch', 'org.civicrm.search_kit'],
-            ArchitectureTest::requiredExtensionKeys(self::CONSUMER),
+            ExtensionBoundary::requiredExtensionKeys(self::CONSUMER),
         );
-        self::assertSame([], ArchitectureTest::requiredExtensionKeys(self::FIXTURES . '/de.example.provider'));
-        self::assertSame([], ArchitectureTest::requiredExtensionKeys(self::FIXTURES));
+        self::assertSame([], ExtensionBoundary::requiredExtensionKeys(self::FIXTURES . '/de.example.provider'));
+        self::assertSame([], ExtensionBoundary::requiredExtensionKeys(self::FIXTURES));
     }
 
     public function testLocateExtensionTriesSiblingThenCiMountThenExtDirAndChecksTheKey(): void
@@ -62,12 +62,12 @@ final class ArchitectureTestTest extends TestCase
         $previous = getenv('CK_EXT_DIR');
         putenv('CK_EXT_DIR=' . self::FIXTURES . '/ext-dir');
         try {
-            self::assertSame(self::FIXTURES . '/de.example.provider', ArchitectureTest::locateExtension(self::CONSUMER, 'de.example.provider'));
-            self::assertSame(self::CONSUMER . '/.civikitchen-siblings/de.example.cisibling', ArchitectureTest::locateExtension(self::CONSUMER, 'de.example.cisibling'));
-            self::assertSame(self::FIXTURES . '/ext-dir/de.example.mounted', ArchitectureTest::locateExtension(self::CONSUMER, 'de.example.mounted'));
-            self::assertNull(ArchitectureTest::locateExtension(self::CONSUMER, 'de.example.missing'));
+            self::assertSame(self::FIXTURES . '/de.example.provider', ExtensionBoundary::locateExtension(self::CONSUMER, 'de.example.provider'));
+            self::assertSame(self::CONSUMER . '/.civikitchen-siblings/de.example.cisibling', ExtensionBoundary::locateExtension(self::CONSUMER, 'de.example.cisibling'));
+            self::assertSame(self::FIXTURES . '/ext-dir/de.example.mounted', ExtensionBoundary::locateExtension(self::CONSUMER, 'de.example.mounted'));
+            self::assertNull(ExtensionBoundary::locateExtension(self::CONSUMER, 'de.example.missing'));
             // The directory exists but its info.xml declares another key.
-            self::assertNull(ArchitectureTest::locateExtension(self::CONSUMER, 'de.example.mismatch'));
+            self::assertNull(ExtensionBoundary::locateExtension(self::CONSUMER, 'de.example.mismatch'));
         } finally {
             putenv($previous === false ? 'CK_EXT_DIR' : 'CK_EXT_DIR=' . $previous);
         }
@@ -77,13 +77,13 @@ final class ArchitectureTestTest extends TestCase
     {
         self::assertSame(
             ['~^CRM_Consumer(_|$)~'],
-            ArchitectureTest::prefixRegexes(self::CONSUMER),
+            ExtensionBoundary::prefixRegexes(self::CONSUMER),
         );
         self::assertSame(
             ['~^Civi\\\\CiSibling(\\\\|$)~'],
-            ArchitectureTest::prefixRegexes(self::CONSUMER . '/.civikitchen-siblings/de.example.cisibling'),
+            ExtensionBoundary::prefixRegexes(self::CONSUMER . '/.civikitchen-siblings/de.example.cisibling'),
         );
-        self::assertSame([], ArchitectureTest::prefixRegexes(self::FIXTURES));
+        self::assertSame([], ExtensionBoundary::prefixRegexes(self::FIXTURES));
     }
 
     /**

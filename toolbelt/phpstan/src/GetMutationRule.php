@@ -7,6 +7,8 @@ namespace CiviKitchen\PHPStan;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor;
+use PhpParser\NodeVisitorAbstract;
 use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\ParserFactory;
 use PHPStan\Analyser\Scope;
@@ -41,12 +43,6 @@ use PHPStan\Rules\RuleErrorBuilder;
  */
 final class GetMutationRule implements Rule
 {
-    private const PAGE_BASE = 'CRM_Core_Page';
-
-    private const MAX_HOPS = 2;
-
-    private const ADVICE = 'a route a browser can GET must not change data — check the request method, or document the exception with @phpstan-ignore ck.route.mutationOnGet.';
-
     private RouteCatalog $routes;
 
     public function __construct(RouteCatalog $routes)
@@ -61,7 +57,8 @@ final class GetMutationRule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
-        $class = $node->getClassReflection()->getName();
+        // PHP's own name for an anonymous class; phpstan's hashes a path.
+        $class = $node->getClassReflection()->isAnonymous() ? 'class@anonymous' : $node->getClassReflection()->getName();
 
         /** @var array<string, Node\Stmt\ClassMethod> $methods */
         $methods = [];
@@ -86,17 +83,16 @@ final class GetMutationRule implements Rule
                 continue;
             }
             foreach ($reachable as $method) {
-                foreach ((new NodeFinder())->find($method->stmts ?? [], static fn (Node $n): bool => $n instanceof Node\Expr) as $expr) {
+                foreach (self::ownNodes($method, static fn (Node $n): bool => $n instanceof Node\Expr, true) as $expr) {
                     $what = Mutation::describe($expr);
                     if ($what === null) {
                         continue;
                     }
-                    $error = RuleErrorBuilder::message(sprintf(
-                        '%s writes from %s, which %s — %s',
+                    $error = RuleErrorBuilder::message(MutationOnGet::message(
                         $what,
                         $class . '::' . $methods[$name]->name->toString() . '()',
-                        $route === '' ? 'is reachable by GET' : sprintf('answers GET %s', $route),
-                        self::ADVICE,
+                        $route,
+                        '@phpstan-ignore ck.route.mutationOnGet',
                     ))
                         ->identifier('ck.route.mutationOnGet')
                         ->line($expr->getStartLine());
@@ -172,7 +168,7 @@ final class GetMutationRule implements Rule
     private static function isPage(ClassReflection $reflection): bool
     {
         foreach ($reflection->getParentClassesNames() as $parent) {
-            if ($parent === self::PAGE_BASE) {
+            if ($parent === MutationOnGet::PAGE_BASE) {
                 return true;
             }
         }
@@ -195,7 +191,7 @@ final class GetMutationRule implements Rule
     {
         $seen = [];
         $level = [$root];
-        for ($hop = 0; $hop <= self::MAX_HOPS && $level !== []; $hop++) {
+        for ($hop = 0; $hop <= MutationOnGet::MAX_HOPS && $level !== []; $hop++) {
             $next = [];
             foreach ($level as $name) {
                 if (isset($seen[$name]) || !isset($methods[$name])) {
@@ -218,10 +214,49 @@ final class GetMutationRule implements Rule
      *
      * @return list<string>
      */
+    /**
+     * The method's nodes matching $filter, minus those of a class declared in it:
+     * its methods run only when called, an anonymous class's constructor runs
+     * right there when $constructors.
+     *
+     * @param callable(Node): bool $filter
+     * @return list<Node>
+     */
+    private static function ownNodes(Node\Stmt\ClassMethod $method, callable $filter, bool $constructors = false): array
+    {
+        $visitor = new class ($filter, $constructors) extends NodeVisitorAbstract {
+            /** @var list<Node> */
+            public array $found = [];
+
+            /** @param callable(Node): bool $filter */
+            public function __construct(private $filter, private bool $constructors)
+            {
+            }
+
+            public function enterNode(Node $node): ?int
+            {
+                if (($this->filter)($node)) {
+                    $this->found[] = $node;
+                }
+                $runs = match (true) {
+                    // phpstan names an analysed anonymous class, so its parser attribute decides.
+                    $node instanceof Node\Stmt\Class_ => $this->constructors && $node->getAttribute('anonymousClass') === true,
+                    $node instanceof Node\Stmt\ClassMethod => $node->name->toLowerString() === '__construct',
+                    default => true,
+                };
+
+                return $runs ? null : NodeVisitor::DONT_TRAVERSE_CHILDREN;
+            }
+        };
+        (new NodeTraverser($visitor))->traverse($method->stmts ?? []);
+
+        return $visitor->found;
+    }
+
     private static function localCalls(Node\Stmt\ClassMethod $method): array
     {
         $names = [];
-        foreach ((new NodeFinder())->find($method->stmts ?? [], static fn (Node $n): bool => $n instanceof Node\Expr\MethodCall || $n instanceof Node\Expr\StaticCall) as $call) {
+        foreach (self::ownNodes($method, static fn (Node $n): bool => $n instanceof Node\Expr\MethodCall || $n instanceof Node\Expr\StaticCall) as $call) {
             if (!$call instanceof Node\Expr\MethodCall && !$call instanceof Node\Expr\StaticCall) {
                 continue;
             }
@@ -257,7 +292,7 @@ final class GetMutationRule implements Rule
     private static function checksRequestMethod(array $methods): bool
     {
         foreach ($methods as $method) {
-            foreach ((new NodeFinder())->find($method->stmts ?? [], static fn (Node $n): bool => $n instanceof Node\Expr) as $expr) {
+            foreach (self::ownNodes($method, static fn (Node $n): bool => $n instanceof Node\Expr) as $expr) {
                 if ($expr instanceof Node\Expr\MethodCall
                     && $expr->name instanceof Node\Identifier
                     && $expr->name->toLowerString() === 'getmethod') {

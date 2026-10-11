@@ -29,6 +29,8 @@ services:
 	# The APIv4 contract rules share one analyser; the split into three
 	# rules is only because a phpstan rule binds to a single node type.
 	-
+		class: CiviKitchen\PHPStan\ReflectionClassLookup
+	-
 		class: CiviKitchen\PHPStan\Api4Contract
 		arguments:
 			- %currentWorkingDirectory%

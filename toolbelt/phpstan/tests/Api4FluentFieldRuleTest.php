@@ -7,6 +7,7 @@ namespace CiviKitchen\PHPStan\Tests;
 use CiviKitchen\PHPStan\Api4Catalog;
 use CiviKitchen\PHPStan\Api4Contract;
 use CiviKitchen\PHPStan\Api4FluentFieldRule;
+use CiviKitchen\PHPStan\ReflectionClassLookup;
 use PHPStan\Rules\Rule;
 use PHPStan\Testing\RuleTestCase;
 
@@ -51,6 +52,6 @@ final class Api4FluentFieldRuleTest extends RuleTestCase
 
     protected function getRule(): Rule
     {
-        return new Api4FluentFieldRule(new Api4Contract(__DIR__, self::createReflectionProvider()));
+        return new Api4FluentFieldRule(new Api4Contract(__DIR__, new ReflectionClassLookup(self::createReflectionProvider())));
     }
 }

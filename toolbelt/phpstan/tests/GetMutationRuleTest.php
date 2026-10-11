@@ -60,6 +60,7 @@ final class GetMutationRuleTest extends RuleTestCase
                 . 'which is reachable by GET' . self::ADVICE,
                 109,
             ],
+            ...self::unlistedPageErrors(),
         ]);
     }
 
@@ -106,6 +107,44 @@ final class GetMutationRuleTest extends RuleTestCase
                 'Widget::create() writes from CiviKitchen\\Fixtures\\Routes\\TraitPage::run(), '
                 . 'which is reachable by GET' . self::ADVICE,
                 109,
+            ],
+            ...self::unlistedPageErrors(),
+        ];
+    }
+
+    /**
+     * The writes of pages no route list names: DAO/BAO calls, a trait helper,
+     * anonymous pages and a page holding nested classes.
+     *
+     * @return list<array{string, int}>
+     */
+    private static function unlistedPageErrors(): array
+    {
+        $from = ' writes from CiviKitchen\\Fixtures\\Routes\\LedgerPage::run(), which is reachable by GET' . self::ADVICE;
+
+        return [
+            ['CRM_Core_BAO_Ledger::writeRecord()' . $from, 123],
+            ['->save() on a DAO/BAO' . $from, 125],
+            ['->delete() on a DAO/BAO' . $from, 126],
+            ['INSERT in ->query()' . $from, 128],
+            [
+                'INSERT in CRM_Core_DAO::executeQuery() writes from CiviKitchen\\Fixtures\\Routes\\StorePage::run(), '
+                . 'which is reachable by GET' . self::ADVICE,
+                141,
+            ],
+            ...array_map(
+                static fn (int $line): array => ['Widget::create() writes from class@anonymous::run(), which is reachable by GET' . self::ADVICE, $line],
+                [162, 176, 214, 225],
+            ),
+            [
+                'Widget::create() writes from CiviKitchen\\Fixtures\\Routes\\GuardLeakPage::run(), '
+                . 'which is reachable by GET' . self::ADVICE,
+                202,
+            ],
+            [
+                'Widget::create() writes from CiviKitchen\\Fixtures\\Routes\\BuilderPage::run(), '
+                . 'which is reachable by GET' . self::ADVICE,
+                253,
             ],
         ];
     }

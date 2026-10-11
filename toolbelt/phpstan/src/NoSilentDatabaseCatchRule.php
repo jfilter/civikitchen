@@ -31,9 +31,6 @@ use PHPStan\Rules\RuleErrorBuilder;
  */
 final class NoSilentDatabaseCatchRule implements Rule
 {
-    /** Log levels that reach a production log. */
-    private const LOUD_LEVELS = ['error', 'critical', 'alert', 'emergency'];
-
     public function getNodeType(): string
     {
         return Node\Stmt\TryCatch::class;
@@ -50,14 +47,7 @@ final class NoSilentDatabaseCatchRule implements Rule
             if (self::handles($catch)) {
                 continue;
             }
-            $errors[] = RuleErrorBuilder::message(
-                $catch->stmts === []
-                    ? 'Empty catch around a database call — the query can fail and nothing will say so. '
-                        . 'Rethrow, or \\Civi::log()->error() with the context.'
-                    : 'Catch around a database call neither rethrows nor logs at error level — a failed query '
-                        . 'becomes a substituted value the caller cannot tell from real data. '
-                        . 'Rethrow, or \\Civi::log()->error() with the context.',
-            )->identifier('ck.db.silentCatch')->line($catch->getStartLine())->build();
+            $errors[] = RuleErrorBuilder::message(DatabaseCatch::message($catch->stmts === []))->identifier('ck.db.silentCatch')->line($catch->getStartLine())->build();
         }
 
         return $errors;
@@ -93,7 +83,7 @@ final class NoSilentDatabaseCatchRule implements Rule
         }
         $method = $node->name->toLowerString();
         $level = $method === 'log' ? self::logLevel(CallArgs::value($node, 0, 'level')) : $method;
-        if (!in_array($level, self::LOUD_LEVELS, true)) {
+        if (!in_array($level, DatabaseCatch::LOUD_LEVELS, true)) {
             return false;
         }
         // The receiver only has to be something that produces a logger.
