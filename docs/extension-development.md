@@ -413,10 +413,15 @@ gate failed and 2 for a usage error, such as an unknown gate name in `--only`
 or `--skip`. `ck ci --help` lists the gates. Two of them are opt-in, as in the
 workflow: `phpstan-tests` runs when `phpstan-tests.neon(.dist)` exists, and
 `phpunit-extra` runs `phpunit -c FILE` for `--extra-phpunit-config FILE` (the
-workflow's `extra_phpunit_config` input).
+workflow's `extra_phpunit_config` input). `ckanalyze` is a shadow gate on trial
+to replace phpstan: its findings show as `shadow` in the summary and never fail
+the run, while a crash of the tool does. Every finding counts, notes included.
+A repo's own `mago.toml` takes the baseline's place, so it loads the
+CiviKitchen plugins only when it `extends` the baseline; its `[source]` lists
+add to the scope `ckanalyze` sets instead of replacing it.
 
-The gates that read git (`cklint`, `ckconform`, `ckcivix`, `ckfmt`, `ckcompat`,
-`cktaint`, `ckeslint`) run in `CK_TOOL_PATH`, everything that boots CiviCRM in
+The gates that read git (`cklint`, `ckconform`, `ckcivix`, `ckfmt`, `ckanalyze`,
+`ckcompat`, `cktaint`, `ckeslint`) run in `CK_TOOL_PATH`, everything that boots CiviCRM in
 `CK_EXT_PATH`. Both default to the current directory. For an extension below
 the repository root, `ckx` sets `CK_TOOL_PATH=/civikitchen-repo/<directory>`
 (see [Several extensions in one repository](#several-extensions-in-one-repository)).

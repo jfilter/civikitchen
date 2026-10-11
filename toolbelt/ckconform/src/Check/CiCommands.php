@@ -15,7 +15,7 @@ final class CiCommands
 {
     /** The tools each `ck ci` gate runs (toolbelt/lib/php/src/Cli/CiCommand.php). */
     private const CI_GATES = [
-        'cklint' => 'cklint phpcs',
+        'cklint' => 'cklint',
         'ckconform' => 'ckconform',
         'ckcivix' => 'ckcivix',
         'ckfmt' => 'ckfmt',
@@ -25,6 +25,7 @@ final class CiCommands
         'phpstan' => 'phpstan',
         // Analyses the tests with phpstan-tests.neon(.dist), never phpstan.neon.dist.
         'phpstan-tests' => 'phpstan-tests',
+        'ckanalyze' => 'ckanalyze',
         'ckcompat' => 'ckcompat',
         'ckdeps' => 'ckdeps',
         'cktaint' => 'cktaint',
@@ -33,7 +34,7 @@ final class CiCommands
     ];
 
     /** Tools a `ck <subcommand>` runs beyond its own `ck<subcommand>` binary. */
-    private const CK_EXTRAS = ['lint' => 'phpcs', 'coverage' => 'phpunit', 'test' => 'ckphpunit phpunit', 'phpunit' => 'ckphpunit phpunit'];
+    private const CK_EXTRAS = ['coverage' => 'phpunit', 'test' => 'ckphpunit phpunit', 'phpunit' => 'ckphpunit phpunit'];
 
     /** Package-manager flags that take the next word as their value. */
     private const VALUE_FLAGS = ['--prefix', '-C', '--cwd', '--dir', '-w', '--workspace', '--filter', '-d', '--working-dir'];

@@ -23,12 +23,16 @@ final class CiCommand implements Command
         'phpunit-extra' => ['ext', ['phpunit', '-c']],
         'phpstan' => ['ext', ['phpstan', 'analyse', '--no-progress']],
         'phpstan-tests' => ['ext', ['phpstan', 'analyse', '-c']],
+        'ckanalyze' => ['tool', ['ckanalyze']],
         'ckcompat' => ['tool', ['ckcompat']],
         'ckdeps' => ['ext', ['ckdeps']],
         'cktaint' => ['tool', ['cktaint']],
         'cksmarty' => ['ext', ['cksmarty']],
         'ckeslint' => ['tool', ['ckeslint']],
     ];
+
+    /** Gates on trial beside the one they are to replace: findings (exit 1) never fail the run, a crash does. */
+    private const SHADOW = ['ckanalyze'];
 
     public function __construct(private readonly Runner $runner = new Runner())
     {
@@ -109,13 +113,18 @@ final class CiCommand implements Command
             $started = hrtime(true);
             $status = $this->runner->passthrough($command, $environment, $directory);
             $seconds = (hrtime(true) - $started) / 1e9;
+            $shadow = $status === 1 && in_array($gate, self::SHADOW, true);
             if ($github) {
                 echo "::endgroup::\n";
                 if ($status !== 0) {
-                    echo "::error title=ck ci::{$gate} failed (exit {$status})\n";
+                    echo $shadow ? "::warning title=ck ci::{$gate} (shadow, not gating) exited {$status}\n" : "::error title=ck ci::{$gate} failed (exit {$status})\n";
                 }
             }
-            $results[$gate] = $status === 0 ? ['pass', $seconds, ''] : ['fail', $seconds, "exit {$status}"];
+            $results[$gate] = match (true) {
+                $status === 0 => ['pass', $seconds, ''],
+                $shadow => ['shadow', $seconds, "exit {$status}, not gating"],
+                default => ['fail', $seconds, "exit {$status}"],
+            };
         }
 
         echo "\nck ci summary\n";
@@ -214,7 +223,8 @@ ck ci — run every in-container gate of the shared extension CI, in its order.
 Gates: {$gates}
 
 Every gate runs even after an earlier one failed; the exit code is 1 when any
-failed. Run from the extension root. CK_EXT_PATH (default: the current
+failed. ckanalyze is a shadow gate: its findings (exit 1) show as `shadow`
+in the summary and never fail the run; any other failure does. Run from the extension root. CK_EXT_PATH (default: the current
 directory) is where CiviCRM enabled the extension; CK_TOOL_PATH (default:
 CK_EXT_PATH) is the same directory inside the git checkout, /civikitchen-repo/<dir>
 in a repository of several extensions. phpstan-tests runs when

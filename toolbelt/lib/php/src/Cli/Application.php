@@ -41,6 +41,7 @@ final class Application
             'ckcompat' => 'compatibility',
             'ckfmt' => 'format',
             'cklint' => 'lint',
+            'ckanalyze' => 'analyze',
             'ckeslint' => 'javascript',
             'ckphpunit' => 'test',
             'ckmutate' => 'mutate',
@@ -97,6 +98,9 @@ final class Application
         if ($command === 'lint') {
             return (new LintCommand($this->checkoutRoot, $this->runner))->run($arguments);
         }
+        if ($command === 'analyze') {
+            return (new AnalyzeCommand($this->checkoutRoot, $this->runner))->run($arguments);
+        }
         if (in_array($command, ['javascript', 'js', 'eslint'], true)) {
             return (new JavaScriptLintCommand($this->checkoutRoot, $this->runner))->run($arguments);
         }
@@ -130,6 +134,7 @@ ck — CiviKitchen extension-development toolbelt
   ck ci [args]            every in-container gate of the shared CI, with a summary
   ck conform [args]       repository conformance
   ck lint [args]          PHP lint and bug patterns
+  ck analyze              mago static analysis (shadow gate beside phpstan)
   ck format [args]        PHP/JS formatting
   ck compatibility       declared PHP-floor compatibility
   ck dependencies        Composer dependency audit

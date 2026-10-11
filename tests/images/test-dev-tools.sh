@@ -19,6 +19,7 @@
 #   3d. ckrelease builds a dist zip and rejects a mismatched tag
 #   3g. ckcompat rejects syntax the declared PHP floor cannot parse
 #   4. phpstan actually analyses a sample file (intentionally with type errors)
+#   4c. ckanalyze runs mago analyze against core as a shadow gate
 #   5. phpunit actually runs a passing assertion
 #   5b. ckphpunit injects the transaction canary listener, after CiviTestListener
 #   5c. cklifecycle's guards (the cycle itself needs a booted site)
@@ -1152,6 +1153,88 @@ if grep -q "deprecatedClass" <<<"${MARKED_OUT}"; then
     fail "@ck-legacy scope was still reported (output: ${MARKED_OUT:0:400})"
 else
     ok "@ck-legacy exempts the scope from the deprecation rules"
+fi
+
+# ---------------------------------------------------------------------------
+# 4c. ckanalyze: mago analyze against the image's CiviCRM core, with civix
+#     code read for its symbols and the APIv4 Result false positive filtered.
+echo "== ckanalyze =="
+ANADIR="${WORKDIR}/analyzeext"
+mkdir -p "${ANADIR}/Civi/Widget" "${ANADIR}/tests/phpunit"
+cat > "${ANADIR}/info.xml" <<'XML'
+<?xml version="1.0"?>
+<extension key="org.example.widget" type="module">
+  <file>widget</file>
+  <civix>
+    <namespace>CRM/Widget</namespace>
+  </civix>
+</extension>
+XML
+echo '{"require":{"php":">=8.1"}}' > "${ANADIR}/composer.json"
+cat > "${ANADIR}/widget.civix.php" <<'PHP'
+<?php
+
+class CRM_Widget_ExtensionUtil {
+
+  public static function ts(string $text): string {
+    return $text;
+  }
+
+}
+PHP
+cat > "${ANADIR}/Civi/Widget/Rows.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+namespace Civi\Widget;
+
+use CRM_Widget_ExtensionUtil as E;
+
+final class Rows {
+
+  public function label(): string {
+    return E::ts('Widget');
+  }
+
+  public function firstId(): mixed {
+    $result = \Civi\Api4\Contact::get(FALSE)->execute();
+    return $result[0]['id'] ?? NULL;
+  }
+
+  public function count(): int {
+    return 'many';
+  }
+
+}
+PHP
+# Outside the analyzed scope, as in phpstan's main pass.
+cat > "${ANADIR}/tests/phpunit/RowsTest.php" <<'PHP'
+<?php
+
+function rows_test(): int {
+  return 'not analyzed';
+}
+PHP
+(cd "${ANADIR}" && git init -q . && git add -A) >/dev/null 2>&1
+ANA_OUT="$( (cd "${ANADIR}" && ckanalyze) 2>&1 || true)"
+if grep -q 'invalid-return-statement' <<<"${ANA_OUT}"; then
+    ok "ckanalyze reports the wrong return type"
+else
+    fail "ckanalyze missed the wrong return type (output: ${ANA_OUT:0:400})"
+fi
+if ! grep -q 'invalid-return-statement' <<<"${ANA_OUT}" \
+    || grep -qE 'non-existent-(method|class)|extension-boundary|Civi\\Api4\\Generic\\Result|RowsTest' <<<"${ANA_OUT}"; then
+    fail "ckanalyze reported core, civix symbols, Result access or tests/ (output: ${ANA_OUT:0:600})"
+else
+    ok "ckanalyze resolves core and civix symbols, filters Result access, skips tests/"
+fi
+if ANA_CI_OUT="$( (cd "${ANADIR}" && ck ci --only ckanalyze) 2>&1 )" \
+    && grep -qE 'ckanalyze +shadow' <<<"${ANA_CI_OUT}" \
+    && grep -q 'invalid-return-statement' <<<"${ANA_CI_OUT}"; then
+    ok "ck ci reports ckanalyze findings as a shadow gate and passes"
+else
+    fail "ck ci did not treat ckanalyze as a shadow gate (output: ${ANA_CI_OUT:0:400})"
 fi
 
 # ---------------------------------------------------------------------------

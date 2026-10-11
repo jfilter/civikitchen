@@ -180,17 +180,25 @@ runs, so they are comments, and the mago finding they meant still stands.
 
 ### 3. Replace phpstan with mago analyze
 
-- Ship a CiviKitchen analyzer baseline: core as an include, civix files as
-  includes, the `Result` false positive filtered by a plugin, and strictness
-  set to phpstan level 10.
+- Done: the analyzer baseline in `ckanalyze` — core and civix files as
+  includes, the `Result` false positive filtered by a plugin. mago's default
+  strictness already reports `mixed` (`mixed-assignment` and friends), which
+  phpstan level 10 does not.
 - Done: the phpstan rules, the disallowed bans and the phpat architecture
   test as analyzer plugins (see Port status). The bans are a plugin rather
   than `disallowed-functions` settings, because they include static methods
   and a per-path allowance; the architecture test is a plugin rather than
   `mago guard`, because its allowed namespaces come from each repo's
   `info.xml` requirements.
-- Shadow phase: run `mago analyze` in `ck ci` alongside phpstan, non-gating,
-  across the consumer repos. Triage every difference into one of: a mago
+- Shadow phase: `ckanalyze` runs `mago analyze` in `ck ci` after phpstan,
+  non-gating (findings report as `shadow`, a crash still fails). It analyzes
+  what phpstan's main pass analyzes and reads core, civix files, `vendor/`,
+  siblings and `policy.vendored_paths` for their symbols. The `Result` false
+  positive is filtered by a plugin. A first run over 38 extension repos
+  (2026-10-11) completed on every one; `mixed-assignment` and the other
+  `mixed-*` codes make up most findings, followed by classes of required
+  extensions that were not checked out beside the repo. Triage every
+  difference across the consumer repos into one of: a mago
   false positive (fix the plugin or report upstream), a phpstan-only finding
   (port or accept the loss deliberately), or a real defect (fix it in the
   repo).

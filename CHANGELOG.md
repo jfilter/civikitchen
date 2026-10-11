@@ -28,6 +28,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
   statement) and mago's `block-statement` (braces on every control
   structure). Both carry over checks the phpcs standard ran, with the same
   findings on real extension code.
+- `ckanalyze` (`ck analyze`): `mago analyze` with the CiviKitchen analyzer
+  plugins over the extension's PHP outside `tests/`, reading CiviCRM core,
+  civix-generated files, `vendor/`, `.civikitchen-siblings/` and
+  `policy.vendored_paths` for their symbols. `ck ci` runs it after phpstan as
+  a shadow gate: findings show as `shadow` and never fail the run, a crash of
+  the tool does. A plugin drops the row-access and array-cast findings on
+  core's APIv4 `Result`, which mago misreads because core declares it without
+  template types.
 
 ### Changed
 

@@ -49,7 +49,7 @@ grep -q 'ck dependencies' <<<"${deps_help}"
 for tool in ckboot ckcoretest cktestreset; do
   bash "${root}/toolbelt/bin/${tool}" --help | grep -q "^${tool} - " || { echo "${tool} --help printed no usage" >&2; exit 1; }
 done
-for alias in ckcivix ckcompat ckconform ckcoverage ckdeps ckeslint ckfmt cklifecycle cklint ckmutate ckphpunit ckprofile ckrelease ckscenario ckschemadiff cksmarty; do
+for alias in ckanalyze ckcivix ckcompat ckconform ckcoverage ckdeps ckeslint ckfmt cklifecycle cklint ckmutate ckphpunit ckprofile ckrelease ckscenario ckschemadiff cksmarty; do
   [ -L "${root}/toolbelt/bin/${alias}" ] || { echo "${alias} is not a symlink" >&2; exit 1; }
   [ "$(readlink "${root}/toolbelt/bin/${alias}")" = ck ] || { echo "${alias} does not target ck" >&2; exit 1; }
 done
@@ -89,7 +89,7 @@ mkdir -p "${ci}/bin" "${ci}/ext" "${ci}/repo/ext"
 cp "${work}/info.xml" "${ci}/ext/info.xml"
 cp "${work}/info.xml" "${ci}/repo/ext/info.xml"
 printf '%s\n' '{"name": "example/demo", "require": {"php": ">=8.1"}}' > "${ci}/ext/composer.json"
-for gate in cklint ckconform ckcivix ckfmt ckcoverage phpunit phpstan ckcompat cktaint cksmarty ckeslint; do
+for gate in cklint ckconform ckcivix ckfmt ckcoverage phpunit phpstan ckanalyze ckcompat cktaint cksmarty ckeslint; do
   cat > "${ci}/bin/${gate}" <<'SH'
 #!/bin/bash
 name=$(basename "$0")
@@ -127,7 +127,7 @@ grep -qE '^  cklint +pass ' <<<"$out" || fail "summary does not mark cklint pass
 grep -qE '^  phpunit-extra +skipped +- ' <<<"$out" || fail "phpunit-extra must be skipped without a config"
 grep -qE '^  phpstan-tests +skipped ' <<<"$out" || fail "phpstan-tests must be skipped without its config"
 order=$(cut -d'|' -f1 "${ci}/log" | paste -sd' ' -)
-[ "$order" = 'cklint ckconform ckcivix ckfmt ckcoverage phpstan ckcompat ckdeps cktaint cksmarty ckeslint' ] \
+[ "$order" = 'cklint ckconform ckcivix ckfmt ckcoverage phpstan ckanalyze ckcompat ckdeps cktaint cksmarty ckeslint' ] \
   || fail "gates ran out of order or not after a failure: $order"
 grep -qx "cklint|${ci}/ext|--all" "${ci}/log" || fail "cklint --all not run in the extension"
 grep -qx "ckcoverage|${ci}/ext|tests/phpunit" "${ci}/log" || fail "ckcoverage tests/phpunit not run"
@@ -141,7 +141,7 @@ rc=0
 run_ci env CK_EXT_PATH="${ci}/ext" CK_TOOL_PATH="${ci}/repo/ext" CK_EXTRA_PHPUNIT_CONFIG=phpunit-unit.xml.dist \
   ck ci --skip ckdeps > "${ci}/out" 2>&1 || rc=$?
 [ "$rc" = 0 ] || fail "all-green run exited $rc"
-for tool in cklint ckconform ckcivix ckfmt ckcompat cktaint ckeslint; do
+for tool in cklint ckconform ckcivix ckfmt ckanalyze ckcompat cktaint ckeslint; do
   grep -q "^${tool}|${ci}/repo/ext|" "${ci}/log" || fail "${tool} did not run in CK_TOOL_PATH"
 done
 for ext in ckcoverage phpstan cksmarty; do
@@ -166,6 +166,12 @@ for args in '--only nosuch' '--skip cklint,nosuch' '--only ,cklint' '--only' '--
 done
 grep -q 'unknown gate: nosuch' <<<"$(run_ci ck ci --only nosuch 2>&1)" || fail "unknown gate not named"
 grep -q 'empty gate name' <<<"$(run_ci ck ci --only ,cklint 2>&1)" || fail "empty gate name not named"
+
+# A shadow gate's findings are reported, never the run's exit code.
+rc=0
+out=$(run_ci env CK_FAKE_FAIL=ckanalyze ck ci --only ckanalyze 2>&1) || rc=$?
+[ "$rc" = 0 ] || fail "ckanalyze findings failed the run (rc=$rc)"$'\n'"$out"
+grep -qE '^  ckanalyze +shadow ' <<<"$out" || fail "summary does not mark ckanalyze as shadow"$'\n'"$out"
 
 # An early failure does not stop the later gates, and it alone sets the exit code.
 : > "${ci}/log"

@@ -126,6 +126,7 @@ workflow calls the same command
 | `ckfmt` | Formatting: mago for PHP, oxfmt for JS/TS |
 | `ckcoverage` | PHPUnit line coverage against the configured floor |
 | `phpstan` | Level 10; the repository's `phpstan.neon.dist` includes civikitchen's CiviCRM rules, so it runs unwrapped |
+| `ckanalyze` | Shadow gate: `mago analyze` with the CiviKitchen plugins against CiviCRM core, reported beside phpstan without failing the run |
 | `ckcompat` | PHP compatibility with the floor declared in `composer.json` |
 | `ckdeps` | `composer.json` matches what the code uses |
 | `cktaint` | Taint analysis with psalm |

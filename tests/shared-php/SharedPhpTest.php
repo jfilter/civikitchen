@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use CiviKitchen\Toolbelt\Cli\AnalyzeCommand;
 use CiviKitchen\Toolbelt\Cli\Application;
 use CiviKitchen\Toolbelt\Cli\CompatibilityCommand;
 use CiviKitchen\Toolbelt\Cli\CoverageCommand;
@@ -310,13 +311,98 @@ final class SharedPhpTest extends TestCase
         self::assertSame([
             'repo: cklint --all', 'repo: ckconform', 'repo: ckcivix --check', 'repo: ckfmt --check',
             'ext: ckcoverage tests/phpunit', 'ext: phpunit -c unit.xml', 'ext: phpstan analyse --no-progress',
-            'ext: phpstan analyse -c phpstan-tests.neon --no-progress', 'repo: ckcompat', 'ext: ckdeps',
+            'ext: phpstan analyse -c phpstan-tests.neon --no-progress', 'repo: ckanalyze', 'repo: ckcompat', 'ext: ckdeps',
             'repo: cktaint', 'repo: ckeslint',
         ], $runner->calls);
         self::assertStringContainsString("::error title=ck ci::ckdeps failed (exit 1)\n", $output);
         $summary = (string) file_get_contents($this->temporary . '/summary.md');
         self::assertStringContainsString('| `ckdeps` | fail (exit 1) |', $summary);
         self::assertStringContainsString('### Taint analysis: no blocking findings', $summary);
+    }
+
+    public function testCiReportsAShadowGateWithoutFailingTheRun(): void
+    {
+        mkdir($this->temporary . '/ext');
+        file_put_contents($this->temporary . '/ext/info.xml', '<extension key="demo"><file>demo</file></extension>');
+        putenv('CK_EXT_PATH=' . $this->temporary . '/ext');
+        putenv('GITHUB_ACTIONS=true');
+        putenv('GITHUB_STEP_SUMMARY=' . $this->temporary . '/summary.md');
+        $runner = new RecordingRunner();
+        $runner->exitCodes['ckanalyze'] = 1;
+        try {
+            ob_start();
+            $status = (new Application('/nonexistent', dirname(__DIR__, 2), $runner))->run(['ci', '--only', 'ckanalyze,ckconform'], 'ck');
+            $output = (string) ob_get_clean();
+            $runner->exitCodes['ckconform'] = 1;
+            ob_start();
+            $failing = (new Application('/nonexistent', dirname(__DIR__, 2), $runner))->run(['ci', '--only', 'ckanalyze,ckconform'], 'ck');
+            ob_end_clean();
+            // A crash is no finding: exit 2 fails the run like any gate.
+            $runner->exitCodes = ['ckanalyze' => 2];
+            ob_start();
+            $crashed = (new Application('/nonexistent', dirname(__DIR__, 2), $runner))->run(['ci', '--only', 'ckanalyze'], 'ck');
+            ob_end_clean();
+        } finally {
+            foreach (['CK_EXT_PATH', 'GITHUB_ACTIONS', 'GITHUB_STEP_SUMMARY'] as $name) {
+                putenv($name);
+            }
+        }
+        self::assertSame(0, $status);
+        self::assertSame(1, $failing);
+        self::assertSame(1, $crashed);
+        self::assertStringContainsString("::warning title=ck ci::ckanalyze (shadow, not gating) exited 1\n", $output);
+        self::assertStringNotContainsString('::error', $output);
+        self::assertStringContainsString('| `ckanalyze` | shadow (exit 1, not gating) |', (string) file_get_contents($this->temporary . '/summary.md'));
+    }
+
+    public function testAnalyzeReadsCoreAndGeneratedCodeOnlyForTheirSymbols(): void
+    {
+        $core = $this->temporary . '/core';
+        mkdir($core);
+        touch($core . '/Civi.php');
+        file_put_contents($this->temporary . '/composer.json', '{"require":{"php":">=8.2"}}');
+        mkdir($this->temporary . '/lib');
+        putenv('CIVICRM_CORE_DIR=' . $core);
+        $before = getcwd();
+        chdir($this->temporary);
+        try {
+            $runner = new AnalyzeRunner();
+            self::assertSame(0, (new AnalyzeCommand(dirname(__DIR__, 2), $runner))->run([]));
+            self::assertSame(['mago', '--workspace', '.', '--config', $runner->configPath, '--php-version', '8.2', 'analyze'], $runner->command);
+            self::assertSame(
+                'extends = ["' . dirname(__DIR__, 2) . "/toolbelt/mago/mago.toml\"]\n\n[source]\npaths = [\"Civi/Widget.php\"]\n"
+                . 'includes = ["' . $core . "\", \"CRM/Widget/DAO/Thing.php\", \"widget.civix.php\", \"lib\"]\n\n[analyzer]\nminimum-fail-level = \"note\"\n",
+                $runner->config,
+            );
+            self::assertSame(getcwd(), $runner->environment['CK_MAGO_WORKSPACE'] ?? null);
+            self::assertSame('mago.toml', basename($runner->configPath));
+            self::assertDirectoryDoesNotExist(dirname($runner->configPath));
+
+            // A repo's own mago.toml is the base, and its php-version stands.
+            touch('mago.toml');
+            $own = new AnalyzeRunner();
+            ob_start();
+            self::assertSame(1, (new AnalyzeCommand(dirname(__DIR__, 2), $own))->run([]));
+            self::assertStringContainsString("using this repo's own mago.toml", (string) ob_get_clean());
+            self::assertStringStartsWith('extends = ["' . realpath('mago.toml') . '"]', $own->config);
+            self::assertNotContains('--php-version', $own->command);
+
+            putenv('CIVICRM_CORE_DIR=' . $this->temporary . '/nowhere');
+            $missing = new AnalyzeRunner();
+            self::assertSame(2, (new AnalyzeCommand(dirname(__DIR__, 2), $missing))->run([]));
+            self::assertSame([], $missing->command);
+
+            // Without CIVICRM_CORE_DIR, a buildkit image's core comes from cv.
+            putenv('CIVICRM_CORE_DIR');
+            $buildkit = new AnalyzeRunner($core . "/\n");
+            ob_start();
+            (new AnalyzeCommand(dirname(__DIR__, 2), $buildkit, $this->temporary . '/no-image-core'))->run([]);
+            ob_end_clean();
+            self::assertStringContainsString('includes = ["' . $core . '",', $buildkit->config);
+        } finally {
+            putenv('CIVICRM_CORE_DIR');
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
     }
 
     public function testCoverageTreatsOptionalTestsPolicyWithItsMandatoryReasonAsOptional(): void
@@ -1068,6 +1154,51 @@ final class RecordingRunner extends Runner
             }
         }
         return false;
+    }
+}
+
+/** A git checkout with source, generated and test PHP; records the mago run and the config it read. */
+final class AnalyzeRunner extends Runner
+{
+    /** @var list<string> */
+    public array $command = [];
+
+    public string $config = '';
+
+    public string $configPath = '';
+
+    /** @var array<string, string> */
+    public array $environment = [];
+
+    public function __construct(private readonly string $cvRoot = '')
+    {
+    }
+
+    public function capture(array $command, ?array $environment = null, ?string $workingDirectory = null): array
+    {
+        $joined = implode(' ', $command);
+        if ($command[0] === 'cv') {
+            return ['status' => $this->cvRoot === '' ? 1 : 0, 'output' => $this->cvRoot];
+        }
+        if (str_contains($joined, 'rev-parse')) {
+            return ['status' => 0, 'output' => "true\n"];
+        }
+        if (str_contains($joined, 'ls-files')) {
+            return ['status' => 0, 'output' => "CRM/Widget/DAO/Thing.php\nCivi/Widget.php\nlib/upstream.php\nphpstanBootstrap.php\ntests/phpunit/WidgetTest.php\nwidget.civix.php\n"];
+        }
+        if (str_ends_with($command[0], 'ckconform')) {
+            return ['status' => 0, 'output' => "lib -- unmodified upstream\n"];
+        }
+        return ['status' => 0, 'output' => ''];
+    }
+
+    public function passthrough(array $command, ?array $environment = null, ?string $workingDirectory = null): int
+    {
+        $this->command = $command;
+        $this->configPath = $command[4];
+        $this->config = (string) file_get_contents($this->configPath);
+        $this->environment = $environment ?? [];
+        return is_file('mago.toml') ? 1 : 0;
     }
 }
 

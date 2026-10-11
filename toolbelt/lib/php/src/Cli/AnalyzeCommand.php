@@ -1,0 +1,121 @@
+<?php
+
+declare(strict_types=1);
+
+namespace CiviKitchen\Toolbelt\Cli;
+
+use CiviKitchen\Toolbelt\Process\Runner;
+use CiviKitchen\Toolbelt\Repository\Files;
+use CiviKitchen\Toolbelt\Repository\PhpFloor;
+
+final class AnalyzeCommand implements Command
+{
+    public function __construct(
+        private readonly string $checkoutRoot,
+        private readonly Runner $runner = new Runner(),
+        private readonly string $imageCore = '/var/www/html/core',
+    ) {
+    }
+
+    public function run(array $arguments): int
+    {
+        foreach ($arguments as $argument) {
+            if (in_array($argument, ['-h', '--help'], true)) {
+                echo $this->usage();
+                return 0;
+            }
+            return $this->error("unknown argument: {$argument}");
+        }
+        $repository = new Files($this->checkoutRoot, $this->runner);
+        if (!$repository->isGitCheckout()) {
+            return $this->error('not a git checkout - the file list comes from git ls-files.');
+        }
+        $core = $this->core();
+        if ($core === null) {
+            return $this->error("no CiviCRM core at CIVICRM_CORE_DIR, /var/www/html/core or cv's [civicrm.root] - set CIVICRM_CORE_DIR.");
+        }
+        // phpstan's main pass leaves the suite to phpstan-tests; the same scope keeps the two comparable.
+        $isTest = static fn(string $file): bool => preg_match('#(^|/)tests/#', $file) === 1 || $file === 'phpstanBootstrap.php';
+        $paths = array_values(array_filter($repository->source(['php'], [], true, true), static fn(string $file): bool => !$isTest($file)));
+        if ($paths === []) {
+            echo "ckanalyze: no PHP files to analyze.\n";
+            return 0;
+        }
+        $generated = array_values(array_diff($repository->source(['php'], [], false, true), $repository->source(['php'], [], true, true)));
+        $includes = [$core, ...$generated];
+        foreach (['vendor', '.civikitchen-siblings', ...$repository->vendoredPrefixes()] as $symbolsOnly) {
+            if (file_exists($symbolsOnly)) {
+                $includes[] = $symbolsOnly;
+            }
+        }
+
+        $own = is_file('mago.toml');
+        if ($own) {
+            echo "ckanalyze: using this repo's own mago.toml (the CiviKitchen plugins load only through its extends).\n";
+        }
+        $base = $own ? (string) realpath('mago.toml') : $this->checkoutRoot . '/toolbelt/mago/mago.toml';
+        // mago picks the config format by extension, so the file needs its .toml.
+        $directory = sys_get_temp_dir() . '/ckanalyze-' . bin2hex(random_bytes(6));
+        if (!mkdir($directory, 0700)) {
+            return $this->error("cannot create {$directory}");
+        }
+        $config = $directory . '/mago.toml';
+        $list = static fn(array $items): string => '[' . implode(', ', array_map(static fn(string $item): string => (string) json_encode($item, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), $items)) . ']';
+        // mago's analyzer fails on errors only; a shadow run has to count every finding.
+        file_put_contents($config, "extends = {$list([$base])}\n\n[source]\npaths = {$list($paths)}\nincludes = {$list($includes)}\n\n[analyzer]\nminimum-fail-level = \"note\"\n");
+        $command = ['mago', '--workspace', '.', '--config', $config];
+        $floor = $own ? null : PhpFloor::ofComposerJson('.');
+        if ($floor !== null) {
+            $command = [...$command, '--php-version', $floor];
+        }
+        // The extension's plugins resolve info.xml and fixtures from the repo root, not mago's config directory.
+        $environment = [...(getenv() ?: []), 'CK_MAGO_WORKSPACE' => (string) getcwd()];
+        try {
+            return $this->runner->passthrough([...$command, 'analyze'], $environment);
+        } finally {
+            @unlink($config);
+            @rmdir($directory);
+        }
+    }
+
+    /** Buildkit images keep core inside the CMS build, so cv names it there. */
+    private function core(): ?string
+    {
+        $configured = (string) getenv('CIVICRM_CORE_DIR');
+        if ($configured !== '') {
+            return is_file(rtrim($configured, '/') . '/Civi.php') ? rtrim($configured, '/') : null;
+        }
+        if (is_file($this->imageCore . '/Civi.php')) {
+            return $this->imageCore;
+        }
+        $cv = $this->runner->capture(['cv', 'path', '-d', '[civicrm.root]']);
+        $root = rtrim(trim($cv['output']), '/');
+        return $cv['status'] === 0 && $root !== '' && is_file($root . '/Civi.php') ? $root : null;
+    }
+
+    private function error(string $message): int
+    {
+        fwrite(STDERR, "ckanalyze: {$message}\n");
+        return 2;
+    }
+
+    private function usage(): string
+    {
+        return <<<'TXT'
+ckanalyze - static analysis with mago analyze and the CiviKitchen plugins.
+
+  ckanalyze               analyze the extension's PHP outside tests/
+
+Run from the extension root inside the image; untracked files count. CiviCRM
+core (CIVICRM_CORE_DIR, else /var/www/html/core, else cv's [civicrm.root]),
+civix-generated files,
+vendor/, .civikitchen-siblings/ and policy.vendored_paths are read for their
+symbols only. Uses this
+repo's mago.toml when it has one (its [source] lists add to the scope
+above), else the CiviKitchen baseline at the composer.json PHP floor. Every
+finding fails, notes included. `ck ci` runs it as a shadow gate beside phpstan:
+findings are reported but do not fail the run.
+
+TXT;
+    }
+}
