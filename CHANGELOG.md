@@ -14,6 +14,15 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- An extension whose `composer.json` declares `extra.strauss` gets the managed
+  `.civikitchen/strauss.php`. It runs a pinned, checksum-verified Strauss
+  release from the system temp directory, so composer can prefix bundled
+  packages without the phar shipping. `.civikitchen/` is left out of release
+  archives ([Prefixed dependencies](docs/extension-releases.md#prefixed-dependencies-strauss)).
+  The template gate stamps and lints it too.
+
 ## [1.36.0] - 2026-10-11
 
 ### Added

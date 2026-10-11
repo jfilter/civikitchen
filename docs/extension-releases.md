@@ -172,7 +172,7 @@ Tracked files at the tag plus any declared build output, under a single
 top-level directory named the extension key, minus the development layer:
 
 ```
-.github/ .docker/ .claude/ tests/ node_modules/
+.github/ .docker/ .civikitchen/ .claude/ tests/ node_modules/
 .gitattributes .gitignore .editorconfig civikitchen.yaml .phpunit.result.cache
 .gitlab-ci.yml renovate.json mago.toml phpcs.xml(.dist)
 composer-dependency-analyser.php phpstan.neon(.dist) phpstan-tests.neon(.dist)
@@ -196,6 +196,52 @@ When `composer_install` is enabled, package-level copies of the same excluded
 development paths (for example `vendor/acme/package/.github/`) are removed
 before the temporary tree is archived. The resulting ZIP still goes through
 the ordinary `ckrelease verify` and fresh-install smoke test.
+
+### Prefixed dependencies (Strauss)
+
+PHP has one class table per process. Two extensions that bundle different
+versions of the same package share whichever copy loads first, which ends in a
+fatal error or a silently wrong result. A package other extensions may bundle
+too is therefore prefixed with [Strauss](https://github.com/BrianHenryIE/strauss),
+in place in `vendor/`:
+
+```json
+"extra": {
+  "strauss": {
+    "target_directory": "vendor",
+    "namespace_prefix": "Civi\\Myext\\Vendor\\",
+    "classmap_prefix": "Civi_Myext_Vendor_",
+    "packages": ["acme/lib"]
+  }
+},
+"scripts": {
+  "prefix-namespaces": ["@php .civikitchen/strauss.php", "@composer dump-autoload"],
+  "post-install-cmd": ["@prefix-namespaces"],
+  "post-update-cmd": ["@prefix-namespaces"]
+}
+```
+
+- Declaring `extra.strauss` makes `.civikitchen/strauss.php` a managed file that
+  `ckinit --update` writes. It caches the pinned Strauss release in the system
+  temp directory and runs a private copy whose SHA-256 it checked, so the phar
+  never lands in the extension. The archive leaves `.civikitchen/` out; a deploy
+  from the git tag ships the file, which then exits at once outside the CLI.
+  Dropping `extra.strauss` leaves the runner in place: delete it with the config.
+- Every `composer install` runs the script: the release workflow's
+  (`composer_install: true`), CI's, and a deploy that builds from the tag. The
+  archive carries the prefixed tree.
+- The extension's main file loads `vendor/autoload.php`.
+- Packages core ships (Guzzle, `psr/log`, `psr/http-message`, …) go under
+  `provide`, with a range that covers the supported core versions. Never use `*`.
+  A bundled copy would replace core's for every extension. When the range does
+  not satisfy a requirement, Composer installs its own copy without a warning.
+- Strauss also writes `vendor/composer/autoload_aliases.php`, which would
+  answer the unprefixed names. The `composer dump-autoload` after it leaves the
+  file unreferenced, so code that names a package without the prefix fails in
+  development as in production.
+- That `composer dump-autoload` writes a plain autoloader, so
+  `--optimize-autoloader` on the outer install has no effect. Classes resolve
+  through the PSR-4/PSR-0 rules instead of a classmap.
 
 Because the archive is built from tracked files, everything a `.gitignore`
 already covers is absent for free, unless it is declared build output; the list

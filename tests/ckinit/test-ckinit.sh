@@ -864,5 +864,28 @@ fi
 grep -q 'ci: gitlab supports a repository holding one extension' <<<"$out"
 test ! -e "$work/gitlab-mono/.github/workflows/ci.yml"
 
+# The Strauss runner exists only where composer.json declares extra.strauss;
+# there it is managed like any other file.
+test ! -e "$work/clean/.civikitchen/strauss.php"
+cp -R "$work/clean" "$work/strauss"
+php -r '$f = $argv[1]; $j = json_decode(file_get_contents($f), true); $j["extra"]["strauss"] = ["packages" => ["acme/lib"]];
+  file_put_contents($f, json_encode($j, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");' "$work/strauss/composer.json"
+out=$("$root/scaffold/ckinit.php" --check "$work/strauss" 2>&1 || true)
+grep -q 'missing   .civikitchen/strauss.php' <<<"$out" || { echo "an absent Strauss runner was not reported: $out" >&2; exit 1; }
+"$root/scaffold/ckinit.php" --update "$work/strauss" >/dev/null
+cmp "$work/strauss/.civikitchen/strauss.php" "$root/scaffold/template/extension/.civikitchen/strauss.php"
+"$root/scaffold/ckinit.php" --check "$work/strauss" >/dev/null
+# Seeding replaces composer.json with the template's, so it writes no runner.
+cp -R "$work/clean" "$work/strauss-seed"
+cp "$work/strauss/composer.json" "$work/strauss-seed/composer.json"
+"$root/scaffold/ckinit.php" --force "$work/strauss-seed" >/dev/null
+test ! -e "$work/strauss-seed/.civikitchen/strauss.php"
+printf '%s\n' '{' > "$work/strauss/composer.json"
+if out=$("$root/scaffold/ckinit.php" --check "$work/strauss" 2>&1); then
+  echo "an unparseable composer.json was accepted" >&2
+  exit 1
+fi
+grep -q 'cannot parse .*composer.json' <<<"$out"
+
 "$root/scaffold/ckinit.php" --help >/dev/null
 echo "ckinit integration checks passed"
