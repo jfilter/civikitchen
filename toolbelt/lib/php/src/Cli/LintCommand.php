@@ -128,8 +128,9 @@ final class LintCommand implements Command
      */
     private function magoRuleEnabled(array $magoArguments, string $rule): ?bool
     {
-        $result = $this->runner->capture([...$magoArguments, 'config', '--show', 'linter', '--no-extensions']);
-        $config = json_decode($result['output'], true);
+        // stdout only: mago logs `--php-version` overrides to stderr.
+        $result = $this->runner->captureSeparate([...$magoArguments, 'config', '--show', 'linter', '--no-extensions']);
+        $config = json_decode($result['stdout'], true);
         $enabled = is_array($config) ? ($config['rules'][$rule]['enabled'] ?? null) : null;
 
         return $result['status'] === 0 && is_bool($enabled) ? $enabled : null;

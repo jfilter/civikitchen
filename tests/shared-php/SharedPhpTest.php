@@ -784,6 +784,23 @@ final class SharedPhpTest extends TestCase
         }
     }
 
+    public function testLintFixReadsTheLinterConfigPastThePhpVersionNotice(): void
+    {
+        $before = getcwd();
+        chdir($this->temporary);
+        file_put_contents($this->temporary . '/composer.json', '{"require":{"php":">=8.1"}}');
+        ob_start();
+        try {
+            $runner = new RecordingRunner();
+            self::assertSame(0, (new LintCommand(dirname(__DIR__, 2), $runner))->run(['--fix', '--all']));
+            self::assertTrue($runner->passedArgument('--php-version'));
+            self::assertTrue($runner->passedArgument('--potentially-unsafe'));
+        } finally {
+            ob_end_clean();
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
     public function testLintFixLeavesAStrictTypesOptOutAlone(): void
     {
         $before = getcwd();
@@ -1024,9 +1041,21 @@ final class RecordingRunner extends Runner
             return ['status' => 0, 'output' => "dir tests\n"];
         }
         if ($command[0] === '/fake/mago' && in_array('config', $command, true)) {
-            return ['status' => 0, 'output' => $this->magoLinterConfig];
+            $result = $this->captureSeparate($command, $environment, $workingDirectory);
+            return ['status' => $result['status'], 'output' => $result['stderr'] . $result['stdout']];
         }
         return ['status' => 0, 'output' => ''];
+    }
+
+    public function captureSeparate(array $command, ?array $environment = null, ?string $workingDirectory = null): array
+    {
+        if ($command[0] !== '/fake/mago' || !in_array('config', $command, true)) {
+            return parent::captureSeparate($command, $environment, $workingDirectory);
+        }
+        $this->commands[] = $command;
+        // Like mago: a `--php-version` override is logged to stderr.
+        $stderr = in_array('--php-version', $command, true) ? " INFO Overriding PHP version with 8.1.0.\n" : '';
+        return ['status' => 0, 'stdout' => $this->magoLinterConfig, 'stderr' => $stderr];
     }
 
     /** What `mago config --show linter` prints. */
