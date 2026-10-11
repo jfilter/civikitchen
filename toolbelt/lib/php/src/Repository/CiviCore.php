@@ -31,6 +31,12 @@ final class CiviCore
         if (is_dir($core . '/vendor')) {
             return $core . '/vendor';
         }
+        // The buildkit images link a package core to /var/www/html/core.
+        return self::packageVendor($core) ?? self::packageVendor(realpath($core) ?: $core);
+    }
+
+    private static function packageVendor(string $core): ?string
+    {
         $project = dirname($core, 2);
         return str_ends_with($core, '/civicrm/civicrm-core') && basename($project) === 'vendor' ? $project : null;
     }

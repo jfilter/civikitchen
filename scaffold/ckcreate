@@ -274,6 +274,8 @@ EOF
 echo "$tool: fixing lint findings in the civix output …"
 docker compose -p "$project" -f "$work/compose.yml" exec -T -u root -w "/out/$key" app cklint --fix --all >/dev/null \
   || echo "$tool: cklint --fix could not fix everything; run cklint --all in the new extension" >&2
+docker compose -p "$project" -f "$work/compose.yml" exec -T -u root -w "/out/$key" app ckfmt >/dev/null \
+  || echo "$tool: ckfmt failed; run ckfmt in the new extension" >&2
 docker compose -p "$project" -f "$work/compose.yml" exec -T -u root app \
   chown -R "$(id -u):$(id -g)" "/out/$key" 2>/dev/null || true
 

@@ -576,6 +576,8 @@ final class SharedPhpTest extends TestCase
         $package = $this->temporary . '/drupal/vendor/civicrm/civicrm-core';
         mkdir($package, 0700, true);
         self::assertSame($this->temporary . '/drupal/vendor', CiviCore::vendor($package));
+        symlink($package, $this->temporary . '/linked-core');
+        self::assertSame(realpath($this->temporary . '/drupal/vendor'), CiviCore::vendor($this->temporary . '/linked-core'));
         mkdir($this->temporary . '/bare');
         self::assertNull(CiviCore::vendor($this->temporary . '/bare'));
     }
