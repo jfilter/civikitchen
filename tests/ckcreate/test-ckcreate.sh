@@ -47,7 +47,7 @@ php -r '
   $xml = simplexml_load_file($argv[1] . "/info.xml");
   assert((string) $xml->license === "Proprietary");
   assert((string) $xml->version === "0.1.0");
-  assert((string) $xml->php_compatibility->ver[0] === "8.1");
+  assert((string) $xml->php_compatibility->ver[0] === "8.2");
   foreach ($xml->urls->url ?? [] as $url) { assert((string) $url["desc"] !== "Licensing"); }
   $composer = json_decode(file_get_contents($argv[1] . "/composer.json"), true, 512, JSON_THROW_ON_ERROR);
   assert($composer["license"] === "proprietary");
@@ -59,7 +59,7 @@ if grep -q 'MIT' "$proprietary/README.md"; then
   exit 1
 fi
 grep -q '^Copyright (C) .* Acme Collective\. All rights reserved\.$' "$proprietary/LICENSE.txt"
-grep -q $'^\tphpVersion: 80100$' "$proprietary/phpstan.neon.dist"
+grep -q $'^\tphpVersion: 80200$' "$proprietary/phpstan.neon.dist"
 php -r '
   require $argv[1]; $d=ck_config_load($argv[2]);
   assert($d["policy"]["license"] === "Proprietary");

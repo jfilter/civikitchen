@@ -54,6 +54,25 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Changed
 
+- The extension template declares PHP `>=8.2` (was `>=8.1`), so `ckcreate`
+  scaffolds `info.xml` from 8.2 and `ckcompat` checks new extensions against
+  8.2. Existing extensions keep the floor their `composer.json` declares.
+- **Breaking:** the dev images run as the web user (`www-data`; buildkit
+  flavors: `buildkit`), and so does `docker exec`: a root `cv` or `ck` run
+  left root-owned CiviCRM and tool caches the web server could not write.
+  Apache binds port 80 as that user, which Docker allows since 20.10.
+  `CIVIKITCHEN_EXTRA_PACKAGES`
+  and `/civikitchen-init.d/*.sh` hooks that need root need `user: root` on
+  the service. `CIVIKITCHEN_CV_AS_ROOT` and the standalone `cv` wrapper are
+  gone. The demo images stay root for their embedded MariaDB.
+- **Breaking:** the entrypoints no longer run `composer install` in mounted
+  extensions (`CIVIKITCHEN_AUTO_COMPOSER` is gone and warns when set): the
+  web user cannot write a host checkout, and a root run left `vendor/` to be
+  chowned back. `vendor/` now comes from the checkout's owner before the
+  stack starts, through `ck internal composer-install`: `ckup` runs it as the
+  calling user, the CI workflows as the runner user, the GitLab jobs before
+  `ckboot`. A scenario stack or a `playwright-e2e.yml` `prepare_command` runs
+  it itself (`docs/scenarios.md`, `docs/reusable-workflows.md`).
 - cklint no longer reports a mixin-only extension's main file as redundant:
   core includes the info.xml `<file>.php` of every module extension, so the
   file must exist even when the mixins register everything.
