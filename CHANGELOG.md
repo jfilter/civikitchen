@@ -46,8 +46,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   the tool does. It reads core's APIv4 `Result` from a stub that is generic
   over its rows: a `Result` from core's `execute()`, or from `civicrm_api4()`
   without an index, gives rows keyed by field name (`array<string, mixed>`)
-  to `foreach`, index access, `first()` and `single()`, a `Result<array{id: int}>` annotation gives that shape, and any
-  other `Result` takes values of any type. An action that declares its own
+  to `foreach`, index access, `first()` and `single()`, a
+  `Result<array{id: int}>` annotation gives that shape, and any other
+  `Result` takes values of any type. An action that declares its own
   `execute()` keeps its return type. A plugin drops mago's finding on
   `(array) $result`.
 - Two lint rules, off in the baseline and run by `ckcompat`:
