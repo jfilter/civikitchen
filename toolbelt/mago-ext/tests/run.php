@@ -63,6 +63,17 @@ function config(array $case, string $workspace): string
         . "[extension-hosts.civikitchen]\ncommand = {$list($command)}\nenvironment = { {$table} }\n";
 }
 
+/** The stderr of a worker that refuses its arguments before mago's first frame; empty if it starts. */
+function startupError(string $workspace, array $case): string
+{
+    $env = ['CK_MAGO_WORKSPACE' => $workspace, ...($case['env'] ?? [])];
+    $assignments = implode(' ', array_map(static fn (string $key, string $value): string => $key . '=' . escapeshellarg($value), array_keys($env), $env));
+    $arguments = implode(' ', array_map('escapeshellarg', $case['args'] ?? []));
+    $cmd = sprintf('cd %s && %s php %s %s 2>&1 >/dev/null </dev/null', escapeshellarg($workspace), $assignments, escapeshellarg(dirname(__DIR__) . '/worker.php'), $arguments);
+
+    return (string) shell_exec($cmd);
+}
+
 /** @return array{?list<string>, string} "path:line message" for the case's code, sorted (null when mago gave no report or a help substring is missing), and mago's stderr */
 function findings(string $mago, string $workspace, string $configPath, array $case): array
 {
@@ -115,7 +126,8 @@ foreach (glob(__DIR__ . '/cases/*.php') ?: [] as $caseFile) {
         file_put_contents($configPath, config($case, $workspace));
         [$actual, $stderr] = findings($mago, $workspace, $configPath, $case);
         if (isset($case['error'])) {
-            $failedAsExpected = $actual === null && str_contains($stderr, $case['error']);
+            // A request's error reaches mago's output; a startup error only the worker's own stderr, which mago drops now and then.
+            $failedAsExpected = $actual === null && str_contains($stderr . startupError($workspace, $case), $case['error']);
             echo ($failedAsExpected ? 'ok  ' : 'FAIL') . " {$case['name']}" . ($failedAsExpected ? " (error)\n" : "\n  expected an error containing: {$case['error']}\n");
             $failed += $failedAsExpected ? 0 : 1;
             continue;

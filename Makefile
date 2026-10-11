@@ -190,8 +190,8 @@ test-ckinit: $(SCENARIO_YAML_STAMP) ## ckinit seed/update/check integration chec
 	bash tests/ckinit/test-ckup.sh
 	bash tests/ckinit/test-ckx.sh
 
-test-example-template: $(SCENARIO_YAML_STAMP) ## The monorepo examples carry the current template files
-	set -e; for info in examples/monorepo/*/info.xml; do php scaffold/ckinit.php --check "$$(dirname "$$info")"; done
+test-example-template: $(SCENARIO_YAML_STAMP) ## The monorepo examples carry the current template files and pass ckconform
+	set -e; for info in examples/monorepo/*/info.xml; do php scaffold/ckinit.php --check "$$(dirname "$$info")"; (cd "$$(dirname "$$info")" && ../../../toolbelt/bin/ckconform >/dev/null) || { echo "ckconform fails in $$(dirname "$$info")" >&2; exit 1; }; done
 
 test-ckcreate: $(SCENARIO_YAML_STAMP) ## ckcreate orchestration and atomic-output checks (fake Docker)
 	bash tests/ckcreate/test-ckcreate.sh
