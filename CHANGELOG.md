@@ -36,9 +36,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
   civix-generated files, `vendor/`, `.civikitchen-siblings/` and
   `policy.vendored_paths` for their symbols. `ck ci` runs it after phpstan as
   a shadow gate: findings show as `shadow` and never fail the run, a crash of
-  the tool does. A plugin drops the row-access and array-cast findings on
-  core's APIv4 `Result`, which mago misreads because core declares it without
-  template types.
+  the tool does. It reads core's APIv4 `Result` from a stub that is generic
+  over its rows: a `Result` from core's `execute()`, or from `civicrm_api4()`
+  without an index, gives rows keyed by field name (`array<string, mixed>`)
+  to `foreach`, index access, `first()` and `single()`, a `Result<array{id: int}>` annotation gives that shape, and any
+  other `Result` takes values of any type. An action that declares its own
+  `execute()` keeps its return type. A plugin drops mago's finding on
+  `(array) $result`.
 - Two lint rules, off in the baseline and run by `ckcompat`:
   `civikitchen/php-compatibility` reports a dynamic class constant fetch
   `C::{$name}` below 8.3 and the functions newer than the floor that mago has

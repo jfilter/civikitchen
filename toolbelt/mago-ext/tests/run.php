@@ -5,14 +5,14 @@ declare(strict_types=1);
 // Holds every rule to the exact findings its case file expects, through the
 // real mago binary. Usage: php tests/run.php [--mago=<binary>] [case-name-substring]
 //
-// A case: name, command (lint|analyze), code (one, or a list for analyze), paths and includes relative to
-// its workspace (toolbelt/ unless 'workspace' names a directory under it),
+// A case: name, command (lint|analyze), code (one, or a list for analyze), paths, includes and patches
+// relative to its workspace (toolbelt/ unless 'workspace' names a directory under it),
 // args (worker options), env (worker environment), analyzer (mago [analyzer]
 // settings), baseline (true: extend the shipped toolbelt/mago/mago.toml, as a
 // repo's own config does), expect ("path:line message") and help (substrings every
 // expected finding's help must contain), or error (a substring of the output
-// of a run that must fail without a report). {toolbelt} in env and help values
-// is the toolbelt directory.
+// of a run that must fail without a report). {toolbelt} in env, help, includes
+// and patches values is the toolbelt directory.
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -57,7 +57,7 @@ function config(array $case, string $workspace): string
 
     $extends = ($case['baseline'] ?? false) ? 'extends = ' . $list([dirname(__DIR__, 2) . '/mago/mago.toml']) . "\n" : '';
 
-    return $extends . "php-version = \"" . ($case['php'] ?? '8.1') . "\"\n\n[source]\npaths = {$list($case['paths'])}\nincludes = {$list($case['includes'] ?? [])}\n\n"
+    return $extends . "php-version = \"" . ($case['php'] ?? '8.1') . "\"\n\n[source]\npaths = {$list($case['paths'])}\nincludes = {$list($case['includes'] ?? [])}\npatches = {$list($case['patches'] ?? [])}\n\n"
         . "[linter]\nminimum-fail-level = \"note\"\n\n"
         . (isset($case['analyzer']) ? "[analyzer]\n" . implode('', array_map(static fn (string $key, mixed $value): string => "{$key} = " . json_encode($value, JSON_UNESCAPED_SLASHES) . "\n", array_keys($case['analyzer']), $case['analyzer'])) . "\n" : '')
         . "[extension-hosts.civikitchen]\ncommand = {$list($command)}\nenvironment = { {$table} }\n";
@@ -104,7 +104,7 @@ foreach (glob(__DIR__ . '/cases/*.php') ?: [] as $caseFile) {
     foreach (require $caseFile as $case) {
         $case = array_replace($case, array_map(
             static fn (array $values): array => str_replace('{toolbelt}', $toolbelt, $values),
-            array_intersect_key($case, ['env' => true, 'help' => true]),
+            array_intersect_key($case, ['env' => true, 'help' => true, 'includes' => true, 'patches' => true]),
         ));
         if ($filter !== null && !str_contains($case['name'], $filter)) {
             continue;

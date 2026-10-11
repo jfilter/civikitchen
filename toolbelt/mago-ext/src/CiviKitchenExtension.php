@@ -7,6 +7,7 @@ namespace CiviKitchen\Mago;
 use Mago\Sdk\Analyzer\ClassLikeAnalysisHook;
 use Mago\Sdk\Analyzer\IssueFilterHook;
 use Mago\Sdk\Analyzer\MethodCallAnalysisHook;
+use Mago\Sdk\Analyzer\MethodReturnTypeProvider;
 use Mago\Sdk\Analyzer\NodeAnalysisHook;
 use Mago\Sdk\Analyzer\Plugin;
 use Mago\Sdk\Analyzer\PluginDefinition;
@@ -29,6 +30,7 @@ final class CiviKitchenExtension
         ClassLikeAnalysisHook::class => 'registerClassLikeAnalysisHook',
         IssueFilterHook::class => 'registerIssueFilterHook',
         PropertyInitializationProvider::class => 'registerPropertyInitializationProvider',
+        MethodReturnTypeProvider::class => 'registerMethodReturnTypeProvider',
     ];
 
     private function __construct()

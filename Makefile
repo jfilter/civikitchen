@@ -116,7 +116,7 @@ define require_nonempty
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-mago-ext test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario \
+.PHONY: help doctor release test test-shared-php-coverage test-ckconform test-phpstan test-mago-ext test-mago-stubs test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario \
 	test-compose-isolation test-concurrency-groups test-matrix-legs test-sibling-wiring test-dist-build-wiring test-gitlab-mr-jobs test-sibling-checkout test-vendored-paths test-ckeslint test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
 	test-ck-headless test-ckcoretest test-phpstan-bootstrap test-shell-portability test-install-trivy test-resolve-civicrm-stable test-resolve-civicrm-git lint lint-shell lint-shell-portability \
 	test-database-matrix test-compose-config test-playwright-port test-demo-basic-auth test-release-retag test-release-steps test-ci-gates-step test-release-script \
@@ -138,7 +138,7 @@ help: ## Show this help
 doctor: ## Report every missing host prerequisite in one pass
 	bash scripts/doctor.sh
 
-test: test-shared-php-coverage test-ckconform test-phpstan test-mago-ext test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-compose-isolation test-concurrency-groups test-matrix-legs test-sibling-wiring test-dist-build-wiring test-gitlab-mr-jobs test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-resolve-civicrm-stable test-resolve-civicrm-git test-changelog ## Run every fast test suite (no Docker)
+test: test-shared-php-coverage test-ckconform test-phpstan test-mago-ext test-mago-stubs test-rector test-ckinit test-example-template test-ckcreate test-ckcivix test-ckmodernize test-ck test-composer-deps test-profiles test-scenario test-provision test-core-patches test-ckcoretest test-ck-headless test-phpstan-bootstrap test-ckcommon-git test-missing-tool test-compose-isolation test-concurrency-groups test-matrix-legs test-sibling-wiring test-dist-build-wiring test-gitlab-mr-jobs test-sibling-checkout test-database-matrix test-demo-basic-auth test-release-retag test-release-move-major-tag test-release-publish-flags test-release-steps test-ci-gates-step test-release-script test-vendored-paths test-ckeslint test-ckcoverage test-doctor test-tool-locks test-shell-portability test-install-trivy test-resolve-civicrm-stable test-resolve-civicrm-git test-changelog ## Run every fast test suite (no Docker)
 
 test-shared-php-coverage: $(PHPUNIT) $(SCENARIO_YAML_STAMP) ## Shared PHP unit tests and measured line-coverage floor
 	if command -v phpdbg >/dev/null 2>&1; then \
@@ -174,6 +174,11 @@ test-phpstan: $(PHPUNIT) $(CORE) ## The phpstan extension's rule tests + catalog
 test-mago-ext: $(MAGO) ## The mago extension's rule and plugin fixtures
 	composer install --no-interaction --no-progress --working-dir=toolbelt/mago-ext
 	php toolbelt/mago-ext/tests/run.php --mago=$(abspath $(MAGO))
+
+# A stub replaces core's declaration for mago, so a member core adds or changes
+# must fail here; the image tests run the same check against each image's core.
+test-mago-stubs: $(CORE) ## The mago stubs declare every member of the pinned core
+	CIVICRM_CORE_DIR=$(abspath $(CORE)) php tests/toolbelt/test-mago-stub-parity.php
 
 # ckmodernize writes these rewrites into extension code, so each rule's
 # fixtures pin both the rewrite and the calls it must leave alone.

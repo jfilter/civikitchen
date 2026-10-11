@@ -44,7 +44,14 @@ final class AnalyzeCommand implements Command
         }
         $generated = array_values(array_diff($repository->source(['php'], [], false, true), $repository->source(['php'], [], true, true)));
         $coreVendor = CiviCore::vendor($core);
-        $includes = [$core, ...($coreVendor === null || str_starts_with($coreVendor, $core . '/') ? [] : [$coreVendor]), ...$generated];
+        // Each stub stands in for core's file at the same path; stub-parity.php keeps their members in step.
+        $stubs = $this->checkoutRoot . '/toolbelt/mago/stubs';
+        $replaced = [];
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($stubs, \FilesystemIterator::SKIP_DOTS)) as $stub) {
+            $replaced[] = $core . substr((string) $stub, strlen($stubs));
+        }
+        sort($replaced);
+        $includes = [$core, ...($coreVendor === null || str_starts_with($coreVendor, $core . '/') ? [] : [$coreVendor]), $stubs, ...$generated];
         foreach (['vendor', '.civikitchen-siblings', ...$repository->vendoredPrefixes()] as $symbolsOnly) {
             if (file_exists($symbolsOnly)) {
                 $includes[] = $symbolsOnly;
@@ -64,7 +71,7 @@ final class AnalyzeCommand implements Command
         $config = $directory . '/mago.toml';
         $list = static fn(array $items): string => '[' . implode(', ', array_map(static fn(string $item): string => (string) json_encode($item, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), $items)) . ']';
         // mago's analyzer fails on errors only; a shadow run has to count every finding.
-        file_put_contents($config, "extends = {$list([$base])}\n\n[source]\npaths = {$list($paths)}\nincludes = {$list($includes)}\n\n[analyzer]\nminimum-fail-level = \"note\"\n");
+        file_put_contents($config, "extends = {$list([$base])}\n\n[source]\npaths = {$list($paths)}\nincludes = {$list($includes)}\nexcludes = {$list($replaced)}\npatches = {$list([$this->checkoutRoot . '/toolbelt/mago/patches'])}\n\n[analyzer]\nminimum-fail-level = \"note\"\n");
         $command = ['mago', '--workspace', '.', '--config', $config];
         $floor = $own ? null : PhpFloor::ofComposerJson('.');
         if ($floor !== null) {
@@ -97,7 +104,9 @@ Run from the extension root inside the image; untracked files count. CiviCRM
 core (CIVICRM_CORE_DIR, else /var/www/html/core, else cv's [civicrm.root]),
 civix-generated files,
 vendor/, .civikitchen-siblings/ and policy.vendored_paths are read for their
-symbols only. Uses this
+symbols only. Core files with a typed stub in toolbelt/mago/stubs/ are read
+from the stub instead; toolbelt/mago/patches/ adds types to core's own
+declarations. Uses this
 repo's mago.toml when it has one (its [source] lists add to the scope
 above), else the CiviKitchen baseline at the composer.json PHP floor. Every
 finding fails, notes included. `ck ci` runs it as a shadow gate beside phpstan:

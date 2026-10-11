@@ -22,6 +22,8 @@
 #     with Smarty, and still fails a broken one;
 #   * the phpstan field check accepts every live get and create field on the
 #     catalog's minor release.
+#   * execute() and civicrm_api4() without an index return array rows, the
+#     type ckanalyze gives them.
 # The db service gets a plain MYSQL_USER and no grant script: the app user
 # holds rights on its own database only, exactly as a hand-written stack.
 #
@@ -136,6 +138,11 @@ drift=$(docker exec -u www-data -e CK_PHPSTAN_SRC=/tmp/ck-phpstan-src "${APP}" \
 while IFS= read -r line; do echo "    ${line}"; done <<<"${drift}"
 verdict=$(grep '^live-api4-drift: ' <<<"${drift}" | tail -1 | sed 's/^live-api4-drift: //' || true)
 check "APIv4 catalog vs live getFields: ${verdict:-no verdict}" "[ ${drift_rc} = 0 ] && [ -n \"\${verdict}\" ]"
+
+# 1c) The row type ckanalyze gives execute() and civicrm_api4() without an
+# index: the Result holds arrays keyed by field name.
+rows=$(cv ev '$rows = array_merge((array) \Civi\Api4\FinancialType::get(FALSE)->execute(), (array) civicrm_api4("FinancialType", "get", ["checkPermissions" => FALSE])); echo count(array_filter($rows, fn($row) => is_array($row) && array_filter(array_keys($row), "is_int") === [])) . "/" . count($rows);' | tr -d '[:space:]"' || true)
+check "execute() and civicrm_api4() return field maps (field maps/rows: ${rows:-none})" "[ '${rows%/*}' -gt 0 ] && [ '${rows%/*}' = '${rows#*/}' ]"
 
 # 2) The bind-mounted extension is enabled without CIVIKITCHEN_ENABLE_EXTENSIONS.
 status=$(cv api4 Extension.get +w key=ckbootfixture +s status | tr -d '[:space:]' || true)
