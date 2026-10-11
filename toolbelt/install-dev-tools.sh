@@ -5,19 +5,20 @@
 #   - phpunit  (pinned to 9 for CiviCRM compatibility)
 #   - phpstan  (isolated; static analysis incl. the deprecation rules and
 #              CiviKitchen's `@ck-legacy` deprecated-scope resolver)
-#   - phpcs    (only as the engine of PHPCompatibility for `ckcompat`)
 #   - rector   (isolated; powers `ckmodernize` — rector's PHP-version + quality
 #              sets plus CiviKitchen's CiviCRM footgun rules)
 #   - psalm    (isolated; powers `cktaint` — used ONLY as a taint engine, with
 #              CiviCRM source/sink/escape stubs)
 #   - infection (isolated; powers `ckmutate` — mutation testing, opt-in floor)
-#   - mago     (Rust binary; PHP half of `ckfmt` and the linter of `cklint`)
+#   - mago     (Rust binary; PHP half of `ckfmt`, the linter of `cklint`,
+#              the engine of `ckanalyze` and `ckcompat`)
+#   - composer-dependency-analyser (global composer root; powers `ckdeps`)
 #   - oxlint   (npm toolchain + tsgolint Go binary; powers `ckeslint`)
 #   - oxfmt    (npm toolchain; JS/TS half of `ckfmt`)
 #
 # Prerequisites (handled per image):
 #   - composer, php, curl, git on PATH
-#   - /opt/composer/vendor/bin on PATH (so phpcs/phpcbf are picked up)
+#   - /opt/composer/vendor/bin on PATH (so composer-dependency-analyser is picked up)
 set -euo pipefail
 
 # Pins with more than one consumer come from versions.env, which Make `include`s
@@ -41,7 +42,7 @@ TOOLBELT="$(cd "$(dirname "$0")" && pwd)"
 # major and turn a green `phpstan analyse` red with no code change.
 #
 # Everything composer can install is pinned in a committed composer.json +
-# composer.lock instead of here — toolbelt/phpcs-root, toolbelt/phpstan-root,
+# composer.lock instead of here — toolbelt/ckdeps-root, toolbelt/phpstan-root,
 # toolbelt/rector and toolbelt/psalm, each with a README explaining its pins.
 # A lock beats a variable: it fixes the transitive tree too, and it is a
 # reviewable diff rather than a resolution that happens at build time. What
@@ -132,7 +133,7 @@ chmod +x /usr/local/bin/mago
 rm -rf /tmp/mago.tar.gz "/tmp/mago-${MAGO_VERSION}-${MAGO_ARCH}-unknown-linux-gnu"
 
 # ---------------------------------------------------------------------------
-# phpcs + PHPCompatibility (from packagist), the engine behind `ckcompat`.
+# composer-dependency-analyser (from packagist), the engine behind `ckdeps`.
 #
 # COMPOSER_HOME is scoped to this script so it doesn't leak into the runtime
 # image — users who run `composer install` inside a container later
@@ -142,16 +143,9 @@ rm -rf /tmp/mago.tar.gz "/tmp/mago-${MAGO_VERSION}-${MAGO_ARCH}-unknown-linux-gn
 export COMPOSER_HOME=/opt/composer
 export COMPOSER_ALLOW_SUPERUSER=1
 
-# phpcs and everything riding on it (ckcompat, ckdeps) come from the
-# committed composer.json + lock the Dockerfile COPYs to COMPOSER_HOME — see
-# toolbelt/phpcs-root/README.md for what each pin is for. allow-plugins for the
-# phpcs installer is declared in that file, not set here.
+# From the committed composer.json + lock the Dockerfile COPYs to
+# COMPOSER_HOME — see toolbelt/ckdeps-root/README.md for the pin.
 composer global install --no-interaction --no-progress
-
-# Register PHPCompatibility and the PHPCSUtils it is built on explicitly, so
-# `ckcompat` does not depend on what the composer installer plugin wrote.
-phpcs --config-set installed_paths \
-    "${COMPOSER_HOME}/vendor/phpcompatibility/php-compatibility,${COMPOSER_HOME}/vendor/phpcsstandards/phpcsutils"
 
 # ---------------------------------------------------------------------------
 # rector (isolated install in its own dir) — powers `ckmodernize`. Beside its
@@ -169,8 +163,8 @@ composer install --working-dir="${TOOLBELT}/rector" --no-interaction --no-progre
 # switch — they are the only thing that catches calls into the ~640 symbols
 # CiviCRM core marks @deprecated, and they need no list anyone has to maintain.
 #
-# extension-installer is a composer plugin, so it needs allow-plugins like the
-# phpcs installer above — both declared in their composer.json. It writes a GeneratedConfig.php into its own vendor
+# extension-installer is a composer plugin, so it needs allow-plugins, declared
+# in its composer.json. It writes a GeneratedConfig.php into its own vendor
 # tree, which means the rules are active for every project this phpstan
 # analyses without a single project neon mentioning them.
 PHPSTAN_DIR="${TOOLBELT}/phpstan-root"
@@ -213,7 +207,7 @@ composer install --working-dir="${TOOLBELT}/mago-ext" --no-interaction --no-prog
 # psalm (isolated install in its own dir) — powers `cktaint`, installed beside
 # its taint config and CiviCRM stubs in toolbelt/psalm from the committed lock.
 #
-# Isolated, NOT `composer global require` alongside phpcs, and deliberately not
+# Isolated, NOT `composer global require` alongside the ckdeps analyser, and deliberately not
 # near phpstan: psalm pulls ~50 packages of its own (amphp, nikic/php-parser,
 # felixfbecker/…), and the phpstan tree above is what the static-analysis gate
 # every extension depends on — it must not be perturbed by another tool's

@@ -126,6 +126,19 @@ final class Syntax
         return $name === null || str_contains($name, '\\') ? null : strtolower($name);
     }
 
+    /** Like globalFunctionName, but `use function x as y;` makes y() a call of x(). */
+    public static function calledGlobalFunction(SourceFile $source, Node $callee): ?string
+    {
+        $callee = self::unwrap($source, $callee);
+        $resolved = $callee->kind === NodeKind::Identifier ? $source->getResolvedName($callee) : null;
+        if ($resolved?->imported !== true) {
+            return self::globalFunctionName($source, $callee);
+        }
+        $name = ltrim($resolved->name, '\\');
+
+        return str_contains($name, '\\') ? null : strtolower($name);
+    }
+
     /** The value of a TRUE/FALSE literal, `\`-qualified or not; null for anything else. */
     public static function booleanLiteral(SourceFile $source, Node $node): ?bool
     {

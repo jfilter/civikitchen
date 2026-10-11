@@ -17,7 +17,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # toolbelt/psalm/README.md. Raising it drops the older CiviCRM lines.
 FLOOR=8.1.31
 ROOTS=(
-    toolbelt/phpcs-root
+    toolbelt/ckdeps-root
     toolbelt/phpstan-root
     toolbelt/mago-ext
     toolbelt/rector

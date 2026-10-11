@@ -74,8 +74,8 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
 RUN pecl install pcov xdebug \
     && docker-php-ext-enable pcov
 
-# Shared dev-tools install (civix, phpunit, phpstan, phpcs+PHPCompatibility,
-# mago, rector/ckmodernize).
+# Shared dev-tools install (civix, phpunit, phpstan, mago, rector/ckmodernize,
+# the ckdeps analyser).
 # Lives in toolbelt/ so the standalone image uses the same script.
 # Composer-installable tools are pinned in committed lockfiles (toolbelt/*-root,
 # toolbelt/rector, toolbelt/psalm); what is left below is what needs a phar,
@@ -92,9 +92,9 @@ ARG MAGO_SHA256_X86_64
 ARG MAGO_SHA256_AARCH64
 ARG NPM_VERSION
 ARG INFECTION_VERSION
-# The phpcs installation root IS composer's home dir — `composer global
+# The ckdeps installation root IS composer's home dir — `composer global
 # install` in install-dev-tools.sh reads exactly these two files.
-COPY toolbelt/phpcs-root /opt/composer
+COPY toolbelt/ckdeps-root /opt/composer
 # The toolbelt, laid out as in a checkout, as in the standalone image — minus
 # the standalone-only helpers: cktestreset reseeds the standalone scratch DB,
 # ckcoretest runs core suites against its dist core, ckboot provisions the
@@ -310,9 +310,7 @@ ENTRYPOINT ["/home/buildkit/entrypoint.sh"]
 FROM base AS final
 
 # /opt/composer/vendor/bin is prepended ahead of /home/buildkit/buildkit/bin
-# so the dev-tools phpcs (with PHPCompatibility registered)
-# wins over the plain phpcs that civi-download-tools installs into buildkit's
-# own bin dir.
+# so the toolbelt's pinned tools win over buildkit's own copies.
 ARG DEFAULT_SITE_TYPE
 ARG CIVICRM_VERSION
 # Which CiviCRM the image bakes, readable via `docker inspect` without booting.
@@ -332,6 +330,12 @@ WORKDIR /home/buildkit
 # at the build-time localhost DB; the entrypoint overwrites it for the runtime
 # external DB.
 COPY --from=builder --chown=buildkit:buildkit /home/buildkit /home/buildkit
+
+# ckcompat and ckanalyze read core at /var/www/html/core, as in the standalone
+# image; cv only finds it once the site's database is up.
+RUN core="$(find /home/buildkit/buildkit/build/site -name Civi.php -printf '%h\n')" \
+    && test "$(printf '%s\n' "${core}" | wc -l)" -eq 1 && test -n "${core}" \
+    && ln -s "${core}" /var/www/html/core
 
 # Shared xdebug toggle + provisioning library — sourced from the entrypoint,
 # also used by the standalone image so the two stay in lockstep. Profiles ship

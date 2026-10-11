@@ -12,12 +12,13 @@
 #
 # What it checks:
 #   1. Every binary responds to --version
-#   2. phpcs carries PHPCompatibility and nothing of the retired style standards
+#   2. the toolbelt ships no phpcs; mago does its jobs
 #   3. ck scenario parses a canonical civikitchen.yaml
 #   3b. cklint's mago stage runs the CiviKitchen extension rules and its tests
 #   3c. ckmodernize boots rector and previews a CiviCRM footgun rewrite
 #   3d. ckrelease builds a dist zip and rejects a mismatched tag
-#   3g. ckcompat rejects syntax the declared PHP floor cannot parse
+#   3g. ckcompat rejects syntax, APIs, constants and enum cases the declared PHP
+#       floor lacks, not core's polyfills
 #   4. phpstan actually analyses a sample file (intentionally with type errors)
 #   4c. ckanalyze runs mago analyze against core as a shadow gate
 #   5. phpunit actually runs a passing assertion
@@ -43,7 +44,7 @@ fail() { echo "  ✗ $1"; FAIL=$((FAIL+1)); FAILURES+=("$1"); }
 # ---------------------------------------------------------------------------
 # 1. Binaries respond to --version
 echo "== versions =="
-for bin in composer node npm civix phpunit phpstan phpcs phpcbf cv infection; do
+for bin in composer composer-dependency-analyser node npm civix phpunit phpstan cv infection; do
     if command -v "${bin}" >/dev/null 2>&1 && "${bin}" --version >/dev/null 2>&1; then
         ok "${bin} --version"
     else
@@ -145,11 +146,10 @@ if [ "${CIVICRM_UF:-}" = "Standalone" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 2. phpcs is only PHPCompatibility's engine; cklint lints with mago
-echo "== phpcs standards =="
-STANDARDS="$(phpcs -i 2>&1)"
-if grep -q PHPCompatibility <<<"${STANDARDS}"; then ok "PHPCompatibility standard registered"; else fail "PHPCompatibility standard missing ($STANDARDS)"; fi
-if grep -qE 'Drupal|CiviKitchen' <<<"${STANDARDS}"; then fail "a retired style standard is still registered ($STANDARDS)"; else ok "no Drupal or CiviKitchen phpcs standard"; fi
+# 2. No phpcs in the toolbelt: cklint and ckcompat run on mago. buildkit's own
+#    clone keeps its phpcs, which no ck tool calls.
+echo "== no phpcs =="
+if [ -e /opt/composer/vendor/bin/phpcs ]; then fail "the toolbelt still installs phpcs"; else ok "the toolbelt installs no phpcs"; fi
 
 # ---------------------------------------------------------------------------
 # 3. ck scenario parses a canonical civikitchen.yaml
@@ -1014,11 +1014,10 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3g. ckcompat: the declared PHP floor is checked by BOTH stages — mago's
-#     parser at the floor version (categorical: syntax the floor cannot read)
-#     and PHPCompatibility (version-specific APIs). The image runs a single PHP
-#     8.4, so `php -l` is structurally blind to 8.4-only syntax; this is the
-#     only gate that sees it.
+# 3g. ckcompat: mago at the declared PHP floor — its parser for syntax the floor
+#     cannot read, analyze for APIs it lacks. The image runs a single PHP 8.4,
+#     so `php -l` is structurally blind to 8.4-only syntax; this is the only
+#     gate that sees it.
 echo "== ckcompat =="
 CMPDIR="${WORKDIR}/compatext"
 mkdir -p "${CMPDIR}/Civi"
@@ -1059,10 +1058,7 @@ else
     CMP_OK_OUT="$( (cd "${CMPDIR}" && ckcompat --php 8.4) 2>&1 || true)"
     fail "ckcompat failed on code that matches its floor (output: ${CMP_OK_OUT:0:300})"
 fi
-# Property hooks are the case PHPCompatibility 10.0.0-alpha2 gets wrong twice
-# over — it reports them as a removed curly-brace string offset, at ANY
-# testVersion, and offers phpcbf a "fix". The parse stage is what actually
-# names them, which is the whole reason it exists. Assert the verdict only.
+# Property hooks: syntax only the parse stage names.
 cat > "${CMPDIR}/Civi/Hooked.php" <<'PHP'
 <?php
 
@@ -1080,6 +1076,74 @@ if (cd "${CMPDIR}" && ckcompat) >/dev/null 2>&1; then
     fail "ckcompat passed PHP-8.4 property hooks against an 8.3 floor"
 else
     ok "ckcompat rejects PHP-8.4 property hooks against the declared floor"
+fi
+# array_find() is PHP 8.4, but core ships symfony/polyfill-php84: calling it on
+# an 8.3 floor is fine, and flagging it would be a false alarm.
+APIDIR="${WORKDIR}/compatapi"
+mkdir -p "${APIDIR}/Civi"
+echo '{"require":{"php":">=8.3"}}' > "${APIDIR}/composer.json"
+cat > "${APIDIR}/Civi/Api.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+function acme_api_first(array $xs): mixed {
+  return array_find($xs, fn($x) => $x !== NULL);
+}
+PHP
+if API_OUT="$( (cd "${APIDIR}" && ckcompat) 2>&1)"; then
+    ok "ckcompat accepts a function core polyfills"
+else
+    fail "ckcompat flagged a polyfilled function (output: ${API_OUT:0:400})"
+fi
+cat > "${APIDIR}/Civi/Dom.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+function acme_api_dom(string $name): string {
+  return \Dom\HTMLDocument::createEmpty()->saveHtml() . "${name}";
+}
+PHP
+API_OUT="$( (cd "${APIDIR}" && ckcompat) 2>&1 || true)"
+if grep -q 'unavailable-method' <<<"${API_OUT}" && grep -q 'civikitchen/php-deprecation' <<<"${API_OUT}"; then
+    ok "ckcompat reports an API the floor lacks and a deprecated interpolation"
+else
+    fail "ckcompat missed Dom\\HTMLDocument on an 8.3 floor or \"\${name}\" (output: ${API_OUT:0:400})"
+fi
+# Core polyfills RoundingMode, Pdo\Mysql and CURL_HTTP_VERSION_3, not
+# Random\IntervalBoundary: only the last one's constant fetch may be reported.
+CONSTDIR="${WORKDIR}/compatconst"
+mkdir -p "${CONSTDIR}/Civi"
+echo '{"require":{"php":">=8.1"}}' > "${CONSTDIR}/composer.json"
+cat > "${CONSTDIR}/Civi/Polyfilled.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+function acme_const_polyfilled(): array {
+  return [\RoundingMode::HalfAwayFromZero, \Pdo\Mysql::ATTR_COMPRESS, \CURL_HTTP_VERSION_3];
+}
+PHP
+if CONST_OUT="$( (cd "${CONSTDIR}" && ckcompat) 2>&1)"; then
+    ok "ckcompat accepts constants and enum cases core polyfills"
+else
+    fail "ckcompat flagged a polyfilled constant or enum case (output: ${CONST_OUT:0:400})"
+fi
+cat > "${CONSTDIR}/Civi/Boundary.php" <<'PHP'
+<?php
+
+declare(strict_types = 1);
+
+function acme_const_boundary(): object {
+  return \Random\IntervalBoundary::ClosedOpen;
+}
+PHP
+CONST_OUT="$( (cd "${CONSTDIR}" && ckcompat) 2>&1 || true)"
+if grep -q 'Random\\IntervalBoundary` is not available' <<<"${CONST_OUT}" && [ "$(grep -c 'civikitchen/unavailable-access' <<<"${CONST_OUT}")" -eq 1 ]; then
+    ok "ckcompat reports an enum case of a class the floor lacks"
+else
+    fail "ckcompat missed Random\\IntervalBoundary::ClosedOpen on an 8.1 floor (output: ${CONST_OUT:0:400})"
 fi
 
 # ---------------------------------------------------------------------------

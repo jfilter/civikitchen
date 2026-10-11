@@ -12,7 +12,7 @@ use InvalidArgumentException;
  */
 final class Options
 {
-    private const KNOWN = ['disable', 'exclude', 'max-lines', 'external-actions', 'ignore-calls', 'sql-known-tables', 'route-catalog'];
+    private const KNOWN = ['disable', 'exclude', 'max-lines', 'external-actions', 'ignore-calls', 'sql-known-tables', 'route-catalog', 'compatibility'];
 
     /** @param array<string, string> $values */
     private function __construct(private readonly array $values)

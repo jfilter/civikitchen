@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CiviKitchen\Toolbelt\Cli;
 
 use CiviKitchen\Toolbelt\Process\Runner;
+use CiviKitchen\Toolbelt\Repository\CiviCore;
 use CiviKitchen\Toolbelt\Repository\Files;
 use CiviKitchen\Toolbelt\Repository\PhpFloor;
 
@@ -30,9 +31,9 @@ final class AnalyzeCommand implements Command
         if (!$repository->isGitCheckout()) {
             return $this->error('not a git checkout - the file list comes from git ls-files.');
         }
-        $core = $this->core();
+        $core = CiviCore::locate($this->runner, $this->imageCore);
         if ($core === null) {
-            return $this->error("no CiviCRM core at CIVICRM_CORE_DIR, /var/www/html/core or cv's [civicrm.root] - set CIVICRM_CORE_DIR.");
+            return $this->error(CiviCore::MISSING);
         }
         // phpstan's main pass leaves the suite to phpstan-tests; the same scope keeps the two comparable.
         $isTest = static fn(string $file): bool => preg_match('#(^|/)tests/#', $file) === 1 || $file === 'phpstanBootstrap.php';
@@ -42,7 +43,8 @@ final class AnalyzeCommand implements Command
             return 0;
         }
         $generated = array_values(array_diff($repository->source(['php'], [], false, true), $repository->source(['php'], [], true, true)));
-        $includes = [$core, ...$generated];
+        $coreVendor = CiviCore::vendor($core);
+        $includes = [$core, ...($coreVendor === null || str_starts_with($coreVendor, $core . '/') ? [] : [$coreVendor]), ...$generated];
         foreach (['vendor', '.civikitchen-siblings', ...$repository->vendoredPrefixes()] as $symbolsOnly) {
             if (file_exists($symbolsOnly)) {
                 $includes[] = $symbolsOnly;
@@ -76,21 +78,6 @@ final class AnalyzeCommand implements Command
             @unlink($config);
             @rmdir($directory);
         }
-    }
-
-    /** Buildkit images keep core inside the CMS build, so cv names it there. */
-    private function core(): ?string
-    {
-        $configured = (string) getenv('CIVICRM_CORE_DIR');
-        if ($configured !== '') {
-            return is_file(rtrim($configured, '/') . '/Civi.php') ? rtrim($configured, '/') : null;
-        }
-        if (is_file($this->imageCore . '/Civi.php')) {
-            return $this->imageCore;
-        }
-        $cv = $this->runner->capture(['cv', 'path', '-d', '[civicrm.root]']);
-        $root = rtrim(trim($cv['output']), '/');
-        return $cv['status'] === 0 && $root !== '' && is_file($root . '/Civi.php') ? $root : null;
     }
 
     private function error(string $message): int

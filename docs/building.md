@@ -80,7 +80,7 @@ committing both files:
 
 | Root | Tools |
 | --- | --- |
-| `toolbelt/phpcs-root` | phpcs, PHPCompatibility, composer-dependency-analyser |
+| `toolbelt/ckdeps-root` | composer-dependency-analyser (`ckdeps`) |
 | `toolbelt/phpstan-root` | phpstan + the extensions every image ships |
 | `toolbelt/rector` | rector (and the phpstan version it may see) |
 | `toolbelt/psalm` | psalm (taint engine for `cktaint`) |

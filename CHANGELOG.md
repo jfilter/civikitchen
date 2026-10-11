@@ -28,6 +28,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   statement) and mago's `block-statement` (braces on every control
   structure). Both carry over checks the phpcs standard ran, with the same
   findings on real extension code.
+- `ckmigrate` (`ck migrate`) moves an extension repository off a retired
+  CiviKitchen tool in place, starting with phpcs; it exits 1 with a list of
+  what needs a person.
 - `ckanalyze` (`ck analyze`): `mago analyze` with the CiviKitchen analyzer
   plugins over the extension's PHP outside `tests/`, reading CiviCRM core,
   civix-generated files, `vendor/`, `.civikitchen-siblings/` and
@@ -36,6 +39,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   the tool does. A plugin drops the row-access and array-cast findings on
   core's APIv4 `Result`, which mago misreads because core declares it without
   template types.
+- Two lint rules, off in the baseline and run by `ckcompat`:
+  `civikitchen/php-compatibility` reports a dynamic class constant fetch
+  `C::{$name}` below 8.3 and the functions newer than the floor that mago has
+  no data for; `civikitchen/php-deprecation` reports `"${var}"` from 8.2 and
+  `get_class()` without an argument from 8.3.
 
 ### Changed
 
@@ -51,12 +59,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `no-generic-var-on-action-param`, `no-required-on-external-action`,
   `name-boolean-arguments`; Slevomat's `DeclareStrictTypes` → mago's
   `strict-types`. To migrate:
-  - delete `phpcs.xml.dist` / `phpcs.xml`; `ckconform`'s `phpcs-config` check
-    now fails while one is left. Move CiviKitchen sniff settings to worker
-    options in a `mago.toml` that extends the baseline: `externalActions`
-    becomes `--external-actions`, `maxLines` becomes `--max-lines`.
-  - a `phpcs:ignore` for a check that still exists becomes
-    `// @mago-expect lint:<rule>`; other `phpcs:` comments can go.
+  - run `ckmigrate`. It deletes `phpcs.xml.dist` / `phpcs.xml` (`ckconform`'s
+    `phpcs-config` check now fails while one is left), turns a `phpcs:ignore`
+    for a check that still exists into `// @mago-expect lint:<rule>`, drops
+    the other `phpcs:` comments and lists what needs a person. Move a
+    CiviKitchen sniff setting it lists to worker options in a `mago.toml` that
+    extends the baseline: `externalActions` becomes `--external-actions`,
+    `maxLines` becomes `--max-lines`.
   - `ckinit --update` rewrites the managed test bootstrap, which drops its
     `phpcs:disable` lines.
   - drop a `phpcs.xml.dist` entry from `policy.template_custom`: ckinit,
@@ -88,11 +97,30 @@ except that a break the consumers are adjusted for ships as a minor, marked
   concatenation after `=` as a block. A repo with such code fails
   `ckfmt --check` until one `ckfmt` run. The new output passes `cklint`
   unchanged, and `cklint` reports nothing new.
+- **Breaking**: `ckcompat` checks with mago alone and needs CiviCRM core
+  (`CIVICRM_CORE_DIR`, the image's core or `cv`'s), whose symfony polyfills
+  count as available: `array_find()` on an 8.3 floor is no longer reported.
+  It runs `mago lint` and `mago analyze` at the floor for syntax and missing
+  functions, classes and methods, mago's Deprecation rules at the top of
+  `--range` (else 8.5), and reports calls to built-in symbols PHP deprecates
+  up to that version. A newer function, class or method is not reported in a
+  file that guards it with `function_exists()`, `class_exists()` or
+  `method_exists()`, or behind a `PHP_VERSION_ID` or
+  `version_compare(PHP_VERSION, …)` check above the floor. A floor below 8.0
+  (`>=7.4` in `composer.json`), a reversed range or a path that does not exist
+  exits 2, so an extension that still declares PHP 7 fails `ck ci` until it
+  raises its floor. Constants, enum cases, static calls and static properties
+  of a newer class, and newer global constants, are reported too (a
+  `defined()` guard counts); `instanceof`, type hints and `::class` stay
+  silent, since PHP does not fail on them.
+  `ckmigrate` drops a leftover `phpcs:ignore` for a PHPCompatibility sniff.
 
 ### Removed
 
 - The `/opt/civikitchen-coder` link and the `CODER_REF` build argument.
-  phpcs stays in the images as the engine of PHPCompatibility for `ckcompat`.
+- **Breaking**: phpcs, PHPCompatibility and PHPCSUtils leave the images; the
+  global composer root (`toolbelt/ckdeps-root`) holds only the `ckdeps`
+  analyser. buildkit's own clone keeps its phpcs.
 
 ### Fixed
 

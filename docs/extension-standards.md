@@ -244,13 +244,21 @@ up; see
   (`ckconform` `php-version-coherence`). Without `phpVersion`, phpstan analyses
   with the image's PHP — 8.3-only syntax then passes CI and fatals on the 8.1
   site the extension promised to install on. `ckcompat` adds what phpstan does
-  not know, in two stages against that floor: `mago lint --semantics` parses
-  the code AS the floor version (so PHP-8.4-only syntax such as
-  `new Foo()->bar()` or property hooks is a hard error on an 8.3 floor — the
-  image ships a single PHP 8.4, which makes `php -l` structurally blind to
-  exactly that), then PHPCompatibility for the version-specific APIs a parse
-  cannot see (`json_validate()` arrived in 8.3). `ckmodernize` reads the same
-  floor, so rector never rewrites past it.
+  not know, with mago against that floor: `mago lint --semantics` parses the
+  code AS the floor version (so PHP-8.4-only syntax such as `new Foo()->bar()`
+  or property hooks is a hard error on an 8.3 floor — the image ships a single
+  PHP 8.4, which makes `php -l` structurally blind to exactly that), `mago
+  analyze` reports the functions, classes and methods the floor lacks
+  (`Dom\HTMLDocument` arrived in 8.4), and two CiviKitchen rules cover what
+  mago has no data for (`C::{$name}` below 8.3, `"${var}"` from 8.2). Functions
+  CiviCRM core polyfills (`array_find()`, `json_validate()`) count as
+  available, since core ships symfony's polyfills, and so does a newer
+  function, class or method in a file that guards it with `function_exists()`,
+  `class_exists()` or `method_exists()`. Deprecations come from
+  mago's Deprecation rules and from the built-in symbols PHP deprecates, both
+  up to the newest PHP. A function new in a PHP release that mago has no data for yet goes
+  unreported until a mago bump brings it. `ckmodernize` reads the same floor,
+  so rector never rewrites past it.
 - **`@ck-legacy`, not `@deprecated`, for code that must touch a deprecated
   API.** phpstan's deprecation rules (bundled in the images) report every call
   into an `@deprecated` symbol and exempt only scopes that are themselves
@@ -384,9 +392,9 @@ up; see
   untracked files.
 - **Rule packs come from the image, not from each repo's `composer.json`.**
   The mago baseline and its CiviKitchen rules ship under `toolbelt/mago*`;
-  PHPCompatibility and the phpstan extensions (deprecation rules,
-  disallowed-calls, strict-rules) are installed once from the image's committed
-  lockfiles (`toolbelt/phpcs-root`, `toolbelt/phpstan-root`) — an extension carries no dev dependencies at all. Third-party rules are cherry-picked, never a
+  the phpstan extensions (deprecation rules, disallowed-calls, strict-rules)
+  are installed once from the image's committed lockfile
+  (`toolbelt/phpstan-root`) — an extension carries no dev dependencies at all. Third-party rules are cherry-picked, never a
   whole foreign standard, and every pack that would turn the fleet red at once
   (`phpstan-strict-rules`) is installed but left out of the auto-registration
   so a repo opts in with one `includes:` line when it is ready.

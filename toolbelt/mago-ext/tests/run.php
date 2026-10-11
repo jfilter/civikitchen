@@ -57,7 +57,7 @@ function config(array $case, string $workspace): string
 
     $extends = ($case['baseline'] ?? false) ? 'extends = ' . $list([dirname(__DIR__, 2) . '/mago/mago.toml']) . "\n" : '';
 
-    return $extends . "php-version = \"8.1\"\n\n[source]\npaths = {$list($case['paths'])}\nincludes = {$list($case['includes'] ?? [])}\n\n"
+    return $extends . "php-version = \"" . ($case['php'] ?? '8.1') . "\"\n\n[source]\npaths = {$list($case['paths'])}\nincludes = {$list($case['includes'] ?? [])}\n\n"
         . "[linter]\nminimum-fail-level = \"note\"\n\n"
         . (isset($case['analyzer']) ? "[analyzer]\n" . implode('', array_map(static fn (string $key, mixed $value): string => "{$key} = " . json_encode($value, JSON_UNESCAPED_SLASHES) . "\n", array_keys($case['analyzer']), $case['analyzer'])) . "\n" : '')
         . "[extension-hosts.civikitchen]\ncommand = {$list($command)}\nenvironment = { {$table} }\n";

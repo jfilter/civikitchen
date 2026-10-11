@@ -387,6 +387,20 @@ The default config combines Rector's PHP-version / code-quality sets with
 CiviKitchen rules for CiviCRM-specific footguns such as
 `CRM_Utils_Array::value()` and `CRM_Core_Error::fatal()`.
 
+When a release retires a tool, `ckmigrate` moves the repository off it in
+place; review the result with `git diff`. For phpcs it turns a `phpcs:ignore`
+of a sniff that became a mago rule into `// @mago-expect lint:<rule>`, keeps
+the reason, drops every other `phpcs:` comment and deletes
+`phpcs.xml(.dist)`. It exits 1 and lists what needs a person: a setting the
+deleted config made for a sniff that became a mago rule, a comment it cannot rewrite (a
+docblock, a `phpcs:disable` of a ported sniff), a `template_custom` entry. A
+pragma covers one finding where `phpcs:ignore` covered the whole line, so run
+`cklint` afterwards.
+
+```bash
+ckx ckmigrate
+```
+
 ## CI
 
 The same loop runs unattended in CI: boot the stack, enable the extension,

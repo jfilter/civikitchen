@@ -146,8 +146,8 @@ ENV CIVICRM_UF=Standalone
 RUN curl -sS https://getcomposer.org/installer \
     | php -- --install-dir=/usr/local/bin --filename=composer
 
-# Shared dev-tools install (civix, phpunit, phpstan, phpcs+PHPCompatibility,
-# mago, rector/ckmodernize).
+# Shared dev-tools install (civix, phpunit, phpstan, mago, rector/ckmodernize,
+# the ckdeps analyser).
 # Lives in toolbelt/ so the buildkit image uses the same script.
 # Every tool version is pinned in the script; pass --build-arg to override
 # (e.g. to test a newer phpstan before bumping the default).
@@ -163,9 +163,9 @@ ARG MAGO_SHA256_X86_64
 ARG MAGO_SHA256_AARCH64
 ARG NPM_VERSION
 ARG INFECTION_VERSION
-# The phpcs installation root IS composer's home dir — `composer global
+# The ckdeps installation root IS composer's home dir — `composer global
 # install` in install-dev-tools.sh reads exactly these two files.
-COPY toolbelt/phpcs-root /opt/composer
+COPY toolbelt/ckdeps-root /opt/composer
 # The toolbelt, laid out as in a checkout: every ck* tool resolves its library,
 # configs and toolchains relative to its own real path, so nothing branches on
 # "image or checkout". install-dev-tools.sh links the tools into PATH.

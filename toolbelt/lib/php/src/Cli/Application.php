@@ -42,6 +42,7 @@ final class Application
             'ckfmt' => 'format',
             'cklint' => 'lint',
             'ckanalyze' => 'analyze',
+            'ckmigrate' => 'migrate',
             'ckeslint' => 'javascript',
             'ckphpunit' => 'test',
             'ckmutate' => 'mutate',
@@ -90,7 +91,7 @@ final class Application
             return (new LifecycleCommand($this->checkoutRoot, $this->runner))->run($arguments);
         }
         if (in_array($command, ['compatibility', 'compat'], true)) {
-            return (new CompatibilityCommand($this->runner))->run($arguments);
+            return (new CompatibilityCommand($this->checkoutRoot, $this->runner))->run($arguments);
         }
         if (in_array($command, ['format', 'fmt'], true)) {
             return (new FormatCommand($this->checkoutRoot, $this->runner))->run($arguments);
@@ -100,6 +101,9 @@ final class Application
         }
         if ($command === 'analyze') {
             return (new AnalyzeCommand($this->checkoutRoot, $this->runner))->run($arguments);
+        }
+        if ($command === 'migrate') {
+            return (new MigrateCommand($this->checkoutRoot, $this->runner))->run($arguments);
         }
         if (in_array($command, ['javascript', 'js', 'eslint'], true)) {
             return (new JavaScriptLintCommand($this->checkoutRoot, $this->runner))->run($arguments);
@@ -147,6 +151,7 @@ ck — CiviKitchen extension-development toolbelt
   ck taint [args]         taint analysis
   ck mutate [args]        mutation testing
   ck modernize [args]     civix/Rector modernization
+  ck migrate              move a repo off retired CiviKitchen tools
   ck release [args]       extension release artifact
   ck profile [args]       validate/list runtime profiles
   ck config [args]        validate civikitchen.yaml

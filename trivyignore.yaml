@@ -287,10 +287,9 @@ vulnerabilities:
       upstream's composer.lock. The OS command injection is in phpcs's own
       argument handling, reached only when a developer runs buildkit's phpcs by
       hand on a tree they mounted; nothing the images serve loads it. Scoped to
-      buildkit's clone on purpose: the toolbelt copy resolves >= 3.13.6 (floor
-      in toolbelt/phpcs-root/composer.json) and a regression there must NOT be
-      hidden — the standalone flavors, which carry only that copy, scan clean
-      for this ID.
+      buildkit's clone on purpose: the toolbelt ships no phpcs, so the
+      standalone flavors scan clean for this ID and a phpcs that reaches them
+      must NOT be hidden.
       Recheck after a buildkit rebuild; upstream re-locking >= 3.13.6 drops it.
     expired_at: 2026-11-01
 

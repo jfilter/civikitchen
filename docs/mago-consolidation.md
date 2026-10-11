@@ -16,17 +16,17 @@ mago release.
 | Syntax check of changed files (`cklint`) | `php -l` | `mago lint` + `mago analyze` |
 | Layout (`ckfmt`) | mago formatter | unchanged |
 | Style and footgun sniffs (`cklint`) | mago linter + CiviKitchen rules as a mago extension (done) | unchanged |
-| Version compatibility (`ckcompat`) | mago floor parse + PHPCompatibility | mago lint + mago analyze at the floor |
+| Version compatibility (`ckcompat`) | mago lint + mago analyze at the floor (done) | unchanged |
 | Static analysis (`phpstan` gate) | phpstan, deprecation rules, disallowed-calls, phpat, CiviKitchen rules | `mago analyze` + CiviKitchen plugins as a mago extension |
 | Taint analysis (`cktaint`) | psalm | psalm (mago's `tainted-data-to-sink` is a syntactic rule without data flow) |
 | Automated refactoring (`ckmodernize`) | rector | rector (mago has no equivalent) |
 | Mutation testing (`ckmutate`) | infection | infection |
 | Unused and missing dependencies (`ckdeps`) | composer-dependency-analyser | composer-dependency-analyser |
 
-At the end, the `phpcs-root` and `phpstan-root` composer roots and the
-phpstan extension package leave the images; the civicrm/coder clone is
-already gone.
-`ckdeps` moves to its own small composer root.
+At the end, the `phpstan-root` composer root and the phpstan extension
+package leave the images. phpcs, PHPCompatibility and the civicrm/coder clone
+are already gone, and `ckdeps` has its own small composer root
+(`toolbelt/ckdeps-root`).
 
 ## Evidence so far
 
@@ -57,7 +57,13 @@ which is step 3.
   (`unavailable-*`), not by `mago lint`. Deprecated functions and constants
   are reported only by `mago analyze` (`deprecated-*`).
 
-PHPCompatibility stays until the five gaps are closed upstream.
+The five gaps are covered by the `civikitchen/php-compatibility` and
+`civikitchen/php-deprecation` rules and by running mago's Deprecation rules
+at the newest PHP (step 4).
+PHPCompatibility also reported functions that CiviCRM core polyfills through
+symfony/polyfill-php80 to -php85 (`mb_trim()`, `array_find()`,
+`json_validate()`), which an extension may call on any floor; mago reads the
+polyfills as symbols and stays silent.
 
 **Static analysis.** On one extension that is clean under phpstan level 10,
 `mago analyze` with core as an include ran in 1.2 s, against 4.7 s for
@@ -131,7 +137,8 @@ without its replacement.
   - formatter output is still clean under `cklint`
   - the lint stage produces no new findings
 - Report the five compatibility gaps and the `analyze`-only compile errors
-  upstream. They decide when `ckcompat` can drop PHPCompatibility.
+  upstream. A gap fixed there retires its part of the
+  `civikitchen/php-compatibility` or `civikitchen/php-deprecation` rule.
 
 The 1.45 → 1.55 bump changes formatter output for wrapped boolean
 conditions, which now open and close on their own lines, and for wrapped
@@ -140,10 +147,10 @@ concatenations on the right of `=`. Repos with such code fail `ckfmt
 
 ### 2. Replace phpcs with mago linter rules (done)
 
-`cklint` runs `php -l` and `mago lint` only. phpcs stays in the image as the
-engine of PHPCompatibility until step 4; civicrm/coder and the CiviKitchen
-phpcs standard are gone, and `ckconform` fails on a leftover
-`phpcs.xml(.dist)`.
+`cklint` runs `php -l` and `mago lint` only. civicrm/coder and the
+CiviKitchen phpcs standard are gone, and `ckconform` fails on a leftover
+`phpcs.xml(.dist)`. `ckmigrate` rewrites a consumer repo's phpcs comments and
+deletes its config.
 
 Every check the CiviKitchen standard ran at error level, and what covers it
 now. Measured on a corpus of 1182 extension files, both tools over the same
@@ -207,12 +214,45 @@ runs, so they are comments, and the mago finding they meant still stands.
   and `ckconform` flags leftovers.
 - `cklint` then runs `mago analyze` on changed files in place of `php -l`.
 
-### 4. Drop PHPCompatibility
+### 4. Drop PHPCompatibility (done)
 
-- `ckcompat` runs `mago lint` and `mago analyze` at the floor and, for
-  deprecations, at the newest PHP the images ship.
-- This requires the five gaps from step 1 to be fixed upstream, or covered
-  by a CiviKitchen rule.
+`ckcompat` runs mago alone, with the polyfill directories of CiviCRM core's
+`vendor/symfony` as includes:
+
+- at the floor: the `civikitchen/php-compatibility` rule (every `mago lint`
+  run also reports the syntax its PHP version cannot parse), and
+  `mago analyze` retaining only the `unavailable-*` and `deprecated-*` codes
+  for built-in symbols. Analyzer filters drop a deprecation of a
+  `@deprecated` symbol in the analyzed code (the static-analysis gate's
+  question) and a newer symbol the file guards with `function_exists()`,
+  `class_exists()` or `method_exists()`, or with a `PHP_VERSION_ID` or
+  `version_compare(PHP_VERSION, …)` check above the floor. A guard counts per
+  file, so an unguarded second call in a guarded file goes unreported.
+- at the top of `--range`, else 8.5: every rule in mago's Deprecation
+  category, read from `mago lint --list-rules` so a bump brings new ones,
+  and `civikitchen/php-deprecation`. A closed range thus never fails on a
+  deprecation that starts above it.
+  mago reports deprecated built-in symbols at every PHP version, so they need
+  no second run; the filter drops one whose `#[Deprecated(since: …)]` in
+  mago's stubs lies above the top of the range.
+
+A function PHP removed before 8.0 (`each()`, `create_function()`) is not
+`ckcompat`'s question: no supported floor has it, and phpstan reports it as
+an unknown function.
+
+phpcs, PHPCompatibility and PHPCSUtils left the images with it. Left open:
+
+- A function new in a PHP release that mago's stubs do not mark yet goes
+  unreported until a mago bump, or until it joins the rule's list.
+- mago 1.55 checks a newer class only on `new`; the
+  `civikitchen/unavailable-access` hook adds constant fetches, enum cases,
+  static calls and global constants from mago's own version data. That data
+  has no version for a newer constant of an older class
+  (`ReflectionProperty::IS_VIRTUAL`), so that goes unreported.
+- A built-in deprecation marked only by a docblock has no `since`, so a
+  `--range` that ends below it still reports it (`lcg_value()` at 8.1-8.3).
+- The polyfills are the image core's, so a function core polyfills only since
+  a newer CiviCRM than the extension's minimum passes.
 
 ## Risks
 

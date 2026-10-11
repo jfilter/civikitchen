@@ -31,7 +31,7 @@ packages/civikitchen-scenario-schema/vendor
 toolbelt/psalm/vendor
 toolbelt/rector/vendor
 toolbelt/phpstan-root/vendor
-toolbelt/phpcs-root/vendor
+toolbelt/ckdeps-root/vendor
 toolbelt/mago-ext/vendor
 toolbelt/mago-ext/tests/.work
 toolbelt/ckconform/.phpunit.result.cache

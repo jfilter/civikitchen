@@ -9,9 +9,11 @@ use CiviKitchen\Toolbelt\Cli\CoverageCommand;
 use CiviKitchen\Toolbelt\Cli\FormatCommand;
 use CiviKitchen\Toolbelt\Cli\InternalRuntimeCommand;
 use CiviKitchen\Toolbelt\Cli\LintCommand;
+use CiviKitchen\Toolbelt\Cli\MigrateCommand;
 use CiviKitchen\Toolbelt\Cli\ReleaseCommand;
 use CiviKitchen\Toolbelt\JavaScript\Api4CatalogExport;
 use CiviKitchen\Toolbelt\Process\Runner;
+use CiviKitchen\Toolbelt\Repository\CiviCore;
 use CiviKitchen\Toolbelt\Repository\Files;
 use CiviKitchen\Toolbelt\Repository\PhpFloor;
 use CiviKitchen\Toolbelt\Runtime\ExtensionInspector;
@@ -405,6 +407,122 @@ final class SharedPhpTest extends TestCase
         }
     }
 
+    public function testMigrateTurnsPhpcsCommentsIntoMagoPragmas(): void
+    {
+        $source = <<<'PHP'
+            <?php
+            // phpcs:disable PSR1.Files.SideEffects
+            require __DIR__ . '/x.php';
+            // phpcs:enable
+
+            class Widget {
+              // phpcs:ignore Drupal.Scope.MethodScope -- legacy hook signature
+              function legacy(): void {
+                $x = unserialize($s); // phpcs:ignore CiviKitchen.Security.NoUnsafeUnserialize.Unsafe -- trusted cache
+                civicrm_api3('Job', 'x'); // phpcs:ignore CiviKitchen.Legacy.NoLegacyCall -- no v4
+                $url = 'http://example.org'; // phpcs:ignore
+                // phpcs:ignore CiviKitchen.I18n.UseExtensionTs.BareTs, Drupal.Semantics.FunctionAlias
+                echo ts(sizeof([]));
+                /* phpcs:disable CiviKitchen.Files.MaxFileLength */
+                /**
+                 * phpcs:ignore Example.Sniff
+                 */
+              }
+            }
+            /* phpcs:ignore Drupal.Scope.MethodScope */ function a(): void {}
+            function/* phpcs:ignore Example.Sniff */b(): void {}
+            function c(): bool { return /* phpcs:ignore Example.Sniff */true; }
+            function d(): void {
+              /* phpcs:ignore Example.Sniff */ c();
+            }
+            PHP;
+        $expected = <<<'PHP'
+            <?php
+            require __DIR__ . '/x.php';
+
+            class Widget {
+              // @mago-expect lint:civikitchen/explicit-visibility -- legacy hook signature
+              function legacy(): void {
+                $x = unserialize($s); // @mago-expect lint:civikitchen/no-unsafe-unserialize -- trusted cache
+                civicrm_api3('Job', 'x');
+                $url = 'http://example.org';
+                // @mago-expect lint:civikitchen/use-extension-ts,lint:no-alias-function
+                echo ts(sizeof([]));
+                /* phpcs:disable CiviKitchen.Files.MaxFileLength */
+                /**
+                 * phpcs:ignore Example.Sniff
+                 */
+              }
+            }
+            /* @mago-expect lint:civikitchen/explicit-visibility */ function a(): void {}
+            function b(): void {}
+            function c(): bool { return true; }
+            function d(): void {
+              c();
+            }
+            PHP;
+
+        // A block disable of a ported sniff and a docblock stay for a person.
+        self::assertSame([$expected, [14, 15]], (new MigrateCommand(dirname(__DIR__, 2)))->migrateComments($source));
+    }
+
+    public function testMigrateDropsCommentsWithoutChangingOutputOrLeavingBlankLines(): void
+    {
+        $migrate = new MigrateCommand(dirname(__DIR__, 2));
+        $cases = [
+            'inline HTML keeps the open tag whole' => ["<p><?php // phpcs:ignore X.Y.Z ?></p>\n", "<p><?php ?></p>\n"],
+            'consecutive comments go without a trace' => [
+                "<?php\nfunction f() {\n    // phpcs:disable A\n    // phpcs:disable B\n    # phpcs:disable C\n    return 1;\n}\n",
+                "<?php\nfunction f() {\n    return 1;\n}\n",
+            ],
+            'CRLF lines go whole' => ["<?php\r\n    // phpcs:disable X\r\n    \$a = 1;\r\n", "<?php\r\n    \$a = 1;\r\n"],
+            'no space where no token could merge' => ["<?php\nfoo(/* phpcs:ignore X.Y.Z */\$b);\n", "<?php\nfoo(\$b);\n"],
+            'a comment as the last token' => ["<?php\n\$a = 1;\n// phpcs:enable", "<?php\n\$a = 1;\n"],
+        ];
+        foreach ($cases as $name => [$source, $expected]) {
+            self::assertSame([$expected, []], $migrate->migrateComments($source), $name);
+        }
+    }
+
+    public function testMigrateDeletesThePhpcsConfigAndListsWhatNeedsAPerson(): void
+    {
+        $before = getcwd();
+        chdir($this->temporary);
+        try {
+            mkdir('Civi');
+            file_put_contents('Civi/Widget.php', "<?php\n\$a = 1; // phpcs:ignore\n");
+            file_put_contents('phpcs.xml.dist', <<<'XML'
+                <?xml version="1.0"?>
+                <ruleset name="widget">
+                  <rule ref="CiviKitchen"><exclude name="CiviKitchen.Modern.NameBooleanArguments"/></rule>
+                  <exclude-pattern>*/frontend/*</exclude-pattern>
+                  <rule ref="CiviKitchen.Files.MaxFileLength"><exclude-pattern>*/tests/*</exclude-pattern></rule>
+                  <rule ref="Drupal.Files.TxtFileLineLength"><exclude-pattern>*.md</exclude-pattern></rule>
+                </ruleset>
+                XML);
+            ob_start();
+            $status = (new MigrateCommand(dirname(__DIR__, 2), new MigrateRunner('phpcs.xml.dist -- local sniffs')))->run([]);
+            $output = (string) ob_get_clean();
+            self::assertSame(1, $status);
+            self::assertFileDoesNotExist('phpcs.xml.dist');
+            self::assertSame("<?php\n\$a = 1;\n", file_get_contents('Civi/Widget.php'));
+            self::assertStringContainsString('turned off CiviKitchen.Modern.NameBooleanArguments: disable civikitchen/name-boolean-arguments', $output);
+            self::assertStringContainsString('configured CiviKitchen.Files.MaxFileLength (now civikitchen/max-file-length): <exclude-pattern>*/tests/*</exclude-pattern>', $output);
+            self::assertStringContainsString('drop the phpcs.xml.dist entry from policy.template_custom', $output);
+            // Ruleset-wide path excludes and sniffs without a mago rule are no work for a person.
+            self::assertStringNotContainsString('frontend', $output);
+            self::assertStringNotContainsString('TxtFileLineLength', $output);
+
+            // A migrated repository is a no-op.
+            ob_start();
+            $again = (new MigrateCommand(dirname(__DIR__, 2), new MigrateRunner('')))->run([]);
+            self::assertStringContainsString('0 file(s) rewritten', (string) ob_get_clean());
+            self::assertSame(0, $again);
+        } finally {
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
     public function testCoverageTreatsOptionalTestsPolicyWithItsMandatoryReasonAsOptional(): void
     {
         file_put_contents($this->temporary . '/info.xml', '<extension key="org.example.safe"><file>safe</file></extension>');
@@ -439,11 +557,80 @@ final class SharedPhpTest extends TestCase
             $formatRunner = new RecordingRunner();
             self::assertSame(0, (new FormatCommand(dirname(__DIR__, 2), $formatRunner))->run(['--check', '--', '-odd.php']));
             self::assertTrue($formatRunner->passedArgument('-odd.php'));
-
-            $compatibilityRunner = new RecordingRunner();
-            self::assertSame(0, (new CompatibilityCommand($compatibilityRunner))->run(['--php', '8.1', '--', '-odd.php']));
-            self::assertTrue($compatibilityRunner->passedArgument('-odd.php'));
         } finally {
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
+    public function testCoreVendorIsItsOwnOrTheProjectsWhenCoreIsAPackage(): void
+    {
+        $own = $this->temporary . '/standalone/core';
+        mkdir($own . '/vendor', 0700, true);
+        self::assertSame($own . '/vendor', CiviCore::vendor($own));
+        $package = $this->temporary . '/drupal/vendor/civicrm/civicrm-core';
+        mkdir($package, 0700, true);
+        self::assertSame($this->temporary . '/drupal/vendor', CiviCore::vendor($package));
+        mkdir($this->temporary . '/bare');
+        self::assertNull(CiviCore::vendor($this->temporary . '/bare'));
+    }
+
+    public function testCompatibilityRunsMagoAtTheFloorWithCorePolyfillsAsSymbols(): void
+    {
+        $core = $this->temporary . '/core';
+        mkdir($core . '/vendor/symfony/polyfill-php84', 0777, true);
+        mkdir($core . '/vendor/symfony/console', 0777, true);
+        touch($core . '/Civi.php');
+        file_put_contents($this->temporary . '/composer.json', '{"require":{"php":">=8.1"}}');
+        file_put_contents($this->temporary . '/-odd.php', '<?php');
+        putenv('CIVICRM_CORE_DIR=' . $core);
+        $before = getcwd();
+        chdir($this->temporary);
+        try {
+            $runner = new CompatibilityRunner();
+            ob_start();
+            self::assertSame(0, (new CompatibilityCommand(dirname(__DIR__, 2), $runner))->run(['--', '-odd.php']));
+            ob_end_clean();
+            $config = $runner->configs[0];
+            self::assertStringContainsString("paths = [\"-odd.php\"]\nincludes = [\"{$core}/vendor/symfony/polyfill-php84\"]\n", $config);
+            self::assertStringContainsString('"' . dirname(__DIR__, 2) . '/toolbelt/mago-ext/worker.php", "--compatibility=8.5"]', $config);
+            self::assertSame([
+                ['8.5', 'lint', '--list-rules', '--json'],
+                ['8.1', 'lint', '--only', 'civikitchen/php-compatibility'],
+                ['8.5', 'lint', '--only', 'explicit-nullable-param,deprecated-cast,civikitchen/php-deprecation'],
+            ], array_map(static fn(array $command): array => array_slice($command, 6), array_slice($runner->commands, 0, 3)));
+            self::assertSame(['8.1', 'analyze', '--retain-code', 'unavailable-class-constant'], array_slice($runner->commands[3], 6, 4));
+            self::assertContains('deprecated-function', $runner->commands[3]);
+            self::assertDirectoryDoesNotExist(dirname($runner->configPaths[0]));
+
+            // The top of a range is where the deprecation rules run; one failing stage fails the run.
+            $ranged = new CompatibilityRunner(['analyze' => 1]);
+            ob_start();
+            self::assertSame(1, (new CompatibilityCommand(dirname(__DIR__, 2), $ranged))->run(['--range', '8.1-8.3']));
+            ob_end_clean();
+            self::assertSame('8.3', $ranged->commands[2][6]);
+            self::assertStringContainsString('"--compatibility=8.3"]', $ranged->configs[0]);
+            $crashed = new CompatibilityRunner(['analyze' => 1, 'civikitchen/php-compatibility' => 2]);
+            ob_start();
+            self::assertSame(2, (new CompatibilityCommand(dirname(__DIR__, 2), $crashed))->run([]));
+            ob_end_clean();
+
+            $typo = new CompatibilityRunner();
+            self::assertSame(2, (new CompatibilityCommand(dirname(__DIR__, 2), $typo))->run(['-odd.php', 'Civi/Missing.php']));
+            self::assertSame([], $typo->commands);
+
+            // A floor mago cannot check, a reversed range and a malformed version are usage errors.
+            foreach ([['--php', '7.4'], ['--range', '8.4-8.1'], ['--range=8.1'], ['--php=8.1-8.3']] as $arguments) {
+                $invalid = new CompatibilityRunner();
+                self::assertSame(2, (new CompatibilityCommand(dirname(__DIR__, 2), $invalid))->run($arguments), implode(' ', $arguments));
+                self::assertSame([], $invalid->commands);
+            }
+
+            putenv('CIVICRM_CORE_DIR=' . $this->temporary . '/nowhere');
+            $missing = new CompatibilityRunner();
+            self::assertSame(2, (new CompatibilityCommand(dirname(__DIR__, 2), $missing))->run([]));
+            self::assertSame([], $missing->commands);
+        } finally {
+            putenv('CIVICRM_CORE_DIR');
             chdir($before === false ? dirname(__DIR__, 2) : $before);
         }
     }
@@ -1199,6 +1386,62 @@ final class AnalyzeRunner extends Runner
         $this->config = (string) file_get_contents($this->configPath);
         $this->environment = $environment ?? [];
         return is_file('mago.toml') ? 1 : 0;
+    }
+}
+
+/** Records each mago run and the config it read; answers --list-rules with two Deprecation rules. */
+final class CompatibilityRunner extends Runner
+{
+    /** @var list<list<string>> */
+    public array $commands = [];
+
+    /** @var list<string> */
+    public array $configs = [];
+
+    /** @var list<string> */
+    public array $configPaths = [];
+
+    /** @param array<string, int> $exitCodes exit status per mago subcommand or flag */
+    public function __construct(private readonly array $exitCodes = [])
+    {
+    }
+
+    public function captureSeparate(array $command, ?array $environment = null, ?string $workingDirectory = null): array
+    {
+        $this->commands[] = $command;
+        $rules = [['code' => 'explicit-nullable-param', 'category' => 'Deprecation'], ['code' => 'strict-types', 'category' => 'Safety'], ['code' => 'deprecated-cast', 'category' => 'Deprecation']];
+        return ['status' => 0, 'stdout' => (string) json_encode($rules), 'stderr' => ''];
+    }
+
+    public function passthrough(array $command, ?array $environment = null, ?string $workingDirectory = null): int
+    {
+        $this->commands[] = $command;
+        $this->configPaths[] = $command[4];
+        $this->configs[] = (string) file_get_contents($command[4]);
+        $status = 0;
+        foreach ($this->exitCodes as $argument => $code) {
+            $status = in_array($argument, $command, true) ? max($status, $code) : $status;
+        }
+        return $status;
+    }
+}
+
+/** A git checkout holding Civi/Widget.php, with a canned policy.template_custom. */
+final class MigrateRunner extends Runner
+{
+    public function __construct(private readonly string $templateCustom)
+    {
+    }
+
+    public function capture(array $command, ?array $environment = null, ?string $workingDirectory = null): array
+    {
+        $joined = implode(' ', $command);
+        return match (true) {
+            str_contains($joined, 'rev-parse') => ['status' => 0, 'output' => "true\n"],
+            str_contains($joined, 'ls-files') => ['status' => 0, 'output' => "Civi/Widget.php\n"],
+            str_contains($joined, 'template_custom') => ['status' => 0, 'output' => $this->templateCustom],
+            default => ['status' => 0, 'output' => ''],
+        };
     }
 }
 

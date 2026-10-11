@@ -26,11 +26,13 @@ printf '<?php\n' > "$work/ext/keep.php"
 printf '<?php\n// changed\n' > "$work/ext/keep.php"
 
 status=0
-err=$(cd "$work/ext" && PATH="$php_dir:$git_dir:/usr/bin:/bin" \
+mkdir -p "$work/core"
+touch "$work/core/Civi.php"
+err=$(cd "$work/ext" && PATH="$php_dir:$git_dir:/usr/bin:/bin" CIVICRM_CORE_DIR="$work/core" \
   "$root/toolbelt/bin/ckcompat" --php 8.1 2>&1 >/dev/null) || status=$?
 test "$status" -ne 0
 # The program that is missing, and the PATH it was looked for on.
-grep -q 'ck: phpcs was not found on PATH (' <<<"$err"
+grep -q 'ck: mago was not found on PATH (' <<<"$err"
 if grep -q 'proc_open' <<<"$err"; then exit 1; fi
 
 echo 'ok   a tool missing from PATH is named instead of leaking a proc_open warning'
