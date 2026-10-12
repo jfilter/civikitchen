@@ -268,4 +268,15 @@ check "cksmarty names the broken body" "grep -q 'MessageTemplate MessageTemplate
 check "cksmarty passes the token-only subject" "! grep -q 'ckmsgtplbad (msg_subject)' '${FIXTURE}/smarty-ckmsgtplbad.log'"
 [ "${fail}" = 0 ] || tail -20 "${FIXTURE}"/smarty-*.log
 
+# 12) A profile set with neither API users nor an AuthX policy, like the empty
+# dev profile, leaves the site's AuthX header policy as it is.
+authx_get='echo json_encode(Civi::settings()->get("authx_header_cred"));'
+authx_before=$(cv ev "${authx_get}" || true)
+docker exec -u www-data "${APP}" sh -c 'printf "{\"description\":\"no users\",\"dependencies\":[]}\n" > /tmp/ck-no-users.json'
+docker exec -u www-data -e CK_PROFILE_JSON=/tmp/ck-no-users.json "${APP}" \
+    cv scr /opt/civikitchen/docker/profiles/configure-api-users.php > "${FIXTURE}/no-users.log" 2>&1 || true
+authx_after=$(cv ev "${authx_get}" || true)
+check "a profile without API users keeps authx_header_cred (${authx_before:-?} -> ${authx_after:-?})" \
+    "[ -n '${authx_before}' ] && [ '${authx_before}' != '[]' ] && [ '${authx_before}' = '${authx_after}' ]"
+
 if [ "${fail}" = 0 ]; then echo "==> PASS: ${IMAGE} on ${DATABASE_IMAGE}"; else echo "==> FAIL: ${IMAGE} on ${DATABASE_IMAGE}"; exit 1; fi

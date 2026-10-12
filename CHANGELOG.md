@@ -14,6 +14,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- A profile set with neither `apiUsers` nor an `authx` policy no longer
+  touches AuthX. Since the template's CI stack selects the empty `dev`
+  profile, every such boot emptied `authx_header_cred`, so API-key and JWT
+  header authentication stopped working in e2e suites that rely on the
+  core default.
+
 ## [1.38.1] - 2026-10-12
 
 ### Fixed

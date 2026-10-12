@@ -320,84 +320,87 @@ if (getenv('CK_RECONCILE_API_USERS') === '1') {
 }
 
 // === AuthX: one policy for the entire selected profile set ===
-echo "     Configuring AuthX...\n";
+// A set with neither API users nor an AuthX policy leaves the site's AuthX as it is.
 $authxPolicy = getenv('CK_AUTHX_HEADER_CRED');
-$authxHeaderCred = !$apiUsers ? [] : ($authxPolicy !== FALSE && $authxPolicy !== ''
-  ? explode(',', $authxPolicy)
-  : ($config['authx']['header_cred'] ?? ['jwt', 'api_key']));
-if (array_diff($authxHeaderCred, ['jwt', 'api_key', 'pass']) !== []) {
-  throw new \RuntimeException('configure-api-users: invalid CK_AUTHX_HEADER_CRED policy');
-}
-if ($apiUsers && !in_array('api_key', $authxHeaderCred, TRUE) && !in_array('pass', $authxHeaderCred, TRUE)) {
-  throw new \RuntimeException('configure-api-users: API users need api_key or pass; JWT credentials are not generated');
-}
-if ($apiUsers && $uf === 'Joomla' && !in_array('api_key', $authxHeaderCred, TRUE)) {
-  throw new \RuntimeException('configure-api-users: Joomla API users require api_key authentication');
-}
-\Civi::settings()->set('authx_header_cred', $authxHeaderCred);
 $authPermissions = [];
-if (in_array('pass', $authxHeaderCred, TRUE)) {
-  $authPermissions[] = 'authenticate with password';
-}
-if (in_array('api_key', $authxHeaderCred, TRUE)) {
-  $authPermissions[] = 'authenticate with api key';
-}
-// Make CiviCRM's permission list known to the CMS before granting any.
-civicrm_api3('System', 'flush');
+if ($apiUsers || ($authxPolicy !== FALSE && $authxPolicy !== '') || isset($config['authx']['header_cred'])) {
+  echo "     Configuring AuthX...\n";
+  $authxHeaderCred = !$apiUsers ? [] : ($authxPolicy !== FALSE && $authxPolicy !== ''
+    ? explode(',', $authxPolicy)
+    : ($config['authx']['header_cred'] ?? ['jwt', 'api_key']));
+  if (array_diff($authxHeaderCred, ['jwt', 'api_key', 'pass']) !== []) {
+    throw new \RuntimeException('configure-api-users: invalid CK_AUTHX_HEADER_CRED policy');
+  }
+  if ($apiUsers && !in_array('api_key', $authxHeaderCred, TRUE) && !in_array('pass', $authxHeaderCred, TRUE)) {
+    throw new \RuntimeException('configure-api-users: API users need api_key or pass; JWT credentials are not generated');
+  }
+  if ($apiUsers && $uf === 'Joomla' && !in_array('api_key', $authxHeaderCred, TRUE)) {
+    throw new \RuntimeException('configure-api-users: Joomla API users require api_key authentication');
+  }
+  \Civi::settings()->set('authx_header_cred', $authxHeaderCred);
+  if (in_array('pass', $authxHeaderCred, TRUE)) {
+    $authPermissions[] = 'authenticate with password';
+  }
+  if (in_array('api_key', $authxHeaderCred, TRUE)) {
+    $authPermissions[] = 'authenticate with api key';
+  }
+  // Make CiviCRM's permission list known to the CMS before granting any.
+  civicrm_api3('System', 'flush');
 
-// === Per-CMS prep: AuthX permissions for the administrator role ===
-switch ($uf) {
-  case 'Drupal8':
-    // AuthX's perm guard requires one permission per credential type. Grant it
-    // only to the roles that should expose API authentication; granting it to
-    // Drupal's global `authenticated` role would expand the profile's access
-    // policy to every existing CMS account.
-    $adminRole = \Drupal\user\Entity\Role::load('administrator');
-    if ($adminRole) {
-      foreach (['authenticate with password', 'authenticate with api key'] as $permission) {
-        $adminRole->revokePermission($permission);
+  // === Per-CMS prep: AuthX permissions for the administrator role ===
+  switch ($uf) {
+    case 'Drupal8':
+      // AuthX's perm guard requires one permission per credential type. Grant it
+      // only to the roles that should expose API authentication; granting it to
+      // Drupal's global `authenticated` role would expand the profile's access
+      // policy to every existing CMS account.
+      $adminRole = \Drupal\user\Entity\Role::load('administrator');
+      if ($adminRole) {
+        foreach (['authenticate with password', 'authenticate with api key'] as $permission) {
+          $adminRole->revokePermission($permission);
+        }
+        foreach ($authPermissions as $permission) $adminRole->grantPermission($permission);
+        $adminRole->grantPermission('access CiviCRM');
+        $adminRole->grantPermission('administer CiviCRM');
+        $adminRole->save();
       }
-      foreach ($authPermissions as $permission) $adminRole->grantPermission($permission);
-      $adminRole->grantPermission('access CiviCRM');
-      $adminRole->grantPermission('administer CiviCRM');
-      $adminRole->save();
-    }
-    break;
+      break;
 
-  case 'WordPress':
-    if ($adminRole = get_role('administrator')) {
-      foreach (['authenticate with password', 'authenticate with api key'] as $authPermission) {
-        $adminRole->remove_cap(ck_wp_cap($authPermission));
+    case 'WordPress':
+      if ($adminRole = get_role('administrator')) {
+        foreach (['authenticate with password', 'authenticate with api key'] as $authPermission) {
+          $adminRole->remove_cap(ck_wp_cap($authPermission));
+        }
+        foreach ($authPermissions as $authPermission) {
+          $adminRole->add_cap(ck_wp_cap($authPermission));
+        }
       }
-      foreach ($authPermissions as $authPermission) {
-        $adminRole->add_cap(ck_wp_cap($authPermission));
-      }
-    }
-    break;
+      break;
 
-  case 'Standalone':
-    // Built-in admin role already carries every permission; the per-user
-    // roles below get "authenticate with password" added explicitly.
-    break;
+    case 'Standalone':
+      // Built-in admin role already carries every permission; the per-user
+      // roles below get "authenticate with password" added explicitly.
+      break;
 
-  case 'Joomla':
-    // CRM_Core_Permission_Joomla checks permissions via $user->authorise(perm,
-    // 'com_civicrm'), which needs a com_civicrm ACL asset. civibuild never
-    // registers the component (its install script can't run on the layout), so
-    // that asset is absent — create it the way Joomla's installer would, once,
-    // so the per-user grants below have something to attach to. Idempotent.
-    $jdb = \Joomla\CMS\Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-    $civiAsset = new \Joomla\CMS\Table\Asset($jdb);
-    if (!$civiAsset->loadByName('com_civicrm')) {
-      $civiAsset->name = 'com_civicrm';
-      $civiAsset->title = 'CiviCRM';
-      $civiAsset->setLocation((new \Joomla\CMS\Table\Asset($jdb))->getRootId(), 'last-child');
-      $civiAsset->rules = '{}';
-      if (!$civiAsset->check() || !$civiAsset->store()) {
-        throw new \RuntimeException('configure-api-users: could not create com_civicrm ACL asset: ' . $civiAsset->getError());
+    case 'Joomla':
+      // CRM_Core_Permission_Joomla checks permissions via $user->authorise(perm,
+      // 'com_civicrm'), which needs a com_civicrm ACL asset. civibuild never
+      // registers the component (its install script can't run on the layout), so
+      // that asset is absent — create it the way Joomla's installer would, once,
+      // so the per-user grants below have something to attach to. Idempotent.
+      $jdb = \Joomla\CMS\Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
+      $civiAsset = new \Joomla\CMS\Table\Asset($jdb);
+      if (!$civiAsset->loadByName('com_civicrm')) {
+        $civiAsset->name = 'com_civicrm';
+        $civiAsset->title = 'CiviCRM';
+        $civiAsset->setLocation((new \Joomla\CMS\Table\Asset($jdb))->getRootId(), 'last-child');
+        $civiAsset->rules = '{}';
+        if (!$civiAsset->check() || !$civiAsset->store()) {
+          throw new \RuntimeException('configure-api-users: could not create com_civicrm ACL asset: ' . $civiAsset->getError());
+        }
       }
-    }
-    break;
+      break;
+  }
 }
 
 // === Create the API users ===
