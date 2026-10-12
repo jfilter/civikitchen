@@ -91,7 +91,9 @@ their drivers and `scripts` execute as trusted application code.
 committed config cannot begin disclosing generated credentials accidentally.
 
 When profiles are selected, the generator creates the Standalone `admin` demo
-user needed by the shared profile driver. If `site_url` is omitted it is derived
+user needed by the shared profile driver. A scenario mounts no `init.d` hooks:
+the data an extension needs belongs in a profile, whose content the driver
+applies after the extension is enabled. If `site_url` is omitted it is derived
 from `http_port`; ports outside `1..65535` are rejected before Compose render.
 
 A git-sourced dependency (`repo`) ships no `vendor/` directory, so the driver

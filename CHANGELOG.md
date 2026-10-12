@@ -22,6 +22,18 @@ except that a break the consumers are adjusted for ships as a minor, marked
   created once by their anchor (`external_identifier` = `ref`, `trxn_id`
   `profile-seed-…`), and later UI edits survive. Until now the driver ignored
   `config` and `seed` and reported the profile as applied.
+- **Breaking:** profiles apply in two phases at boot. Dependencies come before
+  the mounted extensions and `CIVIKITCHEN_EXTRA_EXTENSIONS`; `config`, `seed`,
+  `scripts` and API users come after them, so a seed record or script can use
+  the extension under development. Before, the whole profile ran first. A root
+  or profile `apply.sh` runs once, in the second phase. The shared driver takes
+  the phase as an optional second argument (`all`, `deps`, `content`).
+- The template stacks select a dev profile, `.docker/profiles/dev/profile.json`,
+  which `ckinit` seeds and `ckboot` passes on: the managed CI compose file
+  mounts and trusts it and creates the `admin` user it seeds as. Run
+  `ckinit --update` and add the profile lines to the seeded
+  `.docker/docker-compose.yml` by hand. `init.d` hooks run after the profile and
+  are for the stack's environment; the template's `init.d/README.md` says so.
 - **Breaking:** a profile's PHP runs only when its `scripts` list names it.
   A `seeds/` directory fails `ck profile validate` and the boot with a pointer
   to `scripts`; move the files and list them. The bundled profiles have

@@ -871,10 +871,14 @@ ck_resolve_authx_policy() {
 # the union. Needs network (git clones) and can take several minutes.
 # Runs inside ck_post_install_provision, so it is marker-gated: it applies
 # once, and a failure aborts the boot (no marker) and re-runs on next start.
+# Phase `deps` fetches and enables profile dependencies; `content` (config, seed,
+# scripts, API users) follows once the mounted extensions are enabled. A custom
+# apply.sh runs once, in the content phase.
 ck_apply_profile() {
+    local phase="$1"
     [[ -n "${CIVIKITCHEN_PROFILE:-}" ]] || return 0
     local name dir root apply want_cms authx_policy index=0 merged
-    local -a names resolved=()
+    local -a names resolved=() phase_arg
     IFS=',' read -ra names <<< "${CIVIKITCHEN_PROFILE}"
     # Validate the whole list before applying anything — a typo in the last
     # name must not leave a half-provisioned site behind the failed boot.
@@ -896,6 +900,7 @@ ck_apply_profile() {
         # An external root can share its own driver; otherwise use the bundled
         # driver. A profile-local apply.sh is the narrowest override.
         apply="${CK_PROFILE_DIR}/apply.sh"
+        phase_arg=("${phase}")
         [[ -f "${root}/apply.sh" ]] && apply="${root}/apply.sh"
         [[ -f "${dir}/apply.sh" ]] && apply="${dir}/apply.sh"
         # CMS gate: profile.json declares the CMS family it needs (e.g.
@@ -906,7 +911,11 @@ ck_apply_profile() {
             echo "[civikitchen] ERROR: profile '${name}' requires a ${want_cms} site; this site is '${CIVICRM_SITE_TYPE:-unknown}'." >&2
             return 1
         fi
-        echo "[civikitchen] Applying profile '${name}' (needs network; this can take several minutes)..."
+        if [[ "${apply}" != "${CK_PROFILE_DIR}/apply.sh" ]]; then
+            [[ "${phase}" == content ]] || continue
+            phase_arg=()
+        fi
+        echo "[civikitchen] Applying profile '${name}', ${phase} (needs network; this can take several minutes)..."
         # Pass CK_CREDENTIALS_FILE through explicitly (like ck_smtp/ck_demo_user
         # above) so a profile's configure-api-users.php + scripts resolve it
         # deterministically rather than relying on runuser's preserve-env. Empty
@@ -917,8 +926,9 @@ ck_apply_profile() {
             CK_CREDENTIALS_OUTPUT="${CK_CREDENTIALS_OUTPUT:-file}" \
             CK_AUTHX_HEADER_CRED="${authx_policy}" \
             CK_DEFER_API_USERS=1 \
-            bash "${apply}" "${dir}"
+            bash "${apply}" "${dir}" "${phase_arg[@]}"
     done
+    [[ "${phase}" == content ]] || return 0
     # Configure identities once from the complete selected set. This turns
     # same-role declarations into an exact union and lets the CMS adapters
     # remove stale CiviKitchen-owned permissions/users safely.
@@ -1018,8 +1028,9 @@ ck_no_phone_home() {
 # Marker-gated post-install provisioning bundle: civicrm.org calls off, core
 # locales, profile, registry + mounted extensions, and init.d hooks, run once.
 # The marker is written only on success so a failed step re-runs on the next
-# start instead of being silently skipped. The profile goes before the user's
-# extension knobs and init hooks, which layer on top of it.
+# start instead of being silently skipped. Profile dependencies come first, so the
+# mounted extension can rely on them; profile content follows the mounted
+# extension, so its seed and scripts can use it; init.d hooks run last.
 ck_post_install_provision() {
     if [[ -f "${CK_PROVISIONED_MARKER}" ]]; then
         echo "[civikitchen] Already provisioned (${CK_PROVISIONED_MARKER}) — CIVIKITCHEN_PROFILE / *_EXTENSIONS / init.d changes are not re-applied; remove the marker to re-run."
@@ -1031,9 +1042,10 @@ ck_post_install_provision() {
     seeded="$(ck_as_web cv ev "echo \\Civi::settings()->get('${CK_PROVISIONED_SETTING}') ? 'yes' : 'no';")"
     ck_no_phone_home
     ck_locales
-    ck_apply_profile
+    ck_apply_profile deps
     ck_extra_extensions
     ck_enable_extensions
+    ck_apply_profile content
     if [[ "${seeded}" == "yes" ]]; then
         echo "[civikitchen] init.d hooks already ran on this database (setting ${CK_PROVISIONED_SETTING}) — not re-run; re-provision with docker compose down -v."
     else

@@ -27,19 +27,22 @@ export CK_PROVISIONED_MARKER="$work/provisioned"
 . "$root/docker/runtime/provision.sh"
 ck_no_phone_home() { echo phone >> "$work/steps"; }
 ck_locales() { echo locales >> "$work/steps"; }
-ck_apply_profile() { echo profile >> "$work/steps"; }
+ck_apply_profile() { echo "profile-$1" >> "$work/steps"; }
 ck_extra_extensions() { echo extra >> "$work/steps"; }
 ck_enable_extensions() { echo enable >> "$work/steps"; }
-ck_run_init_hooks() { echo run >> "$work/hooks"; }
+ck_run_init_hooks() { echo run >> "$work/hooks"; echo hooks >> "$work/steps"; }
 
 ck_post_install_provision >/dev/null
 [[ -f "$CK_PROVISIONED_MARKER" && -f "$DB_SETTING" ]] || fail "first boot did not mark file and database"
+# Profile content (seed, scripts) can use the mounted extension; init.d layers on top.
+[[ "$(tr '\n' ' ' < "$work/steps")" == "phone locales profile-deps extra enable profile-content hooks " ]] \
+    || fail "first boot ran the steps out of order: $(tr '\n' ' ' < "$work/steps")"
 
 # A recreated container: the marker file is gone, the database keeps its setting.
 /bin/rm "$CK_PROVISIONED_MARKER"
 ck_post_install_provision >/dev/null
 [[ "$(wc -l < "$work/hooks")" -eq 1 ]] || fail "init.d hooks ran again on a provisioned database"
-[[ "$(sort -u "$work/steps" | tr '\n' ' ')" == "enable extra locales phone profile " && "$(wc -l < "$work/steps")" -eq 10 ]] \
+[[ "$(sort -u "$work/steps" | tr '\n' ' ')" == "enable extra hooks locales phone profile-content profile-deps " && "$(wc -l < "$work/steps")" -eq 13 ]] \
     || fail "recreated container did not re-apply profile, locales and extensions"
 [[ -f "$CK_PROVISIONED_MARKER" ]] || fail "recreated container did not restore the marker file the healthcheck reads"
 

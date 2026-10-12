@@ -817,6 +817,12 @@ if awk '/^ *volumes: *$/ { v=1; next } v && !/^ *(- |#)/ { bad=1 } { v=0 } END {
   exit 1
 fi
 
+# The seeded dev profile, which both compose stacks select, passes the boot-time validation.
+"$root/toolbelt/bin/ck" profile validate "$work/clean/.docker/profiles/dev" >/dev/null \
+  || { echo "ckinit: seeded dev profile is not a valid profile" >&2; exit 1; }
+grep -q 'example_ext' "$work/clean/.docker/profiles/dev/profile.json" \
+  || { echo "ckinit: seeded dev profile did not get the extension's name" >&2; exit 1; }
+
 # ci: gitlab swaps the GitHub callers and renovate.json for a managed
 # .gitlab-ci.yml; without the key no GitLab file appears.
 test ! -e "$work/clean/.gitlab-ci.yml"

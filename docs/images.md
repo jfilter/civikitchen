@@ -194,6 +194,13 @@ The shared driver applies `dependencies` → `config` → `seed` → `scripts`:
 - `scripts` run in list order. A `seeds/` directory is an error, not a
   convention.
 
+At boot the driver runs in two phases around the extensions the stack brings
+itself. First every selected profile's dependencies are fetched and enabled.
+Then the mounted extensions and `CIVIKITCHEN_EXTRA_EXTENSIONS` are enabled.
+After that come `config`, `seed`, `scripts` and API users, so a seed record or
+script can use the extension under development. `init.d` hooks run last. A root
+or profile `apply.sh` replaces the driver; it runs once, in the second phase.
+
 A missing prerequisite fails the apply before anything is written, with every
 problem listed. Only `config.settings` go first, because the components they
 enable must be on before their records can be checked. Examples are membership types without CiviMember, an unknown

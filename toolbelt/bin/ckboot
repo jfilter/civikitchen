@@ -37,6 +37,12 @@ export CIVICRM_AUTO_INSTALL="${CIVICRM_AUTO_INSTALL:-1}"
 if [ -d .docker/init.d ]; then
   export CK_INIT_D="${PWD}/.docker/init.d"
 fi
+# The repo's dev profile, selected and trusted as in the CI compose stack.
+if [ -f .docker/profiles/dev/profile.json ]; then
+  export CIVIKITCHEN_PROFILE="${CIVIKITCHEN_PROFILE:-dev}"
+  export CIVIKITCHEN_PROFILE_PATH="${PWD}/.docker/profiles${CIVIKITCHEN_PROFILE_PATH:+:${CIVIKITCHEN_PROFILE_PATH}}"
+  export CIVIKITCHEN_TRUST_EXTERNAL_PROFILES=1
+fi
 site_url="${CIVIKITCHEN_SITE_URL:-http://localhost:8080}"
 
 # cv finds the CMS from the web root; the entrypoint provisions before it runs

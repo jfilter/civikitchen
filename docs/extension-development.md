@@ -158,12 +158,18 @@ file rather than asked of
 longer matches. A dependency the site does not have fails the install loudly;
 further steps chain as before (`ck_headless()->sqlFile(...)->apply()`).
 
-## Provisioning hooks
+## Dev profile and provisioning hooks
 
-Anything a test setup needs beyond `cv ext:enable` — renderer config, seed
-data, system packages — can run automatically on first boot. Mount scripts
-into `/civikitchen-init.d/`; after a fresh auto-install they run in lexical
-order: `*.sh` via bash, `*.php` via `cv scr`, both as the image's web user
+The data a test setup needs beyond `cv ext:enable` belongs in the repository's
+dev profile, `.docker/profiles/dev/profile.json`: dependencies, settings, seed
+records, scripts and API users ([profile format](images.md#profiles-civikitchen_profile)).
+Both template compose stacks and `ckboot` select it. Its dependencies are
+enabled before the extension, its content runs after it, so a seed script can
+use the extension's own entities.
+
+What the stack itself needs, such as a renderer binary or system packages, can
+run as a first-boot hook. Mount scripts into `/civikitchen-init.d/`; after a
+fresh auto-install they run after the profile, in lexical order: `*.sh` via bash, `*.php` via `cv scr`, both as the image's web user
 (www-data on standalone, buildkit on the CMS images). A hook that needs root,
 like `CIVIKITCHEN_EXTRA_PACKAGES`, needs `user: root` on the service; `docker
 compose exec` then defaults to root too, so pass `-u www-data` to `cv` and

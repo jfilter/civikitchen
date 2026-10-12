@@ -479,7 +479,7 @@ include:
 The jobs run inside the civikitchen image, with the database as a GitLab
 service, so a plain docker executor is enough. `ckboot` provisions the site in
 the job container with the checkout attached as the extension, running the
-repository's `.docker/init.d` hooks as the CI compose stack does. The gates
+repository's `.docker/init.d` hooks and dev profile as the CI compose stack does. The gates
 then run as the web user:
 
 - `civikitchen-ci` runs `ck ci`, then `cklifecycle`.

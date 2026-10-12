@@ -40,11 +40,17 @@ services:
     environment:
       CIVICRM_AUTO_INSTALL: "1"
       CIVIKITCHEN_SITE_URL: "http://localhost:8080"
+      # The profile seeds as admin, the user the e2e suites log in with.
+      CIVIKITCHEN_DEMO_USER: admin
+      CIVIKITCHEN_PROFILE: dev
+      CIVIKITCHEN_PROFILE_PATH: /civikitchen-profiles
+      CIVIKITCHEN_TRUST_EXTERNAL_PROFILES: "1"
     volumes:
       # Mounted under ext/ → enabled on first boot, <requires> resolved.
       - ..:/var/www/html/ext/ckmonobase
       # The repository root: .git for cklint, ckfmt and ckconform.
       - ../../../..:/civikitchen-repo
+      - ./profiles:/civikitchen-profiles:ro
       - ./init.d:/civikitchen-init.d:ro
 # END CIVIKITCHEN MANAGED app
 

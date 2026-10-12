@@ -11,7 +11,7 @@
 # Host ports come from .docker/.env (gitignored; ckup writes it) so several
 # stacks can run side by side; the defaults apply when it is absent.
 #
-# Re-provision from scratch (re-runs init.d hooks): docker compose down -v && up -d
+# Re-provision from scratch (re-seeds the profile, re-runs init.d hooks): docker compose down -v && up -d
 #
 # Every gate the shared CI runs in the container, with a summary table:
 #   /path/to/civikitchen/scaffold/ckx ck ci
@@ -44,6 +44,10 @@ services:
       # Must match the host:port opened in the browser (asset URLs).
       CIVIKITCHEN_SITE_URL: "http://localhost:${CK_HTTP_PORT:-8080}"
       CIVIKITCHEN_DEMO_USER: admin
+      # Dependencies, config, seed records and API users: profiles/dev/profile.json.
+      CIVIKITCHEN_PROFILE: dev
+      CIVIKITCHEN_PROFILE_PATH: /civikitchen-profiles
+      CIVIKITCHEN_TRUST_EXTERNAL_PROFILES: "1"
       # Outbound mail lands in maildev.
       CIVIKITCHEN_SMTP_HOST: maildev
       CIVIKITCHEN_SMTP_PORT: "1025"
@@ -55,8 +59,8 @@ services:
       # The repository root: .git for cklint, ckfmt and ckconform.
       - ../../../..:/civikitchen-repo
       # - ../../othersibling:/var/www/html/ext/de.example.othersibling
-      # First-boot provisioning hooks (seed data, API users, settings) — run
-      # after install + ext:enable, in lexical order. See init.d/README.md.
+      - ./profiles:/civikitchen-profiles:ro
+      # Hooks for the stack's environment, run after the profile. See init.d/README.md.
       - ./init.d:/civikitchen-init.d:ro
 
   db:

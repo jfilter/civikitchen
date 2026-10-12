@@ -34,6 +34,10 @@ case " $* " in
   *' ext:enable '*) [ "${CK_FAKE_FAIL_ENABLE:-0}" != 1 ] ;;
   *' ext:download '*) printf '%s\n' "$*" >> "${CK_FAKE_CV_LOG:?}" ;;
   *' vset '*|*' vdel '*) printf '%s\n' "$*" >> "${CK_FAKE_CV_LOG:-/dev/null}" ;;
+  *' scr --user=admin '*apply-content.php*)
+    printf '%s\n' content >> "${CK_FAKE_CONTENT_LOG:-/dev/null}"
+    [ "${CK_FAKE_FAIL_CONTENT:-0}" != 1 ]
+    ;;
   *'--user=admin'*) printf 'ok' ;;
   *) : ;;
 esac
@@ -116,6 +120,41 @@ if PATH="$work/bin:$PATH" CK_FAKE_EXT_DIR="$work/ext" CK_FAKE_LOCAL_KEYS=org.exa
 fi
 [ "$(cat "$work/ext/org.example.demo/demo.php")" = packaged ] && [ ! -d "$work/ext/org.example.demo/.git" ] \
   || { echo "packaged extension changed after failed lifecycle status query" >&2; exit 1; }
+
+# The deps phase swaps in the pin without touching content; a failing content
+# phase in a later process still restores the packaged code.
+: > "$work/content.log"
+PATH="$work/bin:$PATH" CK_FAKE_EXT_DIR="$work/ext" CK_FAKE_LOCAL_KEYS=org.example.demo \
+  CK_FAKE_CONTENT_LOG="$work/content.log" \
+  bash "$root/docker/profiles/apply.sh" "$work/profile" deps >/dev/null
+[ "$(git -C "$work/ext/org.example.demo" rev-parse HEAD)" = "$commit" ] \
+  || { echo "deps phase did not install the pinned commit" >&2; exit 1; }
+! grep -qx content "$work/content.log" || { echo "deps phase applied profile content" >&2; exit 1; }
+if PATH="$work/bin:$PATH" CK_FAKE_EXT_DIR="$work/ext" CK_FAKE_LOCAL_KEYS=org.example.demo \
+  CK_FAKE_CONTENT_LOG="$work/content.log" CK_FAKE_FAIL_CONTENT=1 \
+  bash "$root/docker/profiles/apply.sh" "$work/profile" content >/dev/null 2>&1; then
+  echo "content phase accepted a failed content step" >&2
+  exit 1
+fi
+[ "$(cat "$work/ext/org.example.demo/demo.php")" = packaged ] && [ ! -d "$work/ext/org.example.demo/.git" ] \
+  || { echo "content failure did not restore the packaged extension swapped in by deps" >&2; exit 1; }
+[ -z "$(find "$work/ext" -maxdepth 1 -name '.*')" ] \
+  || { echo "content failure left rollback state behind" >&2; exit 1; }
+PATH="$work/bin:$PATH" CK_FAKE_EXT_DIR="$work/ext" CK_FAKE_LOCAL_KEYS=org.example.demo \
+  bash "$root/docker/profiles/apply.sh" "$work/profile" deps >/dev/null
+: > "$work/content.log"
+PATH="$work/bin:$PATH" CK_FAKE_EXT_DIR="$work/ext" CK_FAKE_LOCAL_KEYS=org.example.demo \
+  CK_FAKE_CONTENT_LOG="$work/content.log" \
+  bash "$root/docker/profiles/apply.sh" "$work/profile" content > "$work/out"
+grep -qx content "$work/content.log" || { echo "content phase did not apply profile content" >&2; exit 1; }
+! grep -q cloning "$work/out" || { echo "content phase fetched dependencies" >&2; exit 1; }
+[ -z "$(find "$work/ext" -maxdepth 1 -name '.*')" ] && [ -d "$work/ext/org.example.demo/.git" ] \
+  || { echo "successful content phase kept the packaged backup" >&2; exit 1; }
+if PATH="$work/bin:$PATH" CK_FAKE_EXT_DIR="$work/ext" \
+  bash "$root/docker/profiles/apply.sh" "$work/profile" bogus >/dev/null 2>&1; then
+  echo "apply.sh accepted an unknown phase" >&2
+  exit 1
+fi
 
 # Registry acquisition is download-only. `enable` is handled exclusively by
 # the ordered enable phase, so absent/false keeps the extension disabled.

@@ -45,6 +45,7 @@ const SEEDED_FILES = [
   '.gitignore',
   'civikitchen.yaml',
   '.docker/docker-compose.yml',
+  '.docker/profiles/dev/profile.json',
   'composer.json',
   'phpstan.neon.dist',
   // Opt-in test analysis. Seeded, never managed: its mere existence turns a
