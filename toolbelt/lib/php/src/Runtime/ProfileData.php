@@ -157,9 +157,12 @@ final class ProfileData
         $merged = [
             'description' => 'Aggregated CiviKitchen API users',
             'dependencies' => [],
-            'authx' => ['header_cred' => array_values(array_filter(explode(',', $policy), 'strlen'))],
             'apiUsers' => $apiUsers,
         ];
+        // An empty policy (no API users in the set) must not reach AuthX as [].
+        if ($policy !== '') {
+            $merged['authx'] = ['header_cred' => array_values(array_filter(explode(',', $policy), 'strlen'))];
+        }
         $json = json_encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         if (file_put_contents($output, $json . "\n") === false) {
             throw new RuntimeException("cannot write merged profile: {$output}");

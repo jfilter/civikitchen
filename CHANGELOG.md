@@ -14,6 +14,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- A boot whose selected profiles declare no `apiUsers`, like the template's
+  empty `dev` profile, leaves `authx_header_cred` as it is. 1.39.0 fixed
+  this only for a profile handed to `configure-api-users.php` directly; the
+  first-boot path merges the selected set first, and the merged profile
+  still carried an empty AuthX policy that emptied the setting.
+
 ## [1.39.0] - 2026-10-12
 
 ### Added

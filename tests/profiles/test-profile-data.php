@@ -45,6 +45,15 @@ assert($data['authx']['header_cred'] === ['api_key', 'jwt']);
 assert($data['apiUsers'][0]['permissions'] === ['one', 'two']);
 assert($data['apiUsers'][1]['permissions'] === ['one', 'two']);
 
+// A set without API users resolves to an empty policy; the merged profile then
+// carries no AuthX policy, so configure-api-users.php leaves AuthX alone.
+$empty = $work . '/empty.json';
+file_put_contents($empty, json_encode(['dependencies' => []], JSON_THROW_ON_ERROR));
+$profiles->merge($merged, '', [$empty]);
+$data = json_decode((string) file_get_contents($merged), true, 512, JSON_THROW_ON_ERROR);
+assert(!array_key_exists('authx', $data));
+assert($data['apiUsers'] === []);
+
 $conflict = $work . '/conflict.json';
 file_put_contents($conflict, json_encode([
     'dependencies' => [],
