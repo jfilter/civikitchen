@@ -410,6 +410,34 @@ final class SharedPhpTest extends TestCase
         }
     }
 
+    public function testAnalyzeReadsRequiredExtensionsForTheirSymbols(): void
+    {
+        $core = $this->temporary . '/core';
+        mkdir($core . '/ext/search_kit', 0777, true);
+        file_put_contents($core . '/ext/search_kit/info.xml', '<extension key="org.civicrm.search_kit"/>');
+        touch($core . '/Civi.php');
+        mkdir($this->temporary . '/ext/org.example.rules', 0777, true);
+        file_put_contents(
+            $this->temporary . '/info.xml',
+            '<extension key="widget"><requires><ext>org.example.rules</ext><ext>org.civicrm.search_kit</ext><ext>org.example.absent</ext></requires></extension>',
+        );
+        putenv('CIVICRM_CORE_DIR=' . $core);
+        putenv('CK_EXT_DIR=' . $this->temporary . '/ext');
+        $before = getcwd();
+        chdir($this->temporary);
+        try {
+            $runner = new AnalyzeRunner();
+            self::assertSame(0, (new AnalyzeCommand(dirname(__DIR__, 2), $runner))->run([]));
+            self::assertStringContainsString('"' . $this->temporary . '/ext/org.example.rules"]' . "\nexcludes", $runner->config);
+            self::assertStringNotContainsString('search_kit', $runner->config);
+            self::assertStringNotContainsString('org.example.absent', $runner->config);
+        } finally {
+            putenv('CIVICRM_CORE_DIR');
+            putenv('CK_EXT_DIR');
+            chdir($before === false ? dirname(__DIR__, 2) : $before);
+        }
+    }
+
     public function testMigrateTurnsPhpcsCommentsIntoMagoPragmas(): void
     {
         $source = <<<'PHP'

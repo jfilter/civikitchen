@@ -8,6 +8,7 @@ use CiviKitchen\Toolbelt\Process\Runner;
 use CiviKitchen\Toolbelt\Repository\CiviCore;
 use CiviKitchen\Toolbelt\Repository\Files;
 use CiviKitchen\Toolbelt\Repository\PhpFloor;
+use CiviKitchen\Toolbelt\Runtime\ExtensionInspector;
 
 final class AnalyzeCommand implements Command
 {
@@ -15,6 +16,7 @@ final class AnalyzeCommand implements Command
         private readonly string $checkoutRoot,
         private readonly Runner $runner = new Runner(),
         private readonly string $imageCore = '/var/www/html/core',
+        private readonly string $imageExtDir = '/var/www/html/ext',
     ) {
     }
 
@@ -56,6 +58,17 @@ final class AnalyzeCommand implements Command
             if (file_exists($symbolsOnly)) {
                 $includes[] = $symbolsOnly;
             }
+        }
+        // Required extensions resolve as phpstanBootstrap.php resolves them; core's own sit inside $core.
+        $extDir = getenv('CK_EXT_DIR') ?: $this->imageExtDir;
+        $inspector = new ExtensionInspector('');
+        $coreKeys = array_map($inspector->key(...), [...glob("{$core}/ext/*/info.xml") ?: [], ...glob("{$core}/ext/*/*/info.xml") ?: []]);
+        foreach (array_diff($inspector->requirements('info.xml'), $coreKeys) as $key) {
+            if (!is_dir("{$extDir}/{$key}")) {
+                fwrite(STDERR, "ckanalyze: required extension {$key} is not under {$extDir}; its classes stay unresolved\n");
+                continue;
+            }
+            $includes[] = "{$extDir}/{$key}";
         }
 
         $own = is_file('mago.toml');
@@ -103,8 +116,9 @@ ckanalyze - static analysis with mago analyze and the CiviKitchen plugins.
 Run from the extension root inside the image; untracked files count. CiviCRM
 core (CIVICRM_CORE_DIR, else /var/www/html/core, else cv's [civicrm.root]),
 civix-generated files,
-vendor/, .civikitchen-siblings/ and policy.vendored_paths are read for their
-symbols only. Core files with a typed stub in toolbelt/mago/stubs/ are read
+vendor/, .civikitchen-siblings/, policy.vendored_paths and the extensions
+named in info.xml <requires> (under CK_EXT_DIR, else /var/www/html/ext) are
+read for their symbols only. Core files with a typed stub in toolbelt/mago/stubs/ are read
 from the stub instead; toolbelt/mago/patches/ adds types to core's own
 declarations. Uses this
 repo's mago.toml when it has one (its [source] lists add to the scope

@@ -14,6 +14,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- `ckanalyze` reads the extensions named in `info.xml` `<requires>` for their
+  symbols, as `phpstanBootstrap.php` does, so a class extended from CiviRules
+  or another required extension resolves instead of failing as unknown.
+
 ## [1.38.0] - 2026-10-12
 
 ### Changed
