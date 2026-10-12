@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.37.1] - 2026-10-12
+
 ### Fixed
 
 - `.civikitchen/strauss.php` downloads Strauss through `HTTPS_PROXY`. PHP's
@@ -1761,7 +1763,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.37.0...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.37.1...HEAD
+[1.37.1]: https://github.com/jfilter/civikitchen/compare/v1.37.0...v1.37.1
 [1.37.0]: https://github.com/jfilter/civikitchen/compare/v1.36.0...v1.37.0
 [1.36.0]: https://github.com/jfilter/civikitchen/compare/v1.35.0...v1.36.0
 [1.35.0]: https://github.com/jfilter/civikitchen/compare/v1.34.0...v1.35.0
