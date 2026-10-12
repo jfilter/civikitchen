@@ -110,3 +110,8 @@ no-request-variable = { enabled = true, exclude = ["tests/**", "**/tests/**"] }
 [extension-hosts.civikitchen]
 command = ["php", "/opt/civikitchen/toolbelt/mago-ext/worker.php", "--disable=civikitchen/name-boolean-arguments",
   "--exclude=civikitchen/remote-address:tests/**,civikitchen/remote-address:**/tests/**"]
+
+[analyzer]
+# Every use of a mixed value is still reported (mixed-argument, mixed-operand,
+# …); assigning one before an is_*() check narrows it is the house idiom.
+ignore = ["mixed-assignment"]
