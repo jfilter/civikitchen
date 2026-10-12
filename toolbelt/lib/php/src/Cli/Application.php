@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CiviKitchen\Toolbelt\Cli;
 
 use CiviKitchen\Toolbelt\Process\Runner;
+use RuntimeException;
 
 final class Application
 {
@@ -25,6 +26,17 @@ final class Application
 
     /** @param list<string> $arguments */
     public function run(array $arguments, string $program): int
+    {
+        try {
+            return $this->dispatch($arguments, $program);
+        } catch (RuntimeException $e) {
+            fwrite(STDERR, basename($program) . ': ' . $e->getMessage() . "\n");
+            return 2;
+        }
+    }
+
+    /** @param list<string> $arguments */
+    private function dispatch(array $arguments, string $program): int
     {
         $name = basename($program);
         $aliases = [

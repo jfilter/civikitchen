@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CiviKitchen\Toolbelt\Repository;
 
 use CiviKitchen\Toolbelt\Process\Runner;
+use RuntimeException;
 
 final class Files
 {
@@ -71,7 +72,7 @@ final class Files
     {
         $result = $this->runner->capture([$this->checkoutRoot . '/toolbelt/bin/ckconform', '--policy', 'vendored_paths']);
         if ($result['status'] !== 0) {
-            return [];
+            throw new RuntimeException("cannot read policy.vendored_paths from civikitchen.yaml:\n" . trim($result['output']));
         }
         $prefixes = [];
         foreach (preg_split('/\R/', trim($result['output'])) ?: [] as $line) {

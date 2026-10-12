@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # `policy.vendored_paths` in civikitchen.yaml keeps third-party source a repo carries
-# verbatim out of the file lists cklint/ckfmt/ckeslint build. Without it a repo
+# verbatim out of the file lists cklint/ckfmt/ckanalyze build (Repository\Files). Without it a repo
 # can only choose between a permanently red gate and reformatting code that has
 # to stay byte-identical to its upstream.
 set -euo pipefail
@@ -10,7 +10,7 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-# ck_policy_all shells out to ckconform, so the fixture needs a real checkout.
+# Files reads the policy through ckconform and the list through git, so the fixture is a real checkout.
 cd "$work"
 git init -q .
 git config user.email ck@example.org
@@ -21,13 +21,11 @@ printf '<?php\n' > .docker/upstream/proxy/proxy.php
 git add -A
 git commit -qm fixture
 
-# shellcheck source=../../toolbelt/lib/ckcommon.sh
-. "$root/toolbelt/lib/ckcommon.sh"
-
+# shellcheck disable=SC2016 # PHP source, expanded by PHP
 list() {
-  { ck_git ls-files --cached --others --exclude-standard -- '*.php' 2>/dev/null \
-    | grep -Ev "$ck_re_vendored" \
-    | ck_drop_repo_vendored || true; }
+  php -r 'require $argv[1] . "/toolbelt/lib/php/bootstrap.php";
+    $files = (new CiviKitchen\Toolbelt\Repository\Files($argv[1]))->source(["php"], [], true, true);
+    echo implode("\n", $files), "\n";' "$root"
 }
 
 # No civikitchen.yaml at all: the filter must be a no-op, not a filter that drops
@@ -61,5 +59,13 @@ printf '%s\n' \
   '      reason: upstream polyfill, copied verbatim' >> civikitchen.yaml
 files="$(list)"
 grep -q '^mixin/polyfill.php$' <<<"$files" && fail "a top-level vendored prefix was still listed"
+
+# A policy ckconform rejects fails the list instead of silently dropping the exclusions.
+printf '%s\n' '  no_such_key: 1' >> civikitchen.yaml
+rc=0
+out=$(list 2>&1) || rc=$?
+[ "$rc" != 0 ] || fail "an unreadable policy still produced a file list: $out"
+grep -qF 'cannot read policy.vendored_paths' <<<"$out" || fail "the failure does not name the policy: $out"
+grep -q 'mixin/polyfill.php' <<<"$out" && fail "an unreadable policy listed the vendored file"
 
 echo "vendored_paths suite OK"

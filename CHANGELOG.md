@@ -24,6 +24,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- `cklint`, `ckfmt` and `ckanalyze` fail when `civikitchen.yaml` cannot be
+  read, instead of silently linting the paths `policy.vendored_paths`
+  declares as vendored.
 - A profile set with neither `apiUsers` nor an `authx` policy no longer
   touches AuthX. Since the template's CI stack selects the empty `dev`
   profile, every such boot emptied `authx_header_cred`, so API-key and JWT
