@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.39.1] - 2026-10-12
+
 ### Changed
 
 - The `playwright` job runs the test fixtures' browser in a container on the
@@ -1887,7 +1889,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.39.0...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.39.1...HEAD
+[1.39.1]: https://github.com/jfilter/civikitchen/compare/v1.39.0...v1.39.1
 [1.39.0]: https://github.com/jfilter/civikitchen/compare/v1.38.1...v1.39.0
 [1.38.1]: https://github.com/jfilter/civikitchen/compare/v1.38.0...v1.38.1
 [1.38.0]: https://github.com/jfilter/civikitchen/compare/v1.37.1...v1.38.0
