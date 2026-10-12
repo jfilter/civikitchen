@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.38.0] - 2026-10-12
+
 ### Changed
 
 - **Breaking:** the profile driver applies the whole schema contract:
@@ -1812,7 +1814,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.37.1...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.38.0...HEAD
+[1.38.0]: https://github.com/jfilter/civikitchen/compare/v1.37.1...v1.38.0
 [1.37.1]: https://github.com/jfilter/civikitchen/compare/v1.37.0...v1.37.1
 [1.37.0]: https://github.com/jfilter/civikitchen/compare/v1.36.0...v1.37.0
 [1.36.0]: https://github.com/jfilter/civikitchen/compare/v1.35.0...v1.36.0
