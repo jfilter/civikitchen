@@ -14,11 +14,6 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
-### Fixed
-
-- `ckmigrate` no longer leaves a doubled blank line, or a blank line opening a
-  block, where it drops a phpcs comment, so its result passes `ckfmt --check`.
-
 ## [1.37.0] - 2026-10-11
 
 ### Added
@@ -29,6 +24,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   packages without the phar shipping. `.civikitchen/` is left out of release
   archives ([Prefixed dependencies](docs/extension-releases.md#prefixed-dependencies-strauss)).
   The template gate stamps and lints it too.
+
+### Fixed
+
+- `ckmigrate` no longer leaves a doubled blank line, or a blank line opening a
+  block, where it drops a phpcs comment, so its result passes `ckfmt --check`.
 
 ## [1.36.0] - 2026-10-11
 
