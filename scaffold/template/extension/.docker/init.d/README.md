@@ -1,8 +1,9 @@
 # First-boot provisioning hooks
 
 Scripts here run once after a fresh auto-install, in lexical order:
-`*.sh` via bash (as root), `*.php` via `cv scr` (as www-data). A failing
-hook aborts the boot — broken provisioning is loud, not silent.
+`*.sh` via bash, `*.php` via `cv scr`, both as the image's web user. A
+failing hook aborts the boot — broken provisioning is loud, not silent.
+A tool a `*.sh` hook fetches goes into `~/.local/bin`, which is on `PATH`.
 
 Use them for everything a reproducible dev/test setup needs beyond
 `cv ext:enable`: API users with scoped roles, seed rows, settings,

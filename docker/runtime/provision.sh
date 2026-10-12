@@ -943,7 +943,7 @@ ck_apply_profile() {
 }
 
 # First-boot provisioning hooks mounted into CK_INIT_D, run in lexical order:
-# *.sh via bash (as the container user; system setup needs `user: root`),
+# *.sh via bash (as the container user, whose ~/.local/bin is on PATH; system setup needs `user: root`),
 # *.php via `cv scr` (as the web user, for Civi settings / seed data). A failing hook aborts the boot.
 ck_run_init_hooks() {
     [[ -d "${CK_INIT_D}" ]] || return 0

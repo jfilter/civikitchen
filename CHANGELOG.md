@@ -41,6 +41,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ### Fixed
 
+- The dev images put the web user's `~/.local/bin` (`/var/www/.local/bin`,
+  buildkit flavors `/home/buildkit/.local/bin`) on `PATH`. Since the images
+  run as that user, no `PATH` directory was writable, so a `*.sh` init hook
+  could not install a tool. The template's `init.d/README.md` no longer
+  claims those hooks run as root.
 - `ckconform` treats a subdirectory with its own `info.xml` (for example a
   fixture extension the dev stack installs beside the main one) as a separate
   extension. Before, its hooks failed `hook-dispatch-name` under the main

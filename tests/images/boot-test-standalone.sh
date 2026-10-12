@@ -56,6 +56,7 @@ sed "s/__EXTKEY__/ckbootfixture/g" "${SRC}/scaffold/template/extension/phpunit.x
    > "${FIXTURE}/phpunit.xml.dist"
 PROFILE_FIXTURE="$(cd "$(dirname "$0")/fixtures/external-profile" && pwd)"
 LIFECYCLE_FIXTURE="$(cd "$(dirname "$0")/fixtures/lifecycle" && pwd)"
+INITD_FIXTURE="$(cd "$(dirname "$0")/fixtures/init.d" && pwd)"
 
 RAW="$(echo "${IMAGE}-${DATABASE_IMAGE}" | tr -c 'a-z0-9' '-')"
 SLUG="satest-$(echo "${RAW}" | cut -c1-32)$(echo "${RAW}" | cksum | cut -d' ' -f1)"
@@ -96,6 +97,7 @@ docker run -d --name "${APP}" --network "${NET}" \
     -v "${FIXTURE}:/var/www/html/ext/ckbootfixture:ro" \
     -v "${PROFILE_FIXTURE}:/civikitchen-external-profiles:ro" \
     -v "${LIFECYCLE_FIXTURE}:/civikitchen-lifecycle-fixtures:ro" \
+    -v "${INITD_FIXTURE}:/civikitchen-init.d:ro" \
     "${extra[@]}" \
     "${IMAGE}" >/dev/null
 
@@ -194,6 +196,12 @@ content=$(cv ev 'echo implode("/", [\Civi\Api4\Contact::get(FALSE)->addWhere("ex
 check "content: organization seed, contribution, fixed membership type, domain renamed (got ${content:-absent})" "[ '${content}' = '1/1/1/Acme Association' ]"
 reapply=$(docker exec -u www-data "${APP}" bash /opt/civikitchen/docker/profiles/apply.sh /civikitchen-external-profiles/content 2>&1 | grep -E '^  (config|seed):' | tr '\n' '|' || true)
 check "content: a second apply changes nothing (got ${reapply:-absent})" "[ '${reapply}' = '  config: unchanged|  seed: 0 contact(s), 0 contribution(s) created|' ]"
+
+# 6c) A *.sh init hook runs as the web user; the tool it installs into
+# ~/.local/bin is on PATH for later hooks and for docker exec.
+check "init.d: a later hook finds the installed tool" "docker logs '${APP}' 2>&1 | grep -F 'init.d hook found: ckinittool-ok' >/dev/null"
+tool=$(docker exec -u www-data "${APP}" ckinittool 2>&1 || true)
+check "init.d: docker exec finds the installed tool (got ${tool:-absent})" "[ '${tool}' = 'ckinittool-ok' ]"
 
 # 7) No calls to civicrm.org from the admin status check.
 vc=$(cv api4 Job.get +w api_action=version_check +s is_active --out=json-strict | tr -d '[:space:]' || true)

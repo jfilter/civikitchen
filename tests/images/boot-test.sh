@@ -45,6 +45,7 @@ docker run -d --name "${APP}" --network "${NET}" \
     -e CIVICRM_DB_ROOT_PASSWORD=root \
     -e CIVIKITCHEN_SITE_URL=http://localhost \
     -e CIVICRM_SITE_TYPE="${SITE_TYPE}" \
+    -v "$(cd "$(dirname "$0")/fixtures/init.d" && pwd):/civikitchen-init.d:ro" \
     "${IMAGE}" >/dev/null
 
 echo "==> waiting for healthy (first-boot reinstall + provisioning)..."
@@ -88,6 +89,12 @@ offline=$(docker exec -u buildkit -w /home/buildkit/buildkit/build/site/web "${A
     | tr -d '[:space:]' || true)
 check "version_check job inactive, ext_repo_url false (got ${offline:-none})" \
     "echo '${offline}' | grep -q '\"is_active\":false' && echo '${offline}' | grep -q '\"value\":false'"
+
+# 2c) A *.sh init hook runs as buildkit; the tool it installs into
+# ~/.local/bin is on PATH for later hooks and for docker exec.
+check "init.d: a later hook finds the installed tool" "docker logs '${APP}' 2>&1 | grep -F 'init.d hook found: ckinittool-ok' >/dev/null"
+tool=$(docker exec "${APP}" ckinittool 2>&1 || true)
+check "init.d: docker exec finds the installed tool (got ${tool:-absent})" "[ '${tool}' = 'ckinittool-ok' ]"
 
 # 3) Joomla only: the option=com_civicrm route must be registered. cv (check 2)
 # boots via the settings.d shim regardless of Joomla's component registration,

@@ -278,6 +278,11 @@ server can write. Docker lets that user bind port 80
 (`net.ipv4.ip_unprivileged_port_start=0`, set since Docker 20.10). The demo
 images run as root, because they start an embedded MariaDB.
 
+No directory on the system `PATH` is writable for that user. A `*.sh` init
+hook that fetches a tool installs it into the user's `~/.local/bin`
+(`/var/www/.local/bin`, buildkit flavors `/home/buildkit/.local/bin`), which
+is on `PATH` for the hooks, `docker exec` and `ck ci`.
+
 The v1 paths `/opt/civikitchen-<tool>` and the v1 profile directory
 `/usr/local/share/civikitchen/profiles` are links to the same directories and
 are **deprecated**: they go away in v2. A profile a stack mounts below the old

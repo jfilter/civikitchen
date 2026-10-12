@@ -367,5 +367,7 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=600s --retries=18 \
     CMD test -f /home/buildkit/.civikitchen-provisioned \
         && curl -fsS -o /dev/null http://localhost/ || exit 1
 
+# A *.sh init hook runs as this user and installs extra tools into its ~/.local/bin.
+ENV PATH="${PATH}:/home/buildkit/.local/bin"
 USER buildkit
 ENTRYPOINT ["/home/buildkit/entrypoint.sh"]

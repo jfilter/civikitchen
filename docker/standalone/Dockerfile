@@ -232,6 +232,8 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=600s --retries=18 \
     CMD test -f /var/www/html/private/.civikitchen-provisioned \
         && curl -fsS -o /dev/null http://localhost/ || exit 1
 
+# A *.sh init hook runs as this user and installs extra tools into its ~/.local/bin.
+ENV PATH="${PATH}:/var/www/.local/bin"
 USER www-data
 ENTRYPOINT ["/usr/local/bin/civikitchen-entrypoint"]
 CMD ["apache2-foreground"]
