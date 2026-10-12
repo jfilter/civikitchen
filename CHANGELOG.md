@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.39.0] - 2026-10-12
+
 ### Added
 
 - `policy.civicrm` in `civikitchen.yaml` names the CiviCRM minor a repo
@@ -1865,7 +1867,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.38.1...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.39.0...HEAD
+[1.39.0]: https://github.com/jfilter/civikitchen/compare/v1.38.1...v1.39.0
 [1.38.1]: https://github.com/jfilter/civikitchen/compare/v1.38.0...v1.38.1
 [1.38.0]: https://github.com/jfilter/civikitchen/compare/v1.37.1...v1.38.0
 [1.37.1]: https://github.com/jfilter/civikitchen/compare/v1.37.0...v1.37.1
