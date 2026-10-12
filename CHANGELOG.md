@@ -14,6 +14,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- The `playwright` job runs the test fixtures' browser in a container on the
+  stack's network instead of on the runner's host network. Other jobs that
+  create or remove Docker networks on the same host no longer abort its
+  requests with `net::ERR_NETWORK_CHANGED`. The test runner stays on the
+  runner, and `localhost:<port>` still reaches the site from the browser.
+
 ### Fixed
 
 - A boot whose selected profiles declare no `apiUsers`, like the template's
