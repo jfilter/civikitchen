@@ -61,6 +61,8 @@ final class Policy
         'template_custom' => 'ckinit: template-managed files this repo owns instead',
         'renovate_preset' => 'ckinit: the Renovate preset the managed renovate.json extends',
         'ci' => "ckinit: 'gitlab' for a repository whose CI runs on GitLab",
+        // read by the reusable workflows
+        'civicrm' => 'extension-ci.yml + extension-release.yml: the CiviCRM minor whose :standalone-<minor> image the stacks run',
         // read by the image entrypoint (docker/runtime/provision.sh)
         'extension_source' => 'entrypoint: key@HTTPS-URL#sha256=digest for a dependency, one per source',
         'extension_release' => 'entrypoint + extension-release.yml: key repo tag asset sha256 for a dependency staged from a GitHub release',
@@ -180,7 +182,7 @@ final class Policy
         self::validateDocument($document);
         $policy = $document['policy'] ?? [];
         $out = [];
-        foreach (['license', 'copyright', 'hook_style', 'npm_license', 'max_unreleased_days', 'renovate_preset', 'ci'] as $key) {
+        foreach (['license', 'copyright', 'hook_style', 'npm_license', 'max_unreleased_days', 'renovate_preset', 'ci', 'civicrm'] as $key) {
             if (array_key_exists($key, $policy)) $out[$key] = [(string) $policy[$key]];
         }
         if (isset($policy['coverage']['minimum'])) $out['min_coverage'] = [(string) $policy['coverage']['minimum']];

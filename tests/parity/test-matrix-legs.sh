@@ -35,12 +35,12 @@ done
 step='Parse matrix_images into the compat and browser legs'
 php "$root/tests/parity/workflow-step.php" "$workflow" compat-images "$step" > "$work/step.sh"
 
-# legs <matrix_images> <image> <playwright> <matrix_playwright>: runs the step
+# legs <matrix_images> <image> <playwright> <matrix_playwright>: runs the step (<image>: the key job's resolved image)
 # with its own env: mapping, each expression resolved from these inputs.
 legs() {
   local -A inputs=(
     ['${{ inputs.matrix_images }}']=$1
-    ['${{ inputs.image }}']=$2
+    ['${{ needs.key.outputs.image }}']=$2
     ['${{ inputs.playwright }}']=$3
     ['${{ inputs.matrix_playwright }}']=$4
   )

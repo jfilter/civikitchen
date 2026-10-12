@@ -52,10 +52,11 @@ on:
       image:
         description: >-
           Override the compose stack's CiviKitchen image. Empty (the default)
-          leaves the compose file's own ${CIVIKITCHEN_IMAGE:-...} default in
-          place. Lets a caller pin or float the image without editing the
-          template-managed CI compose file — how the canary repo tracks
-          :standalone while the fleet is on :v1.
+          takes the :standalone-<minor> image of the repo's policy.civicrm,
+          else the compose file's own ${CIVIKITCHEN_IMAGE:-...} default. Lets
+          a caller float the image without editing the template-managed CI
+          compose file — how the canary repo tracks :standalone while the
+          fleet is on :v1. Setting both this and policy.civicrm is an error.
         type: string
         default: ''
       matrix_images:
@@ -257,6 +258,7 @@ jobs:
       tool_path: ${{ steps.key.outputs.tool_path }}
       repo_path: ${{ steps.key.outputs.repo_path }}
       dist_build_tool: ${{ steps.dist-build.outputs.tool }}
+      image: ${{ steps.image.outputs.image }}
     env:
       CK_EXT_KEY_INPUT: ${{ inputs.key }}
       CK_WORKING_DIRECTORY: ${{ inputs.working_directory }}
@@ -337,6 +339,7 @@ jobs:
           sparse-checkout: |
             toolbelt
             packages
+            .github/scripts
           path: .civikitchen-ci
 
       - name: Read the declared release build
@@ -361,6 +364,23 @@ jobs:
             exit 1
           fi
           echo "tool=$tool" >> "$GITHUB_OUTPUT"
+
+      # policy.civicrm names the CiviCRM minor once for every stack job; empty
+      # leaves the compose file's own default image in place.
+      - name: Resolve the stack image
+        id: image
+        env:
+          CK_WD: ${{ steps.key.outputs.wd }}
+          CK_IMAGE_INPUT: ${{ inputs.image }}
+        run: |
+          set -euo pipefail
+          minor=
+          if [ -f "$CK_WD/civikitchen.yaml" ]; then
+            minor=$(cd "$CK_WD" && php "$GITHUB_WORKSPACE/.civikitchen-ci/toolbelt/bin/ckconform" --policy civicrm)
+          fi
+          image=$(.civikitchen-ci/.github/scripts/stack-image.sh "$minor" "$CK_IMAGE_INPUT" '')
+          echo "stack image: ${image:-default of the compose file}"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
 
   # Template drift: the tooling files civikitchen owns (CI caller, test
   # bootstraps, CI compose stack) must match the template, or
@@ -643,8 +663,8 @@ jobs:
       CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
       CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
       # Read by the compose file's ${CIVIKITCHEN_IMAGE:-<default>}; `:-` treats
-      # the empty default as unset, so not passing `image` changes nothing.
-      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      # empty as unset, so with neither `image` nor policy.civicrm nothing changes.
+      CIVIKITCHEN_IMAGE: ${{ needs.key.outputs.image }}
       # One compose project PER JOB. The extension's compose file names its
       # project after the extension, so two jobs of the same run booting the
       # same stack share it — and the second one's `down -v --remove-orphans`
@@ -940,7 +960,7 @@ jobs:
       CK_EXT_PATH: ${{ needs.key.outputs.ext_path }}
       CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
       CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
-      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      CIVIKITCHEN_IMAGE: ${{ needs.key.outputs.image }}
       # One compose project per job — see the note in `ci`.
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-upgrade
     defaults:
@@ -1019,7 +1039,7 @@ jobs:
 
       # Boots and installs the OLD version — including its own CI compose file
       # and therefore the image that release was tested with, unless the
-      # caller pins `image`.
+      # caller pins `image` or policy.civicrm.
       - name: Start CiviCRM stack on the previous release
         env:
           CK_SIBLING_OVERRIDE: ${{ steps.deps.outputs.sibling_override }}
@@ -1130,7 +1150,7 @@ jobs:
       CK_EXT_PATH: ${{ needs.key.outputs.ext_path }}
       CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
       CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
-      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      CIVIKITCHEN_IMAGE: ${{ needs.key.outputs.image }}
       # One compose project per job — see the note in `ci`.
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-schema-parity
     defaults:
@@ -1377,7 +1397,7 @@ jobs:
       CK_EXT_PATH: ${{ needs.key.outputs.ext_path }}
       CK_TOOL_PATH: ${{ needs.key.outputs.tool_path }}
       CK_REPO_PATH: ${{ needs.key.outputs.repo_path }}
-      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      CIVIKITCHEN_IMAGE: ${{ needs.key.outputs.image }}
       # One compose project per job — see the note in `ci`.
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-mutation
     defaults:
@@ -1508,7 +1528,7 @@ jobs:
       # empty for the compose file's own default. Only the first boot overrides
       # it — at the step — so everything after the swap already runs against the
       # image this pipeline actually tests on.
-      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+      CIVIKITCHEN_IMAGE: ${{ needs.key.outputs.image }}
       # One compose project per job — see the note in `ci`.
       COMPOSE_PROJECT_NAME: ck-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.key.outputs.key_slug }}-core-upgrade
     defaults:
@@ -1609,7 +1629,7 @@ jobs:
           CIVIKITCHEN_IMAGE: ${{ inputs.core_upgrade_from }}
           # The old core's image may predate `ck internal composer-install`, and
           # the site ends on the run's image, whose PHP vendor/ has to fit.
-          CK_VENDOR_IMAGE: ${{ inputs.image }}
+          CK_VENDOR_IMAGE: ${{ needs.key.outputs.image }}
           CK_SIBLING_OVERRIDE: ${{ steps.deps.outputs.sibling_override }}
         run: |
           set -euo pipefail
@@ -1780,6 +1800,7 @@ jobs:
       group: ck-${{ github.repository }}-${{ github.ref }}-${{ inputs.working_directory }}-${{ github.workflow }}-${{ inputs.image }}-compat-images
       cancel-in-progress: true
     if: ${{ inputs.matrix_images != '' || inputs.playwright || inputs.matrix_playwright }}
+    needs: key
     runs-on: ${{ inputs.runs_on || vars.CK_RUNS_ON || 'ubuntu-latest' }}
     outputs:
       images: ${{ steps.parse.outputs.images }}
@@ -1789,7 +1810,7 @@ jobs:
         id: parse
         env:
           CK_MATRIX_IMAGES: ${{ inputs.matrix_images }}
-          CK_IMAGE: ${{ inputs.image }}
+          CK_IMAGE: ${{ needs.key.outputs.image }}
           CK_PLAYWRIGHT: ${{ inputs.playwright }}
           CK_MATRIX_PLAYWRIGHT: ${{ inputs.matrix_playwright }}
         run: |

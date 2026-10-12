@@ -57,10 +57,12 @@ on:
         default: false
       image:
         description: >-
-          CiviKitchen image the install smoke test runs in. Defaults to the
-          released contract image, the same one the CI compose stack pins.
+          CiviKitchen image the install smoke test runs in. Empty (the
+          default): the :standalone-<minor> image of the repo's policy.civicrm,
+          else the released contract image the CI compose stack pins. Setting
+          both this and policy.civicrm is an error.
         type: string
-        default: 'ghcr.io/jfilter/civikitchen:v1'
+        default: ''
       smoke_test:
         description: >-
           Install the built archive into a fresh CiviCRM before publishing.
@@ -132,9 +134,6 @@ jobs:
     env:
       # Inputs reach the shell through the environment, never through expression
       # interpolation inside `run:` — an interpolated input IS the script text.
-      # Read by the smoke stack's ${CIVIKITCHEN_IMAGE} on every compose call,
-      # not just `up` — an unset variable there resolves to an empty image.
-      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
       CK_REQUIRE_CHANGELOG: ${{ inputs.require_changelog }}
       CK_RELEASE_REF: HEAD
     steps:
@@ -297,6 +296,18 @@ jobs:
           php "$GITHUB_WORKSPACE"/.civikitchen-ci/toolbelt/bin/ckconform --dist-paths > /dev/null
           tool=$(php "$GITHUB_WORKSPACE"/.civikitchen-ci/toolbelt/bin/ckconform --policy dist_build_tool)
           echo "tool=$tool" >> "$GITHUB_OUTPUT"
+
+      # Read by the smoke stack's ${CIVIKITCHEN_IMAGE} on every compose call,
+      # not just `up` — an unset variable there resolves to an empty image.
+      - name: Resolve the smoke-test image
+        env:
+          CK_IMAGE_INPUT: ${{ inputs.image }}
+        run: |
+          set -euo pipefail
+          minor=$(php "$GITHUB_WORKSPACE"/.civikitchen-ci/toolbelt/bin/ckconform --policy civicrm)
+          image=$("$GITHUB_WORKSPACE"/.civikitchen-ci/.github/scripts/stack-image.sh "$minor" "$CK_IMAGE_INPUT" ghcr.io/jfilter/civikitchen:v1)
+          echo "smoke-test image: $image"
+          echo "CIVIKITCHEN_IMAGE=$image" >> "$GITHUB_ENV"
 
       - name: Set up Node for the declared release build
         if: ${{ steps.dist-build.outputs.tool == 'bun' }}

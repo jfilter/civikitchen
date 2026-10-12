@@ -851,6 +851,15 @@ so it names a `release` (repository, tag, asset) instead of a `url`; see
 [A dependency only a credential can reach](extension-releases.md#a-dependency-only-a-credential-can-reach).
 An entry carries a `url` or a `release`, never both and never neither.
 
+A repo that targets one CiviCRM minor names it once as `civicrm: "6.17"`
+(quoted: unquoted YAML reads `6.10` as `6.1`). `extension-ci.yml` and the
+release smoke test of `extension-release.yml` then run on
+`:standalone-<minor>` instead of the contract image, so CI and release cannot
+test different cores. Passing their `image` input as well fails the run. The
+minor has to be on the supported list in
+[images.md](images.md#tags--versions). GitLab CI picks its job image before
+the repository is read, so there `CK_IMAGE` still names it.
+
 Values shared across an organisation's repos can sit once in a file of the same
 format named by `CK_DEFAULT_CONFIG`; a repo's own `civikitchen.yaml` overrides per
 key. In CI the `policy_defaults` input of `extension-ci.yml` — or, set once

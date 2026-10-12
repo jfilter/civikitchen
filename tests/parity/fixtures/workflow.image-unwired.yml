@@ -1,0 +1,22 @@
+on: workflow_call
+jobs:
+  direct:
+    runs-on: ubuntu-latest
+    env:
+      CIVIKITCHEN_IMAGE: ${{ inputs.image }}
+    steps:
+      - run: docker compose up -d
+  stepwise:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          CK_VENDOR_IMAGE: ${{ inputs.image || 'ghcr.io/acme/img:1' }}
+        run: docker compose up -d
+  resolved:
+    runs-on: ubuntu-latest
+    env:
+      CIVIKITCHEN_IMAGE: ${{ needs.key.outputs.image }}
+    steps:
+      - env:
+          CK_IMAGE_INPUT: ${{ inputs.image }}
+        run: echo resolver

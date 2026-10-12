@@ -14,6 +14,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- `policy.civicrm` in `civikitchen.yaml` names the CiviCRM minor a repo
+  targets, once. `extension-ci.yml` and the release smoke test of
+  `extension-release.yml` run on its `:standalone-<minor>` image; passing
+  their `image` input as well fails the run. Before, a repo that pinned its
+  CI image still had its release smoke-tested on the contract image's core.
+
 ### Fixed
 
 - A profile set with neither `apiUsers` nor an `authx` policy no longer
