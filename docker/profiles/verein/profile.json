@@ -148,5 +148,6 @@
       ],
       "skipUfReason": "Contact Layout is only bundled with the CMS images that expose it"
     }
-  ]
+  ],
+  "scripts": ["scripts/10-verein.php", "scripts/20-sepa-mandate.php"]
 }

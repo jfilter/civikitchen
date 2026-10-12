@@ -7,7 +7,7 @@
 // would do (and Drupal/WordPress/Standalone do at install time) is link the CMS
 // admin to a CiviCRM contact. Without that UFMatch, `cv --user=admin` fails with
 // "Cannot login. Failed to determine contact ID", which blocks running the
-// profile seeds as admin. Create the link the same way CiviCRM itself does, via
+// profile scripts as admin. Create the link the same way CiviCRM itself does, via
 // CRM_Core_BAO_UFMatch::synchronizeUFMatch (idempotent). Joomla only.
 if (CIVICRM_UF !== 'Joomla') {
   return;

@@ -7,9 +7,9 @@
 # and takes a few minutes; it is marker-gated by the caller, so it applies
 # exactly once per container.
 #
-# Entirely driven by the profile dir (profile.json + seeds/*.php), so every
-# profile shares this one script; a profile may ship its own apply.sh to
-# override it. Each dependency in profile.json names one of three sources:
+# Entirely driven by profile.json, applied as dependencies -> config -> seed ->
+# scripts, so every profile shares this one script; a profile may ship its own
+# apply.sh to override it. Each dependency in profile.json names one of three sources:
 #   "repo": <git url>     cloned at "version" into the site's ext dir
 #   "registry": true      cv ext:download (packaged release incl. built assets)
 #   neither               bundled with core (e.g. flexmailer), enable only
@@ -21,7 +21,7 @@
 set -euo pipefail
 
 # Packaged code replaced by an immutable Git pin remains recoverable until the
-# complete profile succeeds. A failed enable/seed/user step restores the prior
+# complete profile succeeds. A failed enable/content/script/user step restores the prior
 # filesystem state; installed packaged extensions are refused below because a
 # database upgrade cannot be rolled back safely by swapping PHP files.
 PROFILE_SUCCEEDED=0
@@ -46,6 +46,9 @@ PROFILE_DIR="${1:?usage: apply.sh <profile-dir>}"
 PROFILE_NAME="$(basename "${PROFILE_DIR}")"
 JSON="${PROFILE_DIR}/profile.json"
 CK_PROFILE_CLI="$(command -v ck 2>/dev/null)" || { echo "apply.sh: no ck on PATH" >&2; exit 1; }
+# Resolved before anything is fetched or written: a missing script or a retired
+# seeds/ directory fails the apply while the site is still untouched.
+SCRIPTS="$("${CK_PROFILE_CLI}" internal profile-scripts "${JSON}")"
 # civibuild layout if present (demo + buildkit dev images); on the standalone
 # dev image cv is on the global PATH and finds the site via env, no cd needed.
 SITE_WEB="/home/buildkit/buildkit/build/site/web"
@@ -254,31 +257,32 @@ if [ "${UF}" = "Joomla" ]; then
     cv scr "$(dirname "$0")/joomla-link-admin.php"
 fi
 
-# Seeds run as the admin CMS user. civibuild sites always have one; the
-# standalone dev image only after an auto-install with a demo admin — fail
-# with a hint instead of a cryptic cv error per seed.
+# Content and scripts run as the admin CMS user. civibuild sites always have
+# one; the standalone dev image only after an auto-install with a demo admin —
+# fail with a hint instead of a cryptic cv error.
 if ! cv ev --user=admin 'echo "ok";' >/dev/null 2>&1; then
     echo "apply.sh: no 'admin' user on this site — profiles need one." >&2
     echo "apply.sh: on the standalone dev image set CIVICRM_AUTO_INSTALL=1 and CIVIKITCHEN_DEMO_USER=admin." >&2
     exit 1
 fi
 
-echo "==> [${PROFILE_NAME}] seeding demo data"
-# Seeds are PHP scripts run with a booted CiviCRM (cv scr): one process per
-# seed instead of one per API call, with real loops + error handling. Run as
-# the admin CMS user — extensions like CiviSEPA make internal API calls that
-# re-check permissions regardless of the caller's check_permissions flag.
-# Ordered by filename prefix. A failed seed aborts the apply so the caller does
-# not write its provisioning marker; the next boot can then retry the complete
-# idempotent profile instead of preserving a partially seeded healthy site.
-for seed in "${PROFILE_DIR}/seeds/"*.php; do
-    [ -e "${seed}" ] || continue
-    echo "  -> $(basename "${seed}")"
-    if ! cv scr --user=admin "${seed}"; then
-        echo "  ERROR: profile seed failed: $(basename "${seed}")" >&2
+echo "==> [${PROFILE_NAME}] asserting config, creating seed records"
+# config converges on every apply; seed rows are created once, matched by their
+# anchor. A missing prerequisite (component, financial type, group) fails here.
+CK_PROFILE_JSON="${JSON}" cv scr --user=admin "$(dirname "$0")/apply-content.php"
+
+# Scripts are PHP run with a booted CiviCRM (cv scr) after the declarative part,
+# in profile order, as the admin CMS user — extensions like CiviSEPA re-check
+# permissions in internal API calls. A failed script aborts the apply so the
+# caller writes no provisioning marker and the next boot retries the profile.
+while IFS= read -r script; do
+    [ -n "${script}" ] || continue
+    echo "==> [${PROFILE_NAME}] script $(basename "${script}")"
+    if ! cv scr --user=admin "${script}"; then
+        echo "  ERROR: profile script failed: ${script}" >&2
         exit 1
     fi
-done
+done <<<"${SCRIPTS}"
 
 if "${CK_PROFILE_CLI}" internal profile-api-users-declared "${JSON}"; then
     echo "==> [${PROFILE_NAME}] preparing API users + AuthX"

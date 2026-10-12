@@ -53,5 +53,6 @@
       "version": "c9be29ae1cdd03c251dd92e5ca6a29f54d775de1",
       "enable": true
     }
-  ]
+  ],
+  "scripts": ["scripts/10-fundraising.php"]
 }

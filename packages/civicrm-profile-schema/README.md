@@ -11,8 +11,10 @@ ck profile validate path/to/profile-directory
 The dependency-free validator implements the JSON Schema vocabulary used by
 `profile.schema.json`; images use this exact file to validate mounted external
 profiles before applying any profile in the selected list. Shape validation is
-not a sandbox: consumers that execute `scripts`, seed PHP, or profile drivers
-must separately establish trust in that code.
+not a sandbox: consumers that execute `scripts` or profile drivers must
+separately establish trust in that code. `ck profile validate` also rejects a
+`scripts` entry that is no file inside the profile directory, and a `seeds/`
+directory: only the files `scripts` lists run.
 
 JSON Schema (draft 2020-12) for the civikitchen CiviCRM **profile** format — the
 declarative description of a scenario: `dependencies` (extensions), `authx`,
@@ -32,10 +34,25 @@ Reusable `$defs` for consumers that only need a slice:
 `config` covers settings, the domain organization, from-address, mailbox domain,
 groups and membership types (`membership_types`, asserted by name).
 
-Content has two tiers: **declarative** `config` (asserted every run) + `seed`
-(created-once fixtures) for config and anchors, and optional **imperative**
-`scripts` (PHP run via `cv scr`, after the declarative tier) for volume /
-complex data that declarative JSON can't express. Nothing has to be declarative.
+A profile applies in this order: `dependencies` → `config` → `seed` →
+`scripts`.
+
+- **`config`** is asserted on every apply: whatever differs is written back.
+  `settings` go first, so components a profile lists in `enable_components`
+  count for the rest. `enable_components` is the whole list, not an addition.
+- **`seed`** creates each record once and never touches it again, so edits
+  made in the UI survive a re-apply. Contacts are matched by
+  `external_identifier` = `ref` and contributions by `trxn_id`
+  `profile-seed-<ref>` (or `profile-seed-<contact_ref>-<n>` without a `ref`).
+  Deleted records count as existing.
+- **`scripts`** are PHP files run via `cv scr` in list order, for volume or
+  complex data that declarative JSON can't express.
+
+A missing prerequisite is an error, never a skip. Examples are membership types
+without CiviMember, an unknown financial type, setting, field or group, or a
+`contact_ref` no contact carries. The apply lists every such problem before it
+writes anything. The one exception is `settings`: they are written first,
+because the APIs of a component they enable only exist once it is on.
 
 ## Use
 

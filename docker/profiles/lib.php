@@ -1,9 +1,9 @@
 <?php
-// Shared helpers for profile seeds (seeds/*.php, run via `cv scr` with a
-// booted CiviCRM). Include from a seed with:
+// Shared helpers for profile scripts (listed in profile.json "scripts", run via
+// `cv scr` with a booted CiviCRM). Include from scripts/<file>.php with:
 //   require_once __DIR__ . '/../../lib.php';
 // Helpers are create-only; idempotency guards (skip when already seeded)
-// stay in each seed, keyed on data only that seed creates.
+// stay in each script, keyed on data only that script creates.
 
 use Civi\Api4\Address;
 use Civi\Api4\Contact;

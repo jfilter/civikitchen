@@ -45,7 +45,6 @@
 : "${CK_BOOT_STUB:=/var/www/html/civicrm.standalone.php}"
 # Where named profiles (docker/profiles/<name>/) ship inside the image.
 : "${CK_PROFILE_DIR:=/opt/civikitchen/docker/profiles}"
-: "${CK_PROFILE_SCHEMA_DIR:=/opt/civikitchen/packages/civicrm-profile-schema}"
 # Optional civibuild-style settings.d dir (loaded into civicrm.settings.php).
 # Only the buildkit entrypoint sets this; see ck_smtp.
 : "${CK_SETTINGS_D:=}"
@@ -820,14 +819,9 @@ ck_resolve_profile() {
     printf '%s' "${matches[0]}"
 }
 
+# Schema plus what the driver needs from the directory (scripts present, no seeds/).
 ck_validate_profile() {
-    local dir="$1" validator="${CK_PROFILE_SCHEMA_DIR}/validate.php"
-    local schema="${CK_PROFILE_SCHEMA_DIR}/profile.schema.json"
-    [[ -f "${validator}" && -f "${schema}" ]] || {
-        echo "[civikitchen] ERROR: bundled profile validator/schema missing from ${CK_PROFILE_SCHEMA_DIR}." >&2
-        return 1
-    }
-    php "${validator}" "${schema}" "${dir}/profile.json" >/dev/null
+    "$(ck_runtime_cli)" profile validate "$1" >/dev/null
 }
 
 ck_profile_is_bundled() {
@@ -837,7 +831,7 @@ ck_profile_is_bundled() {
     [[ "${candidate}" == "${bundled}"/* ]]
 }
 
-# External profiles can carry a root/profile apply.sh and seed PHP. Schema
+# External profiles can carry a root/profile apply.sh and script PHP. Schema
 # validation proves their data shape; it is not a code sandbox. Requiring an
 # explicit trust decision prevents a read-only mount from being mistaken for a
 # data-only security boundary.
@@ -867,12 +861,12 @@ ck_resolve_authx_policy() {
     printf '%s' "${resolved}"
 }
 
-# Apply named profiles (extensions + seed data + API users) at first boot.
+# Apply named profiles (extensions + config + seed + scripts + API users) at first boot.
 # Opt-in via CIVIKITCHEN_PROFILE=<name>[,<name>...] — a comma-separated list
 # is applied left to right; profiles ship in CK_PROFILE_DIR (see
 # docker/profiles/). Combining works because every layer converges instead of
-# colliding: apply.sh skips extensions the site already has, seeds skip when
-# their anchor org exists, and configure-api-users.php upserts users/roles
+# colliding: apply.sh skips extensions the site already has, config converges,
+# seed records are created once per anchor, and configure-api-users.php upserts users/roles
 # (merging role permissions), so a name shared across profiles ends up with
 # the union. Needs network (git clones) and can take several minutes.
 # Runs inside ck_post_install_provision, so it is marker-gated: it applies
@@ -914,7 +908,7 @@ ck_apply_profile() {
         fi
         echo "[civikitchen] Applying profile '${name}' (needs network; this can take several minutes)..."
         # Pass CK_CREDENTIALS_FILE through explicitly (like ck_smtp/ck_demo_user
-        # above) so a profile's configure-api-users.php + seeds resolve it
+        # above) so a profile's configure-api-users.php + scripts resolve it
         # deterministically rather than relying on runuser's preserve-env. Empty
         # when unset -> the script's `?:` falls back to $HOME/api-credentials.txt
         # (no change for profiles that don't set it).

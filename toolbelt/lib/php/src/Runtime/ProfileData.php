@@ -61,6 +61,47 @@ final class ProfileData
         return $messages;
     }
 
+    /**
+     * The profile's `scripts`, resolved against its directory, in profile order.
+     *
+     * @return list<string>
+     */
+    public function scripts(string $file): array
+    {
+        $problems = $this->problems($file);
+        if ($problems !== []) {
+            throw new RuntimeException(implode("\n", $problems));
+        }
+        $directory = (string) realpath(dirname($file));
+        return array_map(static fn(mixed $script): string => (string) realpath($directory . '/' . $script),
+            $this->load($file)['scripts'] ?? []);
+    }
+
+    /**
+     * What keeps a schema-valid profile from applying: a retired seeds/ directory
+     * or a `scripts` entry that is no file inside the profile directory.
+     *
+     * @return list<string>
+     */
+    public function problems(string $file): array
+    {
+        $directory = realpath(dirname($file));
+        if ($directory === false) {
+            return ["profile directory not found: " . dirname($file)];
+        }
+        $problems = [];
+        if (is_dir($directory . '/seeds')) {
+            $problems[] = "{$directory}/seeds: the seeds/ directory is no longer run; name its PHP files in the profile's \"scripts\" list";
+        }
+        foreach ($this->load($file)['scripts'] ?? [] as $script) {
+            $path = is_string($script) && !str_starts_with($script, '/') ? realpath($directory . '/' . $script) : false;
+            if ($path === false || !is_file($path) || !str_starts_with($path, $directory . '/')) {
+                $problems[] = "{$directory}: script " . json_encode($script) . ' is no file inside the profile directory';
+            }
+        }
+        return $problems;
+    }
+
     /** @return list<array<string, mixed>> */
     public function dependencies(string $file, string $uf): array
     {

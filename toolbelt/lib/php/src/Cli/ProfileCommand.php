@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CiviKitchen\Toolbelt\Cli;
 
+use CiviKitchen\Toolbelt\Runtime\ProfileData;
 use CkProfileSchemaValidator;
 use Throwable;
 
@@ -59,6 +60,9 @@ TXT;
             $schemaDocument = json_decode((string) file_get_contents($schema), true, 512, JSON_THROW_ON_ERROR);
             $profileDocument = json_decode((string) file_get_contents($target), false, 512, JSON_THROW_ON_ERROR);
             $errors = (new CkProfileSchemaValidator($schemaDocument))->validate($profileDocument);
+            if ($errors === []) {
+                $errors = (new ProfileData())->problems($target);
+            }
         } catch (Throwable $e) {
             fwrite(STDERR, "profile validation failed: {$e->getMessage()}\n");
             return 2;

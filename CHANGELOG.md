@@ -14,6 +14,31 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the profile driver applies the whole schema contract:
+  `dependencies` → `config` → `seed` → `scripts`. `config` is written back on
+  every apply, so drift is corrected. `seed` contacts and contributions are
+  created once by their anchor (`external_identifier` = `ref`, `trxn_id`
+  `profile-seed-…`), and later UI edits survive. Until now the driver ignored
+  `config` and `seed` and reported the profile as applied.
+- **Breaking:** a profile's PHP runs only when its `scripts` list names it.
+  A `seeds/` directory fails `ck profile validate` and the boot with a pointer
+  to `scripts`; move the files and list them. The bundled profiles have
+  migrated.
+
+### Added
+
+- A missing prerequisite fails the apply before anything except
+  `config.settings` is written, with every problem listed. This covers membership types without CiviMember,
+  contributions without CiviContribute, an unknown setting, financial type,
+  field or group, a `contact_ref` no contact carries, and a seed contribution
+  without `financial_type_id:name`, which the schema now requires.
+- `ck profile validate` rejects a `scripts` entry that is no file inside the
+  profile directory.
+- `config.membership_types[].fixed_period_start_day` (MMDD). A fixed-period
+  type without it is an error, since core cannot compute its dates.
+
 ## [1.37.1] - 2026-10-12
 
 ### Fixed

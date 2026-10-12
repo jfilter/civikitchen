@@ -174,16 +174,33 @@ basic auth.
 
 ## Profiles (`CIVIKITCHEN_PROFILE`)
 
-A profile layers a curated extension stack + seed data + API users on top of
-the base site at **first boot**, on every flavor, demo and dev images alike. On
-the `:standalone` dev image the profile needs an admin user to seed as, so
+A profile layers a curated extension stack + configuration + seed data + API
+users on top of the base site at **first boot**, on every flavor, demo and dev
+images alike. On the `:standalone` dev image the profile needs an admin user to
+seed as, so
 combine it with `CIVICRM_AUTO_INSTALL=1` and `CIVIKITCHEN_DEMO_USER=admin`.
 
 API users are created through each CMS's native API — `cv` boots CiviCRM *and*
 the host CMS, so the driver uses the Drupal entity API / WordPress users+roles /
 Standalone APIv4 / Joomla users+usergroups directly, with no drush or wp-cli.
-The profiles live in [`docker/profiles/`](../docker/profiles/) (one dir per
-profile: `profile.json` + `seeds/*.php`, applied by the shared driver):
+The profiles live in [`docker/profiles/`](../docker/profiles/), one dir per
+profile with a `profile.json` and the PHP files its `scripts` list names.
+The shared driver applies `dependencies` → `config` → `seed` → `scripts`:
+
+- `config` (settings, domain name, from-address, mailbox domain, groups,
+  membership types) is written back on every apply wherever it differs.
+- `seed` contacts and contributions are created once, matched by their anchor;
+  later UI edits survive.
+- `scripts` run in list order. A `seeds/` directory is an error, not a
+  convention.
+
+A missing prerequisite fails the apply before anything is written, with every
+problem listed. Only `config.settings` go first, because the components they
+enable must be on before their records can be checked. Examples are membership types without CiviMember, an unknown
+financial type, setting or field, or a group nobody defines. The schema
+package's [README](../packages/civicrm-profile-schema/README.md) holds the
+exact rules.
+
 
 | Profile | Extensions | Seed data | API users |
 |---|---|---|---|
@@ -207,7 +224,8 @@ docker run -d -p 80:80 --name civicrm \
 Profiles are **combinable** — a comma-separated list is applied left to right
 (`CIVIKITCHEN_PROFILE=verein,mailing` gives the Verein world plus mailing
 lists and Mosaico). Each layer converges instead of colliding: extensions the
-site already has are skipped, seeds skip when their anchor org exists, and a
+site already has are skipped, `config` converges, `seed` records exist once
+per anchor, and a
 username/role declared by several profiles ends up with the union of the
 permissions (one line per username in the credentials file; the last
 profile's random password and api_key are the valid pair). Profiles with API
@@ -239,7 +257,7 @@ services:
 
 `ck profile validate ./profiles/my-ngo` validates the data shape with the same
 dependency-free canonical schema used at boot. It does not sandbox the optional
-root/profile `apply.sh` or PHP seeds: external profile roots are fully trusted
+root/profile `apply.sh` or its `scripts`: external profile roots are fully trusted
 executable code with app and CiviCRM-admin access, which is why the separate
 trust flag is mandatory. Runtime validation and trust checks cover the complete
 selected list before the first profile changes the site; duplicate names and

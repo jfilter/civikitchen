@@ -43,5 +43,6 @@
       "registry": true,
       "enable": true
     }
-  ]
+  ],
+  "scripts": ["scripts/10-mailing.php"]
 }

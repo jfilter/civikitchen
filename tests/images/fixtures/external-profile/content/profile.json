@@ -1,0 +1,30 @@
+{
+  "description": "Declarative content fixture: config and seed, then one script",
+  "dependencies": [],
+  "config": {
+    "settings": {
+      "max_attachments": 7,
+      "enable_components": ["CiviEvent", "CiviContribute", "CiviMail", "CiviMember", "CiviPledge", "CiviCase", "CiviReport", "CiviCampaign"]
+    },
+    "domain_name": "Acme Association",
+    "from_email": "info@acme.example",
+    "mailbox_domain": "acme.example",
+    "groups": [
+      {"ref": "board", "name": "acme_board", "title": "Board"}
+    ],
+    "membership_types": [
+      {"name": "acme_regular", "financial_type": "Member Dues", "minimum_fee": 60},
+      {"name": "acme_annual", "financial_type": "Member Dues", "period_type": "fixed", "fixed_period_start_day": 101}
+    ]
+  },
+  "seed": {
+    "contacts": [
+      {"ref": "acme-ada", "first_name": "Ada", "last_name": "Example", "email": "ada@acme.example", "groups": ["board"]},
+      {"ref": "acme-supplies", "contact_type": "Organization", "organization_name": "Acme Supplies"}
+    ],
+    "contributions": [
+      {"ref": "ada-2026", "contact_ref": "acme-ada", "total_amount": 60, "financial_type_id:name": "Member Dues", "receive_date": "2026-01-15"}
+    ]
+  },
+  "scripts": ["scripts/10-after-seed.php"]
+}

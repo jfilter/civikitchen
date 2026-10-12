@@ -85,7 +85,7 @@ extension without a committed `vendor/` gets it from the `run` line above,
 which needs the mount writable. An extension path outside the config directory additionally
 requires `trust_external_extension: true`. External profile paths likewise
 require `trust_external_profiles: true` because
-their drivers and seeds execute as trusted application code.
+their drivers and `scripts` execute as trusted application code.
 
 `credentials_output: log` or `both` requires `allow_secret_logging: true`, so a
 committed config cannot begin disclosing generated credentials accidentally.

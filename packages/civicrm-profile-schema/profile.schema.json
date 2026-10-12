@@ -106,11 +106,11 @@
     "config": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Instance configuration asserted on every apply (overwrite): a consumer re-asserts these so drift is corrected each run.",
+      "description": "Instance configuration asserted on every apply (overwrite): whatever differs is written back, so drift is corrected each run. Applied after dependencies, before seed.",
       "properties": {
         "settings": {
           "type": "object",
-          "description": "CiviCRM Settings (Setting.set), asserted every run — e.g. environment: Staging (jobs refused + mail off)."
+          "description": "CiviCRM Settings (Setting.set), asserted every run — e.g. environment: Staging (jobs refused + mail off). Applied first, so components named in enable_components count for membership_types and seed.contributions. enable_components is the whole list: list every component the site keeps. An unknown setting is an error."
         },
         "domain_name": {
           "type": "string",
@@ -154,7 +154,7 @@
         },
         "membership_types": {
           "type": "array",
-          "description": "Membership types asserted by name (idempotent). Owned by the domain organization unless member_of_ref names a seed contact.",
+          "description": "Membership types asserted by name (idempotent), owned by the domain organization. Requires CiviMember and an existing financial type; either missing is an error.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -172,7 +172,13 @@
               },
               "period_type": {
                 "enum": ["rolling", "fixed"],
-                "description": "Default: rolling."
+                "description": "Default: rolling. fixed needs fixed_period_start_day."
+              },
+              "fixed_period_start_day": {
+                "type": "integer",
+                "minimum": 101,
+                "maximum": 1231,
+                "description": "Start of a fixed period as MMDD, e.g. 101 for 1 January."
               },
               "duration_unit": {
                 "enum": ["day", "month", "year"],
@@ -200,11 +206,11 @@
     "seed": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Sample content created once and never overwritten (UI edits survive re-apply).",
+      "description": "Sample content created once and never overwritten (UI edits survive re-apply). A record is matched by its anchor, deleted ones included, so a trashed seed record is not recreated. Every missing prerequisite (unknown field, group, financial type, contact ref, disabled component) is listed and nothing is written.",
       "properties": {
         "contacts": {
           "type": "array",
-          "description": "Anchored fixture contacts. Any other APIv4 Contact field may be set as an extra property.",
+          "description": "Anchored fixture contacts, created with their primary email and group memberships. Any other APIv4 Contact field may be set as an extra property; an unknown one is an error.",
           "items": {
             "type": "object",
             "required": ["ref"],
@@ -236,10 +242,10 @@
         },
         "contributions": {
           "type": "array",
-          "description": "Contributions linked to seed contacts. Idempotent via a synthetic trxn_id. Any other APIv4 Contribution field may be set as an extra property.",
+          "description": "Contributions linked to seed contacts, created once. The anchor is trxn_id profile-seed-<ref>, or profile-seed-<contact_ref>-<n> (n = 1-based position in this list) without a ref. Requires CiviContribute. Any other APIv4 Contribution field may be set as an extra property; an unknown one is an error.",
           "items": {
             "type": "object",
-            "required": ["contact_ref", "total_amount"],
+            "required": ["contact_ref", "total_amount", "financial_type_id:name"],
             "properties": {
               "ref": {
                 "type": "string",
@@ -249,10 +255,15 @@
               "contact_ref": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Links to a seed.contacts[].ref."
+                "description": "A seed.contacts[].ref, or the external_identifier of a contact that already exists."
               },
               "total_amount": {
                 "type": "number"
+              },
+              "financial_type_id:name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Financial type by name, e.g. Donation. A numeric financial_type_id is not accepted."
               }
             }
           }
@@ -261,7 +272,7 @@
     },
     "scripts": {
       "type": "array",
-      "description": "Optional imperative seed scripts (PHP run via `cv scr`), applied AFTER the declarative config + seed. The escape hatch for volume / complex fixtures that config/seed cannot express (a year of history, generated records, mandates). Each entry is a path relative to the profile file's directory. A consumer that only wants the declarative tier ignores it.",
+      "description": "Imperative PHP scripts (run via `cv scr` as the admin user), applied in list order AFTER config and seed. The escape hatch for volume / complex fixtures that config/seed cannot express (a year of history, generated records, mandates). Each entry is a path relative to the profile file's directory and must stay inside it. Only listed files run; a seeds/ directory next to profile.json is an error. A consumer that only wants the declarative tier ignores it.",
       "items": {
         "type": "string",
         "minLength": 1
@@ -270,7 +281,7 @@
     "contentProfile": {
       "type": "object",
       "additionalProperties": false,
-      "description": "A standalone declarative content document (authx + apiUsers + config + seed + optional scripts) applied to an instance — e.g. civenv seed's --profile file. A full profile embeds the same shape inline.",
+      "description": "A standalone declarative content document (authx + apiUsers + config + seed + optional scripts) applied to an existing instance by another tool. A full profile embeds the same shape inline.",
       "properties": {
         "authx": {
           "$ref": "#/$defs/authx"

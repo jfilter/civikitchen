@@ -144,13 +144,13 @@ if [ -n "${PROFILE}" ]; then
         done < <(docker exec "${APP}" jq -r '.apiUsers[].username' \
             "/opt/civikitchen/docker/profiles/${prof}/profile.json" 2>/dev/null || true)
     done
-    # A seed failure aborts provisioning and therefore prevents a healthy
+    # A script failure aborts provisioning and therefore prevents a healthy
     # container. Keep the log assertion as defense in depth against a future
     # driver accidentally swallowing the error again.
-    if grep -q 'ERROR: profile seed failed:' "${LOGFILE}"; then
-        echo "  ✗ profile seed failure in logs:"; grep 'ERROR: profile seed failed:' "${LOGFILE}"; fail=1
+    if grep -q 'ERROR: profile script failed:' "${LOGFILE}"; then
+        echo "  ✗ profile script failure in logs:"; grep 'ERROR: profile script failed:' "${LOGFILE}"; fail=1
     else
-        echo "  ✓ no profile seed failures in logs"
+        echo "  ✓ no profile script failures in logs"
     fi
 
     # 7) An API user can actually authenticate and call the API (authx basic

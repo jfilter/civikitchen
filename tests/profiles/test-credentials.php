@@ -58,7 +58,7 @@ expect(str_contains($configurator, "belongs to an unmanaged"), 'existing CMS use
 expect(!str_contains($configurator, "WARN: unknown Drupal permission"), 'unknown Drupal permissions fail closed');
 
 $driver = (string) file_get_contents(dirname(__DIR__, 2) . '/docker/profiles/apply.sh');
-expect(str_contains($driver, 'if ! cv scr --user=admin "${seed}"; then'), 'profile seeds fail closed');
-expect(!str_contains($driver, 'failed (non-fatal)'), 'profile seed failures cannot be swallowed');
+expect(str_contains($driver, 'if ! cv scr --user=admin "${script}"; then'), 'profile scripts fail closed');
+expect(!str_contains($driver, 'failed (non-fatal)'), 'profile script failures cannot be swallowed');
 
 echo "credentials helper tests passed\n";

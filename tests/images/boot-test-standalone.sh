@@ -11,6 +11,8 @@
 #     seed data labels are German while their machine names stay English;
 #   * an external profile is schema-validated and applied, with generated API
 #     credentials written mode 0600 and never disclosed in default logs;
+#   * a profile's config and seed are written before its scripts run, and a
+#     second apply changes nothing;
 #   * the admin status check makes no calls to civicrm.org (version_check job
 #     inactive, ext_repo_url false);
 #   * word replacements reach ts(), which the standalone boot order breaks
@@ -88,7 +90,7 @@ docker run -d --name "${APP}" --network "${NET}" \
     -e CIVIKITCHEN_LOCALES=de_DE \
     -e CIVIKITCHEN_DEFAULT_LOCALE=de_DE \
     -e CIVIKITCHEN_DEMO_USER=admin \
-    -e CIVIKITCHEN_PROFILE=minimal \
+    -e CIVIKITCHEN_PROFILE=minimal,content \
     -e CIVIKITCHEN_PROFILE_PATH=/civikitchen-external-profiles \
     -e CIVIKITCHEN_TRUST_EXTERNAL_PROFILES=1 \
     -v "${FIXTURE}:/var/www/html/ext/ckbootfixture:ro" \
@@ -182,6 +184,16 @@ check "credential file mode is 0600 (got ${cred_mode:-absent})" "[ '${cred_mode}
 cred_line=$(docker exec "${APP}" sed -n '1p' /var/www/api-credentials.txt 2>/dev/null || true)
 check "external profile generated random password + API key" "echo '${cred_line}' | grep -Eq '^smokeapi:[0-9a-f]{48}:[0-9a-f]{32}$'"
 check "password is not derived from username" "! echo '${cred_line}' | grep -q '^smokeapi:smokeapi:'"
+
+# 6b) Declarative content: config + seed land before the profile's scripts,
+# and a re-apply leaves every record alone.
+check "content profile was applied" "docker logs '${APP}' 2>&1 | grep -F '[content] profile applied' >/dev/null"
+order=$(docker logs "${APP}" 2>&1 | grep -E '\[content\] (asserting config|script 10-after-seed)|seed: 2 contact|content fixture script saw' | cut -c1-40 | tr '\n' '|')
+check "content: config + seed before the script (got ${order})" "echo '${order}' | grep -Eq '^==> \[content\] asserting config.*\|  seed: 2 contact.*\|==> \[content\] script 10-after-seed.*\|  content fixture script saw'"
+content=$(cv ev 'echo implode("/", [\Civi\Api4\Contact::get(FALSE)->addWhere("external_identifier", "=", "acme-supplies")->addWhere("contact_type", "=", "Organization")->execute()->count(), \Civi\Api4\Contribution::get(FALSE)->addWhere("trxn_id", "=", "profile-seed-ada-2026")->execute()->count(), \Civi\Api4\MembershipType::get(FALSE)->addWhere("name", "=", "acme_annual")->addWhere("fixed_period_start_day", "=", 101)->execute()->count(), \Civi\Api4\Domain::get(FALSE)->addWhere("id", "=", CRM_Core_Config::domainID())->execute()->single()["name"]]);' | tr -d '"' || true)
+check "content: organization seed, contribution, fixed membership type, domain renamed (got ${content:-absent})" "[ '${content}' = '1/1/1/Acme Association' ]"
+reapply=$(docker exec -u www-data "${APP}" bash /opt/civikitchen/docker/profiles/apply.sh /civikitchen-external-profiles/content 2>&1 | grep -E '^  (config|seed):' | tr '\n' '|' || true)
+check "content: a second apply changes nothing (got ${reapply:-absent})" "[ '${reapply}' = '  config: unchanged|  seed: 0 contact(s), 0 contribution(s) created|' ]"
 
 # 7) No calls to civicrm.org from the admin status check.
 vc=$(cv api4 Job.get +w api_action=version_check +s is_active --out=json-strict | tr -d '[:space:]' || true)

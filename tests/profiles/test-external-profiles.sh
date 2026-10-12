@@ -11,7 +11,6 @@ printf '{"description":"custom","dependencies":[]}\n' > "$work/external/custom/p
 # provision.sh runs where the image links ck into PATH.
 PATH="$root/toolbelt/bin:$PATH"
 CK_PROFILE_DIR="$work/bundled"
-CK_PROFILE_SCHEMA_DIR="$root/packages/civicrm-profile-schema"
 CIVIKITCHEN_PROFILE_PATH="$work/external"
 # shellcheck source=../../docker/runtime/provision.sh
 source "$root/docker/runtime/provision.sh"
@@ -43,5 +42,16 @@ if ck_resolve_profile ../escape >/dev/null 2>&1; then echo "profile traversal pa
 
 printf '{"description":"broken","dependencies":[],"surprise":true}\n' > "$work/external/custom/profile.json"
 if ck_validate_profile "$work/external/custom" >/dev/null 2>&1; then echo "invalid external profile passed schema" >&2; exit 1; fi
+
+printf '{"description":"scripted","dependencies":[],"scripts":["scripts/10-data.php"]}\n' > "$work/external/custom/profile.json"
+if ck_validate_profile "$work/external/custom" >/dev/null 2>&1; then echo "missing profile script passed" >&2; exit 1; fi
+mkdir -p "$work/external/custom/scripts" && printf '<?php\n' > "$work/external/custom/scripts/10-data.php"
+ck_validate_profile "$work/external/custom"
+printf '{"description":"escape","dependencies":[],"scripts":["../second/profile.json"]}\n' > "$work/external/custom/profile.json"
+if ck_validate_profile "$work/external/custom" >/dev/null 2>&1; then echo "script outside the profile passed" >&2; exit 1; fi
+printf '{"description":"legacy","dependencies":[]}\n' > "$work/external/custom/profile.json"
+mkdir -p "$work/external/custom/seeds"
+if ck_validate_profile "$work/external/custom" 2>"$work/err"; then echo "seeds/ directory passed" >&2; exit 1; fi
+grep -q 'name its PHP files in the profile.s "scripts" list' "$work/err" || { echo "seeds/ error does not point at scripts" >&2; exit 1; }
 
 echo "external profile tests passed"

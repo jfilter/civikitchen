@@ -119,6 +119,12 @@ final class InternalRuntimeCommand implements Command
                 }
                 return 0;
             }
+            if ($operation === 'profile-scripts' && count($arguments) === 1) {
+                foreach ($profiles->scripts($arguments[0]) as $script) {
+                    echo $script, "\n";
+                }
+                return 0;
+            }
             if ($operation === 'profiles-merge' && count($arguments) >= 3) {
                 $profiles->merge($arguments[0], $arguments[1], array_slice($arguments, 2));
                 return 0;

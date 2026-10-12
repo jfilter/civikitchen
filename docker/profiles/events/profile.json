@@ -73,5 +73,6 @@
       "version": "461a930b3d4768cb65089568f4dda66f1c0e107b",
       "enable": true
     }
-  ]
+  ],
+  "scripts": ["scripts/10-events.php"]
 }
