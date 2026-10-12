@@ -181,6 +181,15 @@ findings, including a healthy example per type that must produce none.
   test goes: a patch refines core's own class, so members core adds stay
   visible, and mago's documentation rules out a patch adding a member core
   lacks.
+- Done: patches widen two declarations core documents too narrowly.
+  `AbstractEntity::getInfo()` returns `array<string, mixed>`: core documents a
+  closed key set with `type` as a string, but returns `type` as a list and adds
+  keys per entity. `DAOGetAction::addJoin()` takes `$bridge` as
+  `string|array|null`: core defaults it to `NULL` and reads an array as the
+  first join condition. The standalone boot test checks both on the image.
+- `DynamicPropertiesFilterHook` drops mago's `missing-magic-method` on a
+  documented `@property` of a class that allows dynamic properties, as every
+  DAO does through `DB_DataObject` (mago#2483).
 - `Api4ResultFilterHook` drops mago's `invalid-type-cast` on
   `(array) $result`: casting an `ArrayObject` returns its rows, not its
   properties (measured on PHP 8.5, also for a subclass with a public

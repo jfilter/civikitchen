@@ -19,6 +19,20 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - `ckanalyze` reads the extensions named in `info.xml` `<requires>` for their
   symbols, as `phpstanBootstrap.php` does, so a class extended from CiviRules
   or another required extension resolves instead of failing as unknown.
+- `ckanalyze` no longer reports `missing-magic-method` for a documented
+  `@property` of a class that allows dynamic properties, as every CiviCRM DAO
+  does through `DB_DataObject`.
+- `ckanalyze` accepts what core's `getInfo()` returns (a string-keyed map with
+  `type` as a list) and `NULL` or a condition array as the `$bridge` of
+  `addJoin()`, where core's docblocks are narrower.
+- `.civikitchen/strauss.php` initialises the exit status it passes to
+  `passthru()`, which `ckanalyze` reported as an undefined variable.
+
+### Changed
+
+- `ckanalyze` ignores `mixed-assignment`. Every use of a `mixed` value is still
+  reported (`mixed-argument`, `mixed-operand`, …), so assigning one and
+  narrowing it with an `is_*()` check no longer counts twice.
 
 ## [1.38.0] - 2026-10-12
 

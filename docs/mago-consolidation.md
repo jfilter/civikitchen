@@ -191,8 +191,10 @@ runs, so they are comments, and the mago finding they meant still stands.
 - Done: the analyzer baseline in `ckanalyze` — core and civix files as
   includes, core's APIv4 `Result` read from a stub, its rows typed by a
   return-type provider and a patch ([Typing CiviCRM core from outside](core-types.md)). mago's default
-  strictness already reports `mixed` (`mixed-assignment` and friends), which
-  phpstan level 10 does not.
+  strictness already reports every use of a `mixed` value (`mixed-argument`,
+  `mixed-operand` and friends), which phpstan level 10 does not. The baseline
+  ignores `mixed-assignment`: assigning a `mixed` value and narrowing it with an
+  `is_*()` check is the house idiom, and the use is still reported.
 - Done: the phpstan rules, the disallowed bans and the phpat architecture
   test as analyzer plugins (see Port status). The bans are a plugin rather
   than `disallowed-functions` settings, because they include static methods
@@ -205,7 +207,8 @@ runs, so they are comments, and the mago finding they meant still stands.
   siblings and `policy.vendored_paths` for their symbols. A first run over 38 extension repos
   (2026-10-11) completed on every one; `mixed-assignment` and the other
   `mixed-*` codes make up most findings, followed by classes of required
-  extensions that were not checked out beside the repo. Triage every
+  extensions that were not checked out beside the repo, which `ckanalyze` now
+  reads from `info.xml` `<requires>`. Triage every
   difference across the consumer repos into one of: a mago
   false positive (fix the plugin or report upstream), a phpstan-only finding
   (port or accept the loss deliberately), or a real defect (fix it in the
