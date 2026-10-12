@@ -525,9 +525,11 @@ ck_mounted_extension_version() {
 # `cv ext:list` also contacts the extensions feed for download URLs and dies
 # without network. Returns 0 present, 1 absent, 2 when the question itself
 # failed — the caller must not mistake a failed lookup for a missing extension.
+# A key the database knows but whose files are gone (*-missing: a recreated
+# container on a kept database) counts as absent, so it is installed again.
 ck_extension_present() {
     local out
-    if ! out="$(ck_as_web cv api4 Extension.get +w "key=$1" +s key --out=json-strict)"; then
+    if ! out="$(ck_as_web cv api4 Extension.get +w "key=$1" +s key,status --out=json-strict)"; then
         echo "[civikitchen] ERROR: could not query the extension list for $1" >&2
         return 2
     fi

@@ -21,6 +21,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   this only for a profile handed to `configure-api-users.php` directly; the
   first-boot path merges the selected set first, and the merged profile
   still carried an empty AuthX policy that emptied the setting.
+- A container recreated on a kept database installs a `<requires>`
+  dependency again when the database still lists it but its files are gone
+  (`installed-missing`), instead of failing with "extension info.xml key does
+  not match".
 
 ## [1.39.0] - 2026-10-12
 

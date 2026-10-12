@@ -48,7 +48,8 @@ final class InternalRuntimeCommand implements Command
             if ($operation === 'extension-list-contains' && count($arguments) === 1) {
                 $list = json_decode((string) stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
                 foreach (is_array($list) ? $list : [] as $extension) {
-                    if (is_array($extension) && ($extension['key'] ?? null) === $arguments[0]) {
+                    if (is_array($extension) && ($extension['key'] ?? null) === $arguments[0]
+                        && !str_ends_with((string) ($extension['status'] ?? ''), '-missing')) {
                         return 0;
                     }
                 }

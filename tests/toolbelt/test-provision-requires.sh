@@ -115,6 +115,13 @@ expect_log 'ev CRM_Extension_System::singleton()->getFullContainer()->refresh();
 [ -f "$work/ext/org.example.dep/info.xml" ] || fail "verified dependency archive was not installed"
 /bin/rm -rf "$work/ext/org.example.dep"
 
+# Known to the database but without files (a recreated container on a kept database): installed again.
+reset_site '[{"key":"civi_contribute","status":"installed"},{"key":"org.example.dep","status":"installed-missing"}]'
+ck_enable_extensions
+expect_log 'ev CRM_Extension_System::singleton()->getFullContainer()->refresh();;ext:enable org.example.dep;ext:enable fixture;' 'installed-missing dependency'
+[ -f "$work/ext/org.example.dep/info.xml" ] || fail "an installed-missing dependency was not installed again"
+/bin/rm -rf "$work/ext/org.example.dep"
+
 # A wrong digest fails before cv sees or enables the downloaded archive.
 sed -E 's/^      sha256:.*/      sha256: 0000000000000000000000000000000000000000000000000000000000000000/' \
   "$work/ext/fixture/civikitchen.yaml" > "$work/bad-digest.yaml"
