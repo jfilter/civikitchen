@@ -347,7 +347,10 @@ download target of the images). `Civi\Api4\Membership` and a class extended
 from a required extension therefore resolve without a repo-specific bootstrap
 or `scanDirectories` entry; a required extension that is not present is noted on
 stderr and its classes stay unresolved, which phpstan then reports where the
-code touches them. The same `<requires>` list drives the
+code touches them. For the repo's own code it adds only what has no file
+behind it: the `CRM_<Prefix>_DAO_Base` alias civix DAOs extend, core's APIv3
+helpers (`api/v3/utils.php`) and the `CiviMix\Schema` library core loads by
+pathload, so a repo with its own entities keeps `paths: [.]`. The same `<requires>` list drives the
 [extension boundary rule](extension-standards.md#tooling-every-repo-must-have).
 
 ```bash

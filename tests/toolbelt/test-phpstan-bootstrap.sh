@@ -18,6 +18,12 @@ mkdir -p "$core/CRM/Core/DAO"
 echo '<?php class CRM_Core_DAO_Base {}' > "$core/CRM/Core/DAO/Base.php"
 echo '<?php require __DIR__ . "/../CRM/Core/DAO/Base.php";' > "$core/vendor/autoload.php"
 echo '<?php' > "$core/api/api.php"
+mkdir -p "$core/api/v3"
+echo '<?php function civicrm_api3_create_success() {}' > "$core/api/v3/utils.php"
+# Core loads CiviMix\Schema by pathload; the newest version wins.
+mkdir -p "$core/mixin/lib/civimix-schema@5/src" "$core/mixin/lib/civimix-schema@10/src"
+echo '<?php namespace CiviMix\Schema; interface SchemaHelperInterface {}' > "$core/mixin/lib/civimix-schema@5/src/SchemaHelperInterface.php"
+echo '<?php namespace CiviMix\Schema; interface SchemaHelperInterface { const V = 10; }' > "$core/mixin/lib/civimix-schema@10/src/SchemaHelperInterface.php"
 # Core component extension: ships with core, off its classloader path.
 mkdir -p "$core/ext/civi_member/Civi/Api4"
 echo '<?php namespace Civi\Api4; class Membership {}' > "$core/ext/civi_member/Civi/Api4/Membership.php"
@@ -85,5 +91,17 @@ out="$(CIVICRM_CORE_DIR="$core" CK_EXT_DIR="$ext" php -r "$probe" "$ext/repo/php
 # layout is not covered and stays a scanDirectories entry.
 out="$(CIVICRM_CORE_DIR="$core" CK_EXT_DIR="$ext" php -r "$coreprobe" "$ext/repo/phpstanBootstrap.php" 2>"$work/stderr")"
 [[ "$out" == "member - afform" ]] || fail "core ext autoloading is wrong: '$out'"
+
+# The repo's own civix DAOs, core's APIv3 helpers and the newest CiviMix\Schema
+# resolve without <requires>; another prefix's DAO_Base stays unknown.
+mkdir -p "$ext/repo/CRM/Repo/DAO"
+echo '<?php class CRM_Repo_DAO_Item extends CRM_Repo_DAO_Base {}' > "$ext/repo/CRM/Repo/DAO/Item.php"
+ownprobe='require $argv[1]; require dirname($argv[1]) . "/CRM/Repo/DAO/Item.php";
+  echo is_subclass_of("CRM_Repo_DAO_Item", "CRM_Core_DAO_Base") ? "dao" : "-", " ",
+    class_exists("CRM_Other_DAO_Base") ? "other" : "-", " ",
+    function_exists("civicrm_api3_create_success") ? "api3" : "-", " ",
+    interface_exists("CiviMix\\Schema\\SchemaHelperInterface") ? "schema" . CiviMix\Schema\SchemaHelperInterface::V : "-", "\n";'
+out="$(CIVICRM_CORE_DIR="$core" CK_EXT_DIR="$ext" php -r "$ownprobe" "$ext/repo/phpstanBootstrap.php" 2>"$work/stderr")"
+[[ "$out" == "dao - api3 schema10" ]] || fail "own DAO, APIv3 helpers or CiviMix\\Schema did not resolve: '$out'"
 
 echo "phpstan bootstrap: ok"

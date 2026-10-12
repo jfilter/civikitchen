@@ -20,6 +20,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
   runner again, such as a `webServer` the suite starts. 1.39.1 moved the
   browser into a container that reached only the site's port, so those
   pages failed with `net::ERR_CONNECTION_REFUSED`.
+- The template's `phpstanBootstrap.php` resolves what an extension with its own
+  entities needs at analysis time: the runtime-only `CRM_<Prefix>_DAO_Base`
+  alias of the repo's civix DAOs, core's APIv3 helpers (`api/v3/utils.php`)
+  and core's `CiviMix\Schema` library behind `E::schema()`. Such repos can keep
+  the template's `paths: [.]` instead of narrowing the analysed paths and
+  excluding their DAOs and BAOs. Refresh with `ckinit --update`.
 
 ## [1.39.1] - 2026-10-12
 
