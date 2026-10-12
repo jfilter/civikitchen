@@ -14,6 +14,20 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- Catalogs regenerated from CiviCRM 6.19.0. The APIv4 field check now knows
+  Case's `is_my_case`, `is_my_managed_case` and `my_case_role`, Tag's
+  `_depth` and `_descendents`, and the `export`/`revert` actions on the four
+  Price entities. It reports `OptionValue.domain_id`, which 6.19 drops.
+  `hook_civicrm_alterAPIPermissions` warns as deprecated, as core marks it
+  (APIv3 only). `Civi\Mailing\*` counts as core for the extension boundary.
+- Contact and its contact types accept core's default full-text filter
+  field `contact_names` (6.19+). Indices a site or extension adds through
+  `civi.schema.fts_indices` are not in the catalog.
+- `:standalone-6.18` keeps being rebuilt: 6.18 joins the supported minors in
+  `CK_STANDALONE_EXTRA_MINORS`, now that the catalog minor no longer adds it.
+
 ## [1.39.2] - 2026-10-12
 
 ### Fixed

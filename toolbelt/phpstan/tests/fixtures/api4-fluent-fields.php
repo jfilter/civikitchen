@@ -182,4 +182,10 @@ final class AddressExport
             ->addSelect('address_primary.phone')
             ->execute();
     }
+
+    /** Core's default full-text index is a filter field named after the index. */
+    public function fullTextFilter(string $name): void
+    {
+        Contact::get(false)->addWhere('contact_names', 'CONTAINS', $name)->execute();
+    }
 }

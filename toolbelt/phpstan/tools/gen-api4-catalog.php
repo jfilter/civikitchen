@@ -72,10 +72,15 @@ const DYNAMIC_FIELD_PREFIXES = ['segment_'];
  * ContactSpecProvider is covered by DYNAMIC_SPEC_FIELDS below.
  * SearchSegmentExtraFieldProvider is covered by DYNAMIC_FIELD_PREFIXES.
  * PriceFieldSpecProvider builds `<price_set>.<field>`, which the rule skips
- * for containing a dot. Anything not on this list gets a warning.
+ * for containing a dot.
+ * FullTextSearchFilterSpecProvider names a filter field after each full-text
+ * index; core's defaults are read by ftsDefaultIndexFields(), indices a site
+ * or extension adds through `civi.schema.fts_indices` are unknowable.
+ * Anything not on this list gets a warning.
  */
 const REVIEWED_COMPUTED_PROVIDERS = [
     'ContactSpecProvider',
+    'FullTextSearchFilterSpecProvider',
     'PriceFieldSpecProvider',
     'SearchSegmentExtraFieldProvider',
 ];
@@ -560,6 +565,44 @@ function optionGroupNames(string $group, array $roots): array
     return array_values(array_filter(array_unique($names)));
 }
 
+/**
+ * Index names of core's default full-text indices, by entity: the keys of
+ * FullTextSearch::setDefaultIndices() that carry a 'label'.
+ *
+ * @param  array<string, true> $entityNames
+ * @return array<string, list<string>>
+ */
+function ftsDefaultIndexFields(string $coreDir, array $entityNames): array
+{
+    $file = $coreDir . '/Civi/Schema/FullTextSearch.php';
+    $body = is_file($file) ? (staticMethods((string) file_get_contents($file), false)['setDefaultIndices'] ?? null) : null;
+    if ($body === null) {
+        fwrite(STDERR, "FullTextSearchFilterSpecProvider exists but $file has no setDefaultIndices() to read the index names from\n");
+        exit(70);
+    }
+    $fields = [];
+    $entity = null;
+    preg_match_all("/'(\\w+)'\\s*=>\\s*\\[\\s*('label')?/", $body, $keys, PREG_SET_ORDER);
+    foreach ($keys as $key) {
+        if (($key[2] ?? '') !== '' && $entity !== null) {
+            $fields[$entity][] = $key[1];
+        } elseif (isset($entityNames[$key[1]])) {
+            $entity = $key[1];
+        } elseif ($key[1] !== 'columns') {
+            fwrite(STDERR, "$file: setDefaultIndices() key '{$key[1]}' is neither an entity nor an index with 'label' first\n");
+            exit(70);
+        }
+    }
+    // Every index declares its columns; a count mismatch means the shape changed.
+    $indices = array_sum(array_map('count', $fields));
+    if ($indices === 0 || $indices !== preg_match_all("/'columns'\\s*=>/", $body)) {
+        fwrite(STDERR, "$file: read $indices index name(s) from setDefaultIndices(), which does not match its 'columns' entries\n");
+        exit(70);
+    }
+
+    return $fields;
+}
+
 /** @var array<string, list<string>> */
 $specFields = [];
 /** @var list<string> fields from providers with no identifiable entity */
@@ -590,6 +633,11 @@ foreach ($roots as $root) {
         }
         $source = (string) file_get_contents($entry->getPathname());
         $methods = staticMethods($source, false);
+        if ($entry->getFilename() === 'FullTextSearchFilterSpecProvider.php') {
+            foreach (ftsDefaultIndexFields($coreDir, $entityNames) as $entity => $names) {
+                $specFields[$entity] = array_merge($specFields[$entity] ?? [], $names);
+            }
+        }
         preg_match_all('/new\s+FieldSpec\s*\(\s*\'([a-z_][A-Za-z0-9_]*)\'/', $source, $m);
         $fields = array_values(array_unique($m[1]));
         $buildsNames = preg_match('/new\s+FieldSpec\s*\(\s*\$/', $source) === 1;
