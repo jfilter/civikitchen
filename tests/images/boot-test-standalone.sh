@@ -25,7 +25,7 @@
 #   * the phpstan field check accepts every live get and create field on the
 #     catalog's minor release.
 #   * execute() and civicrm_api4() without an index return array rows, the
-#     type ckanalyze gives them.
+#     type ckanalyze gives them; getInfo() and addJoin() match their patches.
 # The db service gets a plain MYSQL_USER and no grant script: the app user
 # holds rights on its own database only, exactly as a hand-written stack.
 #
@@ -147,6 +147,11 @@ check "APIv4 catalog vs live getFields: ${verdict:-no verdict}" "[ ${drift_rc} =
 # index: the Result holds arrays keyed by field name.
 rows=$(cv ev '$rows = array_merge((array) \Civi\Api4\FinancialType::get(FALSE)->execute(), (array) civicrm_api4("FinancialType", "get", ["checkPermissions" => FALSE])); echo count(array_filter($rows, fn($row) => is_array($row) && array_filter(array_keys($row), "is_int") === [])) . "/" . count($rows);' | tr -d '[:space:]"' || true)
 check "execute() and civicrm_api4() return field maps (field maps/rows: ${rows:-none})" "[ '${rows%/*}' -gt 0 ] && [ '${rows%/*}' = '${rows#*/}' ]"
+
+# 1d) The patched types: getInfo() is a string-keyed map with `type` as a list,
+# and addJoin() takes NULL or a condition array as $bridge.
+info=$(cv ev '$info = \Civi\Api4\Contact::getInfo(); $join = fn($bridge) => \Civi\Api4\Contact::get(FALSE)->addSelect("id")->addJoin("Email AS e", "LEFT", $bridge, ...($bridge === NULL ? [["id", "=", "e.contact_id"]] : []))->setLimit(1)->execute()->count(); echo (array_filter(array_keys($info), "is_int") === [] && is_array($info["type"]) ? "map" : "other") . "/" . $join(NULL) . "/" . $join(["id", "=", "e.contact_id"]);' | tr -d '[:space:]"' || true)
+check "getInfo() and addJoin() match the patched types (${info:-none})" "[ '${info}' = 'map/1/1' ]"
 
 # 2) The bind-mounted extension is enabled without CIVIKITCHEN_ENABLE_EXTENSIONS.
 status=$(cv api4 Extension.get +w key=ckbootfixture +s status | tr -d '[:space:]' || true)
