@@ -887,5 +887,21 @@ if out=$("$root/scaffold/ckinit.php" --check "$work/strauss" 2>&1); then
 fi
 grep -q 'cannot parse .*composer.json' <<<"$out"
 
+# Behind an egress proxy the download goes through HTTPS_PROXY: a one-shot
+# listener records the runner's request line and hangs up.
+mkdir "$work/proxy-tmp"
+php -r '$s = stream_socket_server("tcp://127.0.0.1:0"); file_put_contents($argv[1], stream_socket_get_name($s, false));
+  $c = stream_socket_accept($s, 30); file_put_contents($argv[2], $c ? fgets($c) : "no request");' "$work/proxy-addr" "$work/proxy-request" &
+proxy_pid=$!
+for _ in $(seq 50); do [ -s "$work/proxy-addr" ] && break; sleep 0.1; done
+if out=$(TMPDIR="$work/proxy-tmp" https_proxy='' HTTPS_PROXY="http://$(cat "$work/proxy-addr")/" \
+  php "$root/scaffold/template/extension/.civikitchen/strauss.php" 2>&1); then
+  echo "the Strauss runner succeeded through a proxy that hung up" >&2
+  exit 1
+fi
+wait "$proxy_pid"
+grep -q '^CONNECT github.com:443 ' "$work/proxy-request" \
+  || { echo "the Strauss runner bypassed HTTPS_PROXY: $(cat "$work/proxy-request") $out" >&2; exit 1; }
+
 "$root/scaffold/ckinit.php" --help >/dev/null
 echo "ckinit integration checks passed"

@@ -14,6 +14,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- `.civikitchen/strauss.php` downloads Strauss through `HTTPS_PROXY`. PHP's
+  stream wrapper ignores the variable, so behind an egress proxy the download
+  timed out and `composer install` failed.
+
 ## [1.37.0] - 2026-10-11
 
 ### Added
