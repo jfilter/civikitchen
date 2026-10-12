@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ckboot hands the entrypoint what the CI compose stack mounts: the extension,
-# its init.d hooks and its dev profile. Fake entrypoint, apache and curl.
+# its init.d hooks, its dev profile and the admin user that profile seeds as.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -13,7 +13,7 @@ printf '%s\n' '{"description": "dev", "dependencies": []}' > "$work/ext/.docker/
 
 cat > "$work/bin/civikitchen-entrypoint" <<'FAKE'
 #!/usr/bin/env bash
-env | grep -E '^(CK_INIT_D|CIVIKITCHEN_PROFILE|CIVIKITCHEN_PROFILE_PATH|CIVIKITCHEN_TRUST_EXTERNAL_PROFILES)=' | LC_ALL=C sort > "$ENV_DUMP"
+env | grep -E '^(CK_INIT_D|CIVIKITCHEN_DEMO_USER|CIVIKITCHEN_PROFILE|CIVIKITCHEN_PROFILE_PATH|CIVIKITCHEN_TRUST_EXTERNAL_PROFILES)=' | LC_ALL=C sort > "$ENV_DUMP"
 FAKE
 printf '#!/bin/sh\n' > "$work/bin/apache2ctl"
 printf '#!/bin/sh\n' > "$work/bin/curl"
@@ -25,10 +25,15 @@ export PATH="$work/bin:$PATH" ENV_DUMP="$work/env" CK_FAKE_WEB="$work/web"
 
 (builtin cd "$work/ext" && "$root/toolbelt/bin/ckboot" 2>/dev/null) > "$work/out"
 [ "$(cat "$work/out")" = /var/www/html/ext/booted ] || fail "ckboot printed $(cat "$work/out")"
-[ "$(cat "$work/env")" = "CIVIKITCHEN_PROFILE=dev
+[ "$(cat "$work/env")" = "CIVIKITCHEN_DEMO_USER=admin
+CIVIKITCHEN_PROFILE=dev
 CIVIKITCHEN_PROFILE_PATH=$work/ext/.docker/profiles
 CIVIKITCHEN_TRUST_EXTERNAL_PROFILES=1
 CK_INIT_D=$work/ext/.docker/init.d" ] || fail "ckboot passed $(cat "$work/env")"
+
+# A job's own demo user stays.
+(builtin cd "$work/ext" && CIVIKITCHEN_DEMO_USER=editor "$root/toolbelt/bin/ckboot" 2>/dev/null) > /dev/null
+grep -qx CIVIKITCHEN_DEMO_USER=editor "$work/env" || fail "ckboot replaced the job's demo user"
 
 # A repository without a dev profile selects none.
 /bin/rm -r "$work/ext/.docker/profiles"

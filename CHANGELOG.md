@@ -31,8 +31,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
   or profile `apply.sh` runs once, in the second phase. The shared driver takes
   the phase as an optional second argument (`all`, `deps`, `content`).
 - The template stacks select a dev profile, `.docker/profiles/dev/profile.json`,
-  which `ckinit` seeds and `ckboot` passes on: the managed CI compose file
-  mounts and trusts it and creates the `admin` user it seeds as. Run
+  which `ckinit` seeds: the managed CI compose file and `ckboot` mount and
+  trust it and create the `admin` user it seeds as. Run
   `ckinit --update` and add the profile lines to the seeded
   `.docker/docker-compose.yml` by hand. `init.d` hooks run after the profile and
   are for the stack's environment; the template's `init.d/README.md` says so.
