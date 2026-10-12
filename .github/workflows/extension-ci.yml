@@ -2171,36 +2171,29 @@ jobs:
       # Chromium aborts in-flight requests with ERR_NETWORK_CHANGED whenever an
       # interface appears in its netns, and other jobs on the same Docker host
       # add and remove bridges and veths there all the time. The test fixtures'
-      # browser therefore runs in a container on the stack's network, reached
-      # through PW_TEST_CONNECT_WS_ENDPOINT; the test runner stays on the
-      # runner, so suites that call `docker compose` keep working. Inside the
-      # container localhost:$port forwards to app:80, so the baked-in site URL
-      # holds. The browser server is the checkout's own playwright-core, in the
-      # Playwright image of the same version.
+      # browser therefore runs in a container, reached through
+      # PW_TEST_CONNECT_WS_ENDPOINT; the test runner stays on the runner, so
+      # suites that call `docker compose` keep working. <loopback> tunnels the
+      # browser's localhost through the test runner, so the site's port and any
+      # `webServer` the suite starts answer as before. The browser server is the
+      # checkout's own playwright-core, in the Playwright image of that version.
       - name: Start the browser in its own network namespace
         run: |
           set -euo pipefail
           version=$(node -p 'require("playwright-core/package.json").version')
           core=$(dirname "$(node -p 'require.resolve("playwright-core/package.json")')")
-          app=$(docker compose -f "$CK_COMPOSE_FILE" ps -q app)
-          network=$(docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' "$app" | head -n 1)
           ws_port=$(node -e 'const s = require("node:net").createServer().listen(0, () => { console.log(s.address().port); s.close(); });')
           # The project label puts the container under the teardown step's filters.
           docker run -d --name "$COMPOSE_PROJECT_NAME-browser" --label "com.docker.compose.project=$COMPOSE_PROJECT_NAME" \
-            --network "$network" --init --ipc=host --user pwuser -p "127.0.0.1:$ws_port:3000" \
-            -v "$core:/opt/playwright-core:ro" -e CK_SITE_PORT="${CIVICRM_BASE_URL##*:}" \
-            "mcr.microsoft.com/playwright:v$version-noble" sh -c '
-              node -e "const net = require(\"node:net\");
-                net.createServer((client) => {
-                  const app = net.connect(80, \"app\");
-                  client.pipe(app).pipe(client);
-                  client.on(\"error\", () => app.destroy());
-                  app.on(\"error\", () => client.destroy());
-                }).listen(Number(process.env.CK_SITE_PORT));" &
-              exec node /opt/playwright-core/cli.js run-server --port 3000 --host 0.0.0.0'
+            --init --ipc=host --user pwuser -p "127.0.0.1:$ws_port:3000" -v "$core:/opt/playwright-core:ro" \
+            "mcr.microsoft.com/playwright:v$version-noble" \
+            node /opt/playwright-core/cli.js run-server --port 3000 --host 0.0.0.0
           for _ in $(seq 60); do
             if node -e 'require("node:net").connect(Number(process.argv[1]), "127.0.0.1").on("connect", () => process.exit(0)).on("error", () => process.exit(1))' "$ws_port"; then
-              echo "PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:$ws_port/" >> "$GITHUB_ENV"
+              {
+                echo "PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:$ws_port/"
+                echo "PW_TEST_CONNECT_EXPOSE_NETWORK=<loopback>"
+              } >> "$GITHUB_ENV"
               exit 0
             fi
             sleep 2

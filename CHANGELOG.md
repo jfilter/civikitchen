@@ -14,6 +14,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- The `playwright` job's browser reaches every `localhost` service on the
+  runner again, such as a `webServer` the suite starts. 1.39.1 moved the
+  browser into a container that reached only the site's port, so those
+  pages failed with `net::ERR_CONNECTION_REFUSED`.
+
 ## [1.39.1] - 2026-10-12
 
 ### Changed
