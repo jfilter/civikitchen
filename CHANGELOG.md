@@ -39,6 +39,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - `config.membership_types[].fixed_period_start_day` (MMDD). A fixed-period
   type without it is an error, since core cannot compute its dates.
 
+### Fixed
+
+- `ckconform` treats a subdirectory with its own `info.xml` (for example a
+  fixture extension the dev stack installs beside the main one) as a separate
+  extension. Before, its hooks failed `hook-dispatch-name` under the main
+  extension's prefix, and the other source checks judged its files too.
+
 ## [1.37.1] - 2026-10-12
 
 ### Fixed

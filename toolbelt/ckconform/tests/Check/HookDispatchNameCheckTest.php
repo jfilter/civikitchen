@@ -89,6 +89,32 @@ final class HookDispatchNameCheckTest extends CheckTestCase
     }
 
     /**
+     * A directory with its own info.xml is another extension, e.g. a test
+     * fixture the repo installs beside itself; its hooks carry its prefix.
+     */
+    public function testANestedExtensionIsNotThisExtensionsCode(): void
+    {
+        foreach ([false, true] as $git) {
+            $context = $this->repo([
+                '.docker/fixtures/island/info.xml' => $this->infoXml(key: 'island'),
+                '.docker/fixtures/island/island.php' => "<?php\nfunction island_civicrm_config(&\$config) {\n}\n",
+            ], $git);
+            $this->assertSilent($this->run_(new HookDispatchNameCheck(), $context));
+        }
+    }
+
+    public function testADirectoryWithoutItsOwnInfoXmlIsStillThisExtensionsCode(): void
+    {
+        $context = $this->repo([
+            '.docker/fixtures/island/island.php' => "<?php\nfunction island_civicrm_config(&\$config) {\n}\n",
+        ]);
+        $this->assertFails(
+            $this->run_(new HookDispatchNameCheck(), $context),
+            "island_civicrm_config() will never fire — the hook prefix of this extension is 'fixture'",
+        );
+    }
+
+    /**
      * A dependency inside the same repository publishes its hooks like any
      * other: its directory is named freely, so the key decides which neighbour
      * is read.

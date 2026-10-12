@@ -754,6 +754,7 @@ final class Context
      * Shipped source files: tracked (or, outside git, on-disk) files under a
      * directory, by suffix, minus tests/, vendor/ and node_modules/ at any
      * depth — code that never runs on an install must not decide a check.
+     * A subdirectory with its own info.xml is another extension and is left out.
      *
      * @param  list<string>                $extensions
      * @param  callable(string): bool|null $filter
@@ -764,10 +765,21 @@ final class Context
         $files = $this->isGitRepo()
             ? $this->trackedUnder($directory, $extensions)
             : $this->findFiles($directory, $extensions);
+        $nested = [];
+        foreach ($this->isGitRepo() ? $this->trackedFiles() : $this->findFiles('', ['info.xml']) as $file) {
+            if (basename($file) === 'info.xml' && $file !== 'info.xml') {
+                $nested[] = dirname($file) . '/';
+            }
+        }
 
-        return array_values(array_filter($files, static function (string $file) use ($filter): bool {
+        return array_values(array_filter($files, static function (string $file) use ($filter, $nested): bool {
             foreach (['tests/', 'vendor/', 'node_modules/'] as $skip) {
                 if (str_starts_with($file, $skip) || str_contains($file, '/' . $skip)) {
+                    return false;
+                }
+            }
+            foreach ($nested as $extension) {
+                if (str_starts_with($file, $extension)) {
                     return false;
                 }
             }
