@@ -12,6 +12,15 @@
       "minLength": 1,
       "description": "One-line human summary of the scenario."
     },
+    "include": {
+      "type": "array",
+      "description": "Profiles applied before this one, by name; the applying tool resolves them as it resolves a selected profile. Includes nest depth-first, every profile applies once, and a cycle is an error.",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+      }
+    },
     "authx": {
       "$ref": "#/$defs/authx"
     },
@@ -110,9 +119,18 @@
       "properties": {
         "settings": {
           "type": "object",
-          "description": "CiviCRM Settings (Setting.set), asserted every run — e.g. environment: Staging (jobs refused + mail off). Applied first, so components named in enable_components count for membership_types and seed.contributions. enable_components is the whole list: list every component the site keeps. An unknown setting is an error."
+          "description": "CiviCRM Settings (Setting.set), asserted every run — e.g. environment: Staging (jobs refused + mail off). Applied first. enable_components is the whole list; config.components adds to it instead. An unknown setting is an error."
         },
-        "domain_name": {
+        "components": {
+      "type": "array",
+      "description": "Core components switched on, additively: the others keep their state, so profiles combine. Applied after settings, before the rest. A name core does not know (CiviContribute, CiviMember, CiviEvent, CiviMail, CiviPledge, CiviCase, CiviReport, CiviCampaign) is an error.",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "domain_name": {
           "type": "string",
           "minLength": 1,
           "description": "Default organization / domain name."

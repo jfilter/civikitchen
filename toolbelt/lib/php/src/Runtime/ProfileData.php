@@ -38,6 +38,12 @@ final class ProfileData
         return implode(',', $policy);
     }
 
+    /** @return list<string> */
+    public function includes(string $file): array
+    {
+        return array_values(array_map('strval', $this->load($file)['include'] ?? []));
+    }
+
     public function cms(string $file): string
     {
         $profile = $this->load($file);

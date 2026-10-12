@@ -31,15 +31,23 @@ Reusable `$defs` for consumers that only need a slice:
   are never part of a profile: the applying tool issues random passwords and
   API keys. Usernames and roles follow a bounded cross-CMS identifier grammar.
 
-`config` covers settings, the domain organization, from-address, mailbox domain,
-groups and membership types (`membership_types`, asserted by name).
+`config` covers settings, core components, the domain organization,
+from-address, mailbox domain, groups and membership types
+(`membership_types`, asserted by name).
+
+`include` names profiles that apply before this one, so a profile can be
+composed from others: for example a data profile that needs core only, plus
+the extensions that work on that data. Includes nest depth-first, each profile
+applies once, and a cycle is an error.
 
 A profile applies in this order: `dependencies` → `config` → `seed` →
 `scripts`.
 
 - **`config`** is asserted on every apply: whatever differs is written back.
-  `settings` go first, so components a profile lists in `enable_components`
-  count for the rest. `enable_components` is the whole list, not an addition.
+  `settings` go first, then `components`, so both count for the rest.
+  `settings.enable_components` is the whole list; `components` only switches
+  components on, which keeps composed profiles from undoing each other. A
+  component name core does not know is an error.
 - **`seed`** creates each record once and never touches it again, so edits
   made in the UI survive a re-apply. Contacts are matched by
   `external_identifier` = `ref` and contributions by `trxn_id`
@@ -51,8 +59,8 @@ A profile applies in this order: `dependencies` → `config` → `seed` →
 A missing prerequisite is an error, never a skip. Examples are membership types
 without CiviMember, an unknown financial type, setting, field or group, or a
 `contact_ref` no contact carries. The apply lists every such problem before it
-writes anything. The one exception is `settings`: they are written first,
-because the APIs of a component they enable only exist once it is on.
+writes anything. The exceptions are `settings` and `components`: they are
+written first, because the APIs of a component only exist once it is on.
 
 ## Use
 

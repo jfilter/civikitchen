@@ -36,6 +36,9 @@ $badIdentity = json_decode('{"description":"bad identity","dependencies":[],"api
 validator_expect($profileValidator->validate($badIdentity) !== [], 'credential delimiters are rejected in usernames');
 $tooLongIdentity = json_decode('{"description":"long identity","dependencies":[],"apiUsers":[{"username":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","role":"civikitchen_safe","permissions":["access CiviCRM"]}]}');
 validator_expect($profileValidator->validate($tooLongIdentity) !== [], 'cross-CMS usernames are bounded to 60 characters');
+validator_expect($profileValidator->validate(json_decode('{"description":"composed","include":["verein-data"],"dependencies":[],"config":{"components":["CiviPledge"]}}')) === [], 'include and config.components are part of the format');
+validator_expect($profileValidator->validate(json_decode('{"description":"escape","include":["../other"],"dependencies":[]}')) !== [], 'an include is a profile name, not a path');
+validator_expect($profileValidator->validate(json_decode('{"description":"twice","dependencies":[],"config":{"components":["CiviPledge","CiviPledge"]}}')) !== [], 'a component is listed once');
 $badRole = json_decode('{"description":"bad role","dependencies":[],"apiUsers":[{"username":"safe","role":"Api-Role","permissions":["access CiviCRM"]}]}');
 validator_expect($profileValidator->validate($badRole) !== [], 'role identifiers use the portable lowercase machine-name intersection');
 $missingGitVersion = json_decode('{"description":"missing pin","dependencies":[{"name":"org.example.demo","repo":"https://example.org/demo.git"}]}');

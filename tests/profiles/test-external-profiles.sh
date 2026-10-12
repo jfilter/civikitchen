@@ -54,4 +54,31 @@ mkdir -p "$work/external/custom/seeds"
 if ck_validate_profile "$work/external/custom" 2>"$work/err"; then echo "seeds/ directory passed" >&2; exit 1; fi
 grep -q 'name its PHP files in the profile.s "scripts" list' "$work/err" || { echo "seeds/ error does not point at scripts" >&2; exit 1; }
 
+# include: depth-first, each profile once, across roots; cycles and unknown names fail.
+mkdir -p "$work/external/combo" "$work/external/mid"
+/bin/rm -rf "$work/external/builtin" "$work/external/custom/seeds"
+printf '{"description":"custom","dependencies":[]}\n' > "$work/external/custom/profile.json"
+printf '{"description":"mid","include":["builtin"],"dependencies":[]}\n' > "$work/external/mid/profile.json"
+printf '{"description":"combo","include":["mid","builtin","custom"],"dependencies":[]}\n' > "$work/external/combo/profile.json"
+CK_EXPANDED_PROFILES=()
+ck_expand_profile combo ""
+ck_expand_profile custom ""
+[ "${CK_EXPANDED_PROFILES[*]}" = "$work/bundled/builtin $work/external/mid $work/external/custom $work/external/combo" ] \
+  || { echo "include expansion order: ${CK_EXPANDED_PROFILES[*]}" >&2; exit 1; }
+printf '{"description":"builtin","include":["combo"],"dependencies":[]}\n' > "$work/bundled/builtin/profile.json"
+CK_EXPANDED_PROFILES=()
+if ck_expand_profile combo "" 2>"$work/err"; then echo "include cycle passed" >&2; exit 1; fi
+grep -q 'cycle: combo -> mid -> builtin -> combo' "$work/err" || { echo "cycle error: $(cat "$work/err")" >&2; exit 1; }
+printf '{"description":"built in","include":["nowhere"],"dependencies":[]}\n' > "$work/bundled/builtin/profile.json"
+CK_EXPANDED_PROFILES=()
+if ck_expand_profile combo "" 2>/dev/null; then echo "unknown include passed" >&2; exit 1; fi
+
+# ck_apply_profile drives the expanded list, includes first.
+printf '{"description":"built in","dependencies":[]}\n' > "$work/bundled/builtin/profile.json"
+printf '#!/bin/bash\necho "$(basename "$1") $2" >> "%s"\n' "$work/applied" > "$work/bundled/apply.sh"
+ck_as_web() { "$@"; }
+CIVIKITCHEN_PROFILE="combo, custom" ck_apply_profile deps >/dev/null
+[ "$(tr '\n' ' ' < "$work/applied")" = "builtin deps mid deps custom deps combo deps " ] \
+  || { echo "ck_apply_profile applied: $(cat "$work/applied")" >&2; exit 1; }
+
 echo "external profile tests passed"

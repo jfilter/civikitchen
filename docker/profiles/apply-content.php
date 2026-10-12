@@ -9,7 +9,7 @@
  *           external_identifier = ref, contributions by a synthetic trxn_id),
  *           and never touches an existing one, so edits in the UI survive.
  * Every missing prerequisite is listed before anything is written, except
- * that settings go first: the components they enable must be on to check the rest.
+ * that settings and components go first: they must be on to check the rest.
  */
 
 use Civi\Api4\Contact;
@@ -71,7 +71,12 @@ $settingNames = array_keys(\Civi\Core\SettingsMetadata::getMetadata([], $domainI
 foreach (array_diff(array_keys($config['settings'] ?? []), $settingNames) as $name) {
   $missing[] = "config.settings: unknown setting {$name}";
 }
-$components = $config['settings']['enable_components'] ?? Civi::settings()->get('enable_components');
+// enableComponent() only returns FALSE for a name core does not know.
+$knownComponents = array_keys(CRM_Core_Component::getComponents());
+foreach (array_diff($config['components'] ?? [], $knownComponents) as $name) {
+  $missing[] = "config.components: unknown component {$name}";
+}
+$components = array_merge($config['settings']['enable_components'] ?? Civi::settings()->get('enable_components'), $config['components'] ?? []);
 $needs = [
   'CiviMember' => empty($config['membership_types']) ? NULL : 'config.membership_types',
   'CiviContribute' => empty($config['membership_types']) && empty($seed['contributions']) ? NULL : 'config.membership_types, seed.contributions',
@@ -79,18 +84,26 @@ $needs = [
 ];
 foreach (array_filter($needs) as $component => $user) {
   if (!in_array($component, $components, TRUE)) {
-    $missing[] = "{$user}: the {$component} component is not enabled (config.settings.enable_components)";
+    $missing[] = "{$user}: the {$component} component is not enabled (config.components)";
   }
 }
 ck_content_fail($file, $missing);
 
-// ── config: settings first, so the components they enable are on for the rest ──
+// ── config: settings and components first, so they are on for the rest ──
 $changed = [];
 $settings = array_filter($config['settings'] ?? [], static fn(mixed $value, string $name): bool =>
   Civi::settings()->get($name) != $value, ARRAY_FILTER_USE_BOTH);
 if ($settings !== []) {
   Setting::set(FALSE)->setValues($settings)->execute();
   $changed[] = 'settings ' . implode(',', array_keys($settings));
+}
+// Additive, so composed profiles keep each other's components.
+$enable = array_values(array_diff($config['components'] ?? [], Civi::settings()->get('enable_components')));
+foreach ($enable as $name) {
+  CRM_Core_BAO_ConfigSetting::enableComponent($name);
+}
+if ($enable !== []) {
+  $changed[] = 'components ' . implode(',', $enable);
 }
 
 // ── preflight 2: everything the remaining writes need ──

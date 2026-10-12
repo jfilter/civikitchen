@@ -1,5 +1,6 @@
 {
   "description": "Fundraising: campaigns, pledges, recurring donors, CiviRules automation, donation receipts",
+  "include": ["fundraising-data"],
   "authx": {
     "header_cred": ["jwt", "api_key", "pass"]
   },
@@ -53,6 +54,5 @@
       "version": "c9be29ae1cdd03c251dd92e5ca6a29f54d775de1",
       "enable": true
     }
-  ],
-  "scripts": ["scripts/10-fundraising.php"]
+  ]
 }

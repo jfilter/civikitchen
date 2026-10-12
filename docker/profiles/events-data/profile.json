@@ -1,0 +1,9 @@
+{
+  "description": "Past and upcoming events with participants in varied statuses, core only",
+  "dependencies": [],
+  "config": {
+    "settings": {"defaultCurrency": "EUR"},
+    "components": ["CiviEvent"]
+  },
+  "scripts": ["scripts/10-events.php"]
+}

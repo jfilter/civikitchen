@@ -15,8 +15,6 @@ if (ck_seed_org_exists('Bildungswerk Musterstadt e.V.')) {
   return;
 }
 
-\Civi::settings()->set('defaultCurrency', 'EUR');
-
 $orgId = ck_seed_org('Bildungswerk Musterstadt e.V.', 'veranstaltungen@bildungswerk.example.de', ['Seminarstraße 14', '69117', 'Heidelberg']);
 echo "created Bildungswerk Musterstadt e.V. (contact {$orgId})\n";
 

@@ -1,0 +1,9 @@
+{
+  "description": "Spendenwerk Musterstadt e.V. with core only: campaigns, donors with a year of giving, recurring donors, pledges",
+  "dependencies": [],
+  "config": {
+    "settings": {"defaultCurrency": "EUR"},
+    "components": ["CiviContribute", "CiviCampaign", "CiviPledge"]
+  },
+  "scripts": ["scripts/10-fundraising.php"]
+}

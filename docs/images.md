@@ -187,8 +187,10 @@ The profiles live in [`docker/profiles/`](../docker/profiles/), one dir per
 profile with a `profile.json` and the PHP files its `scripts` list names.
 The shared driver applies `dependencies` → `config` → `seed` → `scripts`:
 
-- `config` (settings, domain name, from-address, mailbox domain, groups,
-  membership types) is written back on every apply wherever it differs.
+- `config` (settings, components, domain name, from-address, mailbox domain,
+  groups, membership types) is written back on every apply wherever it
+  differs. `components` only switches components on, so composed profiles
+  keep each other's.
 - `seed` contacts and contributions are created once, matched by their anchor;
   later UI edits survive.
 - `scripts` run in list order. A `seeds/` directory is an error, not a
@@ -202,19 +204,33 @@ script can use the extension under development. `init.d` hooks run last. A root
 or profile `apply.sh` replaces the driver; it runs once, in the second phase.
 
 A missing prerequisite fails the apply before anything is written, with every
-problem listed. Only `config.settings` go first, because the components they
-enable must be on before their records can be checked. Examples are membership types without CiviMember, an unknown
+problem listed. Only `config.settings` and `config.components` go first,
+because a component must be on before its records can be checked. Examples are membership types without CiviMember, an unknown
 financial type, setting or field, or a group nobody defines. The schema
 package's [README](../packages/civicrm-profile-schema/README.md) holds the
 exact rules.
 
 
-| Profile | Extensions | Seed data | API users |
+| Profile | Includes | Extensions | API users |
 |---|---|---|---|
-| `verein` | CiviBanking, CiviSEPA, Contract, Twingle, GDPRX, XCM, IdentityTracker, ContactLayout | Musterverein e.V.: membership types (Voll-/Förder-/Ehrenmitglied), 24 members with addresses + fee history, SEPA creditor + 21 direct-debit mandates | readonly, fundraiser, eventmanager, caseworker, bankimporter |
-| `fundraising` | CiviRules, DonRec | 2 campaigns, 18 donors with varied giving history, 6 recurring donors, 4 pledges with installment schedules | readonly, fundraiser |
-| `events` | RemoteEvent, EventMessages, RemoteTools, XCM, IdentityTracker | 6 past + upcoming events, 18 contacts with participant records in varied statuses | readonly, eventmanager |
-| `mailing` | Mosaico (+ core FlexMailer) | 3 segmented mailing lists, 30 subscribers, a draft newsletter | readonly, mailer |
+| `verein` | `verein-data` | CiviBanking, CiviSEPA, Contract, Twingle, GDPRX, XCM, IdentityTracker, ContactLayout; adds a SEPA creditor + 21 direct-debit mandates | readonly, fundraiser, eventmanager, caseworker, bankimporter |
+| `fundraising` | `fundraising-data` | CiviRules, DonRec | readonly, fundraiser |
+| `events` | `events-data` | RemoteEvent, EventMessages, RemoteTools, XCM, IdentityTracker | readonly, eventmanager |
+| `mailing` | `mailing-data` | Mosaico (+ core FlexMailer) | readonly, mailer |
+
+The `*-data` profiles hold the records and need CiviCRM core only, so they load
+without any extension:
+
+| Data profile | Components | Seed data |
+|---|---|---|
+| `verein-data` | CiviContribute, CiviMember | Musterverein e.V.: membership types (Voll-/Förder-/Ehrenmitglied), 24 members with addresses + fee history |
+| `fundraising-data` | CiviContribute, CiviCampaign, CiviPledge | 2 campaigns, 18 donors with varied giving history, 6 recurring donors, 4 pledges with installment schedules |
+| `events-data` | CiviEvent | 6 past + upcoming events, 18 contacts with participant records in varied statuses |
+| `mailing-data` | CiviMail | 3 segmented mailing lists, 30 subscribers, a draft newsletter |
+
+A profile's `include` list applies before the profile itself, depth-first and
+each profile once; a cycle fails the boot. `CIVIKITCHEN_PROFILE=verein` still
+gives the whole Verein world, `CIVIKITCHEN_PROFILE=verein-data` only its records.
 
 RemoteEvent is skipped on Standalone and ContactLayout on Standalone and
 Joomla. A dependency declares that in `profile.json` with

@@ -17,8 +17,6 @@ if (ck_seed_org_exists('Musterverein e.V.')) {
   return;
 }
 
-\Civi::settings()->set('defaultCurrency', 'EUR');
-
 $vereinId = ck_seed_org('Musterverein e.V.', 'kontakt@musterverein.example.de', ['Vereinsweg 1', '10115', 'Berlin']);
 echo "created Musterverein e.V. (contact {$vereinId})\n";
 

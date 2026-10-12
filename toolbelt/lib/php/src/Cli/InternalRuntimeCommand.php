@@ -96,6 +96,12 @@ final class InternalRuntimeCommand implements Command
                 echo $profiles->authxPolicy($arguments[0], ($arguments[1] ?? '') === '--sort');
                 return 0;
             }
+            if ($operation === 'profile-includes' && count($arguments) === 1) {
+                foreach ($profiles->includes($arguments[0]) as $name) {
+                    echo $name, "\n";
+                }
+                return 0;
+            }
             if ($operation === 'profile-cms' && count($arguments) === 1) {
                 echo $profiles->cms($arguments[0]);
                 return 0;

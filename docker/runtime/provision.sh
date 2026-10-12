@@ -819,6 +819,27 @@ ck_resolve_profile() {
     printf '%s' "${matches[0]}"
 }
 
+# Appends a profile to CK_EXPANDED_PROFILES after its includes, depth-first; each
+# profile lands once, and a cycle is an error. $2 is the include chain so far.
+ck_expand_profile() {
+    local name="$1" chain="$2" dir seen includes include
+    if [[ ",${chain}," == *",${name},"* ]]; then
+        echo "[civikitchen] ERROR: profile include cycle: ${chain//,/ -> } -> ${name}" >&2
+        return 1
+    fi
+    dir="$(ck_resolve_profile "${name}")" || return 1
+    for seen in "${CK_EXPANDED_PROFILES[@]}"; do
+        [[ "${seen}" == "${dir}" ]] && return 0
+    done
+    ck_validate_profile "${dir}" || return 1
+    includes="$("$(ck_runtime_cli)" internal profile-includes "${dir}/profile.json")" || return 1
+    while IFS= read -r include; do
+        [[ -n "${include}" ]] || continue
+        ck_expand_profile "${include}" "${chain:+${chain},}${name}" || return 1
+    done <<< "${includes}"
+    CK_EXPANDED_PROFILES+=("${dir}")
+}
+
 # Schema plus what the driver needs from the directory (scripts present, no seeds/).
 ck_validate_profile() {
     "$(ck_runtime_cli)" profile validate "$1" >/dev/null
@@ -863,7 +884,7 @@ ck_resolve_authx_policy() {
 
 # Apply named profiles (extensions + config + seed + scripts + API users) at first boot.
 # Opt-in via CIVIKITCHEN_PROFILE=<name>[,<name>...] — a comma-separated list
-# is applied left to right; profiles ship in CK_PROFILE_DIR (see
+# is applied left to right, each profile after its `include`s; profiles ship in CK_PROFILE_DIR (see
 # docker/profiles/). Combining works because every layer converges instead of
 # colliding: apply.sh skips extensions the site already has, config converges,
 # seed records are created once per anchor, and configure-api-users.php upserts users/roles
@@ -877,25 +898,24 @@ ck_resolve_authx_policy() {
 ck_apply_profile() {
     local phase="$1"
     [[ -n "${CIVIKITCHEN_PROFILE:-}" ]] || return 0
-    local name dir root apply want_cms authx_policy index=0 merged
-    local -a names resolved=() phase_arg
+    local name dir root apply want_cms authx_policy merged
+    local -a names resolved phase_arg
     IFS=',' read -ra names <<< "${CIVIKITCHEN_PROFILE}"
-    # Validate the whole list before applying anything — a typo in the last
-    # name must not leave a half-provisioned site behind the failed boot.
+    # Expand and validate the whole list before applying anything — a typo in
+    # the last name must not leave a half-provisioned site behind the failed boot.
+    CK_EXPANDED_PROFILES=()
     for name in "${names[@]}"; do
         name="${name// /}"
         [[ -z "${name}" ]] && continue
-        dir="$(ck_resolve_profile "${name}")" || return 1
-        ck_validate_profile "${dir}" || return 1
+        ck_expand_profile "${name}" "" || return 1
+    done
+    resolved=("${CK_EXPANDED_PROFILES[@]}")
+    for dir in "${resolved[@]}"; do
         ck_require_profile_trust "${dir}" || return 1
-        resolved+=("${dir}")
     done
     authx_policy="$(ck_resolve_authx_policy "${resolved[@]}")" || return 1
-    for name in "${names[@]}"; do
-        name="${name// /}"
-        [[ -z "${name}" ]] && continue
-        dir="${resolved[${index}]}"
-        index=$((index + 1))
+    for dir in "${resolved[@]}"; do
+        name="$(basename "${dir}")"
         root="$(dirname "${dir}")"
         # An external root can share its own driver; otherwise use the bundled
         # driver. A profile-local apply.sh is the narrowest override.

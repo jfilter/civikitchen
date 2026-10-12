@@ -119,6 +119,11 @@ if [ -n "${PROFILE}" ]; then
         else
             echo "  ✗ could not read profile.json for '${prof}' from the image"; fail=1
         fi
+        while IFS= read -r included; do
+            [ -n "${included}" ] || continue
+            check "included profile ${included} applied (${prof})" "grep -qF '==> [${included}] profile applied' '${LOGFILE}'"
+        done < <(docker exec "${APP}" jq -r '.include[]?' \
+            "/opt/civikitchen/docker/profiles/${prof}/profile.json" 2>/dev/null || true)
         while IFS=$'\t' read -r git_key git_version; do
             [ -n "${git_key}" ] || continue
             git_path=$(docker exec -u buildkit -w "${WEB}" "${APP}" bash -lc \

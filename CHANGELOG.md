@@ -40,11 +40,21 @@ except that a break the consumers are adjusted for ships as a minor, marked
   A `seeds/` directory fails `ck profile validate` and the boot with a pointer
   to `scripts`; move the files and list them. The bundled profiles have
   migrated.
+- **Breaking:** the bundled profiles are split. `verein-data`,
+  `fundraising-data`, `events-data` and `mailing-data` hold the records and
+  need CiviCRM core only; `verein`, `fundraising`, `events` and `mailing`
+  include them and add their extensions and API users, so selecting them gives
+  the same site as before. Their PHP moved to the data profiles' `scripts/`.
 
 ### Added
 
+- `include` in `profile.json` names profiles that apply first, depth-first,
+  each once; a cycle or an unknown name fails before the site changes.
+- `config.components` switches core components on without touching the
+  others, so composed profiles keep each other's. An unknown component is an
+  error.
 - A missing prerequisite fails the apply before anything except
-  `config.settings` is written, with every problem listed. This covers membership types without CiviMember,
+  `config.settings` and `config.components` is written, with every problem listed. This covers membership types without CiviMember,
   contributions without CiviContribute, an unknown setting, financial type,
   field or group, a `contact_ref` no contact carries, and a seed contribution
   without `financial_type_id:name`, which the schema now requires.

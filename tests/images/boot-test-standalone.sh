@@ -91,7 +91,7 @@ docker run -d --name "${APP}" --network "${NET}" \
     -e CIVIKITCHEN_LOCALES=de_DE \
     -e CIVIKITCHEN_DEFAULT_LOCALE=de_DE \
     -e CIVIKITCHEN_DEMO_USER=admin \
-    -e CIVIKITCHEN_PROFILE=minimal,content \
+    -e CIVIKITCHEN_PROFILE=minimal,content,composed \
     -e CIVIKITCHEN_PROFILE_PATH=/civikitchen-external-profiles \
     -e CIVIKITCHEN_TRUST_EXTERNAL_PROFILES=1 \
     -v "${FIXTURE}:/var/www/html/ext/ckbootfixture:ro" \
@@ -192,6 +192,12 @@ check "password is not derived from username" "! echo '${cred_line}' | grep -q '
 check "content profile was applied" "docker logs '${APP}' 2>&1 | grep -F '[content] profile applied' >/dev/null"
 order=$(docker logs "${APP}" 2>&1 | grep -E '\[content\] (asserting config|script 10-after-seed)|seed: 2 contact|content fixture script saw' | cut -c1-40 | tr '\n' '|')
 check "content: config + seed before the script (got ${order})" "echo '${order}' | grep -Eq '^==> \[content\] asserting config.*\|  seed: 2 contact.*\|==> \[content\] script 10-after-seed.*\|  content fixture script saw'"
+# 6b') include: the bundled core-only fundraising data loads before the profile
+# that includes it, without any extension.
+order=$(docker logs "${APP}" 2>&1 | grep -E '^==> \[(fundraising-data|composed)\] profile applied' | tr '\n' '|')
+check "include: fundraising-data applied before composed (got ${order})" "[ '${order}' = '==> [fundraising-data] profile applied|==> [composed] profile applied|' ]"
+pledged=$(cv ev 'echo \Civi\Api4\Pledge::get(FALSE)->selectRowCount()->execute()->count() > 0 && \Civi\Api4\Campaign::get(FALSE)->selectRowCount()->execute()->count() > 0 ? "yes" : "no";' | tr -d '"' || true)
+check "include: core-only pledges and campaigns seeded (got ${pledged:-absent})" "[ '${pledged}' = yes ]"
 check "content: a profile script sees the mounted extension enabled" "docker logs '${APP}' 2>&1 | grep -F 'content fixture script saw the mounted extension' >/dev/null"
 content=$(cv ev 'echo implode("/", [\Civi\Api4\Contact::get(FALSE)->addWhere("external_identifier", "=", "acme-supplies")->addWhere("contact_type", "=", "Organization")->execute()->count(), \Civi\Api4\Contribution::get(FALSE)->addWhere("trxn_id", "=", "profile-seed-ada-2026")->execute()->count(), \Civi\Api4\MembershipType::get(FALSE)->addWhere("name", "=", "acme_annual")->addWhere("fixed_period_start_day", "=", 101)->execute()->count(), \Civi\Api4\Domain::get(FALSE)->addWhere("id", "=", CRM_Core_Config::domainID())->execute()->single()["name"]]);' | tr -d '"' || true)
 check "content: organization seed, contribution, fixed membership type, domain renamed (got ${content:-absent})" "[ '${content}' = '1/1/1/Acme Association' ]"

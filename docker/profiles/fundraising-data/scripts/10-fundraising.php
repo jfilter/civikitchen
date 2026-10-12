@@ -15,11 +15,6 @@ if (ck_seed_org_exists('Spendenwerk Musterstadt e.V.')) {
   return;
 }
 
-\Civi::settings()->set('defaultCurrency', 'EUR');
-// Campaigns and pledges live behind optional components.
-CRM_Core_BAO_ConfigSetting::enableComponent('CiviCampaign');
-CRM_Core_BAO_ConfigSetting::enableComponent('CiviPledge');
-
 $orgId = ck_seed_org('Spendenwerk Musterstadt e.V.', 'spenden@spendenwerk.example.de', ['Stiftungsallee 8', '48143', 'Münster']);
 echo "created Spendenwerk Musterstadt e.V. (contact {$orgId})\n";
 

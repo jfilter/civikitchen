@@ -1,5 +1,6 @@
 {
   "description": "Email campaigns: Mosaico drag-and-drop templates, segmented newsletter groups, draft mailing",
+  "include": ["mailing-data"],
   "authx": {
     "header_cred": ["jwt", "api_key", "pass"]
   },
@@ -43,6 +44,5 @@
       "registry": true,
       "enable": true
     }
-  ],
-  "scripts": ["scripts/10-mailing.php"]
+  ]
 }

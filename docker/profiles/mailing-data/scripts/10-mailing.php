@@ -16,8 +16,6 @@ if (ck_seed_org_exists('Netzwerk Engagement e.V.')) {
   return;
 }
 
-\Civi::settings()->set('defaultCurrency', 'EUR');
-
 $orgId = ck_seed_org('Netzwerk Engagement e.V.', 'redaktion@netzwerk.example.de', ['Medienpark 2', '50670', 'Köln']);
 echo "created Netzwerk Engagement e.V. (contact {$orgId})\n";
 
