@@ -279,6 +279,37 @@ final class SharedPhpTest extends TestCase
         }
     }
 
+    public function testSmartyFailsWhenThePayloadNeverRan(): void
+    {
+        mkdir($this->temporary . '/ext');
+        file_put_contents($this->temporary . '/ext/info.xml', '<extension key="demo"><file>demo</file></extension>');
+        $runner = new class () extends Runner {
+            public bool $payloadRuns = false;
+
+            public function passthrough(array $command, ?array $environment = null, ?string $workingDirectory = null): int
+            {
+                if ($this->payloadRuns) {
+                    touch((string) ($environment['CK_SMARTY_DONE'] ?? ''));
+                }
+                return 0;
+            }
+
+            public function capture(array $command, ?array $environment = null, ?string $workingDirectory = null): array
+            {
+                return ['status' => 0, 'output' => ''];
+            }
+        };
+        $previous = (string) getcwd();
+        chdir($this->temporary . '/ext');
+        try {
+            self::assertSame(2, (new Application('/nonexistent', dirname(__DIR__, 2), $runner))->run([], 'cksmarty'));
+            $runner->payloadRuns = true;
+            self::assertSame(0, (new Application('/nonexistent', dirname(__DIR__, 2), $runner))->run([], 'cksmarty'));
+        } finally {
+            chdir($previous);
+        }
+    }
+
     public function testCiRunsEveryGateInItsDirectoryAndAggregatesFailures(): void
     {
         mkdir($this->temporary . '/ext');

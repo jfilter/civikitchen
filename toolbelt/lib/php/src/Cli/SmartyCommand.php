@@ -55,7 +55,17 @@ final class SmartyCommand implements Command
             static fn(string $value): string => explode(' -- ', $value, 2)[0],
             $skip,
         ));
-        return $this->runner->passthrough(['cv', 'scr', $payload], $environment);
+        // cv exits 0 when CiviCRM fails to boot, so only the payload's marker proves it ran.
+        $marker = sys_get_temp_dir() . '/cksmarty-done-' . bin2hex(random_bytes(8));
+        $environment['CK_SMARTY_DONE'] = $marker;
+        $status = $this->runner->passthrough(['cv', 'scr', $payload], $environment);
+        $finished = is_file($marker);
+        @unlink($marker);
+        if ($status === 0 && !$finished) {
+            fwrite(STDERR, "cksmarty: the compile payload never finished - CiviCRM did not boot, nothing was checked.\n");
+            return 2;
+        }
+        return $status;
     }
 
     /** @return list<string> */

@@ -28,7 +28,8 @@
  *     the database and never a file anywhere. Those are the ones nothing else
  *     in the toolchain can see at all.
  *
- * Env in: CK_SMARTY_ROOT (extension checkout), CK_SMARTY_KEY (extension key).
+ * Env in: CK_SMARTY_ROOT (extension checkout), CK_SMARTY_KEY (extension key),
+ * CK_SMARTY_DONE (file written on success, so the wrapper can tell a run from a failed boot).
  * Exit: 0 clean, 1 on the first compile failure reported (all are printed).
  */
 
@@ -209,3 +210,7 @@ if ($failures) {
 }
 
 echo "cksmarty: all templates compile.\n";
+$done = getenv('CK_SMARTY_DONE');
+if ($done) {
+  touch($done);
+}
