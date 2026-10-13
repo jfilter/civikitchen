@@ -14,6 +14,22 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- `cksmarty` fails (exit 2) when CiviCRM does not boot, instead of passing
+  without compiling a template: `cv scr` exits 0 when it cannot load the
+  settings, so a run outside a booted stack reported a green gate.
+- The template's `phpstan.neon.dist` leaves `composer-dependency-analyser.php`
+  out of the analysis. Its classes exist only in the image's toolbelt, so a
+  repo with that file failed phpstan under the template's `paths: [.]`. The
+  file is seeded once: add the line under `analyseAndScan` by hand.
+- The template's `phpstan.neon.dist` excludes `node_modules` at any depth
+  (`*/node_modules/*`), not only at the repo root, so a nested frontend
+  package's PHP no longer fails phpstan under `paths: [.]`.
+  A repo moving to `paths: [.]` needs `excludePaths: analyse!: []` in an
+  older seeded `phpstan-tests.neon.dist`, as the template has; otherwise it
+  inherits `tests (?)` and stops with "No files found to analyse".
+
 ### Changed
 
 - Catalogs regenerated from CiviCRM 6.19.0. The APIv4 field check now knows

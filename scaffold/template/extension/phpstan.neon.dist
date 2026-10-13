@@ -35,9 +35,12 @@ parameters:
 		analyseAndScan:
 			- phpstanBootstrap.php
 			- vendor (?)
-			- node_modules (?)
+			# any depth: a frontend/ package's node_modules ships PHP too
+			- */node_modules/*
 			- build (?)
 			- .civikitchen-siblings (?)
+			# ckdeps config: its classes exist only in the image's toolbelt
+			- composer-dependency-analyser.php (?)
 	scanFiles:
 		- __EXTKEY__.civix.php
 	# scanDirectories:
