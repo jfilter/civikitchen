@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.39.3] - 2026-10-13
+
 ### Fixed
 
 - `cksmarty` fails (exit 2) when CiviCRM does not boot, instead of passing
@@ -1934,7 +1936,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.39.2...HEAD
+[Unreleased]: https://github.com/jfilter/civikitchen/compare/v1.39.3...HEAD
+[1.39.3]: https://github.com/jfilter/civikitchen/compare/v1.39.2...v1.39.3
 [1.39.2]: https://github.com/jfilter/civikitchen/compare/v1.39.1...v1.39.2
 [1.39.1]: https://github.com/jfilter/civikitchen/compare/v1.39.0...v1.39.1
 [1.39.0]: https://github.com/jfilter/civikitchen/compare/v1.38.1...v1.39.0
