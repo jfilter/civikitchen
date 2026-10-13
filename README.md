@@ -166,7 +166,7 @@ docker compose exec app ckcoretest --ext search_kit
 What it covers, building Standalone from core `master` or an unreleased
 branch, mounting a civicrm-core checkout over the image's copy, and
 type-checking core's JavaScript are described in
-[CiviCRM core development](docs/images.md#civicrm-core-development).
+[CiviCRM core development](docs/core-development.md).
 
 ## Demo instances
 
@@ -206,7 +206,7 @@ Moving tags are rebuilt daily from the current CiviCRM stable and move only
 after their tests pass; extension repositories pin the `:v1` release tags.
 `:standalone-master` and `:standalone-beta` follow core's `master` and newest
 release branch instead, smoke-tested only and outside the release. See
-[Images](docs/images.md) and [Tags & versions](docs/images.md#tags--versions).
+[Images](docs/images.md) and [Tags & versions](docs/images.md#tags-and-versions).
 
 ## Requirements
 

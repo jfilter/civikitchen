@@ -857,7 +857,7 @@ release smoke test of `extension-release.yml` then run on
 `:standalone-<minor>` instead of the contract image, so CI and release cannot
 test different cores. Passing their `image` input as well fails the run. The
 minor has to be on the supported list in
-[images.md](images.md#tags--versions). GitLab CI picks its job image before
+[images.md](images.md#tags-and-versions). GitLab CI picks its job image before
 the repository is read, so there `CK_IMAGE` still names it.
 
 Values shared across an organisation's repos can sit once in a file of the same
@@ -1161,7 +1161,7 @@ What that job assumes, because the shared workflow cannot ask:
   themselves because CI does not receive passwordless `sudo`.
 
 Copy-pasteable starter, including the config files and the `test:e2e` script:
-[`examples/extension-with-playwright/`](../examples/extension-with-playwright/).
+[`examples/extension-with-playwright/`](https://github.com/civico-de/civikitchen/tree/main/examples/extension-with-playwright/).
 
 By default the job runs once, on `image`. UI behaviour that breaks per
 CiviCRM version is real but rare, and a browser run per image is the most
@@ -1330,7 +1330,7 @@ that sets none of them gets exactly the run it has today.
 Pick the ends of your claimed range, not everything in between: the oldest
 minor you support and current stable. The image tags are `:standalone-<minor>`
 (e.g. `:standalone-6.16`) and the moving `:standalone`; see
-[images.md](images.md#tags--versions). A `<minor>` tag keeps being rebuilt
+[images.md](images.md#tags-and-versions). A `<minor>` tag keeps being rebuilt
 only while it is on the supported list there, so a minor your matrix or
 `core_upgrade_from` pins has to be on it. `:standalone-beta` and
 `:standalone-master` are what core ships next, built daily from its branches:

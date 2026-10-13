@@ -50,6 +50,7 @@ CK_ACTIONLINT_VERSION := 1.7.12
 CK_ACTIONLINT_INSTALLER_SHA256 := 72fa3e45ac20f3c3a512d6747b4fcf719e21f890e8c43e78d48a41fdfb900c4e
 CK_ZIZMOR_VERSION := 1.29.0
 CK_JSCPD_VERSION := 5.0.14
+CK_ZENSICAL_VERSION := 0.0.70
 
 # zizmor and check-jsonschema are Python CLIs fetched on demand rather than
 # installed. uv and pipx both do that, so demanding one specific runner would
@@ -120,7 +121,7 @@ endef
 	test-compose-isolation test-concurrency-groups test-matrix-legs test-sibling-wiring test-dist-build-wiring test-image-wiring test-stack-image test-gitlab-mr-jobs test-sibling-checkout test-vendored-paths test-ckeslint test-ckcoverage test-ckcommon-git test-missing-tool test-doctor test-tool-locks \
 	test-ck-headless test-ckcoretest test-phpstan-bootstrap test-shell-portability test-install-trivy test-resolve-civicrm-stable test-resolve-civicrm-git lint lint-shell lint-shell-portability \
 	test-database-matrix test-compose-config test-playwright-port test-demo-basic-auth test-release-retag test-release-steps test-ci-gates-step test-release-script \
-        lint-actions lint-php lint-schema lint-changelog test-changelog build test-images e2e-ckcreate e2e tools clean
+        lint-actions lint-php lint-schema lint-changelog docs docs-serve docs-a11y test-changelog build test-images e2e-ckcreate e2e tools clean
 
 help: ## Show this help
 	@echo "civikitchen — make targets"
@@ -372,7 +373,7 @@ test-changelog: ## Changelog gate: grammar, release mode and section extraction
 
 # --- static checks -----------------------------------------------------------
 
-lint: lint-shell lint-shell-portability lint-actions lint-php lint-schema lint-changelog ## Every static check CI runs
+lint: lint-shell lint-shell-portability lint-actions lint-php lint-schema lint-changelog docs ## Every static check CI runs
 
 lint-shell: $(SHELLCHECK) ## shellcheck (pinned) over every tracked or untracked, non-ignored shell file
 	@files=$$($(SHELL_FILES)) ; \
@@ -398,6 +399,17 @@ lint-actions: $(CACHE)/actionlint ## actionlint + zizmor over the workflows
 # a malformed file is a red PR, not a red release.
 lint-changelog: ## CHANGELOG.md follows the Keep a Changelog grammar
 	.github/scripts/changelog-check.sh --lint
+
+# The site is built from docs/ by zensical.toml; --strict fails on a link to a
+# missing page or anchor. No --clean: it empties .cache/, this Makefile's tool cache.
+docs: ## Build the documentation site into site/, failing on broken links
+	$(call pyrun_pinned,zensical,$(CK_ZENSICAL_VERSION)) build --strict
+
+docs-serve: ## Serve the documentation site locally with live reload
+	$(call pyrun_pinned,zensical,$(CK_ZENSICAL_VERSION)) serve
+
+docs-a11y: docs ## WCAG 2.1 AA checks of the site in light and dark mode (needs npm ci and Playwright chromium)
+	npx playwright test -c playwright.docs.config.ts
 
 # Advisory token-level clone report, not part of `lint`. Duplicated on purpose:
 # check run() skeletons, parallel test fixtures, clones across composer packages.

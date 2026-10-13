@@ -20,6 +20,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `jfilter/civikitchen`, `ghcr.io/jfilter/civikitchen`,
   `jfilter/civikitchen-scenario-schema` or `@jfilter/civicrm-profile-schema`
   outside prose files.
+- A documentation site at https://civico-de.github.io/civikitchen/, built
+  from `docs/` with Zensical; `make docs` builds it and `make lint` fails on
+  a link to a missing page or anchor.
 
 ### Changed
 
@@ -33,6 +36,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   templated repo, `ckinit --update` rewrites the managed files; the seeded
   `.docker/docker-compose.yml` and `civikitchen.yaml` need the new names by
   hand, and `moved-repository` lists what is left.
+- The CiviCRM core development guide is its own page,
+  `docs/core-development.md`; `docs/images.md`'s "Tags & versions" section is
+  now "Tags and versions", so its anchor reads the same on GitHub and on the
+  site.
 - *Build Dev Images* builds only the standalone flavors on push; the CMS and
   demo flavors build daily or on a manual dispatch. `release.sh` now requires a
   full run (daily or dispatched) covering the image commit — start one with

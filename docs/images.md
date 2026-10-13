@@ -34,13 +34,13 @@ toolchain added:
 - **standalone only**: `cktestreset`, which rebuilds the headless test database
   ([Headless tests](extension-development.md#headless-tests)), and
   `ckcoretest`, which runs core's own suites
-  ([CiviCRM core development](#civicrm-core-development)), and `ckboot`, which
+  ([CiviCRM core development](core-development.md)), and `ckboot`, which
   provisions the site inside a GitLab CI job
   ([CI on GitLab](extension-standards.md#ci-on-gitlab))
 
 **Core patches.** The image carries fixes for core bugs a dev stack must not
 reproduce, until a release contains them: one file per bug in
-[`docker/standalone/core-patches/`](../docker/standalone/core-patches/), each
+[`docker/standalone/core-patches/`](https://github.com/civico-de/civikitchen/tree/main/docker/standalone/core-patches/), each
 naming its upstream issue on an `Upstream:` line. The build applies them in name
 order, skips a patch the release already contains, and fails on any other
 mismatch. `/usr/local/share/civikitchen/core-patches.log` lists what the image
@@ -65,7 +65,7 @@ services:
     # ... see examples/standalone/docker-compose.yml
 ```
 
-Ready-to-run: [`examples/standalone/`](../examples/standalone/)
+Ready-to-run: [`examples/standalone/`](https://github.com/civico-de/civikitchen/tree/main/examples/standalone/)
 
 ## Buildkit flavors (dev)
 
@@ -77,7 +77,7 @@ overridable with `CIVICRM_SITE_TYPE`). The site is built on first container
 start with `civibuild` (~60s), against an external MariaDB.
 
 They carry the standalone image's tools except the two standalone-only ones,
-and share [`docker/runtime/provision.sh`](../docker/runtime/provision.sh) with
+and share [`docker/runtime/provision.sh`](https://github.com/civico-de/civikitchen/blob/main/docker/runtime/provision.sh) with
 it, so the first-boot knobs marked *all* in the
 [configuration reference](configuration.md) work the same. The standalone
 install knobs (*standalone* there) do not apply: civibuild builds the
@@ -107,16 +107,16 @@ services:
 > Opt in explicitly with `CIVIKITCHEN_REINSTALL=1`, or start clean with
 > `docker compose down -v`.
 
-Ready-to-run: [`examples/drupal10/`](../examples/drupal10/),
-[`examples/drupal11/`](../examples/drupal11/),
-[`examples/wordpress/`](../examples/wordpress/),
-[`examples/joomla/`](../examples/joomla/). The compose files show each CMS's
+Ready-to-run: [`examples/drupal10/`](https://github.com/civico-de/civikitchen/tree/main/examples/drupal10/),
+[`examples/drupal11/`](https://github.com/civico-de/civikitchen/tree/main/examples/drupal11/),
+[`examples/wordpress/`](https://github.com/civico-de/civikitchen/tree/main/examples/wordpress/),
+[`examples/joomla/`](https://github.com/civico-de/civikitchen/tree/main/examples/joomla/). The compose files show each CMS's
 extension mount path.
 
 ### Drupal 11
 
 civibuild itself ships no `drupal11-demo` site type, so CiviKitchen vendors one:
-[`docker/buildkit/site-types/drupal11-demo/`](../docker/buildkit/site-types/drupal11-demo/)
+[`docker/buildkit/site-types/drupal11-demo/`](https://github.com/civico-de/civikitchen/tree/main/docker/buildkit/site-types/drupal11-demo/)
 — `drupal10-demo`'s recipe adapted for Drupal 11.4 (content types now come
 from core recipes, Navigation replaced Toolbar; details in the file headers).
 `bake.sh` installs it into the buildkit clone, so Drupal 11 gets the same demo
@@ -134,7 +134,7 @@ image runs `civibuild reinstall` against your external DB and then re-runs the
 same finish the demo image bakes in — registering CiviCRM's Joomla
 component/plugins, enabling the standard component extensions, and the
 `ckjoomlaidentity` identity shim (see
-[`joomla-finish.sh`](../docker/buildkit/joomla-finish.sh)). So `option=com_civicrm`
+[`joomla-finish.sh`](https://github.com/civico-de/civikitchen/blob/main/docker/buildkit/joomla-finish.sh)). So `option=com_civicrm`
 (the admin UI and the api_key API) and the profiles behave the same as on
 the other flavors.
 
@@ -183,7 +183,7 @@ combine it with `CIVICRM_AUTO_INSTALL=1` and `CIVIKITCHEN_DEMO_USER=admin`.
 API users are created through each CMS's native API — `cv` boots CiviCRM *and*
 the host CMS, so the driver uses the Drupal entity API / WordPress users+roles /
 Standalone APIv4 / Joomla users+usergroups directly, with no drush or wp-cli.
-The profiles live in [`docker/profiles/`](../docker/profiles/), one dir per
+The profiles live in [`docker/profiles/`](https://github.com/civico-de/civikitchen/tree/main/docker/profiles/), one dir per
 profile with a `profile.json` and the PHP files its `scripts` list names.
 The shared driver applies `dependencies` → `config` → `seed` → `scripts`:
 
@@ -207,7 +207,7 @@ A missing prerequisite fails the apply before anything is written, with every
 problem listed. Only `config.settings` and `config.components` go first,
 because a component must be on before its records can be checked. Examples are membership types without CiviMember, an unknown
 financial type, setting or field, or a group nobody defines. The schema
-package's [README](../packages/civicrm-profile-schema/README.md) holds the
+package's [README](https://github.com/civico-de/civikitchen/blob/main/packages/civicrm-profile-schema/README.md) holds the
 exact rules.
 
 
@@ -312,7 +312,7 @@ are **deprecated**: they go away in v2. A profile a stack mounts below the old
 directory still lands in `/opt/civikitchen/docker/profiles`. `ckconform` warns
 about every file that still names one, with the replacement.
 
-## Tags & versions
+## Tags and versions
 
 All images rebuild **daily** against the
 current CiviCRM stable release, resolved from
@@ -389,7 +389,7 @@ flavor reaches which version:
   them; otherwise the build fails. The version must be EXACT (`6.15.1`, not `6.15`): it names a tarball.
   With `--build-arg CIVICRM_SOURCE=git`, `CIVICRM_VERSION` is a civicrm-core
   branch or tag instead (`master`, `6.19`), built from git into the same
-  layout — see [Standalone on an unreleased branch](#standalone-on-an-unreleased-branch).
+  layout — see [Standalone on an unreleased branch](core-development.md#standalone-on-an-unreleased-branch).
 - **Buildkit** (`docker/buildkit/`) bakes the site with
   `civibuild create --civi-ver <version>`, which fetches **any** civicrm
   tag/branch. The Drupal 10 site type covers modern older versions such as
@@ -409,81 +409,7 @@ docker build -f docker/buildkit/Dockerfile \
 ```
 
 Or let compose build it on demand (no prebuilt image needed) — ready-to-run:
-[`examples/custom-version/`](../examples/custom-version/), parameterized by
+[`examples/custom-version/`](https://github.com/civico-de/civikitchen/tree/main/examples/custom-version/), parameterized by
 `CIVICRM_VERSION` / `PHP_VERSION`. More build arguments:
 [Building locally](building.md).
 
-## CiviCRM core development
-
-### Core test suites: `ckcoretest`
-
-`ckcoretest` runs CiviCRM *core* phpunit suites against the installed core
-(standalone only). The composer dist export-ignores `**/tests/**`,
-`phpunit.xml.dist` and the `sql/test_data*.mysql` seed files; on first use it
-fetches exactly those for the installed version (sparse blob-filtered checkout
-of the matching tag, cached in the container) — including the per-extension
-suites under `ext/*/tests` — then execs `CIVICRM_UF=UnitTests phpunit <args>`
-from the core dir (`--ext <name>` runs from a core extension's dir instead). It
-refuses to run without a provisioned `TEST_DB_DSN`, and covers the headless PHP
-suites (`api`, `CRM`, `Civi`, ext).
-
-`ckcoretest --e2e` runs `@group e2e` tests instead, against the dev site rather
-than the test DB: they install the extensions they need into it (`cv
-ext:disable` them afterwards) and log in as `ADMIN_USER`, which provisioning
-writes to `~/.cv.json` from `CIVIKITCHEN_DEMO_USER`. Browser tests
-(`Civi\Test\MinkBase`) also need the compose stack's `browser` service
-(`docker compose --profile browser up -d`), a headless Chrome sharing the app's
-network; tests that read `DEMO_USER`, a second user without admin rights, still
-fail, since the image creates only the admin.
-
-Upgrade tests and the karma/qunit JS tests need a buildkit/civibuild
-environment — an accepted gap, since civicrm.org's Jenkins runs the full matrix
-on every core PR anyway. This is for the local loop: run the suites your patch
-touches, let Jenkins do the rest. To verify a core patch or backport, patch the
-file under `/var/www/html/core`, then `ckcoretest tests/phpunit/api/v4/Query`.
-
-`ckeslint --core [dir]` type-checks CiviCRM core's own JavaScript (default
-`$CIVICRM_CORE_DIR`, then `/var/www/html/core`): it copies core's first-party
-`.js` — no vendored trees, minified bundles or tests — beside a `tsconfig.json`
-with `allowJs`/`checkJs` and a declaration file for the globals core's pages
-load by script tag, and runs oxlint with `--type-check`, the correctness
-category and the APIv4 contract rule. It is an analysis tool for upstream bug
-reports, not a gate.
-
-A buildkit image built with `--build-arg KEEP_GIT=1` keeps the git history of
-the civibuild site
-([Building locally](building.md#keeping-the-civicrm-git-history-keep_git1)).
-
-### Standalone on an unreleased branch
-
-`:standalone-master` and `:standalone-beta` are Standalone built from core's
-`master` and its newest release branch, published daily
-([Tags & versions](#tags--versions)). For another branch or tag, or a build
-of your own, build Standalone from git:
-
-```bash
-make build CIVICRM_SOURCE=git CIVICRM_VERSION=master   # tags civikitchen:standalone-master
-```
-
-The build does what core's release script does for the tarball: civicrm-core
-and civicrm-packages at the same branch, `composer install --no-dev` with the
-bower assets, then core's standalone scaffold. Every build fetches the
-branch's current commit; `/usr/local/share/civikitchen/civicrm-source.log` names
-the commits the image holds. Unlike the tarball, core keeps its `tests/`
-directories and seed SQL, so `ckcoretest` runs without fetching them.
-
-To test a core change, mount the directory it touches from your civicrm-core
-checkout over the image's copy, and toggle the change there (`git stash`,
-`git stash pop`) for a failing and a passing run:
-
-```yaml
-services:
-  app:
-    image: ghcr.io/civico-de/civikitchen:standalone-master
-    volumes:
-      - ../civicrm-core/ext/afform:/var/www/html/core/ext/afform
-```
-
-Run `cv flush` after toggling; the Angular and asset caches otherwise keep the
-old files. A change to composer dependencies or outside the mounted directory
-needs a rebuilt image.

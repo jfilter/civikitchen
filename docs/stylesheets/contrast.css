@@ -1,0 +1,10 @@
+/* The theme's indigo accent colours the active navigation link below 4.5:1 in both schemes. */
+[data-md-color-scheme="default"] {
+  --md-accent-fg-color: #3949ab;
+  --md-accent-fg-color--transparent: #3949ab1a;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-accent-fg-color: #8c9eff;
+  --md-accent-fg-color--transparent: #8c9eff1a;
+}

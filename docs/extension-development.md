@@ -1,7 +1,7 @@
 # Extension development
 
 The standalone image is designed for the test loop most extension authors run:
-edit code → reload → run phpunit. The example at [`examples/standalone/`](../examples/standalone/) is the recommended starting point.
+edit code → reload → run phpunit. The example at [`examples/standalone/`](https://github.com/civico-de/civikitchen/tree/main/examples/standalone/) is the recommended starting point.
 
 ## The dev stack
 
@@ -337,7 +337,7 @@ What each gate enforces, and why, is in
 
 **PHPStan** needs to know about CiviCRM's autoloader to resolve `CRM_*` and
 `Civi\*` symbols. The managed
-[`phpstanBootstrap.php`](../scaffold/template/extension/phpstanBootstrap.php)
+[`phpstanBootstrap.php`](https://github.com/civico-de/civikitchen/blob/main/scaffold/template/extension/phpstanBootstrap.php)
 registers core's class loader, then the civix layout (`CRM_*`, `Civi\*`,
 `api_*`, `vendor/`) of core's own ext packages (`civi_member`,
 `civi_contribute`, … — they ship with core but live off its classloader path)
@@ -426,7 +426,7 @@ The same loop runs unattended in CI: boot the stack, enable the extension,
 run phpunit headless. An extension from `ckcreate` or `ckinit` calls the shared
 `extension-ci.yml`; for a repository without the template, a copy-pasteable
 GitHub Actions setup (workflow + minimal compose stack) lives at
-[`examples/ci/`](../examples/ci/).
+[`examples/ci/`](https://github.com/civico-de/civikitchen/tree/main/examples/ci/).
 
 ### Running the CI gates locally
 
@@ -589,7 +589,7 @@ stage than `build`, does not need the build jobs of the same-repository
 extensions it requires, or is not needed by a `stage: publish` job. A job
 needed through intermediate jobs counts as needed.
 
-[`examples/monorepo/`](../examples/monorepo/) is a two-extension tree, one
+[`examples/monorepo/`](https://github.com/civico-de/civikitchen/tree/main/examples/monorepo/) is a two-extension tree, one
 requiring the other, that this repository's CI runs `extension-ci.yml` and a
 dry run of `extension-release.yml` against.
 
@@ -605,7 +605,7 @@ once.
 
 ## UI tests with Playwright
 
-For browser-level tests of your extension's UI (forms, Angular/React widgets, JS behaviour) there's a copy-pasteable starter at [`examples/extension-with-playwright/`](../examples/extension-with-playwright/). It boots the same standalone stack, runs Playwright on the host against `localhost:8080`, and handles login once via a shared session.
+For browser-level tests of your extension's UI (forms, Angular/React widgets, JS behaviour) there's a copy-pasteable starter at [`examples/extension-with-playwright/`](https://github.com/civico-de/civikitchen/tree/main/examples/extension-with-playwright/). It boots the same standalone stack, runs Playwright on the host against `localhost:8080`, and handles login once via a shared session.
 
 ```bash
 cd examples/extension-with-playwright
@@ -614,7 +614,7 @@ npm install && npx playwright install chromium
 npm run test:e2e
 ```
 
-See the [example's README](../examples/extension-with-playwright/README.md) for how to drop the config files into your own extension repo, and
+See the [example's README](https://github.com/civico-de/civikitchen/blob/main/examples/extension-with-playwright/README.md) for how to drop the config files into your own extension repo, and
 [Extension standards](extension-standards.md#frontend-js-dependencies-js-tests-and-browser-tests)
 for the CI job.
 

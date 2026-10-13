@@ -108,7 +108,7 @@ version.
 
 From a clean `main` whose images have been built and promoted:
 
-First move the `[Unreleased]` bullets in [`CHANGELOG.md`](../CHANGELOG.md)
+First move the `[Unreleased]` bullets in [`CHANGELOG.md`](https://github.com/civico-de/civikitchen/blob/main/CHANGELOG.md)
 under a new `## [X.Y.Z] - YYYY-MM-DD` heading with today's date and add the
 compare link at the bottom. The file follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and `release.yml`

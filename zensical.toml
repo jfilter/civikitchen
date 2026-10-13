@@ -1,0 +1,97 @@
+[project]
+site_name = "civikitchen"
+site_description = "CiviCRM Docker images, an extension template and reusable workflows for CiviCRM development"
+site_url = "https://civico-de.github.io/civikitchen/"
+repo_url = "https://github.com/civico-de/civikitchen"
+repo_name = "civico-de/civikitchen"
+edit_uri = "edit/main/docs/"
+docs_dir = "docs"
+extra_css = ["stylesheets/contrast.css"]
+# A page missing here is still built and searchable, only absent from the sidebar.
+nav = [
+  { "Home" = "index.md" },
+  { "Extension development" = [
+    { "Develop an extension" = "extension-development.md" },
+    { "Standards and checks" = "extension-standards.md" },
+    { "Declarative scenarios" = "scenarios.md" },
+  ] },
+  { "CI and releases" = [
+    { "Releasing an extension" = "extension-releases.md" },
+    { "Reusable workflows" = "reusable-workflows.md" },
+  ] },
+  { "Core development" = "core-development.md" },
+  { "Images" = [
+    { "Images and demos" = "images.md" },
+    { "Configuration" = "configuration.md" },
+  ] },
+  { "Project" = [
+    { "Releases" = "releases.md" },
+    { "Building locally" = "building.md" },
+    { "Implementation architecture" = "implementation-architecture.md" },
+    { "Consolidating on mago" = "mago-consolidation.md" },
+    { "Typing core from outside" = "core-types.md" },
+    { "Moving to civico-de" = "move-to-civico-de.md" },
+    { "Changelog" = "https://github.com/civico-de/civikitchen/blob/main/CHANGELOG.md" },
+  ] },
+  { "Architecture decisions" = [
+    "adr/0001-one-versioned-contract-pinned-at-v1.md",
+    "adr/0002-a-release-is-a-human-version-and-a-tag.md",
+    "adr/0003-release-exclusions-live-in-civikitchen.md",
+    "adr/0004-one-release-path-for-every-extension-repo.md",
+    "adr/0005-several-extensions-in-one-repository.md",
+    "adr/0006-lockstep-releases-in-a-multi-extension-repository.md",
+    "adr/0007-the-repository-at-a-second-neutral-path.md",
+    "adr/0008-the-apiv4-contract-in-javascript-is-a-lint-rule.md",
+    "adr/0009-type-checking-javascript-from-outside.md",
+    "adr/0010-one-yaml-configuration-file.md",
+    "adr/0011-checks-report-only-what-they-are-sure-of.md",
+    "adr/0012-upgrade-fixtures-are-scripts.md",
+    "adr/0013-managed-and-seeded-template-files.md",
+    "adr/0014-images-are-tested-then-promoted.md",
+    "adr/0015-php-shell-typescript-boundaries.md",
+    "adr/0016-core-bugs-are-patched-into-the-standalone-image.md",
+    "adr/0017-php-quality-tools-consolidate-on-mago.md",
+  ] },
+]
+
+[project.theme]
+language = "en"
+features = [
+  "content.code.copy",
+  "navigation.footer",
+  "navigation.sections",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+  "toc.follow",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+
+[project.markdown_extensions]
+tables = {}
+toc.permalink = true
+pymdownx.highlight = {}
+pymdownx.inlinehilite = {}
+pymdownx.superfences = {}
