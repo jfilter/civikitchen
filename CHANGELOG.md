@@ -14,6 +14,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- `cklint`'s mago stage no longer applies `too-many-methods` to
+  `CRM/*/Upgrader.php`: an upgrader gains one method per upgrade step by
+  contract. Other production classes keep the rule.
+
 ## [1.41.1] - 2026-10-13
 
 ### Fixed

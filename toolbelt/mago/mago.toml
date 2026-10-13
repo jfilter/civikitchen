@@ -90,8 +90,9 @@ tagged-fixme = { enabled = false }
 no-shorthand-ternary = { enabled = false }
 
 # A method count is a maintainability signal for production classes only — a
-# PHPUnit case with 30 test methods is the point. Prod keeps cyclomatic-complexity.
-too-many-methods = { enabled = true, exclude = ["tests/**", "**/tests/**"] }
+# PHPUnit case with 30 test methods is the point, and an upgrader gains one per
+# upgrade step by contract. Prod keeps cyclomatic-complexity.
+too-many-methods = { enabled = true, exclude = ["tests/**", "**/tests/**", "CRM/*/Upgrader.php"] }
 
 # A test that drives a real preProcess() has to simulate the request that
 # CRM_Utils_Request::retrieve() reads; production code keeps the rule.
