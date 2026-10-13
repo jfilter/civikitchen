@@ -136,6 +136,14 @@ PHP,
         $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $context));
     }
 
+    public function testTestsDoNotCreateRuntimeDependencies(): void
+    {
+        $context = $this->repo([
+            'tests/phpunit/CRM/Fixture/ActionTest.php' => "<?php\nclass Fake extends CRM_Civirules_Action {}\n",
+        ], git: true);
+        $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $context));
+    }
+
     /**
      * The regression this port exists for: an `<ext>[^<]+</ext>` regex could not
      * see a declaration whose element carries an attribute, so a correctly

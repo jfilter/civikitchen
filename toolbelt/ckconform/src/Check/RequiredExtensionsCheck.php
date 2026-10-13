@@ -97,10 +97,9 @@ final class RequiredExtensionsCheck implements Check
     private function extendsCiviRules(Context $context): bool
     {
         foreach ($context->trackedUnder('', ['.php']) as $file) {
-            // Static-analysis stubs describe optional symbols but are never
-            // loaded by CiviCRM and therefore cannot create a runtime
-            // dependency.
-            if (str_starts_with($file, 'phpstan-stubs/')) {
+            // Static-analysis stubs and tests are never loaded by CiviCRM, so
+            // a CiviRules class they extend is no runtime dependency.
+            if (str_starts_with($file, 'phpstan-stubs/') || preg_match('#(^|/)tests/#', $file) === 1) {
                 continue;
             }
             $contents = $context->read($file);
