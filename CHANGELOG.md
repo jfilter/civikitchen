@@ -21,6 +21,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   resolves on the site and in CiviCRM alike.
 - A translation inherits `order`, `section` and its title from the default page
   in the site navigation, as it does in the handbook.
+- ckconform's `required-extensions` check accepts an abstract class behind the
+  `// ckconform-optional civirules` guard, so an optional CiviRules adapter can
+  have a shared base class.
 
 ## [1.41.0] - 2026-10-13
 

@@ -92,6 +92,21 @@ PHP,
         $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $context));
     }
 
+    public function testAnnotatedGuardAroundAnAbstractBaseIsOptional(): void
+    {
+        $context = $this->repo([
+            'CRM/Fixture/Form/Base.php' => <<<'PHP'
+<?php
+// ckconform-optional civirules -- base form is inert when CiviRules is absent
+if (class_exists('CRM_CivirulesActions_Form_Form')) {
+    /** Optional base form. */
+    abstract class CRM_Fixture_Form_Base extends CRM_CivirulesActions_Form_Form {}
+}
+PHP,
+        ], git: true);
+        $this->assertSilent($this->run_(new RequiredExtensionsCheck(), $context));
+    }
+
     public function testGuardWithoutExplicitAnnotationStillRequiresCiviRules(): void
     {
         $context = $this->repo([
