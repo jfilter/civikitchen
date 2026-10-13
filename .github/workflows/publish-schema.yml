@@ -1,4 +1,4 @@
-# Publish packages/civicrm-profile-schema to GitHub Packages (@jfilter scope).
+# Publish packages/civicrm-profile-schema to GitHub Packages (@civico-de scope).
 # Trigger by pushing a tag like `civicrm-profile-schema-v0.1.0`. Keep the tag
 # version in sync with the package.json version. Uses the built-in GITHUB_TOKEN
 # (packages: write) — no extra secret.
@@ -20,14 +20,14 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           registry-url: https://npm.pkg.github.com
-          scope: '@jfilter'
+          scope: '@civico-de'
       - name: publish
         run: npm publish
         working-directory: packages/civicrm-profile-schema
