@@ -52,11 +52,12 @@ on:
 # writer is whichever run finishes promote last — not whichever commit is
 # newer. Two pushes in quick succession therefore leave the live images built
 # from the OLDER commit, and the next release refuses with "image drift".
-# Queue instead of cancelling: a cancelled run can already have moved some
-# flavors' tags, which is the same split state by another route.
+# A newer push or dispatch cancels the running one, so the last commit wins. A
+# run cancelled mid-promote leaves split tags until the next full run.
+# A daily run cancels nothing, so it never discards a release candidate.
 concurrency:
   group: build-dev-images
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 # Default for every job; the ones that push to GHCR widen it themselves.
 permissions:
@@ -294,6 +295,7 @@ jobs:
     # families CiviCRM recommends. This gates promotion: Dependabot may propose
     # a new sidecar tag, but the default moves only after install, provisioning,
     # locale rendering, and the isolated headless DB all pass here.
+    # A push checks the baseline only; the full runs a release needs cover all.
     needs: [resolve-civicrm, smoke-test-standalone]
     runs-on: ubuntu-24.04
     permissions:
@@ -302,11 +304,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        database:
-          - mariadb:10.11
-          - mariadb:11.4
-          - mariadb:12.2
-          - mysql:8.0
+        database: ${{ fromJSON(github.event_name == 'push' && '["mariadb:10.11"]' || '["mariadb:10.11","mariadb:11.4","mariadb:12.2","mysql:8.0"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

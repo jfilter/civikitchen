@@ -311,10 +311,11 @@ version not published, see
 
 ### Database compatibility
 
-The standalone candidate must pass against MariaDB 10.11, 11.4 (recommended)
-and 12.2 and MySQL 8.0 before promotion, each with a real install, extension
-provisioning, locale rendering and a boot into the isolated test database. The
-examples keep MariaDB 10.11 as default; changing it requires passing this
+Before promotion the standalone candidate gets a real install, extension
+provisioning, locale rendering and a boot into the isolated test database. A
+push runs this against MariaDB 10.11 only. The daily and dispatched runs, which
+a release requires, add MariaDB 11.4 (recommended) and 12.2 and MySQL 8.0. The
+examples keep MariaDB 10.11 as default; changing it requires passing the full
 matrix.
 
 ## Custom or older CiviCRM versions

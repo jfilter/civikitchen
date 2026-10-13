@@ -64,6 +64,10 @@ flavors. Start one with:
 gh workflow run build-dev-images.yml
 ```
 
+A new push or dispatch cancels the run in progress, so start it after your last
+push. A run cancelled while promoting leaves some tags on the older commit
+until the next full run.
+
 The release workflow checks this: it compares those trees between the commit
 each live image was built from and the release commit, and fails on a
 mismatch. If the difference cannot affect the image, such as a comment-only

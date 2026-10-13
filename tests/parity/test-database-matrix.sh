@@ -3,9 +3,11 @@ set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 workflow="$root/.github/workflows/build-dev-images.yml"
-for image in mariadb:10.11 mariadb:11.4 mariadb:12.2 mysql:8.0; do
-  grep -q -- "- ${image}" "$workflow" || { echo "database matrix misses ${image}" >&2; exit 1; }
-done
+# A push checks the baseline only; every other run covers the whole matrix.
+grep -qF "'push' && '[\"mariadb:10.11\"]'" "$workflow" \
+  || { echo "push database matrix is not the mariadb:10.11 baseline" >&2; exit 1; }
+grep -qF "'[\"mariadb:10.11\",\"mariadb:11.4\",\"mariadb:12.2\",\"mysql:8.0\"]'" "$workflow" \
+  || { echo "full database matrix misses an image" >&2; exit 1; }
 grep -Eq 'needs: \[.*database-compat-standalone.*\]' "$workflow" \
   || { echo "standalone promotion is not gated by database compatibility" >&2; exit 1; }
 grep -Eq 'needs: \[.*scenario-test-standalone.*\]' "$workflow" \

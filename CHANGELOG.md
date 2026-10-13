@@ -14,6 +14,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- A push tests the standalone candidate against MariaDB 10.11 only; daily and
+  dispatched runs keep the full database matrix.
+- A new push or dispatch of Build Dev Images cancels the run in progress
+  instead of queueing behind it. A daily run cancels nothing.
+
 ## [1.40.0] - 2026-10-13
 
 ### Added
