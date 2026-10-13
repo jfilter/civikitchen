@@ -2,64 +2,78 @@
 
 ## Core test suites: `ckcoretest`
 
-`ckcoretest` runs CiviCRM *core* phpunit suites against the installed core
-(standalone only). The composer dist export-ignores `**/tests/**`,
-`phpunit.xml.dist` and the `sql/test_data*.mysql` seed files; on first use it
-fetches exactly those for the installed version (sparse blob-filtered checkout
-of the matching tag, cached in the container) — including the per-extension
-suites under `ext/*/tests` — then execs `CIVICRM_UF=UnitTests phpunit <args>`
-from the core dir (`--ext <name>` runs from a core extension's dir instead). It
-refuses to run without a provisioned `TEST_DB_DSN`, and covers the headless PHP
-suites (`api`, `CRM`, `Civi`, ext).
+To check a core patch or backport locally, run core's own phpunit suites with
+`ckcoretest`. It works against the installed core, on the standalone image only.
 
-`ckcoretest --e2e` runs `@group e2e` tests instead, against the dev site rather
-than the test DB: they install the extensions they need into it (`cv
-ext:disable` them afterwards) and log in as `ADMIN_USER`, which provisioning
-writes to `~/.cv.json` from `CIVIKITCHEN_DEMO_USER`. Browser tests
-(`Civi\Test\MinkBase`) also need the compose stack's `browser` service
-(`docker compose --profile browser up -d`), a headless Chrome sharing the app's
-network; tests that read `DEMO_USER`, a second user without admin rights, still
-fail, since the image creates only the admin.
+The composer dist leaves out core's tests, `phpunit.xml.dist` and the
+`sql/test_data*.mysql` seed files. On first use, `ckcoretest` fetches exactly
+those for the installed version, including the per-extension suites under
+`ext/*/tests`. It does this with a sparse, blob-filtered checkout of the
+matching tag and caches the result in the container. Then it runs
+`CIVICRM_UF=UnitTests phpunit <args>` from the core directory. With
+`--ext <name>` it runs from that core extension's directory instead.
 
-Upgrade tests and the karma/qunit JS tests need a buildkit/civibuild
-environment — an accepted gap, since civicrm.org's Jenkins runs the full matrix
-on every core PR anyway. This is for the local loop: run the suites your patch
-touches, let Jenkins do the rest. To verify a core patch or backport, patch the
-file under `/var/www/html/core`, then `ckcoretest tests/phpunit/api/v4/Query`.
+It covers the headless PHP suites: api, CRM, Civi and the extensions. It
+refuses to run until `TEST_DB_DSN` is provisioned.
 
-`ckeslint --core [dir]` type-checks CiviCRM core's own JavaScript (default
-`$CIVICRM_CORE_DIR`, then `/var/www/html/core`): it copies core's first-party
-`.js` — no vendored trees, minified bundles or tests — beside a `tsconfig.json`
-with `allowJs`/`checkJs` and a declaration file for the globals core's pages
-load by script tag, and runs oxlint with `--type-check`, the correctness
-category and the APIv4 contract rule. It is an analysis tool for upstream bug
-reports, not a gate.
+A typical loop: patch the file under `/var/www/html/core`, then run
+`ckcoretest tests/phpunit/api/v4/Query`. Run the suites your patch touches and
+leave the rest to civicrm.org's Jenkins, which runs the full matrix on every
+core PR. Upgrade tests and the karma and qunit JavaScript tests need a
+buildkit/civibuild environment. That gap is accepted for the same reason.
 
-A buildkit image built with `--build-arg KEEP_GIT=1` keeps the git history of
-the civibuild site
+### End-to-end tests
+
+`ckcoretest --e2e` runs the `@group e2e` tests. They run against the dev site,
+not the test database. They install the extensions they need into the site,
+so disable those afterwards with `cv ext:disable`. They log in as
+`ADMIN_USER`, which provisioning writes to `~/.cv.json` from
+`CIVIKITCHEN_DEMO_USER`.
+
+Browser tests (`Civi\Test\MinkBase`) also need the compose stack's `browser`
+service, a headless Chrome on the app's network. Start it with
+`docker compose --profile browser up -d`. Tests that read `DEMO_USER`, a
+second user without admin rights, still fail, because the image creates only
+the admin.
+
+### Type-checking core's JavaScript
+
+`ckeslint --core [dir]` type-checks CiviCRM core's own JavaScript. It is an
+analysis tool for upstream bug reports, not a gate. The directory defaults to
+`$CIVICRM_CORE_DIR`, then `/var/www/html/core`.
+
+It copies core's first-party JavaScript, without vendored trees, minified
+bundles or tests. Next to it go a `tsconfig.json` with `allowJs` and `checkJs`
+and a declaration file for the globals that core's pages load by script tag.
+Then it runs oxlint with `--type-check`, the correctness category and the
+APIv4 contract rule.
+
+To work with core's git history in a CMS site, build a buildkit image with
+`--build-arg KEEP_GIT=1`
 ([Building locally](building.md#keeping-the-civicrm-git-history-keep_git1)).
 
 ## Standalone on an unreleased branch
 
-`:standalone-master` and `:standalone-beta` are Standalone built from core's
-`master` and its newest release branch, published daily
-([Tags and versions](images.md#tags-and-versions)). For another branch or tag, or a build
-of your own, build Standalone from git:
+`:standalone-master` and `:standalone-beta` are Standalone built daily from
+core's `master` and from its newest release branch
+([Tags and versions](images.md#tags-and-versions)). For any other branch or
+tag, or for a build of your own, build Standalone from git:
 
 ```bash
 make build CIVICRM_SOURCE=git CIVICRM_VERSION=master   # tags civikitchen:standalone-master
 ```
 
-The build does what core's release script does for the tarball: civicrm-core
-and civicrm-packages at the same branch, `composer install --no-dev` with the
-bower assets, then core's standalone scaffold. Every build fetches the
-branch's current commit; `/usr/local/share/civikitchen/civicrm-source.log` names
-the commits the image holds. Unlike the tarball, core keeps its `tests/`
-directories and seed SQL, so `ckcoretest` runs without fetching them.
+The build does what core's release script does for the tarball. It checks out
+civicrm-core and civicrm-packages at the same branch, runs
+`composer install --no-dev` with the bower assets, and then applies core's
+standalone scaffold. Every build fetches the branch's current commit.
+`/usr/local/share/civikitchen/civicrm-source.log` names the commits the image
+holds. Unlike the tarball, this core keeps its test directories and seed SQL,
+so `ckcoretest` runs without fetching them.
 
 To test a core change, mount the directory it touches from your civicrm-core
-checkout over the image's copy, and toggle the change there (`git stash`,
-`git stash pop`) for a failing and a passing run:
+checkout over the image's copy. Toggle the change there with `git stash` and
+`git stash pop` to get a failing and a passing run:
 
 ```yaml
 services:
@@ -69,6 +83,6 @@ services:
       - ../civicrm-core/ext/afform:/var/www/html/core/ext/afform
 ```
 
-Run `cv flush` after toggling; the Angular and asset caches otherwise keep the
-old files. A change to composer dependencies or outside the mounted directory
-needs a rebuilt image.
+Run `cv flush` after each toggle, or the Angular and asset caches keep the old
+files. A change to composer dependencies, or to anything outside the mounted
+directory, needs a rebuilt image.

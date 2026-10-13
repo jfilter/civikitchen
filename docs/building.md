@@ -1,7 +1,7 @@
 # Building locally
 
-`make help` lists everything below as a target. The fast loop needs no Docker
-daemon:
+Every step on this page is a make target; `make help` lists them. The fast
+loop needs no Docker daemon:
 
 ```bash
 make test                  # ckconform's fixtures, the phpstan extension's rule tests, ckinit
@@ -9,46 +9,79 @@ make lint                  # all static checks, see below
 make test-compose-config   # the compose files; needs the docker CLI, not a daemon
 ```
 
-`make lint` runs strict shellcheck (style level, see `.shellcheckrc` for the two
-disabled false-positive classes) over all shell scripts, a portability check
-that rejects BSD-only `sed -i ''`, actionlint and zizmor over the workflows,
-`php -l` over every PHP file, the profile and scenario schemas against their
-metaschema and every repository-owned instance against its schema, and the
-`CHANGELOG.md` grammar. The `Lint` workflow, on pushes to main and on pull
-requests, consists of `make lint`, `make test` and `make test-compose-config`,
-so what runs in CI and what runs on a laptop cannot drift. `make` fetches the pinned tools (phpunit phar, actionlint,
+The `Lint` workflow runs exactly these three targets on pushes to main and on
+pull requests, so CI and a laptop cannot drift apart.
+
+`make lint` covers:
+
+- strict shellcheck at style level over all shell scripts (`.shellcheckrc`
+  names the two disabled false-positive classes)
+- a portability check that rejects the BSD-only `sed -i ''`
+- actionlint and zizmor over the workflows
+- `php -l` over every PHP file
+- the profile and scenario schemas against their metaschema, and every
+  repository-owned instance against its schema
+- the grammar of `CHANGELOG.md`
+
+On first use, make fetches the pinned tools (phpunit phar, actionlint,
 shellcheck) and the CiviCRM source tree the catalog drift gates need into
-`.cache/` on first use; `make clean` removes it.
+`.cache/`. `make clean` removes it.
 
-The fast loop needs, besides `git` and `curl`: **GNU Make ≥ 3.82** (the
-Makefile refuses older ones — Apple ships 3.81, which silently drops the
-strict-shell flags), a `bash` on PATH, `php` with a coverage driver (phpdbg,
-PCOV or Xdebug), `composer` (the YAML parser and the phpstan rule package),
-`npm` (the pinned oxlint), and `uvx` or `pipx` (zizmor and the schema check).
-Everything else is fetched pinned; `make doctor` reports what is missing. The
-slow loop (`make build` for the standalone image as `civikitchen:standalone`,
-`make test-images`, `make e2e`, `make e2e-ckcreate`)
-additionally needs Docker. `make e2e-ckcreate IMAGE=civikitchen:standalone`
+## Requirements
+
+Besides git and curl, the fast loop needs:
+
+- GNU Make 3.82 or newer. The Makefile refuses older versions; Apple ships
+  3.81, which silently drops the strict-shell flags.
+- bash on the PATH
+- php with a coverage driver (phpdbg, PCOV or Xdebug)
+- composer, for the YAML parser and the phpstan rule package
+- npm, for the pinned oxlint
+- uvx or pipx, for zizmor and the schema check
+
+Everything else is fetched pinned. `make doctor` reports what is missing.
+
+The slow loop also needs Docker. It consists of `make build`, which builds the
+standalone image as `civikitchen:standalone`, plus `make test-images`,
+`make e2e` and `make e2e-ckcreate`. `make e2e-ckcreate IMAGE=civikitchen:standalone`
 creates an extension with real civix and runs `ck ci` on it in the template's
-dev stack, the same check the image workflow runs before promoting.
+dev stack. The image workflow runs the same check before promoting.
 
-The build context is the repo root for both the standalone and buildkit-based images. The Dockerfiles copy from three trees: `toolbelt/` (the `ck*` tools, the mago baseline and extension, the phpstan/psalm/rector packages), `docker/` (the image's own entrypoints, provisioning and demo profiles) and `packages/` (the profile and scenario schemas). None has to live inside another, and `.dockerignore` keeps `.git` and host-built artifacts out.
+## Building images by hand
+
+The build context is the repository root for both the standalone and the
+buildkit-based images. The Dockerfiles copy from three trees:
+
+- `toolbelt/`: the ck tools, the mago baseline and extension, and the
+  phpstan, psalm and rector packages
+- `docker/`: the image's own entrypoints, provisioning and demo profiles
+- `packages/`: the profile and scenario schemas
+
+None of them has to live inside another. `.dockerignore` keeps `.git` and
+host-built artifacts out.
+
+For the buildkit images, `DEFAULT_SITE_TYPE` picks the civibuild site type the
+entrypoint creates on first run. `CIVICRM_VERSION` pins the baked CiviCRM, and
+accepts any civicrm-core tag or branch civibuild can fetch.
+`CIVICRM_BUILD_VERSION` overrides only the civibuild input. CI uses it to pass
+the stable minor branch, such as 6.15, while the image metadata keeps the
+resolved patch version.
+
+For Standalone, `CIVICRM_VERSION` must be an exact release such as 6.15.1,
+because it names a tarball on download.civicrm.org. A bare minor like 6.15 is
+not a tarball. Without the argument the Dockerfile's default applies, so pass
+the current version.
 
 ```bash
-# Standalone (the Dockerfile's default CIVICRM_VERSION — pass the current one)
+# Standalone
 docker build -f docker/standalone/Dockerfile -t civikitchen:standalone .
 
-# Standalone pinned to an EXACT CiviCRM release (names a tarball on
-# download.civicrm.org; a bare minor like 6.15 is not a tarball)
+# Standalone pinned to an exact CiviCRM release
 docker build -f docker/standalone/Dockerfile \
     --build-arg CIVICRM_VERSION=6.15.1 \
     -t civikitchen:standalone-6.15.1 .
 
-# Buildkit-based images: DEFAULT_SITE_TYPE picks which civibuild site type
-# the entrypoint creates on first run. CIVICRM_VERSION pins the baked CiviCRM
-# (any civicrm-core tag/branch civibuild can fetch). CIVICRM_BUILD_VERSION can override only
-# the civibuild input; CI uses it to pass the stable minor branch (e.g.
-# 6.15) while keeping the resolved patch version in the image metadata.
+# Buildkit-based images
 docker build -f docker/buildkit/Dockerfile \
     --build-arg PHP_VERSION=8.3 \
     --build-arg DEFAULT_SITE_TYPE=drupal10-demo \
@@ -73,55 +106,55 @@ docker build -f docker/buildkit/Dockerfile \
 
 ## Bumping a dev tool
 
-Composer-installable tools are pinned in committed `composer.json` +
-`composer.lock` pairs, one per install root. Each root has a README saying what
-its pins are for; bumping means editing the `composer.json`, re-locking and
-committing both files:
+Composer-installable tools are pinned in committed `composer.json` and
+`composer.lock` pairs, one per install root. Each root has a README that says
+what its pins are for. To bump a tool, edit the `composer.json`, re-lock, and
+commit both files, for example after
+`composer update --working-dir=toolbelt/phpstan-root`.
 
 | Root | Tools |
 | --- | --- |
-| `toolbelt/ckdeps-root` | composer-dependency-analyser (`ckdeps`) |
-| `toolbelt/phpstan-root` | phpstan + the extensions every image ships |
-| `toolbelt/rector` | rector (and the phpstan version it may see) |
-| `toolbelt/psalm` | psalm (taint engine for `cktaint`) |
+| `toolbelt/ckdeps-root` | composer-dependency-analyser (ckdeps) |
+| `toolbelt/phpstan-root` | phpstan and the extensions every image ships |
+| `toolbelt/rector` | rector, and the phpstan version it may see |
+| `toolbelt/psalm` | psalm, the taint engine for cktaint |
 | `toolbelt/mago-ext` | the mago extension SDK, pinned to the mago binary in `versions.env` |
 
 Every root resolves its lock against PHP 8.1.31 (`config.platform.php`), the
-floor the images support, so a re-lock on a newer laptop cannot pull a
-transitive that refuses to start on an 8.1/8.2 image.
+lowest version the images support. A re-lock on a newer laptop therefore
+cannot pull in a transitive dependency that refuses to start on an 8.1 or 8.2
+image.
 
-```bash
-composer update --working-dir=toolbelt/phpstan-root
-```
+The lock is the pin. It fixes the transitive tree too, so a daily image
+rebuild cannot move a gate under a repository that did not change. These
+tools have no build argument, because an image whose tool tree was resolved
+fresh at build time is not the image anyone reviewed.
 
-The lock is the pin: it fixes the transitive tree as well, so a daily image
-rebuild cannot move a gate under a repo that did not change. There is no
-`--build-arg` for these — an image whose tool tree was resolved fresh at build
-time is not the image anyone reviewed.
+oxlint and oxfmt are pinned the same way, by the `package.json` and
+`package-lock.json` pairs in `toolbelt/oxlint` and `toolbelt/oxfmt`. An
+`overrides` entry in such a `package.json` lifts a transitive dependency that
+the tool locks to a vulnerable version. It is removed once the tool's own pin
+moves past the fix.
 
-oxlint and oxfmt are pinned the same way by the `package.json` +
-`package-lock.json` pairs in `toolbelt/oxlint` and `toolbelt/oxfmt`.
-An `overrides` entry in such a `package.json` lifts a transitive dependency
-the tool locks to a vulnerable version; it goes once the tool's own pin moves
-past the fix.
+Tools that neither composer nor npm installs stay in
+`toolbelt/install-dev-tools.sh`, and each can be overridden with a build
+argument. These are the civix and phpunit phars, the mago binary, and npm.
+Each of the first three has a checksum, so overriding a `*_VERSION` means
+overriding its `*_SHA256` too. The phpunit pin itself sits in
+`toolbelt/versions.env`, because the Makefile runs the tool test suites on the
+same phar.
 
-What neither composer nor npm installs stays in `toolbelt/install-dev-tools.sh`
-and stays overridable per `--build-arg`: the civix and phpunit phars and the
-mago binary (each with a checksum — overriding a `*_VERSION` means overriding
-its `*_SHA256` too) and npm. The phpunit pin
-itself sits in `toolbelt/versions.env`, because the Makefile runs the tool
-test suites on the same phar. infection is the one composer
-tool still pinned there, because it is applied as a ceiling: images for older
-CiviCRM lines run on PHP 8.1/8.2, and composer picks the newest release that
-PHP accepts.
+infection is the one composer tool still pinned in `versions.env`, because the
+pin works as a ceiling. Images for older CiviCRM lines run on PHP 8.1 or 8.2,
+and composer picks the newest release that PHP accepts.
 
 ## Keeping the CiviCRM git history (`KEEP_GIT=1`)
 
-The published buildkit images strip the git history civibuild clones into the
-site (`vendor/civicrm/civicrm-core` etc., ~550 MB) — extension development and
-the runtime `civibuild reinstall` don't need it. If you want a git-enabled
-site (working on core, `civibuild update`, `git log` archaeology), build your
-own image with the history kept:
+The published buildkit images strip the git history that civibuild clones
+into the site, such as `vendor/civicrm/civicrm-core`, about 550 MB in total.
+Extension development and the runtime `civibuild reinstall` do not need it.
+For a git-enabled site, to work on core, run `civibuild update` or dig through
+`git log`, build your own image with the history kept:
 
 ```bash
 docker build -f docker/buildkit/Dockerfile \
@@ -132,8 +165,8 @@ docker build -f docker/buildkit/Dockerfile \
 
 ## Running the test suite locally
 
-`tests/images/run-local.sh` runs the same test scripts CI runs — on a laptop or
-in a throwaway VM. It needs only bash and docker (no gh, no node):
+`tests/images/run-local.sh` runs the same test scripts as CI, on a laptop or
+in a throwaway VM. It needs only bash and docker, not gh or node:
 
 ```bash
 bash tests/images/run-local.sh                          # everything, published images
@@ -142,16 +175,27 @@ bash tests/images/run-local.sh -p civikitchen drupal11-demo   # your locally bui
 CK_PROFILE=verein bash tests/images/run-local.sh drupal10-demo # + a profile leg
 ```
 
-Per dev flavor it runs the dev-tools functional check and the external-DB
-first-boot test; per demo flavor the single-container boot
-test, which includes the `CIVIKITCHEN_SITE_URL` rewrite leg on a non-80 host
-port. A summary table prints at the end and the exit code reflects failures.
-Budget roughly an hour for the full default run; profile legs add up to
-~15 min each.
+For each dev flavor it runs the dev-tools functional check and the
+external-database first-boot test. For each demo flavor it runs the
+single-container boot test, which includes the `CIVIKITCHEN_SITE_URL` rewrite
+leg on a host port other than 80. A summary table prints at the end, and the
+exit code reflects failures. Budget about an hour for the full default run.
+Each profile leg adds up to 15 minutes.
 
 ## Verifying a built image
 
-`tests/images/test-dev-tools.sh` is a functional check of every bundled tool — it lints non-conforming PHP through cklint, runs phpstan against a typed mistake, executes a phpunit assertion, installs a real package via composer, verifies the xdebug toggle, and holds the scaffold template to cklint and ckfmt. The same script runs in CI against both `:standalone` and the buildkit images. CI also boots each dev flavor's compose example and runs Playwright browser smoke tests before promoting stable tags.
+`tests/images/test-dev-tools.sh` checks that every bundled tool works. It:
+
+- lints non-conforming PHP through cklint
+- runs phpstan against a typed mistake
+- executes a phpunit assertion
+- installs a real package via composer
+- verifies the xdebug toggle
+- holds the scaffold template to cklint and ckfmt
+
+CI runs the same script against `:standalone` and the buildkit images. Before
+promoting stable tags, CI also boots each dev flavor's compose example and
+runs Playwright browser smoke tests.
 
 ```bash
 docker run --rm -v "$(pwd)/tests/images:/civikitchen-test:ro" \

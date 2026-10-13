@@ -1,180 +1,182 @@
 # Extension development
 
-The standalone image is designed for the test loop most extension authors run:
-edit code → reload → run phpunit. The example at [`examples/standalone/`](https://github.com/civico-de/civikitchen/tree/main/examples/standalone/) is the recommended starting point.
+The standalone image is built around the loop most extension authors run: edit
+the code, reload the page, run phpunit. Start from the example in
+[`examples/standalone/`](https://github.com/civico-de/civikitchen/tree/main/examples/standalone/).
 
 ## The dev stack
 
-**1. Mount your extension into the container:**
+Mount your extension into the container:
 
 ```yaml
 volumes:
   - /path/to/your/extension:/var/www/html/ext/myextension
 ```
 
-**2. First start does the install automatically** (with `CIVICRM_AUTO_INSTALL: "1"`,
-which the example sets):
+Then run `docker compose up -d`. With `CIVICRM_AUTO_INSTALL: "1"`, which the
+example sets, the first start runs `cv core:install` against the linked
+database and then enables every extension mounted under ext/, resolving its `<requires>`
+first. Later starts skip the install because the settings file and the database
+persist. A third-party dependency needs no setup. Where the entrypoint fetches
+it from is described under `CIVIKITCHEN_ENABLE_EXTENSIONS` in
+[Configuration](configuration.md).
 
-```bash
-docker compose up -d
-# Container runs `cv core:install` against the linked DB on first boot, then
-# enables every extension mounted under ext/ (its <requires> resolved first).
-# Subsequent starts skip the install (idempotent: settings.php and DB persist).
-```
-
-A third-party `<requires>` needs no setup; where the entrypoint fetches it from
-is under `CIVIKITCHEN_ENABLE_EXTENSIONS` in [Configuration](configuration.md).
-
-**3. Install vendor deps (if your extension uses composer):**
+If your extension uses composer, install its dependencies as your own user, so
+that `vendor/` in your checkout belongs to you. Then enable the extension and
+run its tests:
 
 ```bash
 docker compose run --rm --no-deps -u "$(id -u):$(id -g)" -e HOME=/tmp \
   --entrypoint composer app install -d /var/www/html/ext/myextension
-```
-
-As your user, so `vendor/` in your checkout belongs to you. `ckup` does this
-for every mounted extension before it starts the stack.
-
-**4. Enable + test:**
-
-```bash
 docker compose exec app cv ext:enable myextension
 docker compose exec app bash -c "cd /var/www/html/ext/myextension && phpunit"
 ```
 
-`docker compose down` (without `-v`) drops the container and keeps the DB
-volume: the entrypoint detects the existing tables and runs
-`cv core:install -K` to keep them, so the next boot is fast and DB state
-survives. A recreated container re-applies profile, locales and extensions,
-which restore its file system, but runs the `init.d` hooks only if the
-database lacks the setting `civikitchen_provisioned` their first run wrote, so
-it does not seed the kept database a second time. `docker compose down -v` drops
-the DB volume too; the next `up` is a fresh install.
+`ckup` runs the composer install for every mounted extension before it starts
+the stack.
 
-Several stacks on one machine collide on host ports. The template compose
-reads them from a gitignored `.docker/.env` (`CK_HTTP_PORT`, `CK_MAILDEV_PORT`,
-`CK_SMTP_PORT`, `CK_PMA_PORT`) and derives `CIVIKITCHEN_SITE_URL` from the
-HTTP one; `/path/to/civikitchen/scaffold/ckup` writes that file with free
-ports on its first run and then runs `docker compose up -d` (any further
-arguments are passed through). Without it the defaults 8080/1080/1025/8081
-apply.
+`docker compose down` without `-v` removes the container but keeps the
+database volume. On the next boot the entrypoint finds the existing tables and
+installs with `cv core:install -K` to keep them, so the boot is fast and the
+data survives. A recreated container re-applies the profile, locales and
+extensions, which restores its file system. It runs the `init.d` hooks only if
+the database lacks the setting `civikitchen_provisioned`, which their first run
+wrote, so a kept database is not seeded twice. `docker compose down -v` drops
+the volume as well, and the next start is a fresh install.
 
-In a repository with the template's `.docker/`, `/path/to/civikitchen/scaffold/ckx`
-runs a command in that stack as `www-data`, in the extension's directory (the
-subdirectory you are in maps to the same one in the container). It adds `-T`
-when there is no terminal and, for an extension below the git root, the
-`CK_TOOL_PATH` described under [Running the CI gates locally](#running-the-ci-gates-locally).
-Without a command it opens a shell. `CKX_USER=root` switches the user, for a
-command that has to write where the bind mount does not let `www-data` write.
-Keep it to such commands: a root run that boots CiviCRM (`cv`, the gates)
-leaves caches the web server cannot write until the container is recreated.
-The examples below use it; outside the template layout, spell out
-`docker compose exec -w /var/www/html/ext/<file> app …`.
+Several stacks on one machine collide on host ports. The template's compose
+file reads its ports from a gitignored `.docker/.env` with the keys
+`CK_HTTP_PORT`, `CK_MAILDEV_PORT`, `CK_SMTP_PORT` and `CK_PMA_PORT`, and
+derives `CIVIKITCHEN_SITE_URL` from the HTTP port. On its first run,
+`/path/to/civikitchen/scaffold/ckup` writes that file with free ports. It then
+runs `docker compose up -d` and passes any further arguments through. Without
+the file the defaults 8080, 1080, 1025 and 8081 apply.
 
-All first-boot knobs (SMTP, extra extensions, demo users, …) are listed in the
-[configuration reference](configuration.md).
+In a repository with the template's `.docker/` directory,
+`/path/to/civikitchen/scaffold/ckx` runs a command in that stack as www-data,
+in the extension's directory. The subdirectory you are in maps to the same one
+in the container. When there is no terminal it adds `-T`. For an extension
+below the git root it also sets the tool path described under
+[Running the CI gates locally](#running-the-ci-gates-locally). Without a
+command it opens a shell.
+
+`CKX_USER=root` switches the user, for a command that has to write where the
+bind mount does not let www-data write. Keep it to such commands. A root run
+that boots CiviCRM, such as `cv` or the gates, leaves caches the web server
+cannot write until the container is recreated. The examples below use `ckx`.
+Outside the template layout, write
+`docker compose exec -w /var/www/html/ext/<file> app …` instead.
+
+Every first-boot setting, from SMTP to extra extensions and demo users, is in
+the [configuration reference](configuration.md).
 
 ## Headless tests
 
-For headless tests (extending `CiviUnitTestCase` or implementing `HeadlessInterface`), set `CIVICRM_UF=UnitTests`:
+Headless tests extend `CiviUnitTestCase` or implement `HeadlessInterface`. Run
+them with `CIVICRM_UF=UnitTests`:
 
 ```bash
 docker compose exec -e CIVICRM_UF=UnitTests app \
   bash -c "cd /var/www/html/ext/myextension && phpunit"
 ```
 
-This runs the test framework against a **separate** scratch database
-(`<db>_test`, e.g. `civicrm_test`), not your dev site. On first install the
-image creates that database. On every boot it writes `TEST_DB_DSN` to
-`~/.cv.json` (for both `root` and `www-data`; an existing file is kept) so the
-framework finds it, and patches the boot stub (`civicrm.standalone.php`) so a
-`CIVICRM_UF=UnitTests` boot defines the test DSN before core composes its DSN
-from the `CIVICRM_DB_*` env vars. Without the stub patch, headless `phpunit`
-silently runs against (and wipes) the dev DB; without `TEST_DB_DSN`, a headless
-boot stops with `$GLOBALS[_CV][TEST_DB_DSN] is not set`. Both live in the
-container, not in `private/`, so a container recreated over a kept `private/`
-gets them back. Opt out with `CIVIKITCHEN_TEST_DB=0` if you manage
-`TEST_DB_DSN` yourself — **never point it at the dev database: a headless
-`phpunit` run rebuilds that schema.**
+They run against a separate scratch database named after the main one with a
+`_test` suffix, for example `civicrm_test`, and not against your dev site. The
+image creates that database on first install. Two more things happen on every
+boot. The image writes `TEST_DB_DSN` to `~/.cv.json` for both root and
+www-data, keeping an existing file, so the test framework finds the database.
+It also patches the boot stub `civicrm.standalone.php`, so that a
+`CIVICRM_UF=UnitTests` boot defines the test DSN before core builds its own
+from the `CIVICRM_DB_*` variables.
 
-Headless boots also get `CIVICRM_DB_CACHE_CLASS=ArrayCache` — from the
-patched boot stub on `:standalone`, from
-`/etc/civicrm.settings.d/pre.d/000-civikitchen-test-db-cache.php` on the
-buildkit images — so they cache in the test database even when
-`civicrm.settings.php` selects `FileCache`, `Redis` or `Memcache` (the
-settings template guards that define with `if (!defined(...))`). CiviCRM keys
-those caches by CiviCRM version only: the test DB would read the dev site's
-entries and keep its own across a `Civi\Test` schema rebuild, and a boot then
-queries tables the rebuilt schema does not have
-(`Table 'civicrm_test.civicrm_search_display' doesn't exist`).
+Without the stub patch, headless phpunit silently runs against the dev
+database and wipes it. Without `TEST_DB_DSN`, a headless boot stops with
+`$GLOBALS[_CV][TEST_DB_DSN] is not set`. Both live in the container rather than
+in `private/`, so a container recreated over a kept `private/` gets them back.
+If you manage `TEST_DB_DSN` yourself, opt out with `CIVIKITCHEN_TEST_DB=0`.
+**Never point it at the dev database: a headless phpunit run rebuilds that
+schema.**
 
-**Database grants.** The harness runs `SET global
-innodb_flush_log_at_trx_commit` during schema init
-(`Civi\Test\Schema::setStrict`); on MariaDB 10.11 no privilege narrower than
-`SUPER` permits that statement, so without it every run dies with error 1227.
-The app user has rights on its own database only, so first-boot provisioning
-does the privileged part as the database root user: it
-creates `<db>_test`, grants the app user `ALL` on that database plus `SUPER`,
-sets `log_bin_trust_function_creators` (a binlog-enabled server otherwise
-refuses the harness's triggers and functions), and copies the installed schema
-over. No grant script in your compose file. The example and template stacks
-pass `--log-bin-trust-function-creators=1` to the db service so that setting
-survives a database restart. Root is reached with `CIVICRM_DB_ROOT_PASSWORD`
-(default `root`, matching `MYSQL_ROOT_PASSWORD` in the example stacks). If the
-db service uses a different root password, pass it to the app service;
-otherwise first boot fails with the server's error and the site stays
-unhealthy.
+Headless boots also get `CIVICRM_DB_CACHE_CLASS=ArrayCache`. On `:standalone`
+the patched boot stub sets it, and on the buildkit images
+`/etc/civicrm.settings.d/pre.d/000-civikitchen-test-db-cache.php` does. This
+keeps the cache in the test database even when `civicrm.settings.php` selects
+FileCache, Redis or Memcache, because the settings template only defines that
+constant if it is not set yet. CiviCRM keys those caches by CiviCRM version
+alone. Without the override, the test database would read the dev site's
+entries and keep its own across a `Civi\Test` schema rebuild. A boot would then
+query tables the rebuilt schema does not have, failing with
+`Table 'civicrm_test.civicrm_search_display' doesn't exist`.
 
-**Resetting the scratch DB — `cktestreset`.** A suite can leave `<db>_test`
-inconsistent: `Civi\Test`'s `installMe()` does *not* resolve `<requires>`
-(the image entrypoint does, for the dev site — the test framework is its own
-installer), so
-a test that installs only its own extension leaves it enabled with its
-dependencies missing. Every later `CIVICRM_UF=UnitTests` boot then dies during
-the class scan (`Interface "..." not found`) — and it does not heal itself,
-because the stale class index also survives in the test DB's SQL cache and in
-the per-DSN `CachedCiviContainer.*`/`CachedExtLoader.*` files. `cktestreset`
-resets all layers in one go (drop + reseed `<db>_test` from the main DB, clear
-the cached containers/loaders):
+**Database grants.** During schema init the harness runs
+`SET global innodb_flush_log_at_trx_commit` (in `Civi\Test\Schema::setStrict`).
+On MariaDB 10.11 no privilege narrower than SUPER allows that statement, so
+without it every run dies with error 1227. The app user has rights on its own
+database only, so first-boot provisioning does the privileged part as the
+database root user. It creates the test database, grants the app user ALL on
+it plus SUPER, and sets `log_bin_trust_function_creators`, without which a
+binlog-enabled server refuses the harness's triggers and functions. Then it
+copies the installed schema over. Your compose file needs no grant script.
 
-```bash
-docker compose exec app cktestreset
-```
+The example and template stacks pass `--log-bin-trust-function-creators=1` to
+the database service so the setting survives a database restart. Provisioning
+reaches root with `CIVICRM_DB_ROOT_PASSWORD`. Its default is `root`, which
+matches `MYSQL_ROOT_PASSWORD` in the example stacks. If your database service
+uses a different root password, pass it to the app service. Otherwise the
+first boot fails with the server's error and the site stays unhealthy.
 
-It is also the fix when a suite does not see a change to what `install()` seeds.
-`Civi\Test` rebuilds `<db>_test` only when its step signature changes, the list
-of steps and extension keys it stores in `civitest_revs`. New seed data or a
-bumped `info.xml` version leaves the signature as it was, and the tests run
-against the previous install.
+**Resetting the scratch DB — `cktestreset`.** A suite can leave the test
+database inconsistent. `installMe()` in `Civi\Test` does not resolve
+`<requires>`. The image entrypoint does that for the dev site, but the test
+framework is its own installer. A test that installs only its own extension
+therefore leaves it enabled with its dependencies missing. Every later
+`CIVICRM_UF=UnitTests` boot then dies during the class scan with
+`Interface "..." not found`. It does not heal itself, because the stale class
+index also survives in the test database's SQL cache and in the per-DSN
+`CachedCiviContainer.*` and `CachedExtLoader.*` files. Running
+`docker compose exec app cktestreset` resets all of these at once. It drops
+the test database, reseeds it from the main one and clears the cached
+containers and loaders.
 
-The durable fix belongs in the extension: build the environment with the
-managed bootstrap's `ck_headless()` instead of `\Civi\Test::headless()`. It
-queues one install step per `info.xml` `<requires>` entry, then this
-extension — so `setUpHeadless()` is `return ck_headless()->apply();` and the
-dependency list lives in `info.xml` only. One level deep, and read from the
-file rather than asked of
-`CRM_Extension_Manager`, because touching the extension system before
-`Civi\Test` rebuilds the headless schema leaves caches the rebuilt site no
-longer matches. A dependency the site does not have fails the install loudly;
-further steps chain as before (`ck_headless()->sqlFile(...)->apply()`).
+It is also the fix when a suite does not see a change to what `install()`
+seeds. `Civi\Test` rebuilds the test database only when its step signature
+changes. That signature is the list of steps and extension keys it stores in
+`civitest_revs`. New seed data or a bumped `info.xml` version leaves it
+unchanged, and the tests run against the previous install.
+
+The lasting fix belongs in the extension. Build the environment with
+`ck_headless()` from the managed bootstrap instead of `\Civi\Test::headless()`.
+It queues one install step per `<requires>` entry in `info.xml`, then the
+extension itself. `setUpHeadless()` becomes `return ck_headless()->apply();`
+and the dependency list lives in `info.xml` only. It goes one level deep. It
+reads the file instead of asking `CRM_Extension_Manager`, because touching the
+extension system before `Civi\Test` rebuilds the headless schema leaves caches
+the rebuilt site no longer matches. A dependency the site does not have fails
+the install loudly. Further steps chain as before, for example
+`ck_headless()->sqlFile(...)->apply()`.
 
 ## Dev profile and provisioning hooks
 
-The data a test setup needs beyond `cv ext:enable` belongs in the repository's
-dev profile, `.docker/profiles/dev/profile.json`: dependencies, settings, seed
-records, scripts and API users ([profile format](images.md#profiles-civikitchen_profile)).
-Both template compose stacks and `ckboot` select it. Its dependencies are
-enabled before the extension, its content runs after it, so a seed script can
-use the extension's own entities.
+Data a test setup needs beyond enabling the extension belongs in the
+repository's dev profile, `.docker/profiles/dev/profile.json`. It holds
+dependencies, settings, seed records, scripts and API users, in the
+[profile format](images.md#profiles-civikitchen_profile). Both template
+compose stacks and `ckboot` select it. Its dependencies are enabled before the
+extension and its content runs after it, so a seed script can use the
+extension's own entities.
 
 What the stack itself needs, such as a renderer binary or system packages, can
-run as a first-boot hook. Mount scripts into `/civikitchen-init.d/`; after a
-fresh auto-install they run after the profile, in lexical order: `*.sh` via bash, `*.php` via `cv scr`, both as the image's web user
-(www-data on standalone, buildkit on the CMS images). A hook that needs root,
-like `CIVIKITCHEN_EXTRA_PACKAGES`, needs `user: root` on the service; `docker
-compose exec` then defaults to root too, so pass `-u www-data` to `cv` and
-`ck*`, or a root run leaves caches the web server cannot write. A failing
-hook aborts the boot, so broken provisioning is loud.
+run as a first-boot hook. Mount scripts into `/civikitchen-init.d/`. After a
+fresh auto-install they run after the profile, in lexical order. Files ending
+in `.sh` run with bash and files ending in `.php` with `cv scr`, both as the
+image's web user. That user is www-data on standalone and buildkit on the CMS
+images.
+
+A hook that needs root, like `CIVIKITCHEN_EXTRA_PACKAGES`, needs `user: root`
+on the service. `docker compose exec` then defaults to root as well, so pass
+`-u www-data` to `cv` and the `ck*` tools, or a root run leaves caches the web
+server cannot write. A failing hook aborts the boot, so broken provisioning is
+loud.
 
 ```yaml
 services:
@@ -189,35 +191,32 @@ services:
 
 ## No calls to civicrm.org
 
-CiviCRM's admin status check contacts civicrm.org: the version check posts
-to latest.civicrm.org, and the extension check fetches the civicrm.org/extdir
-feed. It runs on the first admin page of a fresh site and after every
-`cv flush`. On a runner without outbound network the first call waits
-PHP's full socket timeout (60 s) and the second at least 10 s, long enough to
-time out a Playwright test.
+CiviCRM's admin status check contacts civicrm.org. The version check posts to
+latest.civicrm.org, and the extension check fetches the civicrm.org/extdir
+feed. The check runs on the first admin page of a fresh site and after every
+`cv flush`. On a runner without outbound network the first call waits for
+PHP's full socket timeout of 60 s and the second for at least 10 s. That is
+long enough to time out a Playwright test.
 
-First-boot provisioning therefore turns both off, on every flavor, before
-profiles and init hooks run:
-
-- the `version_check` scheduled job is set inactive;
-- `ext_repo_url` is set to boolean `false`, the value core reads as "do not
-  check extensions". An empty string does not do this.
+First-boot provisioning therefore turns both off on every flavor, before
+profiles and init hooks run. It sets the `version_check` scheduled job
+inactive. It sets `ext_repo_url` to boolean `false`, which core reads as "do
+not check extensions". An empty string does not have this effect.
 
 The status page then shows two notices, *Update Check Disabled* and
 *Extensions check disabled*. `cv ext:download` passes its own feed URL and
-still works. An init hook can switch either back on, for example
-`cv api4 Job.update +w api_action=version_check +v is_active=1`.
-Both settings are applied once, with the rest of first-boot provisioning; a
-stack provisioned without them gets them when recreated with
-`docker compose down -v`.
+still works. An init hook can switch either check back on, for example with
+`cv api4 Job.update +w api_action=version_check +v is_active=1`. Both settings
+are applied once, with the rest of first-boot provisioning. A stack
+provisioned without them gets them when recreated with `docker compose down -v`.
 
 ## Creating an extension
 
-Create a module with the host-side wrapper. It boots the temporary CiviCRM
-database which `civix generate:module` requires, generates the civix scaffold,
-applies the versioned CiviKitchen tooling layer, and only then moves the complete
-directory into place. Every step runs in the image; the host needs bash and
-Docker:
+Create a module with the host-side wrapper. `civix generate:module` needs a
+CiviCRM database, so the wrapper boots a temporary one. It generates the civix
+scaffold, applies civikitchen's versioned tooling layer, and only then moves
+the finished directory into place. Every step runs in the image, so the host
+needs only bash and Docker.
 
 ```bash
 /path/to/civikitchen/scaffold/ckcreate example_ext \
@@ -227,61 +226,62 @@ Docker:
   --license Proprietary
 ```
 
-The default target is `./<key>`. Keys are deliberately plain lowercase
-identifiers, so CiviCRM's extension key and file name stay identical. Repeated
-values may live in `~/.config/civikitchen/ckcreate.conf` as `CKCREATE_AUTHOR`,
-`CKCREATE_EMAIL`, `CKCREATE_COPYRIGHT`, `CKCREATE_LICENSE`, and
-`CKCREATE_COMPATIBILITY`. `CKCREATE_PHP_COMPATIBILITY` can raise the template's
-PHP floor while keeping `info.xml` and Composer aligned. `ckcreate --help`
-lists the flags and defaults.
+The default target is `./<key>`. Keys are plain lowercase identifiers on
+purpose, so that CiviCRM's extension key and file name stay identical. Values
+you repeat can go into `~/.config/civikitchen/ckcreate.conf` as
+`CKCREATE_AUTHOR`, `CKCREATE_EMAIL`, `CKCREATE_COPYRIGHT`, `CKCREATE_LICENSE`
+and `CKCREATE_COMPATIBILITY`. `CKCREATE_PHP_COMPATIBILITY` raises the
+template's PHP floor and keeps `info.xml` and Composer aligned.
+`ckcreate --help` lists the flags and defaults.
 
-The result is a git repository with nothing committed: the civix files run
-through `cklint --fix`, and one headless test (`tests/phpunit/Civi/<Namespace>/InstallTest.php`)
-that checks the extension installs, so every gate of `ck ci` passes from the start.
+The result is a git repository with nothing committed. The civix files have
+been through `cklint --fix`, and there is one headless test,
+`tests/phpunit/Civi/<Namespace>/InstallTest.php`, which checks that the
+extension installs. Every gate of `ck ci` passes from the start.
 
-`ckcreate` is atomic: missing mandatory values, a civix error, or a template
-error leaves no partial target directory. For an existing civix module that
-only lacks the tooling layer, run `ckinit` directly, from the civikitchen
-checkout at the version the repo pins. It runs the checkout's `ckinit.php` in
-the image (`CKINIT_IMAGE` overrides `:v1`):
+`ckcreate` is atomic. A missing mandatory value, a civix error or a template
+error leaves no partial target directory behind.
 
-```bash
-/path/to/civikitchen/scaffold/ckinit /path/to/org.example.myext
-```
-
-The argument is the extension directory, not the extension key. `ckinit`
-reads the extension `<file>` value from that directory's `info.xml`, renders
-`scaffold/template/extension/`, and refuses to overwrite existing files. Use `--force`
-only after reviewing conflicts.
+An existing civix module that only lacks the tooling layer gets it from
+`ckinit`. Run it from the civikitchen checkout at the version the repository
+pins, as `/path/to/civikitchen/scaffold/ckinit /path/to/org.example.myext`.
+It runs the checkout's `ckinit.php` in the `:v1` image, which `CKINIT_IMAGE`
+overrides. The argument is the extension directory, not the extension key.
+`ckinit` reads the `<file>` value from that directory's `info.xml`, renders
+`scaffold/template/extension/`, and refuses to overwrite existing files. Use
+`--force` only after reviewing the conflicts.
 
 ### Managed and seeded template files
 
 The template stays an interface after day one
-([ADR-0013](adr/0013-managed-and-seeded-template-files.md)). Its files split
-into two classes: **managed** files that are meant to be byte-identical in every
-repo (the thin CI caller, the test bootstraps, the CI compose stack) and
-**seeded** files the repo takes ownership of after the first copy
-(`composer.json`, `phpstan.neon.dist`, the dev compose file, `.gitignore`).
-Two more modes work with that split:
+([ADR-0013](adr/0013-managed-and-seeded-template-files.md)). Its files fall
+into two classes. Managed files are meant to be byte-identical in every
+repository: the thin CI caller, the test bootstraps and the CI compose stack.
+Seeded files become the repository's own after the first copy: `composer.json`,
+`phpstan.neon.dist`, the dev compose file and `.gitignore`. Two more modes of
+`ckinit` work with that split:
 
 ```bash
 /path/to/civikitchen/scaffold/ckinit --check  /path/to/org.example.myext   # report drift, exit 1 on any
 /path/to/civikitchen/scaffold/ckinit --update /path/to/org.example.myext   # rewrite managed files, create missing ones
 ```
 
-`--update` never touches an existing seeded file; review its output with
+`--update` never touches an existing seeded file. Review its output with
 `git diff` like any other change. The shared `extension-ci.yml` workflow runs
 `--check` on every push, against the template of the ref the caller pins
-([Releases](releases.md#what-a-consumer-pins)), so a template improvement shows
-up in each repo as a red CI that one `--update` fixes.
+([Releases](releases.md#what-a-consumer-pins)). A template improvement
+therefore shows up in each repository as a red CI run that one `--update`
+fixes.
 
-The CI caller and the CI compose file carry **managed blocks** —
-`# BEGIN CIVIKITCHEN MANAGED <name>` … `# END CIVIKITCHEN MANAGED <name>`.
-Only the blocks are compared and refreshed; what a repo writes outside them is
-its own and survives `ckinit --update`: workflow inputs and further jobs after
-the caller's END marker, a sibling mount between the compose file's `app` and
-`db` blocks. A repo that must deviate *inside* a block, or on a managed file
-without blocks, declares it in its `civikitchen.yaml` — the reason is mandatory, and
+The CI caller and the CI compose file contain managed blocks between
+`# BEGIN CIVIKITCHEN MANAGED <name>` and `# END CIVIKITCHEN MANAGED <name>`.
+Only those blocks are compared and refreshed. What a repository writes outside
+them is its own and survives `ckinit --update`. Examples are workflow inputs
+and further jobs after the caller's END marker, or a sibling mount between the
+compose file's app and db blocks.
+
+A repository that must deviate inside a block, or in a managed file without
+blocks, declares it in its `civikitchen.yaml`. The reason is mandatory, and
 only managed files may be listed:
 
 ```yaml
@@ -292,13 +292,14 @@ policy:
     reason: Drupal settings discovery and its own test DSN
 ```
 
-Repo-specific test setup belongs in `tests/phpunit/bootstrap.local.php` (the
-managed bootstrap requires it when present), not in edits to the managed
-`tests/phpunit/bootstrap.php`.
+Repository-specific test setup belongs in `tests/phpunit/bootstrap.local.php`,
+which the managed bootstrap requires when it exists. Do not edit the managed
+`tests/phpunit/bootstrap.php` for it.
 
 ## Civix workflow
 
-The image ships [`civix`](https://github.com/totten/civix) for scaffolding. Common commands:
+The image ships [civix](https://github.com/totten/civix) for scaffolding. The
+common commands:
 
 ```bash
 ckx civix generate:entity MyEntity       # APIv4-exposed entity + schema
@@ -309,60 +310,66 @@ ckx civix upgrade                        # re-run periodically; bumps mixins,
                                          # generated stubs to current civix
 ```
 
-Use `generate:entity` rather than writing `schema/*.entityType.php` by hand: the
-schema names a DAO class under `class`, and the matching `CRM/<Ns>/DAO/<Entity>.php`
-stub is generated alongside it. A schema without its stub looks complete and
-passes every static check, then fatals at install time with `Class "…" not found`
-— after earlier entities' tables exist, so the retry hits `DB Error: already
-exists`. `ckconform`'s `entity-dao-stub` catches both that and a stub whose
-`$_tableName` has drifted from the schema.
+Use `generate:entity` rather than writing `schema/*.entityType.php` by hand.
+The schema names a DAO class under `class`, and the generator creates the
+matching `CRM/<Ns>/DAO/<Entity>.php` stub alongside it. A schema without its
+stub looks complete and passes every static check. It then fails at install
+time with `Class "…" not found`, after the tables of earlier entities already
+exist, so a retry hits `DB Error: already exists`. The `entity-dao-stub` check
+in `ckconform` catches this, and also a stub whose `$_tableName` has drifted
+from the schema.
 
-Modern extensions configure features in `info.xml` via [standard mixins](https://docs.civicrm.org/dev/en/latest/framework/mixin/standard/) (`mgd-php@2`, `menu-xml`, `setting-php`, `entity-types-php@2.0.0`, `smarty@1`, `ang-php`, …) instead of bespoke hooks — `civix upgrade` keeps the mixin block current. (`smarty-v2` is a deprecated alias of the version-independent `smarty@1` — same behaviour, misleading name.)
+Modern extensions configure features in `info.xml` through
+[standard mixins](https://docs.civicrm.org/dev/en/latest/framework/mixin/standard/)
+instead of bespoke hooks. Examples are `mgd-php@2`, `menu-xml`, `setting-php`,
+`entity-types-php@2.0.0`, `smarty@1` and `ang-php`. `civix upgrade` keeps the
+mixin block current. `smarty-v2` is a deprecated alias of the
+version-independent `smarty@1`. It behaves the same, and only the name
+misleads.
 
-The civix layer has a maintenance command of its own:
-
-```bash
-ckcivix --check    # fail when <civix><format> or *.civix.php is missing/behind
-ckcivix --update   # run civix upgrade -n
-```
-
-The shared workflow runs `ckcivix --check` with the other lint gates. Tool and
-format versions are separate scales; `ckcivix` reads the latest format from the
-upgrade scripts in the installed civix phar.
+`ckcivix` maintains the civix layer. `ckcivix --check` fails when
+`<civix><format>` or `*.civix.php` is missing or behind, and
+`ckcivix --update` runs `civix upgrade -n`. The shared workflow runs the check
+with the other lint gates. Tool versions and format versions are separate
+scales. `ckcivix` reads the latest format from the upgrade scripts in the
+installed civix phar.
 
 ## Static analysis and linting
 
 What each gate enforces, and why, is in
-[Extension standards](extension-standards.md); this section is how to run them.
+[Extension standards](extension-standards.md). This section covers how to run
+them.
 
-**PHPStan** needs to know about CiviCRM's autoloader to resolve `CRM_*` and
-`Civi\*` symbols. The managed
+PHPStan needs CiviCRM's autoloader to resolve `CRM_*` and `Civi\*` symbols.
+The managed
 [`phpstanBootstrap.php`](https://github.com/civico-de/civikitchen/blob/main/scaffold/template/extension/phpstanBootstrap.php)
-registers core's class loader, then the civix layout (`CRM_*`, `Civi\*`,
-`api_*`, `vendor/`) of core's own ext packages (`civi_member`,
-`civi_contribute`, … — they ship with core but live off its classloader path)
-and of every extension the repo's `info.xml` `<requires>` that exists under
-the ext dir (`CK_EXT_DIR`, default `/var/www/html/ext` — the mount and
-download target of the images). `Civi\Api4\Membership` and a class extended
-from a required extension therefore resolve without a repo-specific bootstrap
-or `scanDirectories` entry; a required extension that is not present is noted on
-stderr and its classes stay unresolved, which phpstan then reports where the
-code touches them. For the repo's own code it adds only what has no file
-behind it: the `CRM_<Prefix>_DAO_Base` alias civix DAOs extend, core's APIv3
-helpers (`api/v3/utils.php`) and the `CiviMix\Schema` library core loads by
-pathload, so a repo with its own entities keeps `paths: [.]`. The same `<requires>` list drives the
+registers core's class loader first. It then registers the civix layout
+(`CRM_*`, `Civi\*`, `api_*` and `vendor/`) of two groups of extensions. The
+first group is core's own ext packages such as civi_member and civi_contribute,
+which ship with core but live outside its classloader path. The second is every
+extension that the repository's `info.xml` lists under `<requires>` and that
+exists in the ext directory. That directory is `CK_EXT_DIR`, by default
+`/var/www/html/ext`, which is where the images mount and download extensions.
+
+`Civi\Api4\Membership` and classes extended from a required extension
+therefore resolve without a repository-specific bootstrap or a
+`scanDirectories` entry. A required extension that is missing is noted on
+stderr. Its classes stay unresolved, and phpstan reports them where the code
+touches them. For the repository's own code the bootstrap adds only what has
+no file behind it: the `CRM_<Prefix>_DAO_Base` alias that civix DAOs extend,
+core's APIv3 helpers in `api/v3/utils.php`, and the `CiviMix\Schema` library
+that core loads by pathload. A repository with its own entities can keep
+`paths: [.]`. The same `<requires>` list drives the
 [extension boundary rule](extension-standards.md#tooling-every-repo-must-have).
+Run it with `ckx phpstan analyse`.
 
-```bash
-ckx phpstan analyse
-```
-
-**cklint** wraps `php -l` and `mago lint`, defaults to changed PHP files, and
-skips generated code (`*.civix.php`, `DAO/`) and `policy.vendored_paths`. It
-uses the bundled CiviKitchen baseline (`toolbelt/mago/mago.toml` plus the rules
-in `toolbelt/mago-ext`) unless the extension commits its own `mago.toml`, which
-should extend the baseline — see
-[extension standards](extension-standards.md#tooling-every-repo-must-have).
+`cklint` wraps `php -l` and mago lint. It checks changed PHP files by default
+and skips generated code (`*.civix.php`, `DAO/`) and the paths in
+`policy.vendored_paths`. It uses civikitchen's bundled baseline,
+`toolbelt/mago/mago.toml` plus the rules in `toolbelt/mago-ext`, unless the
+extension commits its own `mago.toml`. That file should extend the baseline,
+as [Extension standards](extension-standards.md#tooling-every-repo-must-have)
+explains.
 
 ```bash
 ckx cklint
@@ -373,67 +380,66 @@ ckx cktaint       # taint analysis
 
 ## Modernizing
 
-`ckmodernize` modernizes an extension in two layers: **structure** via civix
-(`civix upgrade` + `civix convert-entity`, civix extensions only) and **code**
-via the bundled Rector setup. By default it previews the code changes and
-lists the civix steps; `--fix` applies both (civix has no preview mode). If
-the extension ships its own `rector.php`, that config wins. Scope with
-`--no-civix` / `--no-rector`, explicit paths, or `--all`; the opt-in `--api`
-(OO style) / `--api=array` flags additionally migrate a safe subset of APIv3
-calls to APIv4 — preview and review those. A `get` call is migrated only
-when its result is discarded or, inside a function, read solely as
-`$result['values']` / `$result['count']`; those reads become
-`$result->getArrayCopy()` / `$result->countFetched()`, keyed by id like
-APIv3 unless `sequential` is 1. The rows are APIv4's, so review what reads
-them:
+`ckmodernize` modernizes an extension in two layers. The structure layer uses
+civix (`civix upgrade` and `civix convert-entity`) and applies to civix
+extensions only. The code layer uses the bundled Rector setup. By default the
+tool previews the code changes and lists the civix steps. `--fix` applies
+both, since civix has no preview mode. If the extension ships its own
+`rector.php`, that config wins. Narrow the scope with `--no-civix` or
+`--no-rector`, give explicit paths, or widen it with `--all`.
 
-- fields and value types follow APIv4 (ids are integers; APIv3's joined
-  contact fields such as `email` are gone);
+The opt-in flags `--api` (object style) and `--api=array` also migrate a safe
+subset of APIv3 calls to APIv4. Preview and review those. A `get` call is
+migrated only when its result is discarded, or when inside a function it is
+read only as `$result['values']` or `$result['count']`. Those reads become
+`$result->getArrayCopy()` and `$result->countFetched()`, keyed by id like
+APIv3 unless `sequential` is 1. The rows are APIv4 rows, so review the code
+that reads them:
+
+- Fields and value types follow APIv4. Ids are integers, and the joined
+  contact fields of APIv3, such as `email`, are gone.
 - APIv4 hides deleted, test and template records (`is_deleted`, `is_test`,
   `is_template`) unless the where clause names the field or the lookup goes
-  through a unique key, while APIv3 applied only each entity's own defaults
-  — test recurring contributions, deleted activities or a trashed contact
-  found by `external_identifier` can appear or disappear;
-- APIv3-only defaults such as Note's `entity_table = civicrm_contact` no
-  longer filter.
+  through a unique key. APIv3 applied only each entity's own defaults. Test
+  recurring contributions, deleted activities or a trashed contact found by
+  `external_identifier` can therefore appear or disappear.
+- Defaults that only APIv3 had, such as `entity_table = civicrm_contact` on
+  Note, no longer filter.
 
 ```bash
 ckx ckmodernize
 ckx ckmodernize --fix --php 8.2
 ```
 
-The default config combines Rector's PHP-version / code-quality sets with
-CiviKitchen rules for CiviCRM-specific footguns such as
+The default config combines Rector's PHP-version and code-quality sets with
+civikitchen rules for CiviCRM-specific traps such as
 `CRM_Utils_Array::value()` and `CRM_Core_Error::fatal()`.
 
-When a release retires a tool, `ckmigrate` moves the repository off it in
-place; review the result with `git diff`. For phpcs it turns a `phpcs:ignore`
-of a sniff that became a mago rule into `// @mago-expect lint:<rule>`, keeps
-the reason, drops every other `phpcs:` comment and deletes
-`phpcs.xml(.dist)`. It exits 1 and lists what needs a person: a setting the
-deleted config made for a sniff that became a mago rule, a comment it cannot rewrite (a
-docblock, a `phpcs:disable` of a ported sniff), a `template_custom` entry. A
-pragma covers one finding where `phpcs:ignore` covered the whole line, so run
-`cklint` afterwards.
-
-```bash
-ckx ckmigrate
-```
+When a release retires a tool, `ckx ckmigrate` moves the repository off it in
+place. Review the result with `git diff`. For phpcs it turns a `phpcs:ignore`
+of a sniff that became a mago rule into `// @mago-expect lint:<rule>` and keeps
+the reason. It drops every other `phpcs:` comment and deletes
+`phpcs.xml(.dist)`. It exits 1 and lists what needs a person to decide: a
+setting the deleted config made for a sniff that became a mago rule, a comment
+it cannot rewrite (a docblock, or a `phpcs:disable` of a ported sniff), and a
+`template_custom` entry. A pragma covers one finding, where `phpcs:ignore`
+covered the whole line, so run `cklint` afterwards.
 
 ## CI
 
-The same loop runs unattended in CI: boot the stack, enable the extension,
-run phpunit headless. An extension from `ckcreate` or `ckinit` calls the shared
-`extension-ci.yml`; for a repository without the template, a copy-pasteable
-GitHub Actions setup (workflow + minimal compose stack) lives at
-[`examples/ci/`](https://github.com/civico-de/civikitchen/tree/main/examples/ci/).
+CI runs the same loop unattended. It boots the stack, enables the extension
+and runs phpunit headless. An extension created by `ckcreate` or `ckinit`
+calls the shared `extension-ci.yml`. For a repository without the template,
+[`examples/ci/`](https://github.com/civico-de/civikitchen/tree/main/examples/ci/)
+holds a GitHub Actions setup to copy, with a workflow and a minimal compose
+stack.
 
 ### Running the CI gates locally
 
-`ck ci` runs every gate the shared workflow's `ci` job runs inside the
+`ck ci` runs every gate that the shared workflow's ci job runs inside the
 container, in the same order and with the same arguments, and ends with a
-summary table. The workflow calls the same command, so the two runs cannot
-drift apart:
+summary table. The workflow calls the same command, so the two cannot drift
+apart:
 
 ```bash
 ckx ck ci
@@ -441,66 +447,74 @@ ckx ck ci --only cklint,ckfmt
 ckx ck ci --skip ckcoverage
 ```
 
-Every gate runs even when an earlier one failed; the exit code is 1 when any
-gate failed and 2 for a usage error, such as an unknown gate name in `--only`
-or `--skip`. `ck ci --help` lists the gates. Two of them are opt-in, as in the
-workflow: `phpstan-tests` runs when `phpstan-tests.neon(.dist)` exists, and
-`phpunit-extra` runs `phpunit -c FILE` for `--extra-phpunit-config FILE` (the
-workflow's `extra_phpunit_config` input). `ckanalyze` is a shadow gate on trial
-to replace phpstan: its findings show as `shadow` in the summary and never fail
-the run, while a crash of the tool does. Every finding counts, notes included.
-A repo's own `mago.toml` takes the baseline's place, so it loads the
-CiviKitchen plugins only when it `extends` the baseline; its `[source]` lists
-add to the scope `ckanalyze` sets instead of replacing it.
+Every gate runs even when an earlier one failed. The exit code is 1 when any
+gate failed, and 2 for a usage error such as an unknown gate name in `--only`
+or `--skip`. `ck ci --help` lists the gates.
 
-The gates that read git (`cklint`, `ckconform`, `ckcivix`, `ckfmt`, `ckanalyze`,
-`ckcompat`, `cktaint`, `ckeslint`) run in `CK_TOOL_PATH`, everything that boots CiviCRM in
-`CK_EXT_PATH`. Both default to the current directory. For an extension below
-the repository root, `ckx` sets `CK_TOOL_PATH=/civikitchen-repo/<directory>`
-(see [Several extensions in one repository](#several-extensions-in-one-repository)).
+Two gates are opt-in, as in the workflow. `phpstan-tests` runs when
+`phpstan-tests.neon(.dist)` exists. `phpunit-extra` runs `phpunit -c FILE` for
+`--extra-phpunit-config FILE`, which matches the workflow's
+`extra_phpunit_config` input. `ckanalyze` is a shadow gate on trial to replace
+phpstan. Its findings show as `shadow` in the summary and never fail the run,
+but a crash of the tool does. Every finding counts, notes included. A
+repository's own `mago.toml` takes the baseline's place, so it loads the
+civikitchen plugins only when it `extends` the baseline. Its `[source]` lists
+add to the scope `ckanalyze` sets rather than replacing it.
 
-To check against the [organisation-wide defaults](extension-standards.md#repository-policy-civikitchenyaml)
+The gates that read git run in `CK_TOOL_PATH`. These are `cklint`,
+`ckconform`, `ckcivix`, `ckfmt`, `ckanalyze`, `ckcompat`, `cktaint` and
+`ckeslint`. Everything that boots CiviCRM runs in `CK_EXT_PATH`. Both default
+to the current directory. For an extension below the repository root, `ckx`
+sets `CK_TOOL_PATH=/civikitchen-repo/<directory>` (see
+[Several extensions in one repository](#several-extensions-in-one-repository)).
+
+To check against the
+[organisation-wide defaults](extension-standards.md#repository-policy-civikitchenyaml)
 locally, mount that `civikitchen.yaml` into the container and add
 `-e CK_DEFAULT_CONFIG=<its path in the container>`.
 
-The host-side steps of the job stay in the workflow: the template drift
-check, the lockfile and secret scans, the JS unit tests, and the stack start
-itself.
+Some steps of the job run on the host and stay in the workflow: the template
+drift check, the lockfile and secret scans, the JS unit tests, and starting
+the stack.
 
-Boots that need something the runner has to fetch first — an uncommitted
-`vendor/` behind a private composer package, or private sibling extensions
-mounted beside this one, the CI equivalent of the sibling mounts in the dev
-compose file below — are two opt-in inputs and a `secrets:` block on the
-shared workflow: [extension-standards.md](extension-standards.md#private-dependencies).
+Some boots need something the runner has to fetch first. One case is an
+uncommitted `vendor/` behind a private composer package. Another is private
+sibling extensions mounted beside this one, the CI counterpart of the sibling
+mounts in the dev compose file described below. The shared workflow handles
+both with two opt-in inputs and a `secrets:` block, described in
+[extension-standards.md](extension-standards.md#private-dependencies).
 
 ## Several extensions in one repository
 
-A repository can hold several extensions that ship together. Its root carries
-no `info.xml`; each extension sits in a direct subdirectory with its own
+A repository can hold several extensions that ship together. Its root has no
+`info.xml`. Each extension sits in a direct subdirectory with its own
 `info.xml`, `civikitchen.yaml`, `composer.json` and test suite. Extensions
-nested deeper, and a repository that is an extension at its root and holds
-more below it, are not covered. The decisions behind the layout are
-[ADR-0005](adr/0005-several-extensions-in-one-repository.md),
+nested deeper are not covered, and neither is a repository that is an
+extension at its root and holds more below it. The decisions behind the layout
+are in [ADR-0005](adr/0005-several-extensions-in-one-repository.md),
 [ADR-0006](adr/0006-lockstep-releases-in-a-multi-extension-repository.md) and
 [ADR-0007](adr/0007-the-repository-at-a-second-neutral-path.md). How the
 checks treat this layout is in
 [Extension standards](extension-standards.md#several-extensions-in-one-repository).
 
 Run `ckinit` at the root. There it manages `.gitattributes`, `renovate.json`,
-`.github/workflows/ci.yml` and `.github/workflows/release.yml`, then runs the
-usual per-extension pass on every direct subdirectory that has an `info.xml`.
-Run on an extension below the root, it skips the files GitHub and Renovate read
-only at the root (the two workflows, `renovate.json`), and its CI compose file gets a
-second managed mount of the repository root at `/civikitchen-repo`, where the
-git-reading gates of `ck ci` run; everything that boots CiviCRM stays at
-`/var/www/html/ext/<file>` (info.xml `<file>`). The dev compose file is
-seeded, not managed, so an existing repository adds that mount by hand. The
-template drift check of each extension's CI job covers that extension's
-directory plus the repository's own managed root files.
+`.github/workflows/ci.yml` and `.github/workflows/release.yml`. Then it runs
+the usual per-extension pass on every direct subdirectory that has an
+`info.xml`.
 
-The root workflow has one job per extension, each calling `extension-ci.yml`
-with the extension's `working_directory` (see
-[Reusable workflows](reusable-workflows.md)):
+Run on an extension below the root, `ckinit` skips the files that GitHub and
+Renovate read only at the root, which are the two workflows and
+`renovate.json`. The extension's CI compose file gets a second managed mount
+of the repository root at `/civikitchen-repo`, where the git-reading gates of
+`ck ci` run. Everything that boots CiviCRM stays at `/var/www/html/ext/<file>`,
+named after the `<file>` in `info.xml`. The dev compose file is seeded, not
+managed, so an existing repository adds that mount by hand. The template drift
+check in each extension's CI job covers that extension's directory plus the
+repository's own managed root files.
+
+The root workflow has one job per extension. Each job calls `extension-ci.yml`
+with the extension's `working_directory`, as described in
+[Reusable workflows](reusable-workflows.md):
 
 ```yaml
 jobs:
@@ -515,36 +529,38 @@ jobs:
       playwright: true
 ```
 
-`ckinit` owns each job's id, `uses:` line and `working_directory`; inputs
-added after a job's END marker are the repository's. `--update` appends a job
-for a new extension directory and drops the job of one that is gone, and
-`--check` fails while the jobs and the directories disagree. Use static jobs,
-not a matrix: the workflow checks in `ckconform` pick the job whose
-`working_directory` names the extension and cannot evaluate `${{ matrix.* }}`.
-Every push runs every extension's jobs, each with its own stack.
+`ckinit` owns each job's id, its `uses:` line and its `working_directory`.
+Inputs added after a job's END marker belong to the repository. `--update`
+appends a job for a new extension directory and drops the job of one that is
+gone. `--check` fails while the jobs and the directories disagree. Use static
+jobs, not a matrix. The workflow checks in `ckconform` pick the job whose
+`working_directory` names the extension, and they cannot evaluate
+`${{ matrix.* }}`. Every push runs every extension's jobs, each with its own
+stack.
 
-**Dependencies inside the repository.** An extension that `<requires>` a
-neighbour mounts the neighbour's directory itself, with a volume line after the
-managed block of its CI compose file (`compose_file`, default
-`.docker/docker-compose.ci.yml`). The target is the dependency's **key**, not
-its `<file>` name, because that is where a required extension is looked up:
+**Dependencies inside the repository.** An extension that requires a
+neighbour mounts the neighbour's directory itself. It adds a volume line after
+the managed block of its CI compose file, which is `compose_file` and defaults
+to `.docker/docker-compose.ci.yml`. The mount target is the dependency's key,
+not its `<file>` name, because a required extension is looked up by key:
 
 ```yaml
 # END CIVIKITCHEN MANAGED app
       - ../../base:/var/www/html/ext/org.example.base
 ```
 
-A mount in the dev compose file alone does not reach CI, which boots only that
-file ([`monorepo-requires-mounted`](extension-standards.md#several-extensions-in-one-repository)).
+A mount in the dev compose file alone does not reach CI, which boots only the
+CI compose file
+([`monorepo-requires-mounted`](extension-standards.md#several-extensions-in-one-repository)).
 
 **Versions move in lockstep.** All extensions carry the same `<version>` and
-`<releaseDate>` (`monorepo-version-lockstep`), so one `vX.Y.Z` tag describes
-all of them.
+`<releaseDate>`, enforced by `monorepo-version-lockstep`, so one `vX.Y.Z` tag
+describes all of them.
 
 **One tag releases every extension.** The root release caller has one job per
-extension that builds, verifies and smoke-tests that extension's archive
-(`stage: build`), and one `publish` job that needs all of them and creates the
-single GitHub release for the tag with every archive attached:
+extension, with `stage: build`, that builds, verifies and smoke-tests that
+extension's archive. A single `publish` job needs all of them and creates the
+one GitHub release for the tag, with every archive attached:
 
 ```yaml
 jobs:
@@ -573,39 +589,47 @@ jobs:
 ```
 
 `ckinit` owns every job's id, `uses:`, `working_directory`, `stage` and
-`needs`; inputs and `secrets:` after a job's END marker are the repository's.
-A job needs the jobs of the same-repository extensions its extension
-`<requires>`: the smoke test installs their archives from the same run, since
-no pinned release of them exists yet; the same-repository extensions are the
-directories next to `working_directory`. If one build job fails, nothing is
-published. An extension that declares `release: none` gets no job; `ckinit`
-refuses a releasing extension that requires one of those. When none releases,
+`needs`. Inputs and `secrets:` after a job's END marker belong to the
+repository. The same-repository extensions are the directories next to
+`working_directory`. A job needs the jobs of those that its extension
+requires, because the smoke test installs their archives from the same run
+while no pinned release of them exists yet. If one build job fails, nothing is
+published.
+
+An extension that declares `release: none` gets no job, and `ckinit` refuses a
+releasing extension that requires one of those. When no extension releases,
 `--check` reports a leftover `release.yml` and `--update` deletes it, unless
 lines outside its managed blocks belong to the repository. `ckinit` never
-overwrites a root `release.yml` without managed markers, and reports a second
-workflow calling `extension-release.yml`. The
-`release-workflow` check fails an extension whose job is missing, runs another
-stage than `build`, does not need the build jobs of the same-repository
-extensions it requires, or is not needed by a `stage: publish` job. A job
-needed through intermediate jobs counts as needed.
+overwrites a root `release.yml` without managed markers, and it reports a
+second workflow that calls `extension-release.yml`.
 
-[`examples/monorepo/`](https://github.com/civico-de/civikitchen/tree/main/examples/monorepo/) is a two-extension tree, one
-requiring the other, that this repository's CI runs `extension-ci.yml` and a
-dry run of `extension-release.yml` against.
+The `release-workflow` check fails an extension in four cases: its job is
+missing, its job runs a stage other than `build`, its job does not need the
+build jobs of the same-repository extensions it requires, or no
+`stage: publish` job needs it. A job needed through intermediate jobs counts
+as needed.
+
+[`examples/monorepo/`](https://github.com/civico-de/civikitchen/tree/main/examples/monorepo/)
+is a tree of two extensions, one requiring the other. This repository's CI
+runs `extension-ci.yml` and a dry run of `extension-release.yml` against it.
 
 ### What adopting it costs a repository
 
-Expect the first run of the real gates to be red: a repository that only
+Expect the first run of the real gates to be red. A repository that only
 validated its configuration has never been formatted by `ckfmt`, linted by
 `cklint`, analysed by PHPStan or tested in CI. Fix that debt per extension, in
-its own commits, before switching the root workflow over, rather than waiving
-it through `ignore_checks`. In the same change, delete the per-extension
+its own commits, before switching the root workflow over. Do not waive it
+through `ignore_checks`. In the same change, delete the per-extension
 `.github/workflows/ci.yml` and `renovate.json` files and align the versions
 once.
 
 ## UI tests with Playwright
 
-For browser-level tests of your extension's UI (forms, Angular/React widgets, JS behaviour) there's a copy-pasteable starter at [`examples/extension-with-playwright/`](https://github.com/civico-de/civikitchen/tree/main/examples/extension-with-playwright/). It boots the same standalone stack, runs Playwright on the host against `localhost:8080`, and handles login once via a shared session.
+For browser tests of your extension's UI, such as forms, Angular or React
+widgets and JS behaviour, start from
+[`examples/extension-with-playwright/`](https://github.com/civico-de/civikitchen/tree/main/examples/extension-with-playwright/).
+It boots the same standalone stack, runs Playwright on the host against
+localhost:8080, and logs in once through a shared session.
 
 ```bash
 cd examples/extension-with-playwright
@@ -614,13 +638,16 @@ npm install && npx playwright install chromium
 npm run test:e2e
 ```
 
-See the [example's README](https://github.com/civico-de/civikitchen/blob/main/examples/extension-with-playwright/README.md) for how to drop the config files into your own extension repo, and
+The
+[example's README](https://github.com/civico-de/civikitchen/blob/main/examples/extension-with-playwright/README.md)
+explains how to move the config files into your own extension repository.
 [Extension standards](extension-standards.md#frontend-js-dependencies-js-tests-and-browser-tests)
-for the CI job.
+covers the CI job.
 
 ## IDE step debugging
 
-Xdebug is installed but disabled until you set `XDEBUG_MODE`. Add it to your compose file:
+Xdebug is installed but stays off until you set `XDEBUG_MODE`. Add it to your
+compose file:
 
 ```yaml
 services:
@@ -633,7 +660,8 @@ services:
       # XDEBUG_IDEKEY: VSCODE                      # default
 ```
 
-VS Code `.vscode/launch.json` (path mapping must match your volume mount):
+For VS Code, add a `.vscode/launch.json`. Its path mapping must match your
+volume mount:
 
 ```json
 {
@@ -650,6 +678,11 @@ VS Code `.vscode/launch.json` (path mapping must match your volume mount):
 }
 ```
 
-PhpStorm: enable "Listen for PHP Debug Connections", set the port to 9003, and add a path mapping from your project to `/var/www/html/ext/myextension`.
+In PhpStorm, enable "Listen for PHP Debug Connections", set the port to 9003,
+and map your project to `/var/www/html/ext/myextension`.
 
-`XDEBUG_START_WITH_REQUEST=trigger` (the default) means xdebug only activates when the request carries `XDEBUG_TRIGGER=1` (cookie, GET/POST param, or env var) — no overhead on regular requests. Use the [Xdebug Helper](https://xdebug.org/docs/step_debug#start_with_request) browser extension to send the trigger.
+With the default `XDEBUG_START_WITH_REQUEST=trigger`, Xdebug only activates
+when a request carries `XDEBUG_TRIGGER=1` as a cookie, a GET or POST
+parameter, or an environment variable. Regular requests have no overhead. The
+[Xdebug Helper](https://xdebug.org/docs/step_debug#start_with_request) browser
+extension sends the trigger.

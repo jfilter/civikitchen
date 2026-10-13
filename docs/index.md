@@ -2,7 +2,7 @@
 
 CiviCRM Docker images with the development toolchain built in, an extension
 template, and reusable GitHub workflows that test, check and release CiviCRM
-extensions. The host needs Docker with the compose plugin and bash; everything
+extensions. The host needs Docker with the compose plugin and bash. Everything
 else runs in the image.
 
 | You want to … | Read |
@@ -34,5 +34,5 @@ docker run -d -p 80:80 --name civicrm ghcr.io/civico-de/civikitchen:standalone-d
 
 Open <http://localhost> and log in as admin / admin.
 
-Extensions pin `@v1`, which names the workflows, the template, the `ck*` tools
-and the `:v1` images as one version; see [Releases](releases.md).
+Extensions pin `@v1`. That one version covers the workflows, the template,
+the ck tools and the v1 images, as [Releases](releases.md) explains.

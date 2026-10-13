@@ -1,12 +1,13 @@
 # Declarative scenarios
 
-`civikitchen.yaml` is the single CiviKitchen configuration for an extension:
-repository/toolbelt policy plus the local or CI scenario. Profile definitions
-remain in their separate `profile.json`; the config selects them by name.
-CiviKitchen parses it with
-the pinned Symfony YAML component and then validates the resulting document
-against the published JSON Schema. JSON input is rejected, so one
-canonical filename and syntax works identically on laptops and in CI
+Each extension keeps its whole CiviKitchen configuration in one file,
+`civikitchen.yaml`. It holds the repository and toolbelt policy and the
+scenario that runs locally or in CI. Profiles stay in their own `profile.json`
+files, and the config selects them by name.
+
+CiviKitchen parses the file with the pinned Symfony YAML component and then
+validates the result against the published JSON Schema. JSON input is
+rejected, so one filename and one syntax work the same on laptops and in CI
 ([ADR-0010](adr/0010-one-yaml-configuration-file.md)).
 
 ```yaml
@@ -49,17 +50,14 @@ scenario:
     - lifecycle
 ```
 
-Validate and inspect the normalized plan:
+Validate the file and inspect the normalized plan, then render a Docker
+Compose model and boot it:
 
 ```bash
 ck config validate
 ck scenario plan
 ck scenario commands
-```
 
-Render a Docker Compose model and boot it:
-
-```bash
 ck scenario compose > civikitchen.compose.json
 # or write it directly:
 ck scenario materialize civikitchen.yaml civikitchen.compose.json
@@ -70,49 +68,70 @@ docker compose -f civikitchen.compose.json run --rm --no-deps -T \
 docker compose -f civikitchen.compose.json up -d --wait
 ```
 
-Compose JSON is intentional: Docker Compose accepts it as the JSON form of the
-Compose model, and the generator can use a real JSON encoder. Relative extension
-and profile paths are resolved against the scenario file and emitted as absolute
-mount sources, so a materialized model remains correct in another directory.
-The source is mounted at `/civikitchen-extension`; each image links that stable
-mount into its own CiviCRM-discovered extension directory, so the same scenario
-model works across Standalone, Drupal, WordPress and Joomla image layouts.
-The extension directory must contain `info.xml`, and `extension.key` must match
-the root `<extension key="…">` attribute (not the usually shorter `<file>`
-prefix). Bind mounts are read-only by default; `extension.writable` is an
-explicit opt-in. The images never run `composer install` on the mount: an
-extension without a committed `vendor/` gets it from the `run` line above,
-which needs the mount writable. An extension path outside the config directory additionally
-requires `trust_external_extension: true`. External profile paths likewise
-require `trust_external_profiles: true` because
-their drivers and `scripts` execute as trusted application code.
+## The rendered model
 
-`credentials_output: log` or `both` requires `allow_secret_logging: true`, so a
-committed config cannot begin disclosing generated credentials accidentally.
+The output is Compose JSON on purpose. Docker Compose accepts JSON as a form
+of the Compose model, and the generator can use a real JSON encoder.
+
+Relative extension and profile paths are resolved against the scenario file
+and written out as absolute mount sources. A materialized model therefore
+stays correct when moved to another directory.
+
+The extension source is mounted at `/civikitchen-extension`. Each image links
+that mount into the extension directory its CiviCRM discovers, so one scenario
+model works across the Standalone, Drupal, WordPress and Joomla layouts.
+
+## Extension and trust rules
+
+- The extension directory must contain `info.xml`.
+- `extension.key` must match the `key` attribute of the root `<extension>`
+  element, not the usually shorter `<file>` prefix.
+- Bind mounts are read-only unless `extension.writable` is set.
+- The images never run `composer install` on the mount. An extension without
+  a committed `vendor/` gets it from the `run` line above, which needs a
+  writable mount.
+- An extension path outside the config directory requires
+  `trust_external_extension: true`.
+- External profile paths require `trust_external_profiles: true`, because
+  their drivers and scripts run as trusted application code.
+- `credentials_output: log` or `both` requires `allow_secret_logging: true`,
+  so a committed config cannot start disclosing generated credentials by
+  accident.
+
+## Profiles, users and ports
 
 When profiles are selected, the generator creates the Standalone `admin` demo
-user needed by the shared profile driver. A scenario mounts no `init.d` hooks:
-the data an extension needs belongs in a profile, whose content the driver
-applies after the extension is enabled. If `site_url` is omitted it is derived
-from `http_port`; ports outside `1..65535` are rejected before Compose render.
+user that the shared profile driver needs. A scenario mounts no `init.d`
+hooks. Data an extension needs belongs in a profile, and the driver applies
+it after the extension is enabled.
 
-A git-sourced dependency (`repo`) ships no `vendor/` directory, so the driver
-resolves its Composer requirements before enabling it: for every checkout with a
-`composer.json` and no `vendor/` it runs `composer update --no-dev` (`install`
-when the repository ships a `composer.lock`), and aborts the profile with
-composer's output if that fails.
+If `site_url` is omitted, it is derived from `http_port`. Ports outside
+1 to 65535 are rejected before Compose is rendered.
 
-The `checks` list is an enum of CiviKitchen operations. It cannot contain shell
-source; `ck scenario commands` emits only fixed `ck` invocations. The generated
-disposable stack uses the database admin account so CiviKitchen can create its
-isolated headless scratch database without materializing a separate grant file.
+A git-sourced dependency (`repo`) ships without `vendor/`, so the driver
+resolves its Composer requirements before enabling it. For every checkout
+with a `composer.json` and no `vendor/`, it runs `composer update --no-dev`,
+or `composer install` when the repository ships a `composer.lock`. If that
+fails, the profile aborts with composer's output.
 
-The document is declaratively repeatable, but moving image tags and runtime
-downloads are not artifact-identical. Pin both application and database images
-by digest. Bundled profiles pin Git sources to full commits; a profile that uses
-`registry: true` still resolves the registry's current packaged release at first
-boot because CiviCRM's registry interface exposes no artifact digest in this
-format. For byte-for-byte reproduction, use only commit-pinned dependencies (or
-materialize a separately checksummed package source) and avoid registry-backed
-profile dependencies. Convenient image tags such as `:v1` deliberately follow
-maintained updates.
+## Checks
+
+The `checks` list is an enum of CiviKitchen operations and cannot contain
+shell code. `ck scenario commands` emits only fixed `ck` invocations. The
+generated throwaway stack uses the database admin account, so CiviKitchen can
+create its isolated headless scratch database without a separate grant file.
+
+## Reproducibility
+
+A scenario is declaratively repeatable, but moving image tags and runtime
+downloads do not give identical artifacts. Pin both the application and the
+database image by digest.
+
+Bundled profiles pin Git sources to full commits. A profile that uses
+`registry: true` still resolves the registry's current packaged release at
+first boot, because CiviCRM's registry interface exposes no artifact digest in
+this format. For byte-for-byte reproduction, use only commit-pinned
+dependencies, or provide a separately checksummed package source, and avoid
+registry-backed profile dependencies.
+
+Convenience tags such as `:v1` follow maintained updates on purpose.

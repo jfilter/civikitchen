@@ -16,8 +16,8 @@ extensions. Documentation: <https://civico-de.github.io/civikitchen/>
 | Work on CiviCRM core | [Core development](#core-development) |
 | Try or demo CiviCRM | [Demo instances](#demo-instances) |
 
-The host needs Docker with the compose plugin and bash; everything else runs in
-the image.
+The host needs Docker with the compose plugin and bash. Everything else runs
+in the image.
 
 ## Extension development
 
@@ -31,22 +31,24 @@ git add -A && git commit -m "Scaffold myext"   # after reviewing it
 ../civikitchen/scaffold/ckx ck ci                         # tests and every check, as CI runs them
 ```
 
-- `ckcreate` generates the module with civix and adds the template: compose
-  files under `.docker/`, CI and release workflows, phpstan/phpunit config and
-  a first test. For an existing civix extension, `scaffold/ckinit <dir>` adds
-  the same files; it refuses when any of them already exists.
-- `ckup` starts CiviCRM Standalone with MariaDB, phpMyAdmin and Maildev,
-  enables the extension on first boot and prints the URL. Its arguments go to
-  `docker compose up -d`; `--wait` returns once the first boot is done.
-- `ckx <command>` runs a command in the stack as `www-data` in the extension's
-  directory; without a command it opens a shell. Headless tests run against a
-  separate test database, not the dev site.
+`ckcreate` generates the module with civix and adds the template: the
+compose files under `.docker/`, the CI and release workflows, the phpstan and
+phpunit config, and a first test. For an existing civix extension,
+`scaffold/ckinit <dir>` adds the same files. It refuses when any of them
+already exists.
 
-The image carries cv, civix, composer, node/npm, phpunit, phpstan, mago, pcov,
-xdebug and the `ck*` tools. Without the template, mount the extension into one
-of the stacks in `examples/` (`standalone`, `drupal10`, `drupal11`,
-`wordpress`, `joomla`); `examples/extension-with-playwright/` adds browser
-tests.
+`ckup` starts CiviCRM Standalone with MariaDB, phpMyAdmin and Maildev, enables
+the extension on first boot and prints the URL. Its arguments go to
+`docker compose up -d`, and `--wait` returns once the first boot is done.
+
+`ckx` runs a command in the stack as www-data, in the extension's directory.
+Without a command it opens a shell. Headless tests run against a separate test
+database, not the dev site.
+
+The image carries cv, civix, composer, node and npm, phpunit, phpstan, mago,
+pcov, xdebug and the ck tools. Without the template, mount the extension into
+one of the stacks in `examples/`: standalone, drupal10, drupal11, wordpress or
+joomla. `examples/extension-with-playwright/` adds browser tests.
 
 → [Extension development](docs/extension-development.md): test loop, civix,
 static analysis, Playwright, step debugging, several extensions in one
@@ -63,16 +65,16 @@ jobs:
     uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
 ```
 
-CI boots the stack from `.docker/docker-compose.ci.yml`, runs PHPUnit under
-coverage and the gates below, and fails when template-managed files have
+CI boots the stack from `.docker/docker-compose.ci.yml` and runs PHPUnit with
+coverage and the gates below. It fails when template-managed files have
 drifted. Matrix images, lifecycle and upgrade tests, schema parity, JS tests,
 Playwright and mutation testing are opt-in inputs, documented in
-[`extension-ci.yml`](.github/workflows/extension-ci.yml). The template's
-`release.yml` calls `extension-release.yml@v1` on a `vX.Y.Z` tag push
+[`extension-ci.yml`](.github/workflows/extension-ci.yml). On a `vX.Y.Z` tag
+push, the template's release workflow calls `extension-release.yml@v1`
 ([Releasing an extension](docs/extension-releases.md)).
 
-`ck ci` runs the gates in this order; `ckx ck ci` runs the same locally and
-`--only cklint,ckfmt` picks gates.
+`ck ci` runs the gates in this order. Run `ckx ck ci` for the same locally,
+and add `--only cklint,ckfmt` to pick gates.
 
 | Gate | Checks |
 |------|--------|
@@ -91,28 +93,28 @@ Playwright and mutation testing are opt-in inputs, documented in
 | `cksmarty` | Every Smarty template compiles |
 | `ckeslint` | oxlint for JS/TS |
 
-Per-repository policy (licence, coverage floor, …) lives in `civikitchen.yaml`
-at the extension root; suppressions always carry a reason. `@v1` pins
-workflows, template, tools and the `:v1` image as one version
-([Releases](docs/releases.md)). Without the template, `examples/ci/` has a
-self-contained workflow.
+Per-repository policy, such as the licence and the coverage floor, lives in
+`civikitchen.yaml` at the extension root. Suppressions always carry a reason.
+Pinning `@v1` pins the workflows, the template, the tools and the v1 image as
+one version ([Releases](docs/releases.md)). Without the template,
+`examples/ci/` has a self-contained workflow.
 
 → [Extension standards](docs/extension-standards.md),
 [Declarative scenarios](docs/scenarios.md)
 
 ## Core development
 
-`ckcoretest` runs core's own PHPUnit suites against the core in a
-`:standalone` stack, fetching the tests the release tarball leaves out:
+`ckcoretest` runs core's own PHPUnit suites against the core in a standalone
+stack. It fetches the tests that the release tarball leaves out:
 
 ```bash
 docker compose exec app ckcoretest tests/phpunit/api/v4/Query
 docker compose exec app ckcoretest --ext search_kit
 ```
 
-`--e2e` runs the `@group e2e` tests against the dev site instead.
-`:standalone-master` and `:standalone-beta` are built daily from core's
-`master` and newest release branch. To test a core change, mount the
+With `--e2e` it runs the e2e group against the dev site instead. The
+`:standalone-master` and `:standalone-beta` images are built daily from core's
+master and its newest release branch. To test a core change, mount the
 directory it touches from a civicrm-core checkout over the image's copy:
 
 ```yaml
@@ -135,11 +137,11 @@ docker run -d -p 80:80 --name civicrm ghcr.io/civico-de/civikitchen:standalone-d
 ```
 
 Open http://localhost and log in as admin / admin. The database lives in the
-container and goes with it; for another host port, set `CIVIKITCHEN_SITE_URL`
-to the URL you open.
+container and goes away with it. For another host port, set
+`CIVIKITCHEN_SITE_URL` to the URL you open.
 
-A profile adds an extension stack, seed data and API users on first boot
-(`verein`, `fundraising`, `events`, `mailing`):
+A profile adds an extension stack, seed data and API users on first boot. The
+profiles are `verein`, `fundraising`, `events` and `mailing`:
 
 ```bash
 docker run -d -p 80:80 --name civicrm -e CIVIKITCHEN_PROFILE=verein \
@@ -156,11 +158,11 @@ builds a Drupal 10 image for any version civibuild can fetch.
 
 ## Images
 
-`ghcr.io/civico-de/civikitchen` is multi-arch. `:standalone` is the main image;
-`:drupal10`, `:drupal11`, `:wordpress` and `:joomla` carry the same tools on a
-CMS site, each with a `-demo` variant. Moving tags are rebuilt daily from the
-current CiviCRM stable and move only after their tests pass; extensions pin the
-`:v1` release tags. → [Images](docs/images.md),
+`ghcr.io/civico-de/civikitchen` is multi-arch. The standalone image is the
+main one. The drupal10, drupal11, wordpress and joomla images carry the same
+tools on a CMS site, and each has a demo variant. Moving tags are rebuilt daily
+from the current CiviCRM stable and move only after their tests pass.
+Extensions pin the v1 release tags. → [Images](docs/images.md),
 [Tags and versions](docs/images.md#tags-and-versions)
 
 ## Documentation

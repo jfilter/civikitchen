@@ -1,13 +1,13 @@
 # Consolidating the PHP toolbelt on mago
 
-The images ship nine PHP quality tools. This plan moves every job mago can
-do onto mago and removes the tool that did it, one gate at a time. A tool
-leaves only when mago is shown to find what the tool found, on fixtures and
-on real extension code. Where mago has no equivalent, the tool stays.
+The images ship nine PHP quality tools. This plan moves every job that mago
+can do onto mago and removes the tool that did it, one gate at a time. A tool
+leaves only once mago is shown to find what the tool found, both on fixtures
+and on real extension code. Where mago has no equivalent, the tool stays.
 
-The decision is [ADR-0017](adr/0017-php-quality-tools-consolidate-on-mago.md).
-The mago pin lives in `toolbelt/install-dev-tools.sh` and follows the newest
-mago release.
+The decision is recorded in
+[ADR-0017](adr/0017-php-quality-tools-consolidate-on-mago.md). The mago pin
+lives in `toolbelt/install-dev-tools.sh` and follows the newest mago release.
 
 ## Target state
 
@@ -23,139 +23,147 @@ mago release.
 | Mutation testing (`ckmutate`) | infection | infection |
 | Unused and missing dependencies (`ckdeps`) | composer-dependency-analyser | composer-dependency-analyser |
 
-At the end, the `phpstan-root` composer root and the phpstan extension
-package leave the images. phpcs, PHPCompatibility and the civicrm/coder clone
-are already gone, and `ckdeps` has its own small composer root
-(`toolbelt/ckdeps-root`).
+At the end, the phpstan-root composer root and the phpstan extension package
+leave the images. phpcs, PHPCompatibility and the civicrm/coder clone are
+already gone. `ckdeps` has its own small composer root in
+`toolbelt/ckdeps-root`.
 
 ## Evidence so far
 
-Measured with mago 1.55.0 inside the `:standalone` image on 2026-10-11.
+Everything here was measured with mago 1.55.0 inside the standalone image on
+2026-10-11.
 
-**`php -l`.** Of 20 fixtures that `php -l` rejects, `mago lint` rejects 15.
-The other five are compile errors that only `mago analyze` reports:
-`break` outside a loop, a `continue` level that is too deep, a redeclared
-function, assignment to `$this`, and a default value of the wrong type.
-`php -l` can leave `cklint` only once `mago analyze` runs on every change,
-which is step 3.
+**php -l.** Of 20 fixtures that `php -l` rejects, `mago lint` rejects 15. The
+other five are compile errors that only `mago analyze` reports. They are a
+break outside a loop, a continue level that is too deep, a redeclared
+function, an assignment to `$this`, and a default value of the wrong type. For
+that reason `php -l` can leave `cklint` only once `mago analyze` runs on every
+change, which is step 3.
 
-**PHPCompatibility.** On 32 version-specific fixtures, checked against an
-8.1 floor:
+**PHPCompatibility.** We checked 32 version-specific fixtures against an 8.1
+floor. mago reports four cases that PHPCompatibility misses. These are
+`str_increment()`, `Dom\HTMLDocument`, `ReflectionClass::newLazyGhost()` and
+the 8.5 deprecation of `ReflectionProperty::setAccessible()`.
 
-- mago reports four cases PHPCompatibility misses: `str_increment()`,
-  `Dom\HTMLDocument`, `ReflectionClass::newLazyGhost()` and the 8.5
-  deprecation of `ReflectionProperty::setAccessible()`.
-- mago misses five cases PHPCompatibility reports:
-  - `"${var}"` interpolation, deprecated in 8.2
-  - `get_class()` without an argument, deprecated in 8.3
-  - an implicitly nullable parameter, deprecated in 8.4. mago reports it
-    only when it runs at 8.4 or later, not at the floor.
-  - `mb_trim()`, new in 8.4. mago has no availability data for it.
-  - dynamic class constant fetch `C::{$name}`, PHP 8.3 syntax that mago
-    parses at an 8.1 floor without a finding
-- New functions, classes and methods are reported only by `mago analyze`
-  (`unavailable-*`), not by `mago lint`. Deprecated functions and constants
-  are reported only by `mago analyze` (`deprecated-*`).
+mago misses five cases that PHPCompatibility reports:
+
+- `"${var}"` interpolation, deprecated in 8.2
+- `get_class()` without an argument, deprecated in 8.3
+- an implicitly nullable parameter, deprecated in 8.4, which mago reports only
+  when it runs at 8.4 or later and not at the floor
+- `mb_trim()`, new in 8.4, for which mago has no availability data
+- the dynamic class constant fetch `C::{$name}`, PHP 8.3 syntax that mago
+  parses at an 8.1 floor without a finding
+
+Only `mago analyze` reports new functions, classes and methods, under the
+unavailable-* codes. `mago lint` does not. Deprecated functions and constants
+are likewise reported only by `mago analyze`, under the deprecated-* codes.
 
 The five gaps are covered by the `civikitchen/php-compatibility` and
-`civikitchen/php-deprecation` rules and by running mago's Deprecation rules
-at the newest PHP (step 4).
-PHPCompatibility also reported functions that CiviCRM core polyfills through
-symfony/polyfill-php80 to -php85 (`mb_trim()`, `array_find()`,
-`json_validate()`), which an extension may call on any floor; mago reads the
-polyfills as symbols and stays silent.
+`civikitchen/php-deprecation` rules, and by running mago's Deprecation rules at
+the newest PHP (step 4). PHPCompatibility also reported functions that
+CiviCRM core polyfills through symfony/polyfill-php80 up to -php85, such as
+`mb_trim()`, `array_find()` and `json_validate()`. An extension may call those
+on any floor. mago reads the polyfills as symbols and stays silent.
 
-**Static analysis.** On one extension that is clean under phpstan level 10,
+**Static analysis.** One extension is clean under phpstan level 10. On it,
 `mago analyze` with core as an include ran in 1.2 s, against 4.7 s for
-phpstan. It reported 25 issues:
+phpstan. mago reported 25 issues:
 
-- 20× `mixed-assignment`, a check stricter than phpstan's level 10
-- 2× `invalid-array-index` on `$result[] = …` against `Civi\Api4\Generic\Result`.
-  These are false positives, because `Result` is an `ArrayObject`.
-- 2× `invalid-type-cast` on an array cast of `Result`, also false positives:
-  casting an `ArrayObject` returns its rows.
-- 1× `incompatible-return-type`: an entity's `create()` returns an action
-  that does not extend the parent's `DAOCreateAction`. phpstan misses this
-  real defect.
+- 20 mixed-assignment findings, a check stricter than phpstan's level 10
+- 2 invalid-array-index findings on `$result[] = …` against
+  `Civi\Api4\Generic\Result`, which are false positives because Result is an
+  ArrayObject
+- 2 invalid-type-cast findings on an array cast of Result, also false
+  positives, because casting an ArrayObject returns its rows
+- 1 incompatible-return-type finding, where an entity's create method returns
+  an action that does not extend the parent's DAOCreateAction, a real defect
+  that phpstan misses
 
-**Extension API.** mago 1.47 added an extension SDK in PHP: custom linter
-rules on the syntax tree, analyzer plugins (type providers, targeted hooks,
-codebase scans) and issue filters. The CiviKitchen phpcs sniffs and phpstan
-rules port to this SDK. The SDK is young, so a port pins its mago version
-exactly.
+**Extension API.** mago 1.47 added an extension SDK in PHP. It supports custom
+linter rules on the syntax tree, analyzer plugins and issue filters. The
+plugins can be type providers, targeted hooks or codebase scans. The
+CiviKitchen phpcs sniffs and phpstan rules port to this SDK. The SDK is young,
+so a port pins its mago version exactly.
 
 ## Port status
 
-`toolbelt/mago-ext` is one mago extension (composer root pinned to the mago
-version in `toolbelt/versions.env`). `make test-mago-ext` runs every case in
-`toolbelt/mago-ext/tests/cases` through the real mago binary and compares the
-exact findings; the image tests run the same cases against the image's mago.
+`toolbelt/mago-ext` is one mago extension. Its composer root is pinned to the
+mago version in `toolbelt/versions.env`. `make test-mago-ext` runs every case
+in `toolbelt/mago-ext/tests/cases` through the real mago binary and compares
+the exact findings. The image tests run the same cases against the image's
+mago.
 
-- **Linter rules, gating in `cklint`:** all eight CiviKitchen sniffs and
-  Slevomat's `DeclareStrictTypes` (mago's own `strict-types`). The sniffs,
-  their PHPUnit test and Slevomat are gone from the phpcs standard. Over the
-  38 local extension repos the mago rules and the old sniffs agree on 3017
-  findings; the seven differences are six false positives the sniff raised on
-  booleans inside nested array literals, and one `phpcs:ignore` that needs to
-  become `@mago-expect`.
-- **Analyzer plugins, not yet run by any gate:** the APIv4 contract rules
-  (calls, fluent fields, action properties and their initialization), the SQL
-  table rule, GET mutation, transactional test DDL, silent database catch, the
-  `civicrm-disallowed` bans (one list in `civicrm-disallowed.php`, read by both
-  tools), the `@ck-legacy` scope as an issue filter, and phpat's architecture
-  test as a plugin. Each shares its contract logic with the phpstan rule
-  through `toolbelt/phpstan/src`, so the two cannot drift during the shadow
-  phase. The architecture plugin reproduces phpat's findings on the same
-  fixtures, plus two phpat misses (a property's `@var` type and a static
-  property fetch). A local shadow run over 49 extension repos found every
-  finding of both tools on the same line once phpstan's suppressions were
-  lifted; the differences left are the divergences below.
-- **Known gaps, both limits of mago's extension API:** a property
-  initialization provider sees the trait but not the class using it, so a
-  trait's defaults count as initialized outside an action too; a hook sees one
-  class-like's syntax tree, so GET mutation does not trace a handler's call
-  into a trait method.
-- **Known divergences:** the fluent APIv4 field check types each argument
-  where it stands, so mago also checks a field name held in a local variable,
-  which phpstan does not; a select list extended in a branch has a union type,
-  and mago then skips the alias checks on `orderBy`/`groupBy` that phpstan
-  still runs. The bans apply in every repo, while phpstan applies them only
-  where `phpstan.neon.dist` includes `civicrm-disallowed.neon`. A class of a
-  required extension that is not checked out is a boundary finding in mago
-  (its help names the missing extension); phpat skips a class it cannot
-  resolve.
+**Linter rules** gate in `cklint`. They cover all eight CiviKitchen sniffs and
+Slevomat's DeclareStrictTypes, which is mago's own strict-types rule. The
+sniffs, their PHPUnit test and Slevomat are gone from the phpcs standard. Over
+the 38 local extension repos, the mago rules and the old sniffs agree on 3017
+findings. Of the seven differences, six are false positives that the sniff
+raised on booleans inside nested array literals. The seventh is one
+`phpcs:ignore` that needs to become `@mago-expect`.
+
+**Analyzer plugins** are ported but not yet run by any gate. They cover the
+APIv4 contract rules for calls, fluent fields, action properties and their
+initialization. They also cover the SQL table rule, GET mutation,
+transactional test DDL and silent database catch. The civicrm-disallowed bans
+are a plugin too, with one list in `civicrm-disallowed.php` that both tools
+read. The `@ck-legacy` scope is an issue filter, and phpat's architecture test
+is a plugin. Each plugin shares its contract logic with the phpstan rule
+through `toolbelt/phpstan/src`, so the two cannot drift during the shadow
+phase. The architecture plugin reproduces phpat's findings on the same
+fixtures. It also catches two cases phpat misses, a property's `@var` type and
+a static property fetch. A local shadow run over 49 extension repos found every
+finding of both tools on the same line once phpstan's suppressions were
+lifted. The differences left are the divergences described below.
+
+**Known gaps** come from two limits of mago's extension API. A property
+initialization provider sees the trait but not the class using it, so a
+trait's defaults count as initialized outside an action too. A hook sees one
+class-like's syntax tree, so GET mutation does not trace a handler's call into
+a trait method.
+
+**Known divergences.** The fluent APIv4 field check types each
+argument where it stands. mago therefore also checks a field name held in a
+local variable, which phpstan does not. A select list extended in a branch has
+a union type, and mago then skips the alias checks on orderBy and groupBy that
+phpstan still runs. The bans apply in every repo, while phpstan applies
+them only where `phpstan.neon.dist` includes `civicrm-disallowed.neon`.
+A class of a required extension that is not checked out is a boundary finding
+in mago, and its help text names the missing extension. phpat skips a class it
+cannot resolve.
 
 ## Steps
 
-Each step ends with the old tool removed from `install-dev-tools.sh`, the
-lock files and the docs, and with a fixture per removed check that fails
+Each step ends with the old tool removed from `install-dev-tools.sh`, the lock
+files and the docs. It also ends with a fixture per removed check that fails
 without its replacement.
 
 ### 1. Follow the newest mago
 
-- Bump the pin to the newest release and keep bumping it. Each bump derives
-  both checksums anew and checks two properties on the extension repos:
-  - formatter output is still clean under `cklint`
-  - the lint stage produces no new findings
-- Report the five compatibility gaps and the `analyze`-only compile errors
-  upstream. A gap fixed there retires its part of the
-  `civikitchen/php-compatibility` or `civikitchen/php-deprecation` rule.
+We bump the pin to the newest release and keep bumping it. Each bump derives
+both checksums anew. It then checks two properties on the extension repos.
+Formatter output must still be clean under `cklint`, and the lint stage must
+produce no new findings.
 
-The 1.45 → 1.55 bump changes formatter output for wrapped boolean
-conditions, which now open and close on their own lines, and for wrapped
-concatenations on the right of `=`. Repos with such code fail `ckfmt
---check` until one `ckfmt` run. The new output is phpcs-clean.
+The five compatibility gaps and the compile errors that only analyze reports
+go upstream as reports. A gap fixed there retires its part of the
+`civikitchen/php-compatibility` or `civikitchen/php-deprecation` rule.
+
+The 1.45 to 1.55 bump changes formatter output in two places. Wrapped boolean
+conditions now open and close on their own lines, and wrapped concatenations
+on the right of an assignment change too. Repos with such code fail
+`ckfmt --check` until one `ckfmt` run. The new output is phpcs-clean.
 
 ### 2. Replace phpcs with mago linter rules (done)
 
-`cklint` runs `php -l` and `mago lint` only. civicrm/coder and the
-CiviKitchen phpcs standard are gone, and `ckconform` fails on a leftover
-`phpcs.xml(.dist)`. `ckmigrate` rewrites a consumer repo's phpcs comments and
+`cklint` runs `php -l` and `mago lint` only. civicrm/coder and the CiviKitchen
+phpcs standard are gone, and `ckconform` fails on a leftover `phpcs.xml` or
+`phpcs.xml.dist`. `ckmigrate` rewrites a consumer repo's phpcs comments and
 deletes its config.
 
-Every check the CiviKitchen standard ran at error level, and what covers it
-now. Measured on a corpus of 1182 extension files, both tools over the same
-files:
+The table lists every check that the CiviKitchen standard ran at error level
+and what covers it now. It was measured on a corpus of 1182 extension files,
+with both tools run over the same files.
 
 | phpcs check | Now |
 |---|---|
@@ -167,104 +175,121 @@ files:
 | Closing tag, `new` without parentheses, line endings, `include` with parentheses, keyword and constant case, tabs, short open tag | `ckfmt` rewrites each of them |
 | Every whitespace, indentation, brace and array layout sniff | `ckfmt` |
 
-Dropped on purpose, with no counterpart:
+Some checks were dropped on purpose and have no counterpart:
 
-- `else if` against `elseif`, a leading backslash in `use`, function-name
-  case: style without a bug behind it.
-- Comment layout (`PostStatementComment`, `DocComment.*`, `ClassComment.*`,
-  `InlineComment`).
-- `ConstructorName`: a PHP 4 constructor is an ordinary method since PHP 8.
-- `DeprecatedFunctions`: `ckcompat` owns deprecations.
-- `DiscouragedFunctions`: Drupal's devel helpers; `eval` is `no-eval`.
-- Drupal-only checks (`t()`, `watchdog`, `hook_menu`, `.info` files,
-  `preg_replace` with `/e`).
-- `CommentedOutCode`: a warning, which never failed `cklint`.
-- A byte-order mark: mago reports it through `strict-types`, since no
-  `declare` can follow it.
+- else if against elseif, a leading backslash in use statements, and
+  function-name case, all style without a bug behind it
+- comment layout (PostStatementComment, DocComment.*, ClassComment.*,
+  InlineComment)
+- ConstructorName, because a PHP 4 constructor is an ordinary method since
+  PHP 8
+- DeprecatedFunctions, because `ckcompat` owns deprecations
+- DiscouragedFunctions, which targets Drupal's devel helpers, while eval is
+  covered by no-eval
+- Drupal-only checks for t(), watchdog, hook_menu, .info files and
+  preg_replace with /e
+- CommentedOutCode, a warning that never failed `cklint`
+- a byte-order mark, which mago reports through strict-types because no
+  declare statement can follow it
 
-`// phpcs:ignore` and `phpcs:disable` lines in consumer repos become
-`@mago-expect` lines. Leftovers need no check of their own: phpcs no longer
-runs, so they are comments, and the mago finding they meant still stands.
+The `// phpcs:ignore` and `phpcs:disable` lines in consumer repos become
+`@mago-expect` lines. Leftovers need no check of their own. phpcs no longer
+runs, so they are plain comments, and the mago finding they meant still
+stands.
 
 ### 3. Replace phpstan with mago analyze
 
-- Done: the analyzer baseline in `ckanalyze` — core and civix files as
-  includes, core's APIv4 `Result` read from a stub, its rows typed by a
-  return-type provider and a patch ([Typing CiviCRM core from outside](core-types.md)). mago's default
-  strictness already reports every use of a `mixed` value (`mixed-argument`,
-  `mixed-operand` and friends), which phpstan level 10 does not. The baseline
-  ignores `mixed-assignment`: assigning a `mixed` value and narrowing it with an
-  `is_*()` check is the house idiom, and the use is still reported.
-- Done: the phpstan rules, the disallowed bans and the phpat architecture
-  test as analyzer plugins (see Port status). The bans are a plugin rather
-  than `disallowed-functions` settings, because they include static methods
-  and a per-path allowance; the architecture test is a plugin rather than
-  `mago guard`, because its allowed namespaces come from each repo's
-  `info.xml` requirements.
-- Shadow phase: `ckanalyze` runs `mago analyze` in `ck ci` after phpstan,
-  non-gating (findings report as `shadow`, a crash still fails). It analyzes
-  what phpstan's main pass analyzes and reads core, civix files, `vendor/`,
-  siblings and `policy.vendored_paths` for their symbols. A first run over 38 extension repos
-  (2026-10-11) completed on every one; `mixed-assignment` and the other
-  `mixed-*` codes make up most findings, followed by classes of required
-  extensions that were not checked out beside the repo, which `ckanalyze` now
-  reads from `info.xml` `<requires>`. Triage every
-  difference across the consumer repos into one of: a mago
-  false positive (fix the plugin or report upstream), a phpstan-only finding
-  (port or accept the loss deliberately), or a real defect (fix it in the
-  repo).
-- Switch the gate once the shadow run is clean on every consumer repo.
-  `phpstan.neon.dist` and `@phpstan-ignore` lines go in the same release,
-  and `ckconform` flags leftovers.
-- `cklint` then runs `mago analyze` on changed files in place of `php -l`.
+The analyzer baseline in `ckanalyze` is done. Core and civix files are
+includes, core's APIv4 Result is read from a stub, and its rows are typed by a
+return-type provider and a patch
+([Typing CiviCRM core from outside](core-types.md)). mago's default
+strictness already reports every use of a mixed value, under
+mixed-argument, mixed-operand and similar codes. phpstan level 10 does not.
+The baseline ignores mixed-assignment. Assigning a mixed value and narrowing
+it with an is_* check is the house idiom, and the later use is still
+reported.
+
+The phpstan rules, the disallowed bans and the phpat architecture test are
+done as analyzer plugins (see Port status). The bans are a plugin rather than
+disallowed-functions settings because they include static methods and a
+per-path allowance. The architecture test is a plugin rather than
+`mago guard` because its allowed namespaces come from each repo's `info.xml`
+requirements.
+
+The shadow phase is running. `ckanalyze` runs `mago analyze` in `ck ci` after
+phpstan without gating. Its findings report as shadow, but a crash still
+fails. It analyzes what phpstan's main pass analyzes. It reads core, civix
+files, `vendor/`, siblings and `policy.vendored_paths` for their symbols. A
+first run over 38 extension repos on 2026-10-11 completed on every one.
+mixed-assignment and the other mixed-* codes made up most findings. Next came
+classes of required extensions that were not checked out beside the repo.
+`ckanalyze` now reads those from the `<requires>` element of `info.xml`.
+
+Every difference across the consumer repos gets triaged into one of three
+kinds. A mago false positive means fixing the plugin or reporting upstream. A
+phpstan-only finding means porting it or accepting the loss deliberately. A
+real defect gets fixed in the repo.
+
+The gate switches once the shadow run is clean on every consumer repo.
+`phpstan.neon.dist` and `@phpstan-ignore` lines go in the same release, and
+`ckconform` flags leftovers. After that, `cklint` runs `mago analyze` on
+changed files in place of `php -l`.
 
 ### 4. Drop PHPCompatibility (done)
 
-`ckcompat` runs mago alone, with the polyfill directories of CiviCRM core's
-`vendor/symfony` as includes:
+`ckcompat` runs mago alone. It uses the polyfill directories of CiviCRM core's
+`vendor/symfony` as includes, and it runs at two PHP versions.
 
-- at the floor: the `civikitchen/php-compatibility` rule (every `mago lint`
-  run also reports the syntax its PHP version cannot parse), and
-  `mago analyze` retaining only the `unavailable-*` and `deprecated-*` codes
-  for built-in symbols. Analyzer filters drop a deprecation of a
-  `@deprecated` symbol in the analyzed code (the static-analysis gate's
-  question) and a newer symbol the file guards with `function_exists()`,
-  `class_exists()` or `method_exists()`, or with a `PHP_VERSION_ID` or
-  `version_compare(PHP_VERSION, …)` check above the floor. A guard counts per
-  file, so an unguarded second call in a guarded file goes unreported.
-- at the top of `--range`, else 8.5: every rule in mago's Deprecation
-  category, read from `mago lint --list-rules` so a bump brings new ones,
-  and `civikitchen/php-deprecation`. A closed range thus never fails on a
-  deprecation that starts above it.
-  mago reports deprecated built-in symbols at every PHP version, so they need
-  no second run; the filter drops one whose `#[Deprecated(since: …)]` in
-  mago's stubs lies above the top of the range.
+At the floor, it runs the `civikitchen/php-compatibility` rule. Every
+`mago lint` run also reports the syntax that its PHP version cannot parse.
+`mago analyze` runs alongside and retains only the unavailable-* and
+deprecated-* codes for built-in symbols. Analyzer filters drop two kinds of
+finding. One is a deprecation of a `@deprecated` symbol in the analyzed code,
+which is the static-analysis gate's question. The other is a newer symbol
+that the file guards with function_exists, class_exists or method_exists, or
+with a `PHP_VERSION_ID` or `version_compare(PHP_VERSION, …)` check above the
+floor. A guard counts per file, so an unguarded second call in a guarded file
+goes unreported.
 
-A function PHP removed before 8.0 (`each()`, `create_function()`) is not
-`ckcompat`'s question: no supported floor has it, and phpstan reports it as
-an unknown function.
+At the top of `--range`, or at 8.5 without one, it runs every rule in mago's
+Deprecation category and `civikitchen/php-deprecation`. The Deprecation rules
+are read from `mago lint --list-rules`, so a bump brings new ones. A closed
+range thus never fails on a deprecation that starts above it. mago reports
+deprecated built-in symbols at every PHP version, so they need no second run.
+The filter drops one whose `#[Deprecated(since: …)]` in mago's stubs lies
+above the top of the range.
 
-phpcs, PHPCompatibility and PHPCSUtils left the images with it. Left open:
+A function that PHP removed before 8.0, such as each() or create_function(),
+is not `ckcompat`'s question. No supported floor has it, and phpstan reports it
+as an unknown function.
 
-- A function new in a PHP release that mago's stubs do not mark yet goes
-  unreported until a mago bump, or until it joins the rule's list.
-- mago 1.55 checks a newer class only on `new`; the
-  `civikitchen/unavailable-access` hook adds constant fetches, enum cases,
-  static calls and global constants from mago's own version data. That data
-  has no version for a newer constant of an older class
-  (`ReflectionProperty::IS_VIRTUAL`), so that goes unreported.
-- A built-in deprecation marked only by a docblock has no `since`, so a
-  `--range` that ends below it still reports it (`lcg_value()` at 8.1-8.3).
-- The polyfills are the image core's, so a function core polyfills only since
-  a newer CiviCRM than the extension's minimum passes.
+phpcs, PHPCompatibility and PHPCSUtils left the images with this step. Four
+limits remain open.
+
+A function new in a PHP release that mago's stubs do not mark yet goes
+unreported until a mago bump, or until it joins the rule's list.
+
+mago 1.55 checks a newer class only on `new`. The
+`civikitchen/unavailable-access` hook adds constant fetches, enum cases,
+static calls and global constants from mago's own version data. That data has
+no version for a newer constant of an older class, such as
+`ReflectionProperty::IS_VIRTUAL`, so that case goes unreported.
+
+A built-in deprecation marked only by a docblock has no since value. A
+`--range` that ends below it therefore still reports it, as with lcg_value()
+at 8.1 to 8.3.
+
+The polyfills are the image core's. A function that core polyfills only since
+a newer CiviCRM than the extension's minimum therefore passes.
 
 ## Risks
 
-- The extension SDK appeared in 1.47 and mago releases several times a week.
-  Ported rules tie the toolbelt to that API, and every bump runs their
-  fixtures.
-- A formatter change in a bump turns `ckfmt --check` red on unchanged code.
-  The bump procedure in step 1 measures this before a release, and the
-  changelog names the one `ckfmt` run consumers need.
-- Every consumer repo carries a `phpstan.neon.dist` and suppression lines.
-  Steps 2 and 3 migrate them with a `ckconform` check, not by hand.
+The extension SDK appeared in 1.47, and mago releases several times a week.
+Ported rules tie the toolbelt to that API, so every bump runs their fixtures.
+
+A formatter change in a bump turns `ckfmt --check` red on unchanged code. The
+bump procedure in step 1 measures this before a release, and the changelog
+names the one `ckfmt` run that consumers need.
+
+Every consumer repo carries a `phpstan.neon.dist` and suppression lines.
+Steps 2 and 3 migrate them with a `ckconform` check rather than by hand.
