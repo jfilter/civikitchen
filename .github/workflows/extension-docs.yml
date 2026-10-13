@@ -1,0 +1,88 @@
+# Builds an extension's handbook/ pages into a documentation site, one per
+# language, checks every page against WCAG 2.1 AA and deploys it to GitHub Pages.
+name: Extension Docs
+
+on:
+  workflow_call:
+    inputs:
+      languages:
+        description: >-
+          Space-separated languages; the first is page.md at the site root,
+          each further one is built into /<lang>/ from page.<lang>.md, falling
+          back to page.md.
+        type: string
+        default: 'en'
+      deploy:
+        description: Deploy to GitHub Pages; the caller decides when (e.g. pushes to main).
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  ZENSICAL_VERSION: 0.0.70
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # job.workflow_sha: this file's own commit, not the caller's.
+      - name: Checkout civikitchen
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: civico-de/civikitchen
+          ref: ${{ job.workflow_sha }}
+          path: .civikitchen-docs
+          persist-credentials: false
+          # The root lockfile pins the Playwright and axe-core the check runs with.
+          sparse-checkout: |
+            .github/extension-docs
+            package.json
+            package-lock.json
+          sparse-checkout-cone-mode: false
+
+      - name: Build the site
+        env:
+          CK_LANGUAGES: ${{ inputs.languages }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zensical"
+          "$RUNNER_TEMP/zensical/bin/pip" install --quiet "zensical==${ZENSICAL_VERSION}"
+          read -ra languages <<< "$CK_LANGUAGES"
+          "$RUNNER_TEMP/zensical/bin/python" .civikitchen-docs/.github/extension-docs/build.py \
+            . "$RUNNER_TEMP/site" "${languages[@]}"
+
+      - name: Check WCAG 2.1 AA
+        working-directory: .civikitchen-docs/.github/extension-docs
+        env:
+          SITE_DIR: ${{ runner.temp }}/site
+        run: |
+          npm ci --prefix "$GITHUB_WORKSPACE/.civikitchen-docs" --no-audit --no-fund
+          npx playwright install chromium --with-deps
+          npx playwright test
+
+      - name: Upload the site
+        if: inputs.deploy
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    if: inputs.deploy
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

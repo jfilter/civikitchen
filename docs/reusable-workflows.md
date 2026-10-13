@@ -1,7 +1,7 @@
 # Reusable CI building blocks
 
 `extension-ci.yml` stays the complete default for a CiviCRM extension. Some
-checks are needed by several extensions beside that stack. Three smaller
+checks are needed by several extensions beside that stack. Four smaller
 reusable workflows cover them, so a repo does not copy the boilerplate for
 checkout, toolchain, artifacts, cleanup and runner selection.
 
@@ -22,8 +22,8 @@ container.
 
 ## Working directory
 
-Every one of these workflows, `extension-ci.yml` included, takes a
-`working_directory` input. It defaults to the repository root, except in
+Every one of these workflows except `extension-docs.yml`, `extension-ci.yml`
+included, takes a `working_directory` input. It defaults to the repository root, except in
 `playwright-e2e.yml`, where it defaults to `tests/e2e`. Each job runs there.
 The value must be a plain relative path inside the repository.
 
@@ -55,7 +55,7 @@ is described in
 
 ## Runner selection
 
-All jobs pick their runner in this order:
+All jobs except those of `extension-docs.yml` pick their runner in this order:
 
 1. the workflow's `runs_on` input,
 2. the caller repository's `CK_RUNS_ON` variable,
@@ -126,3 +126,51 @@ jobs:
 Deployment credentials and product-specific orchestration do not belong in
 these workflows. Deploys, image fleets, tenant discovery and bespoke service
 topologies stay in the repository that owns them.
+
+## Documentation site
+
+`extension-docs.yml` turns the extension's `handbook/` directory into a
+documentation site on GitHub Pages. These are the same pages the handbook
+extension shows inside CiviCRM, so one set of Markdown files serves both.
+
+The site takes its name and description from `info.xml`. Each page's
+frontmatter sets its title, its position (`order`) and its group in the
+navigation (`section`), just as it does in the handbook. Links between pages
+are relative, such as `setup.md#first-steps`, and the build fails on a link to
+a missing page or heading.
+
+A site can have several languages. The first one in `languages` is the default:
+its pages are the plain `name.md` files, served at the site root. Every other
+language gets its own copy under `/<lang>/`, built from `name.<lang>.md` where
+that file exists and from `name.md` where it does not. A language switch in the
+header links the copies. A translation without its default page fails the
+build, and so does a translation for a language the caller did not list. A
+dotted name that is not a language suffix, such as `notes.v1.2.md`, is an
+ordinary page.
+
+Every page of every language is checked against WCAG 2.1 AA in light and dark
+mode before anything is deployed.
+
+```yaml
+name: Docs
+on:
+  push:
+    branches: [main]
+    paths: ['handbook/**', 'info.xml']
+  pull_request:
+    paths: ['handbook/**', 'info.xml']
+jobs:
+  docs:
+    uses: civico-de/civikitchen/.github/workflows/extension-docs.yml@v1
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    with:
+      languages: en de
+      deploy: ${{ github.event_name == 'push' }}
+```
+
+Set the repository's Pages source to GitHub Actions once. GitHub serves Pages
+from a private repository only on paid plans. The workflow always runs on
+GitHub-hosted runners and takes neither `runs_on` nor `working_directory`.

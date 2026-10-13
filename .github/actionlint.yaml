@@ -3,6 +3,9 @@
 # workflows use job.workflow_sha to pin their checkout of this repo; drop these
 # ignores once an actionlint release accepts it.
 paths:
+  .github/workflows/extension-docs.yml:
+    ignore:
+      - 'property "workflow_sha" is not defined in object type'
   .github/workflows/extension-ci.yml:
     ignore:
       - 'property "workflow_sha" is not defined in object type'

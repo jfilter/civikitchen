@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<extension key="org.example.greeter" type="module">
+  <file>greeter</file>
+  <name>Greeter</name>
+  <description>Sends a greeting.</description>
+</extension>

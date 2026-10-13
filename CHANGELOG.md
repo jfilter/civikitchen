@@ -14,6 +14,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- `extension-docs.yml` builds an extension's `handbook/` pages into a GitHub
+  Pages site, one copy per language with `name.<lang>.md` translations falling
+  back to `name.md`, and checks every page against WCAG 2.1 AA.
+
 ### Changed
 
 - A push tests the standalone candidate against MariaDB 10.11 only; daily and
