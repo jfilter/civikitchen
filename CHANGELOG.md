@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.41.0] - 2026-10-13
+
 ### Added
 
 - `extension-docs.yml` builds an extension's `handbook/` pages into a GitHub
@@ -1988,7 +1990,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/civico-de/civikitchen/compare/v1.40.0...HEAD
+[Unreleased]: https://github.com/civico-de/civikitchen/compare/v1.41.0...HEAD
+[1.41.0]: https://github.com/civico-de/civikitchen/compare/v1.40.0...v1.41.0
 [1.40.0]: https://github.com/civico-de/civikitchen/compare/v1.39.3...v1.40.0
 [1.39.3]: https://github.com/jfilter/civikitchen/compare/v1.39.2...v1.39.3
 [1.39.2]: https://github.com/jfilter/civikitchen/compare/v1.39.1...v1.39.2
