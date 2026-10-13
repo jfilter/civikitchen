@@ -40,6 +40,27 @@ printf '# Greeter\n\nSee [usage](usage.md).\n' > "$work/plain/handbook/index.md"
 build "$work/plain" "$work/one" en >/dev/null 2>&1 || fail "one language does not build"
 grep -q 'hreflang' "$work/one/index.html" && fail "one language shows a language switch"
 
+# Heading ids as the handbook extension renders them: umlauts kept, dots and underscores dropped.
+mkdir -p "$work/ids/handbook"
+cp "$fixture/info.xml" "$work/ids/"
+printf '# Ids\n\n## Größe & Maße\n\n## `pulse.host_status`\n' > "$work/ids/handbook/ids.md"
+printf '# Greeter\n\n[a](ids.md#größe--maße) [b](ids.md#pulsehoststatus)\n' > "$work/ids/handbook/index.md"
+build "$work/ids" "$work/i" en >/dev/null 2>&1 || fail "links to the extension's heading ids do not resolve"
+printf '# Greeter\n\n[b](ids.md#pulsehost_status)\n' > "$work/ids/handbook/index.md"
+build "$work/ids" "$work/i2" en >/dev/null 2>&1 && fail "a heading id the extension never renders resolves"
+
+# A translation inherits order and title from its default page.
+mkdir -p "$work/inherit/handbook"
+cp "$fixture/info.xml" "$work/inherit/"
+printf '# Greeter\n' > "$work/inherit/handbook/index.md"
+printf -- '---\ntitle: Zebra\norder: 1\n---\nZ\n' > "$work/inherit/handbook/zebra.md"
+printf 'Z de\n' > "$work/inherit/handbook/zebra.de.md"
+printf -- '---\ntitle: Apple\norder: 2\n---\nA\n' > "$work/inherit/handbook/apple.md"
+printf -- '---\ntitle: Apfel\n---\nA de\n' > "$work/inherit/handbook/apple.de.md"
+build "$work/inherit" "$work/n" en de >/dev/null 2>&1 || fail "the inheritance fixture does not build"
+nav=$(grep -o 'Zebra\|Apfel' "$work/n/de/index.html" | head -2 | tr '\n' ' ')
+[ "$nav" = "Zebra Apfel " ] || fail "German nav order is '$nav'"
+
 mkdir -p "$work/orphan/handbook"
 cp "$fixture/info.xml" "$work/orphan/"
 printf '# A\n' > "$work/orphan/handbook/index.md"

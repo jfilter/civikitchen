@@ -137,12 +137,15 @@ The site takes its name and description from `info.xml`. Each page's
 frontmatter sets its title, its position (`order`) and its group in the
 navigation (`section`), just as it does in the handbook. Links between pages
 are relative, such as `setup.md#first-steps`, and the build fails on a link to
-a missing page or heading.
+a missing page or heading. Heading ids are made the way the handbook makes
+them: lower case, dashes for spaces, umlauts kept, dots and underscores
+dropped. A heading `pulse.host_status` is linked as `#pulsehoststatus`.
 
 A site can have several languages. The first one in `languages` is the default:
 its pages are the plain `name.md` files, served at the site root. Every other
 language gets its own copy under `/<lang>/`, built from `name.<lang>.md` where
-that file exists and from `name.md` where it does not. A language switch in the
+that file exists and from `name.md` where it does not. A translation takes the
+frontmatter keys it leaves out, such as `order`, from its default page. A language switch in the
 header links the copies. A translation without its default page fails the
 build, and so does a translation for a language the caller did not list. A
 dotted name that is not a language suffix, such as `notes.v1.2.md`, is an

@@ -14,6 +14,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- `extension-docs.yml` makes heading ids the way the handbook extension does,
+  so a `page.md#anchor` link to a heading with umlauts, dots or underscores
+  resolves on the site and in CiviCRM alike.
+- A translation inherits `order`, `section` and its title from the default page
+  in the site navigation, as it does in the handbook.
+
 ## [1.41.0] - 2026-10-13
 
 ### Added

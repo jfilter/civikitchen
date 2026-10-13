@@ -5,11 +5,12 @@ usage: build.py <extension-dir> <site-dir> <lang> [<lang> ...]
 The first language is the default: page.md, served at the site root. Every
 further language is built into <site-dir>/<lang>/ from page.<lang>.md where it
 exists and page.md where not, the fallback the handbook extension applies in
-CiviCRM. Title, order and section come from each page's frontmatter, as there.
+CiviCRM. Title, order and section come from each page's frontmatter, and a
+variant inherits the keys it leaves out from page.md, as there. Heading ids
+follow the extension's renderer, so a page.md#anchor link works in both.
 Runs under the Python that has zensical installed.
 """
 
-import json
 import os
 import re
 import shutil
@@ -34,7 +35,15 @@ def die(message):
     sys.exit(1)
 
 
+class Slugify:
+    """Stands for slug.slugify in the generated mkdocs.yml."""
+
+
+yaml.SafeDumper.add_representer(Slugify, lambda dumper, _: dumper.represent_scalar("tag:yaml.org,2002:python/name:slug.slugify", ""))
+
+
 def frontmatter(path):
+    """The page's frontmatter, with its first # heading as title when it sets none."""
     text = path.read_text(encoding="utf-8")
     match = re.match(r"^---\n(.*?)\n---\n", text, re.S)
     data = yaml.safe_load(match.group(1)) if match else {}
@@ -42,8 +51,17 @@ def frontmatter(path):
         die(f"{path}: frontmatter is not a mapping")
     if "title" not in data:
         heading = re.search(r"^# (.+)$", text, re.M)
-        data["title"] = heading.group(1).strip() if heading else path.stem
+        if heading:
+            data["title"] = heading.group(1).strip()
     return data
+
+
+def page_meta(source, variants, lang):
+    """A variant inherits every key it leaves out from the default page, the title last of all."""
+    default = frontmatter(source / variants[None])
+    meta = {**default, **frontmatter(source / variants[lang])} if lang in variants else default
+    meta.setdefault("title", Path(variants[None]).stem)
+    return meta
 
 
 def split_name(name, languages):
@@ -61,7 +79,7 @@ def nav(pages, lang, source):
     """Landing page first, then by order and title; a section sits where its first page sorts."""
     entries = []
     for stem, variants in pages.items():
-        meta = frontmatter(source / variants.get(lang, variants[None]))
+        meta = page_meta(source, variants, lang)
         if stem == "index":
             continue
         order = meta.get("order")
@@ -71,7 +89,7 @@ def nav(pages, lang, source):
     entries.sort(key=lambda e: e[0])
     out, groups = [], {}
     if "index" in pages:
-        out.append({frontmatter(source / pages["index"].get(lang, pages["index"][None]))["title"]: "index.md"})
+        out.append({page_meta(source, pages["index"], lang)["title"]: "index.md"})
     for _, section, item in entries:
         if not section:
             out.append(item)
@@ -139,7 +157,7 @@ def main():
                          "toggle": {"icon": "lucide/moon", "name": "Switch to light mode"}},
                     ],
                 },
-                "markdown_extensions": {"tables": {}, "toc": {"permalink": True}, "pymdownx.highlight": {},
+                "markdown_extensions": {"tables": {}, "toc": {"permalink": True, "slugify": Slugify()}, "pymdownx.highlight": {},
                                         "pymdownx.inlinehilite": {}, "pymdownx.superfences": {}},
             }
             if site_url:
@@ -151,10 +169,11 @@ def main():
                     {"name": LANG_NAMES.get(other.split("_")[0], other), "link": (site_url or "/") + ("" if i == 0 else f"{other}/"), "lang": other.split("_")[0]}
                     for i, other in enumerate(languages)]}
             config_file = Path(tmp) / lang / "mkdocs.yml"
-            # JSON is YAML, and Zensical reads an mkdocs.yml.
-            config_file.write_text(json.dumps(config, ensure_ascii=False))
-            # Zensical keeps site_dir inside the config's directory.
-            subprocess.run([sys.executable, "-m", "zensical", "build", "--strict", "-f", str(config_file)], check=True)
+            config_file.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False))
+            # Zensical keeps site_dir inside the config's directory; PYTHONPATH lets it import slug.py,
+            # without leaving a __pycache__ in the action checkout.
+            env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent), "PYTHONDONTWRITEBYTECODE": "1"}
+            subprocess.run([sys.executable, "-m", "zensical", "build", "--strict", "-f", str(config_file)], check=True, env=env)
             shutil.copytree(Path(tmp) / lang / "site", site / prefix, dirs_exist_ok=True)
 
 
