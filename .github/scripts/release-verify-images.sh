@@ -78,7 +78,7 @@ if [ ${#drift[@]} -gt 0 ]; then
   if [ "${ALLOW_DRIFT}" = 1 ]; then
     echo "::warning::releasing anyway (allow_image_drift)"
   else
-    echo "Wait for 'Build Dev Images' to promote this commit, or re-run this workflow with allow_image_drift." >&2
+    echo "Wait for a full 'Build Dev Images' run (daily, or dispatched) to promote this commit, or re-run this workflow with allow_image_drift." >&2
     exit 1
   fi
 fi

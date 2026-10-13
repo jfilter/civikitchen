@@ -73,7 +73,10 @@ digest. Two consequences worth knowing:
 - A released image has already been through test-then-promote. There is no
   second, differently-built artifact that only the release path produces.
 - A release can only ship image content that is already live. If the release
-  commit touches `docker/**`, `toolbelt/**` or `packages/**`, let *Build Dev Images* finish and promote first.
+  commit touches `docker/**`, `toolbelt/**` or `packages/**`, wait for a full
+  *Build Dev Images* run to promote it. A push builds only the standalone
+  flavors; the full run is the daily one, or start it with
+  `gh workflow run build-dev-images.yml`.
 
 `release.yml` enforces the second point rather than trusting it: for every
 flavor it recovers the commit the live image was built from (the promoted
@@ -116,8 +119,8 @@ becomes the GitHub release body.
 `scripts/release.sh` runs every gate the tag push would hit, locally and
 before the tag exists — on `main`, clean, in sync with `origin/main`, the tag
 free here and on origin, the changelog and ckinit suites green, and a completed,
-successful *Build Dev Images* run for the newest commit that touched the image
-trigger paths. Without `--apply` it only reports.
+successful full *Build Dev Images* run (daily or dispatched, not a push run) at
+or after the newest commit that touched the image trigger paths. Without `--apply` it only reports.
 
 ```bash
 git switch main && git pull

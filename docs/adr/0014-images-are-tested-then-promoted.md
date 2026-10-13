@@ -4,9 +4,9 @@
 
 ## Context
 
-The images rebuild daily against the current CiviCRM stable release and on
-pushes that touch the image inputs (`docker/`, `toolbelt/` and the files the
-build and its tests read). A new CiviCRM release, a Debian
+The images rebuild daily against the current CiviCRM stable release; pushes
+that touch the image inputs (`docker/`, `toolbelt/` and the files the build
+and its tests read) rebuild the standalone flavors. A new CiviCRM release, a Debian
 update or a tool change can break the build or the boot, and the moving tags
 (`:standalone`, `:drupal10`, …) are what local development and the canary
 run on.

@@ -14,6 +14,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- *Build Dev Images* builds only the standalone flavors on push; the CMS and
+  demo flavors build daily or on a manual dispatch. `release.sh` now requires a
+  full run (daily or dispatched) covering the image commit — start one with
+  `gh workflow run build-dev-images.yml` before releasing right after a push.
+
 ## [1.39.3] - 2026-10-13
 
 ### Fixed

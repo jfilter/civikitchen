@@ -46,21 +46,24 @@ image_sha=$(git log -1 --format=%H HEAD -- "${paths[@]}")
 [ -n "$image_sha" ] || die "no commit touching the image trigger paths"
 # Repo from origin: no script in this repo hardwires the slug.
 repo=$(git config --get remote.origin.url | sed -E 's#^(https://github\.com/|git@github\.com:)##; s#\.git$##')
-# A push builds its head, so the run sits on any commit from the image commit up to HEAD.
+# A push builds only the standalone flavors, so only a full run (daily cron or
+# manual dispatch) on any commit from the image commit up to HEAD counts.
 # One line per run, newest last: reruns mean a commit can have several runs.
 run=$(gh run list -R "$repo" --workflow build-dev-images.yml \
-  --branch main --limit 100 --json status,conclusion,updatedAt,databaseId,headSha \
-  --jq '.[] | "\(.updatedAt) \(.databaseId) \(.status) \(.conclusion) \(.headSha)"' | sort |
+  --branch main --limit 100 --json status,conclusion,updatedAt,databaseId,event,headSha \
+  --jq '.[] | "\(.updatedAt) \(.databaseId) \(.event) \(.status) \(.conclusion) \(.headSha)"' | sort |
   while read -r line; do
     sha=${line##* }
+    read -r _ _ event _ <<<"$line"
+    [ "$event" != push ] || continue
     if git merge-base --is-ancestor "$image_sha" "$sha" 2>/dev/null &&
       git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then echo "$line"; fi
   done | tail -1)
-[ -n "$run" ] || die "no Build Dev Images run for image commit ${image_sha}"
-read -r _ run_id run_status run_conclusion _ <<<"$run"
-[ "$run_status" = completed ] || die "newest Build Dev Images run ${run_id} for ${image_sha} is ${run_status}"
-[ "$run_conclusion" = success ] || die "newest Build Dev Images run ${run_id} for ${image_sha} concluded ${run_conclusion}"
-ok "Build Dev Images run ${run_id} is green for image commit ${image_sha}"
+[ -n "$run" ] || die "no full Build Dev Images run for image commit ${image_sha}: wait for the daily run or start one with 'gh workflow run build-dev-images.yml -R ${repo}'"
+read -r _ run_id _ run_status run_conclusion _ <<<"$run"
+[ "$run_status" = completed ] || die "newest full Build Dev Images run ${run_id} for ${image_sha} is ${run_status}"
+[ "$run_conclusion" = success ] || die "newest full Build Dev Images run ${run_id} for ${image_sha} concluded ${run_conclusion}"
+ok "full Build Dev Images run ${run_id} is green for image commit ${image_sha}"
 
 if [ "$apply" != --apply ]; then
   echo "dry run: would tag ${head} as ${tag} and push it to origin (pass --apply)"

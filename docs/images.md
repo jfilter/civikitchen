@@ -314,12 +314,14 @@ about every file that still names one, with the replacement.
 
 ## Tags & versions
 
-All images rebuild **daily** (and on pushes that touch the image inputs, `docker/**` and `toolbelt/**` among them) against the
+All images rebuild **daily** against the
 current CiviCRM stable release, resolved from
 [latest.civicrm.org](https://latest.civicrm.org/stable.php) at build time.
 `:standalone-master` and `:standalone-beta` are the exception: they follow core's
 branches, and a change to the image inputs reaches them with their next daily
-build. The pipeline is test-then-promote ([ADR-0014](adr/0014-images-are-tested-then-promoted.md)): a release that breaks the build or the boot
+build. A push that touches the image inputs (`docker/**` and `toolbelt/**`
+among them) rebuilds only the standalone flavors; the CMS and demo flavors
+follow with the next daily run or a manual dispatch. The pipeline is test-then-promote ([ADR-0014](adr/0014-images-are-tested-then-promoted.md)): a release that breaks the build or the boot
 tests never reaches the stable tags — they keep serving the last good image
 until the breakage is fixed. The cron run builds with the layer cache disabled,
 so `apt-get upgrade` in the Dockerfiles actually re-runs and Debian security

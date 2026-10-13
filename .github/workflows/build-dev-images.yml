@@ -424,6 +424,9 @@ jobs:
 
   build-buildkit:
     needs: resolve-civicrm
+    # Daily and on dispatch only: a push builds the standalone flavors, and
+    # release.sh requires a full run before tagging.
+    if: github.event_name != 'push'
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -687,6 +690,9 @@ jobs:
 
   build-demo:
     needs: resolve-civicrm
+    # Daily and on dispatch only: a push builds the standalone flavors, and
+    # release.sh requires a full run before tagging.
+    if: github.event_name != 'push'
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -898,6 +904,7 @@ jobs:
         env:
           STANDALONE_VERSIONS: ${{ needs.resolve-civicrm.outputs.standalone_versions }}
           SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
         run: .github/scripts/assemble-scan-list.sh
 
   scan-images:
@@ -908,6 +915,8 @@ jobs:
     # gate is one line (add this job to promote-*'s `needs`), and should stay a
     # deliberate decision rather than a side effect.
     needs: [scan-image-list, merge-standalone, merge-buildkit, merge-demo]
+    # On push the CMS and demo merges are skipped, which would skip this job too.
+    if: ${{ !cancelled() && needs.scan-image-list.result == 'success' && needs.merge-standalone.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
