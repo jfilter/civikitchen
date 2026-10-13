@@ -11,5 +11,5 @@
 # and survive `ckinit --update`.
 # BEGIN CIVIKITCHEN MANAGED caller
 include:
-  - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml
+  - remote: https://raw.githubusercontent.com/civico-de/civikitchen/v1/ci/gitlab/extension-ci.yml
 # END CIVIKITCHEN MANAGED caller

@@ -19,4 +19,4 @@ if [[ ! "${minor}" =~ ^[0-9]+\.[0-9]+$ ]]; then
   echo "policy.civicrm is not a CiviCRM minor like 6.17: '${minor}'" >&2
   exit 1
 fi
-echo "ghcr.io/jfilter/civikitchen:standalone-${minor}"
+echo "ghcr.io/civico-de/civikitchen:standalone-${minor}"

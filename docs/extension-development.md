@@ -505,11 +505,11 @@ with the extension's `working_directory` (see
 ```yaml
 jobs:
   base:
-    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
     with:
       working_directory: base
   addon:
-    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
     with:
       working_directory: addon
       playwright: true
@@ -551,7 +551,7 @@ jobs:
   base:
     permissions:
       contents: write        # a called workflow can only narrow this
-    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1
     with:
       working_directory: base
       stage: build
@@ -559,7 +559,7 @@ jobs:
     needs: [base]
     permissions:
       contents: write
-    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1
     with:
       working_directory: addon
       stage: build
@@ -567,7 +567,7 @@ jobs:
     needs: [addon, base]
     permissions:
       contents: write
-    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1
     with:
       stage: publish
 ```

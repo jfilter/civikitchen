@@ -22,7 +22,7 @@ rules:
         # as one versioned contract, and fixes have to reach the extension fleet
         # without a PR in each. See docs/adr/0001-*, which also spells out
         # what a hash pin would cost. Third-party actions still need a hash.
-        jfilter/civikitchen/*: ref-pin
+        civico-de/civikitchen/*: ref-pin
         "*": hash-pin
 
   template-injection:

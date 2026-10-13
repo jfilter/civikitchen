@@ -26,7 +26,7 @@ name: civikitchen-extension-with-playwright
 
 services:
   app:
-    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:standalone}
+    image: ${IMAGE:-ghcr.io/civico-de/civikitchen:standalone}
     # The :standalone tag is rebuilt daily and on image changes to main, to pick
     # up upstream patches. Always pull on `up` so a stale local copy doesn't
     # mask entrypoint/install fixes.

@@ -97,7 +97,7 @@ final class CiCoverageCheckTest extends CheckTestCase
         $context = $this->repo([
             '__policy_fixture' => "min_coverage=54\n",
             'tests/phpunit/SomeTest.php' => '<?php',
-            '.gitlab-ci.yml' => "include:\n  - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml\n",
+            '.gitlab-ci.yml' => "include:\n  - remote: https://raw.githubusercontent.com/civico-de/civikitchen/v1/ci/gitlab/extension-ci.yml\n",
         ]);
         $this->assertPasses($this->run_(new CiCoverageCheck(), $context));
     }
@@ -108,7 +108,7 @@ final class CiCoverageCheckTest extends CheckTestCase
         $context = $this->repo([
             '__policy_fixture' => "min_coverage=54\n",
             'tests/phpunit/SomeTest.php' => '<?php',
-            '.github/workflows/ci.yml' => "jobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n    with:\n      key: x\n",
+            '.github/workflows/ci.yml' => "jobs:\n  ci:\n    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@main\n    with:\n      key: x\n",
         ]);
         $this->assertPasses($this->run_(new CiCoverageCheck(), $context));
     }

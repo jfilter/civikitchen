@@ -25,7 +25,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-PREFIX="ghcr.io/jfilter/civikitchen"
+PREFIX="ghcr.io/civico-de/civikitchen"
 while getopts "p:h" opt; do
     case "${opt}" in
         p) PREFIX="${OPTARG}" ;;

@@ -13,7 +13,7 @@ set -euo pipefail
 die() { echo "ckinit: $*" >&2; exit 2; }
 
 checkout="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-image="${CKINIT_IMAGE:-ghcr.io/jfilter/civikitchen:v1}"
+image="${CKINIT_IMAGE:-ghcr.io/civico-de/civikitchen:v1}"
 command -v docker >/dev/null 2>&1 || die "docker is required"
 
 options=()

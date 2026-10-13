@@ -11,7 +11,7 @@ main workflow rather than create a toolbox job:
 ```yaml
 jobs:
   ci:
-    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
     with:
       extra_phpunit_config: phpunit-unit.xml.dist
 ```
@@ -56,7 +56,7 @@ passed through environment variables rather than interpolated into shell source.
 ```yaml
 jobs:
   frontend:
-    uses: jfilter/civikitchen/.github/workflows/frontend-ci.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/frontend-ci.yml@v1
     with:
       working_directory: frontend
       cache_dependency_path: frontend/package-lock.json
@@ -77,7 +77,7 @@ root paths.
 ```yaml
 jobs:
   e2e:
-    uses: jfilter/civikitchen/.github/workflows/playwright-e2e.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/playwright-e2e.yml@v1
     with:
       install_command: npm ci
       browser_install_command: npx playwright install --with-deps chromium
@@ -102,7 +102,7 @@ checks that need no CiviCRM stack.
 ```yaml
 jobs:
   guard:
-    uses: jfilter/civikitchen/.github/workflows/command-check.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/command-check.yml@v1
     with:
       command: bash tools/qa/check-public-safe.sh
 ```

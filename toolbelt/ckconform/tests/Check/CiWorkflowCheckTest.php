@@ -10,7 +10,7 @@ use CiviKitchen\Ckconform\Tests\CheckTestCase;
 final class CiWorkflowCheckTest extends CheckTestCase
 {
     private const MONOREPO_CALLER = "name: CI\njobs:\n  example:\n"
-        . "    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1\n"
+        . "    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1\n"
         . "    with:\n      working_directory: example\n";
 
     public function testFailsWithoutAnyWorkflow(): void
@@ -23,12 +23,12 @@ final class CiWorkflowCheckTest extends CheckTestCase
     public function testAGitlabPipelineIncludingTheSharedCiPasses(): void
     {
         foreach ([
-            "include:\n  - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml\n",
-            "include: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml\n",
+            "include:\n  - remote: https://raw.githubusercontent.com/civico-de/civikitchen/v1/ci/gitlab/extension-ci.yml\n",
+            "include: https://raw.githubusercontent.com/civico-de/civikitchen/v1/ci/gitlab/extension-ci.yml\n",
             "include:\n  project: mirrors/civikitchen\n  ref: v1\n  file: /ci/gitlab/extension-ci.yml\n",
             "include:\n  - project: mirrors/civikitchen\n    file: [ci/gitlab/extension-ci.yml]\n",
             // GitLab's !reference below the include must not hide it.
-            "include:\n  - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml\n"
+            "include:\n  - remote: https://raw.githubusercontent.com/civico-de/civikitchen/v1/ci/gitlab/extension-ci.yml\n"
                 . ".setup:\n  script: [echo hi]\nextra:\n  script:\n    - !reference [.setup, script]\n",
         ] as $pipeline) {
             $reporter = $this->run_(new CiWorkflowCheck(), $this->repo(['.gitlab-ci.yml' => $pipeline]));
@@ -66,7 +66,7 @@ final class CiWorkflowCheckTest extends CheckTestCase
     public function testCallingTheSharedCiCountsAsALintStep(): void
     {
         $context = $this->repo([
-            '.github/workflows/ci.yml' => "name: CI\njobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n",
+            '.github/workflows/ci.yml' => "name: CI\njobs:\n  ci:\n    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@main\n",
         ]);
         $reporter = $this->run_(new CiWorkflowCheck(), $context);
         $this->assertPasses($reporter);
@@ -108,7 +108,7 @@ final class CiWorkflowCheckTest extends CheckTestCase
         $context = $this->monorepoExtension([
             '.github/workflows/ci.yml' => "name: CI\njobs:\n# END CIVIKITCHEN MANAGED header\n"
                 . "  # BEGIN CIVIKITCHEN MANAGED job-example\n  example:\n"
-                . "    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1\n"
+                . "    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1\n"
                 . "    with:\n      working_directory: example\n"
                 . "  # END CIVIKITCHEN MANAGED job-example\n      playwright: true\n",
         ], [], ['Civi/Neighbour.php' => '<?php']);
@@ -132,7 +132,7 @@ final class CiWorkflowCheckTest extends CheckTestCase
     public function testAMentionOfTheSharedCiInACommentIsNoLintStep(): void
     {
         $context = $this->repo([
-            '.github/workflows/ci.yml' => "# was: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1\nname: CI\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: phpunit\n",
+            '.github/workflows/ci.yml' => "# was: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1\nname: CI\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: phpunit\n",
         ]);
         $this->assertWarns($this->run_(new CiWorkflowCheck(), $context), 'no lint step');
     }

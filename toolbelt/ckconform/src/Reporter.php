@@ -164,7 +164,7 @@ final class Reporter
             'runs' => [[
                 'tool' => ['driver' => [
                     'name' => 'ckconform',
-                    'informationUri' => 'https://github.com/jfilter/civikitchen',
+                    'informationUri' => 'https://github.com/civico-de/civikitchen',
                     'rules' => array_values($rules),
                 ]],
                 'results' => $results,

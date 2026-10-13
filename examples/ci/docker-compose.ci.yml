@@ -10,7 +10,7 @@ services:
   app:
     # Pin a minor for reproducible CI (e.g. :standalone-6.15) or track the
     # current stable with :standalone. Override per-run via IMAGE=... .
-    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:standalone}
+    image: ${IMAGE:-ghcr.io/civico-de/civikitchen:standalone}
     pull_policy: always
     depends_on:
       db:

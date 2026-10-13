@@ -3,7 +3,7 @@
 #
 #   jobs:
 #     ci:
-#       uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+#       uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
 #
 # Pin the major (@v1), not @main: workflow, template, ck* tools and images are
 # released as one versioned contract (docs/releases.md).
@@ -334,7 +334,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           sparse-checkout: |
             toolbelt
@@ -411,7 +411,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
       # ckinit stamps renovate.json from the organisation's renovate_preset,
@@ -614,7 +614,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
       - name: Install trivy
@@ -814,7 +814,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           sparse-checkout: .github/actions
           path: .civikitchen-siblings/ci
@@ -984,7 +984,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           sparse-checkout: .github/actions
           path: .civikitchen-siblings/ci
@@ -1174,7 +1174,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           sparse-checkout: .github/actions
           path: .civikitchen-siblings/ci
@@ -1422,7 +1422,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           sparse-checkout: .github/actions
           path: .civikitchen-siblings/ci
@@ -1555,7 +1555,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           sparse-checkout: .github/actions
           path: .civikitchen-siblings/ci
@@ -1889,7 +1889,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           sparse-checkout: .github/actions
           path: .civikitchen-siblings/ci
@@ -2032,7 +2032,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           sparse-checkout: .github/actions
           path: .civikitchen-siblings/ci

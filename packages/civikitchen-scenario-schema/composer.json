@@ -1,5 +1,5 @@
 {
-  "name": "jfilter/civikitchen-scenario-schema",
+  "name": "civico-de/civikitchen-scenario-schema",
   "description": "Validated YAML scenario loader for CiviKitchen",
   "license": "AGPL-3.0-or-later",
   "require": {

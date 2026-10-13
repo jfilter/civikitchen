@@ -185,7 +185,7 @@ final class MonorepoRequiresMountedCheckTest extends CheckTestCase
     private function caller(string $with): string
     {
         return "name: CI\non: push\njobs:\n  example:\n"
-            . "    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1\n"
+            . "    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1\n"
             . "    with:\n      working_directory: example\n" . $with;
     }
 

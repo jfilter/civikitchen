@@ -157,6 +157,6 @@ Budget roughly an hour for the full default run; profile legs add up to
 docker run --rm -v "$(pwd)/tests/images:/civikitchen-test:ro" \
     -v "$(pwd):/civikitchen-src:ro" \
     --entrypoint='' \
-    ghcr.io/jfilter/civikitchen:standalone \
+    ghcr.io/civico-de/civikitchen:standalone \
     bash /civikitchen-test/test-dev-tools.sh
 ```

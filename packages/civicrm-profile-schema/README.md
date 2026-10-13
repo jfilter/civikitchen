@@ -1,4 +1,4 @@
-# @jfilter/civicrm-profile-schema
+# @civico-de/civicrm-profile-schema
 
 Validate a profile without installing a package or accessing the network:
 
@@ -65,7 +65,7 @@ written first, because the APIs of a component only exist once it is on.
 ## Use
 
 ```ts
-import schema from "@jfilter/civicrm-profile-schema/profile.schema.json";
+import schema from "@civico-de/civicrm-profile-schema/profile.schema.json";
 import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 
@@ -79,7 +79,7 @@ const validateProfile = ajv.getSchema(schema.$id);
 const validateDependency = ajv.getSchema(`${schema.$id}#/$defs/dependency`);
 ```
 
-Published to GitHub Packages under the `@jfilter` scope. Installing requires a
+Published to GitHub Packages under the `@civico-de` scope. Installing requires a
 `read:packages` token (GitHub Packages has no anonymous npm access, even for
 public packages) — put it in your user `~/.npmrc`:
 
@@ -90,5 +90,5 @@ public packages) — put it in your user `~/.npmrc`:
 and route the scope in the consuming repo's `.npmrc`:
 
 ```
-@jfilter:registry=https://npm.pkg.github.com
+@civico-de:registry=https://npm.pkg.github.com
 ```

@@ -10,7 +10,7 @@ canonical filename and syntax works identically on laptops and in CI
 ([ADR-0010](adr/0010-one-yaml-configuration-file.md)).
 
 ```yaml
-"$schema": https://raw.githubusercontent.com/jfilter/civikitchen/main/packages/civikitchen-scenario-schema/scenario.schema.json
+"$schema": https://raw.githubusercontent.com/civico-de/civikitchen/main/packages/civikitchen-scenario-schema/scenario.schema.json
 version: 1
 policy:
   license: AGPL-3.0-or-later
@@ -25,7 +25,7 @@ policy:
       reason: Unmodified upstream assets
 scenario:
   name: myextension
-  image: ghcr.io/jfilter/civikitchen:v1
+  image: ghcr.io/civico-de/civikitchen:v1
   database:
     image: mariadb:11.4
   extension:

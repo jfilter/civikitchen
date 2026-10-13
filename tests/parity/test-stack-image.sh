@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../.."
 script=.github/scripts/stack-image.sh
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-[ "$("$script" 6.17 '' fallback)" = ghcr.io/jfilter/civikitchen:standalone-6.17 ] || fail "policy minor"
+[ "$("$script" 6.17 '' fallback)" = ghcr.io/civico-de/civikitchen:standalone-6.17 ] || fail "policy minor"
 [ "$("$script" '' ghcr.io/acme/img:1 fallback)" = ghcr.io/acme/img:1 ] || fail "image input"
 [ "$("$script" '' '' fallback)" = fallback ] || fail "fallback"
 [ -z "$("$script" '' '' '')" ] || fail "empty fallback stays empty"

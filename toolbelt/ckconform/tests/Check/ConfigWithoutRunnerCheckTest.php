@@ -149,7 +149,7 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         $context = $this->repo([
             'phpstan.neon.dist' => 'parameters:',
             'phpunit.xml.dist' => '<phpunit/>',
-            '.github/workflows/ci.yml' => "jobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n",
+            '.github/workflows/ci.yml' => "jobs:\n  ci:\n    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@main\n",
         ], git: true);
         $this->assertPasses($this->run_(new ConfigWithoutRunnerCheck(), $context));
     }
@@ -159,7 +159,7 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             'playwright.config.ts' => 'export default {}',
-            '.github/workflows/ci.yml' => "jobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n",
+            '.github/workflows/ci.yml' => "jobs:\n  ci:\n    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@main\n",
         ], git: true);
         $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'playwright.config.ts');
     }
@@ -328,7 +328,7 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
     /** ckcoverage runs phpunit.xml(.dist) only; the shared CI runs a second config through extra_phpunit_config. */
     public function testTheSharedCiRunsTheSecondConfigOnlyWhenNamed(): void
     {
-        $uses = "jobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main\n";
+        $uses = "jobs:\n  ci:\n    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@main\n";
         $unnamed = $this->repo([
             'phpunit.xml.dist' => '<phpunit/>',
             'phpunit-unit.xml.dist' => '<phpunit/>',
@@ -367,5 +367,5 @@ final class ConfigWithoutRunnerCheckTest extends CheckTestCase
         $this->assertFails($this->run_(new ConfigWithoutRunnerCheck(), $context), 'playwright.config.ts');
     }
 
-    private const GITLAB_CALLER = "include:\n  - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml\n";
+    private const GITLAB_CALLER = "include:\n  - remote: https://raw.githubusercontent.com/civico-de/civikitchen/v1/ci/gitlab/extension-ci.yml\n";
 }

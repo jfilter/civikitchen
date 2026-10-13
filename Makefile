@@ -437,7 +437,7 @@ build: ## Build the standalone image locally; CIVICRM_VERSION=<release>, or CIVI
 	    -t civikitchen:standalone$(if $(CIVICRM_VERSION),-$(CIVICRM_VERSION)) .
 
 e2e-ckcreate: ## A fresh ckcreate scaffold passes ck ci in its dev stack (Docker; IMAGE=, default :v1)
-	bash tests/ckcreate/e2e-ckcreate.sh $(or $(IMAGE),ghcr.io/jfilter/civikitchen:v1)
+	bash tests/ckcreate/e2e-ckcreate.sh $(or $(IMAGE),ghcr.io/civico-de/civikitchen:v1)
 
 test-images: ## Boot tests + dev-tool tests against the published images (~1 h)
 	bash tests/images/run-local.sh

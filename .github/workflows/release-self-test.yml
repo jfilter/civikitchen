@@ -20,11 +20,11 @@ permissions:
 
 jobs:
   release:
-    if: ${{ github.repository == 'jfilter/civikitchen' }}
+    if: ${{ github.repository == 'civico-de/civikitchen' }}
     permissions:
       contents: write  # declared by the called publish job; a dry run writes nothing
     uses: ./.github/workflows/extension-release.yml
     with:
       working_directory: examples/monorepo/ckmonobase
       dry_run: true
-      image: ghcr.io/jfilter/civikitchen:standalone
+      image: ghcr.io/civico-de/civikitchen:standalone

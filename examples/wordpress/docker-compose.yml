@@ -11,7 +11,7 @@ name: civikitchen-wordpress
 
 services:
   app:
-    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:wordpress}
+    image: ${IMAGE:-ghcr.io/civico-de/civikitchen:wordpress}
     pull_policy: always
     depends_on:
       db:

@@ -101,7 +101,7 @@ final class PlaywrightDiagnosticsCheckTest extends CheckTestCase
         $caller = <<<'YML'
             jobs:
               compat:
-                uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+                uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
                 with:
                   key: demo
                   playwright: true

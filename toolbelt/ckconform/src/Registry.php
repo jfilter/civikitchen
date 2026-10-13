@@ -49,6 +49,7 @@ final class Registry
         Check\NpmLicenseCheck::class,
         Check\FloatingTagCheck::class,
         Check\DeprecatedImagePathCheck::class,
+        Check\MovedRepositoryCheck::class,
         Check\ComposeFloatingTagCheck::class,
         Check\ComposeProjectNameCheck::class,
         Check\PlaywrightDiagnosticsCheck::class,

@@ -64,7 +64,7 @@ license="${CKCREATE_LICENSE:-Proprietary}"
 copyright="${CKCREATE_COPYRIGHT:-}"
 compat="${CKCREATE_COMPATIBILITY:-6.12}"
 php_floor="${CKCREATE_PHP_COMPATIBILITY:-}"
-image="${CKCREATE_IMAGE:-ghcr.io/jfilter/civikitchen:v1}"
+image="${CKCREATE_IMAGE:-ghcr.io/civico-de/civikitchen:v1}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in

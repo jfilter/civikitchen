@@ -473,7 +473,7 @@ the GitHub callers and `renovate.json`. The file includes civikitchen's
 
 ```yaml
 include:
-  - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml
+  - remote: https://raw.githubusercontent.com/civico-de/civikitchen/v1/ci/gitlab/extension-ci.yml
 ```
 
 The jobs run inside the civikitchen image, with the database as a GitLab
@@ -497,7 +497,7 @@ Variables below the managed block override the defaults:
 
 | Variable | Default | Effect |
 |---|---|---|
-| `CK_IMAGE` | `ghcr.io/jfilter/civikitchen:v1` | the job image |
+| `CK_IMAGE` | `ghcr.io/civico-de/civikitchen:v1` | the job image |
 | `CK_DB_IMAGE` | `mariadb:10.11` | keep it equal to the database of `.docker/docker-compose.ci.yml` |
 | `CK_LIFECYCLE` | `"1"` | `"0"` skips `cklifecycle` |
 | `CK_NPM_CI` | `"0"` | `"1"` installs `node_modules` before the gates |
@@ -1249,7 +1249,7 @@ Caller, with both:
 ```yaml
 jobs:
   ci:
-    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
     with:
       composer_install: true
       sibling_repo: myorg/othersibling@v1.4.0
@@ -1443,7 +1443,7 @@ schema change, where a saved search's stored API params stop being valid, where
 a custom field's column survives a migration in name only.
 
 ```yaml
-      core_upgrade_from: ghcr.io/jfilter/civikitchen:standalone-6.16
+      core_upgrade_from: ghcr.io/civico-de/civikitchen:standalone-6.16
 ```
 
 One image tag, and it is the version to upgrade **from** — the oldest minor you
@@ -1525,15 +1525,15 @@ permissions:
 
 jobs:
   compat:
-    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
     with:
       # This caller gets the default `ci` job too — there is one reusable
       # workflow, not two. Point it at the moving edge instead of repeating
       # the pinned :v1 run every push already does: together with the oldest
       # minor below, the weekly run then covers both ends of the range.
-      image: ghcr.io/jfilter/civikitchen:standalone
+      image: ghcr.io/civico-de/civikitchen:standalone
       # Oldest minor from info.xml <compatibility>.
-      matrix_images: ghcr.io/jfilter/civikitchen:standalone-6.16
+      matrix_images: ghcr.io/civico-de/civikitchen:standalone-6.16
       lifecycle: true
       upgrade_from_last_release: true
       # The other half of that question: the upgrader ran, but did it arrive
@@ -1542,7 +1542,7 @@ jobs:
       # The site an existing user has: installed on that oldest minor, then
       # upgraded to the image above. Two boots and a core schema upgrade —
       # the slowest check here, and the one nothing else covers.
-      core_upgrade_from: ghcr.io/jfilter/civikitchen:standalone-6.16
+      core_upgrade_from: ghcr.io/civico-de/civikitchen:standalone-6.16
       # Browser tests, for a repo that has a test:e2e script — another stack
       # boot, which is exactly why it lives here and not in ci.yml.
       # playwright: true

@@ -8,7 +8,7 @@ set -euo pipefail
 
 # --paginate concatenates one JSON array per page; --jq '.[]' streams the
 # elements so `jq -s` can make them one array again.
-gh api "/users/${OWNER}/packages/container/${PKG}/versions?per_page=100" \
+gh api "/orgs/${OWNER}/packages/container/${PKG}/versions?per_page=100" \
     --paginate --jq '.[]' | jq -s '.' > versions.json
 
 # The digest (GHCR calls it `name`) of the version carrying a tag.

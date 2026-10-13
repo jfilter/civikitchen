@@ -72,7 +72,7 @@ final class ComposeFloatingTagCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             '.docker/docker-compose.yml'
-                => "services:\n  app:\n    image: \${CIVIKITCHEN_IMAGE:-ghcr.io/jfilter/civikitchen:standalone}\n",
+                => "services:\n  app:\n    image: \${CIVIKITCHEN_IMAGE:-ghcr.io/civico-de/civikitchen:standalone}\n",
         ], git: true);
         $this->assertPasses($this->run_(new ComposeFloatingTagCheck(), $context));
     }

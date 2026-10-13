@@ -10,7 +10,7 @@ use CiviKitchen\Ckconform\Tests\CheckTestCase;
 
 final class ReleaseTagCoherenceCheckTest extends CheckTestCase
 {
-    private const RELEASE_CALLER = "name: Release\njobs:\n  release:\n    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n";
+    private const RELEASE_CALLER = "name: Release\njobs:\n  release:\n    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n";
 
     public function testFailsWhenInfoXmlIsAheadOfTheNewestTag(): void
     {

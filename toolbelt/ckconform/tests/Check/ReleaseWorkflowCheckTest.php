@@ -12,7 +12,7 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
     public function testFailsWhenNoWorkflowCallsTheSharedReleasePipeline(): void
     {
         $context = $this->repo([
-            '.github/workflows/ci.yml' => "name: CI\njobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1\n",
+            '.github/workflows/ci.yml' => "name: CI\njobs:\n  ci:\n    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1\n",
         ]);
         $this->assertFails($this->run_(new ReleaseWorkflowCheck(), $context), 'no release workflow');
     }
@@ -25,7 +25,7 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
     public function testSilentWhenTheSharedReleasePipelineIsCalled(): void
     {
         $context = $this->repo([
-            '.github/workflows/release.yml' => "name: Release\njobs:\n  release:\n    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n",
+            '.github/workflows/release.yml' => "name: Release\njobs:\n  release:\n    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n",
         ]);
         $this->assertSilent($this->run_(new ReleaseWorkflowCheck(), $context));
     }
@@ -57,12 +57,12 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
     private function rootReleaseCaller(string $publishNeeds = '[base, example]', string $exampleStage = 'build'): string
     {
         $job = static fn (string $directory, string $stage): string => "  {$directory}:\n"
-            . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n"
+            . "    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n"
             . "    with:\n      working_directory: {$directory}\n      stage: {$stage}\n";
 
         return "name: Release\njobs:\n" . $job('base', 'build') . $job('example', $exampleStage)
             . "  publish:\n    needs: {$publishNeeds}\n"
-            . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n"
+            . "    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n"
             . "    with:\n      stage: publish\n";
     }
 
@@ -81,7 +81,7 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
     private static function releaseJob(string $name, string $stage, string $needs = '', string $directory = ''): string
     {
         return "  {$name}:\n" . ($needs === '' ? '' : "    needs: {$needs}\n")
-            . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n"
+            . "    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n"
             . "    with:\n" . ($directory === '' ? '' : "      working_directory: {$directory}\n")
             . "      stage: {$stage}\n";
     }
@@ -130,7 +130,7 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
 
     public function testAMultiExtensionRepositoryFailsWhenNoJobBuildsThisExtension(): void
     {
-        $caller = "name: Release\njobs:\n  base:\n    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n"
+        $caller = "name: Release\njobs:\n  base:\n    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n"
             . "    with:\n      working_directory: base\n      stage: build\n";
         $this->assertFails(
             $this->run_(new ReleaseWorkflowCheck(), $this->monorepoRelease($caller)),
@@ -174,14 +174,14 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
     public function testAMentionInACommentIsNoCaller(): void
     {
         $context = $this->repo([
-            '.github/workflows/ci.yml' => "# releases go through jfilter/civikitchen/.github/workflows/extension-release.yml@v1\nname: CI\njobs:\n  ci:\n    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1\n",
+            '.github/workflows/ci.yml' => "# releases go through civico-de/civikitchen/.github/workflows/extension-release.yml@v1\nname: CI\njobs:\n  ci:\n    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1\n",
         ]);
         $this->assertFails($this->run_(new ReleaseWorkflowCheck(), $context), 'no release workflow');
     }
 
     public function testFailsWhenTwoJobsCallTheSharedReleasePipeline(): void
     {
-        $caller = "name: Release\njobs:\n  release:\n    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n";
+        $caller = "name: Release\njobs:\n  release:\n    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n";
         $context = $this->repo([
             '.github/workflows/release.yml' => $caller,
             '.github/workflows/publish.yml' => $caller,
@@ -191,7 +191,7 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
 
     public function testADryRunCallerIsNoSecondPublisher(): void
     {
-        $caller = "name: Release\njobs:\n  release:\n    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n";
+        $caller = "name: Release\njobs:\n  release:\n    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n";
         $context = $this->repo([
             '.github/workflows/release.yml' => $caller,
             '.github/workflows/release-dry-run.yml' => $caller . "    with:\n      dry_run: true\n",
@@ -203,7 +203,7 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             '.github/workflows/release-dry-run.yml' => "name: Release\njobs:\n  release:\n"
-                . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n    with:\n      dry_run: true\n",
+                . "    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n    with:\n      dry_run: true\n",
         ]);
         $this->assertFails($this->run_(new ReleaseWorkflowCheck(), $context), 'no release workflow');
     }
@@ -212,7 +212,7 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
     {
         $context = $this->repo([
             '__policy_fixture' => "release=none -- internal glue, never installed elsewhere\n",
-            '.github/workflows/release.yml' => "name: Release\njobs:\n  release:\n    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n",
+            '.github/workflows/release.yml' => "name: Release\njobs:\n  release:\n    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n",
         ]);
         $this->assertFails(
             $this->run_(new ReleaseWorkflowCheck(), $context),
@@ -225,7 +225,7 @@ final class ReleaseWorkflowCheckTest extends CheckTestCase
         $context = $this->repo([
             '__policy_fixture' => "release=none -- internal glue, never installed elsewhere\n",
             '.github/workflows/release.yml' => "name: Release\njobs:\n  release:\n"
-                . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n    with:\n      dry_run: true\n",
+                . "    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n    with:\n      dry_run: true\n",
         ]);
         $this->assertPasses($this->run_(new ReleaseWorkflowCheck(), $context));
     }

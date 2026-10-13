@@ -31,8 +31,8 @@
 #
 # Usage:
 #   bash tests/images/boot-test-standalone.sh <image>
-#   CK_PROVISION_OVERRIDE=docker/runtime/provision.sh bash tests/images/boot-test-standalone.sh ghcr.io/jfilter/civikitchen:standalone
-#   CK_DATABASE_IMAGE=mysql:8.0 bash tests/images/boot-test-standalone.sh ghcr.io/jfilter/civikitchen:standalone
+#   CK_PROVISION_OVERRIDE=docker/runtime/provision.sh bash tests/images/boot-test-standalone.sh ghcr.io/civico-de/civikitchen:standalone
+#   CK_DATABASE_IMAGE=mysql:8.0 bash tests/images/boot-test-standalone.sh ghcr.io/civico-de/civikitchen:standalone
 # CK_PROVISION_OVERRIDE mounts a checkout's provision.sh over the image's —
 # for running the test against a published image before it is rebuilt.
 set -euo pipefail

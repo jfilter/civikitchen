@@ -18,7 +18,7 @@
 # In your extension's .docker/compose.yaml:
 #   services:
 #     app:
-#       image: ghcr.io/jfilter/civikitchen:standalone
+#       image: ghcr.io/civico-de/civikitchen:standalone
 
 # Same PHP the official image published (civicrm/civicrm:6.16 ships 8.4).
 ARG PHP_VERSION=8.4

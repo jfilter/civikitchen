@@ -62,13 +62,13 @@ jobs:
   #     fail-fast: false
   #     matrix:
   #       include:
-  #         - image: ghcr.io/jfilter/civikitchen:drupal10
+  #         - image: ghcr.io/civico-de/civikitchen:drupal10
   #           ext_base: /home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext
-  #         - image: ghcr.io/jfilter/civikitchen:drupal11
+  #         - image: ghcr.io/civico-de/civikitchen:drupal11
   #           ext_base: /home/buildkit/buildkit/build/site/web/sites/default/files/civicrm/ext
-  #         - image: ghcr.io/jfilter/civikitchen:wordpress
+  #         - image: ghcr.io/civico-de/civikitchen:wordpress
   #           ext_base: /home/buildkit/buildkit/build/site/web/wp-content/uploads/civicrm/ext
-  #         - image: ghcr.io/jfilter/civikitchen:joomla
+  #         - image: ghcr.io/civico-de/civikitchen:joomla
   #           ext_base: /home/buildkit/buildkit/build/site/web/media/civicrm/ext
   #   steps:
   #     - uses: actions/checkout@v4

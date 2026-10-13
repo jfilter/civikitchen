@@ -5,7 +5,7 @@
 # unprotected shas are deleted. $DRY_RUN=1 only logs. Needs $GH_TOKEN.
 set -euo pipefail
 
-gh api "/users/${OWNER}/packages/container/${PKG}/versions?per_page=100" \
+gh api "/orgs/${OWNER}/packages/container/${PKG}/versions?per_page=100" \
     --paginate > versions.json
 
 # A candidate tag is "<anything>-<40-hex-sha>" or that plus an arch suffix.
@@ -34,5 +34,5 @@ echo "pruning $(wc -l < victims.tsv) versions:"; cat victims.tsv
 if [ "${DRY_RUN}" = "1" ]; then echo "dry run - nothing deleted"; exit 0; fi
 while IFS=$'\t' read -r id tags; do
     echo "deleting version ${id} (${tags})"
-    gh api -X DELETE "/users/${OWNER}/packages/container/${PKG}/versions/${id}"
+    gh api -X DELETE "/orgs/${OWNER}/packages/container/${PKG}/versions/${id}"
 done < victims.tsv

@@ -5,7 +5,7 @@
 # checks. Run inside a built dev image, e.g.:
 #
 #   docker run --rm -v "$(pwd)/tests/images:/civikitchen-test" \
-#       ghcr.io/jfilter/civikitchen:standalone \
+#       ghcr.io/civico-de/civikitchen:standalone \
 #       bash /civikitchen-test/test-dev-tools.sh
 #
 # Or via the workflow's smoke-test job (see .github/workflows/build-dev-images.yml).
@@ -173,7 +173,7 @@ cat > "${WORKDIR}/scenario/civikitchen.yaml" <<'YAML'
 version: 1
 scenario:
   name: image-yaml-smoke
-  image: ghcr.io/jfilter/civikitchen:v1
+  image: ghcr.io/civico-de/civikitchen:v1
   database:
     image: mariadb:10.11
   extension:

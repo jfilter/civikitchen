@@ -11,7 +11,7 @@ name: civikitchen-drupal11
 
 services:
   app:
-    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:drupal11}
+    image: ${IMAGE:-ghcr.io/civico-de/civikitchen:drupal11}
     pull_policy: always
     depends_on:
       db:

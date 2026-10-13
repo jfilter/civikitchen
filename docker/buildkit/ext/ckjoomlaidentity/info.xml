@@ -4,7 +4,7 @@
   <name>CiviKitchen Joomla Identity Sync</name>
   <description>On Joomla, load the Joomla session identity matching the authx-authenticated CiviCRM user, so permission checks (which CRM_Core_Permission_Joomla resolves from Joomla's own identity) work for cv --user and api_key requests.</description>
   <urls>
-    <url desc="Documentation">https://github.com/jfilter/civikitchen</url>
+    <url desc="Documentation">https://github.com/civico-de/civikitchen</url>
   </urls>
   <maintainer>
     <author>CiviKitchen</author>

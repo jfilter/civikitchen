@@ -11,7 +11,7 @@ name: civikitchen-joomla
 
 services:
   app:
-    image: ${IMAGE:-ghcr.io/jfilter/civikitchen:joomla}
+    image: ${IMAGE:-ghcr.io/civico-de/civikitchen:joomla}
     pull_policy: always
     depends_on:
       db:

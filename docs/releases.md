@@ -51,12 +51,12 @@ The template does both pins for you:
 # .github/workflows/ci.yml
 jobs:
   ci:
-    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
 ```
 
 ```yaml
 # .docker/docker-compose.ci.yml
-image: ${CIVIKITCHEN_IMAGE:-ghcr.io/jfilter/civikitchen:v1}
+image: ${CIVIKITCHEN_IMAGE:-ghcr.io/civico-de/civikitchen:v1}
 ```
 
 There is no third pin to keep in sync. The drift job inside `extension-ci.yml`
@@ -142,7 +142,7 @@ next run. A re-run of an earlier run is not a next run: GitHub resolves the
 reusable workflow at the first attempt and keeps that commit for every re-run
 (`gh api repos/<owner>/<repo>/actions/runs/<id> --jq .referenced_workflows`
 shows it). To test a release, push a commit, or run the tools locally against
-`ghcr.io/jfilter/civikitchen:v1`.
+`ghcr.io/civico-de/civikitchen:v1`.
 
 ### Versioning rules
 
@@ -169,9 +169,9 @@ One repo deliberately stays on the moving edge:
 ```yaml
 jobs:
   ci:
-    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@main
+    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@main
     with:
-      image: ghcr.io/jfilter/civikitchen:standalone
+      image: ghcr.io/civico-de/civikitchen:standalone
 ```
 
 Its `.github/workflows/ci.yml` is a template-managed file, so the deviation is

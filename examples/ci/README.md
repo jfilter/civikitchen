@@ -34,7 +34,7 @@ How it works:
 
 Tips:
 
-- **Pin a minor** (`ghcr.io/jfilter/civikitchen:standalone-6.15`) for
+- **Pin a minor** (`ghcr.io/civico-de/civikitchen:standalone-6.15`) for
   reproducible CI, or track `:standalone` to catch upstream breakage early —
   or run both in a matrix.
 - For browser-level UI tests, start from

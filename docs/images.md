@@ -1,7 +1,7 @@
 # Images
 
 Development and demo image flavors, all published to
-`ghcr.io/jfilter/civikitchen`. For the first-boot knobs each flavor
+`ghcr.io/civico-de/civikitchen`. For the first-boot knobs each flavor
 understands, see the
 [configuration reference](configuration.md).
 
@@ -52,7 +52,7 @@ CiviCRM is auto-installed on first container start when `CIVICRM_AUTO_INSTALL=1`
 ```yaml
 services:
   app:
-    image: ghcr.io/jfilter/civikitchen:standalone
+    image: ghcr.io/civico-de/civikitchen:standalone
     ports: ["8080:80"]
     environment:
       CIVICRM_AUTO_INSTALL: "1"   # DB host/name/user/password default to db/civicrm
@@ -87,7 +87,7 @@ database itself. Use these flavors to test CMS-specific behaviour.
 ```yaml
 services:
   app:
-    image: ghcr.io/jfilter/civikitchen:drupal10
+    image: ghcr.io/civico-de/civikitchen:drupal10
     ports: ["8080:80"]
     environment:
       CIVICRM_DB_HOST: db
@@ -155,7 +155,7 @@ Five demo flavors, all built from the same `docker/buildkit/` `demo` target:
 ```bash
 # Pick a flavor: standalone-demo (CMS-less), drupal10-demo, drupal11-demo,
 # wordpress-demo, joomla-demo
-docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:drupal10-demo
+docker run -d -p 80:80 --name civicrm ghcr.io/civico-de/civikitchen:drupal10-demo
 
 # then open http://localhost  —  login: admin / admin
 ```
@@ -241,7 +241,7 @@ fetched nor enabled on that framework.
 # German Verein showcase: Drupal 10 + DACH extension stack + seed data + API users
 docker run -d -p 80:80 --name civicrm \
     -e CIVIKITCHEN_PROFILE=verein \
-    ghcr.io/jfilter/civikitchen:drupal10-demo
+    ghcr.io/civico-de/civikitchen:drupal10-demo
 ```
 
 Profiles are **combinable** — a comma-separated list is applied left to right
@@ -479,7 +479,7 @@ checkout over the image's copy, and toggle the change there (`git stash`,
 ```yaml
 services:
   app:
-    image: ghcr.io/jfilter/civikitchen:standalone-master
+    image: ghcr.io/civico-de/civikitchen:standalone-master
     volumes:
       - ../civicrm-core/ext/afform:/var/www/html/core/ext/afform
 ```

@@ -382,6 +382,8 @@ grep -q 'drifted   .github/workflows/release.yml$' <<<"$out" || { echo "a marker
 arel="$adopt/.github/workflows/release.yml"
 grep -q 'BEGIN CIVIKITCHEN MANAGED caller' "$arel"
 grep -qF "'v[0-9]+.[0-9]+.[0-9]+-*'" "$arel"
+grep -qF 'uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1' "$arel" \
+  || { echo "--update kept the previous owner in the release caller" >&2; exit 1; }
 for kept in '# The dependency release is pinned in civikitchen.yaml.' 'composer_app_repositories: exampledep' \
   'composer_install: true' '# Read-only GitHub App for the private dependency.' \
   'composer_app_id: ${{ vars.EXAMPLE_APP_ID }}' 'composer_app_private_key: ${{ secrets.EXAMPLE_APP_KEY }}'; do
@@ -434,7 +436,7 @@ on:
     tags: ['v*']
 jobs:
   publish:
-    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1
 YAML
 if out=$("$root/scaffold/ckinit.php" --update "$adopt" 2>&1); then
   echo "--update created a second release caller" >&2
@@ -448,14 +450,14 @@ printf '%s\n' '# see extension-release.yml' 'name: Publish' 'on: push' 'jobs:' '
 "$root/scaffold/ckinit.php" --update "$adopt" >/dev/null
 test -f "$arel"
 # A second caller beside the managed one is drift as well.
-printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1' \
   > "$adopt/.github/workflows/publish.yml"
 out=$("$root/scaffold/ckinit.php" --check "$adopt" 2>&1 || true)
 grep -q 'publish.yml also calls extension-release.yml' <<<"$out" \
   || { echo "a second caller beside release.yml was not reported: $out" >&2; exit 1; }
 /bin/rm "$adopt/.github/workflows/publish.yml"
 # A dry-run caller publishes nothing, so it is no second caller.
-printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1' \
   '    with:' '      dry_run: true' > "$adopt/.github/workflows/release-dry-run.yml"
 "$root/scaffold/ckinit.php" --check "$adopt" >/dev/null \
   || { echo "a dry-run caller was counted as a second release caller" >&2; exit 1; }
@@ -692,7 +694,7 @@ grep -q 'missing   .github/workflows/release.yml' <<<"$out" \
   || { echo "a missing root release caller was not reported: $out" >&2; exit 1; }
 # Another workflow already calling the shared release blocks a second caller.
 mkdir -p "$mono/.github/workflows"
-printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1' \
   > "$mono/.github/workflows/publish.yml"
 if out=$("$root/scaffold/ckinit.php" --update "$mono" 2>&1); then
   echo "a second release caller was stamped beside an existing one" >&2
@@ -705,20 +707,20 @@ test ! -e "$mono/.github/workflows/release.yml"
 cp "$work/mono-release.yml" "$mono/.github/workflows/release.yml"
 "$root/scaffold/ckinit.php" --check "$mono" >/dev/null
 # ... and beside an existing root caller too.
-printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1' \
   > "$mono/.github/workflows/publish.yml"
 out=$("$root/scaffold/ckinit.php" --check "$mono" 2>&1 || true)
 grep -q 'publish.yml also calls extension-release.yml' <<<"$out" \
   || { echo "a second caller beside the root release.yml was not reported: $out" >&2; exit 1; }
 /bin/rm "$mono/.github/workflows/publish.yml"
-printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+printf '%s\n' 'on: push' 'jobs:' '  rel:' '    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1' \
   '    with: {dry_run: true, working_directory: base}' > "$mono/.github/workflows/release-dry-run.yml"
 "$root/scaffold/ckinit.php" --check "$mono" >/dev/null \
   || { echo "a dry-run caller was counted as a second root release caller" >&2; exit 1; }
 /bin/rm "$mono/.github/workflows/release-dry-run.yml"
 # A hand-written root caller: its inputs and secrets are never overwritten.
 printf '%s\n' 'name: Release' 'on: {push: {tags: ["v*"]}}' 'jobs:' '  release:' \
-  '    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1' \
+  '    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1' \
   '    with: {working_directory: base}' '    secrets:' '      composer_app_id: ${{ secrets.APP_ID }}' \
   > "$mono/.github/workflows/release.yml"
 cp "$mono/.github/workflows/release.yml" "$work/mono-handwritten.yml"
@@ -830,7 +832,7 @@ make_extension "$work/gitlab"
 printf '%s\n' 'version: 1' 'policy:' '  ci: gitlab' '  release:' '    mode: none' "    reason: 'tagged on GitLab'" > "$work/gitlab/civikitchen.yaml"
 out=$("$root/scaffold/ckinit.php" --update "$work/gitlab")
 grep -q 'created   .gitlab-ci.yml' <<<"$out"
-grep -q 'remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml' "$work/gitlab/.gitlab-ci.yml"
+grep -q 'remote: https://raw.githubusercontent.com/civico-de/civikitchen/v1/ci/gitlab/extension-ci.yml' "$work/gitlab/.gitlab-ci.yml"
 for stray in renovate.json .github/workflows/ci.yml .github/workflows/release.yml; do
   if [ -e "$work/gitlab/$stray" ]; then
     echo "ci: gitlab still seeded a GitHub file: $stray" >&2

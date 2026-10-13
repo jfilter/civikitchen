@@ -1,7 +1,7 @@
 version: 1
 scenario:
   name: ckscenario-runtime
-  image: ghcr.io/jfilter/civikitchen:standalone
+  image: ghcr.io/civico-de/civikitchen:standalone
   database:
     image: mariadb:10.11
   extension:

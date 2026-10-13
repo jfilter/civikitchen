@@ -4,7 +4,7 @@
 # that caller when civikitchen.yaml declares `ci: gitlab`):
 #
 #   include:
-#     - remote: https://raw.githubusercontent.com/jfilter/civikitchen/v1/ci/gitlab/extension-ci.yml
+#     - remote: https://raw.githubusercontent.com/civico-de/civikitchen/v1/ci/gitlab/extension-ci.yml
 #
 # The jobs run inside the civikitchen image with the database as a service, so
 # a docker executor is enough; nothing needs a privileged runner. The e2e job
@@ -23,7 +23,7 @@
 # compose (the managed tests/e2e/lib.sh does).
 
 variables:
-  CK_IMAGE: ghcr.io/jfilter/civikitchen:v1
+  CK_IMAGE: ghcr.io/civico-de/civikitchen:v1
   CK_DB_IMAGE: mariadb:10.11
   CK_LIFECYCLE: "1"
   CK_NPM_CI: "0"

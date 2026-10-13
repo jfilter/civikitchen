@@ -12,7 +12,7 @@
 #     release:
 #       permissions:
 #         contents: write        # the called workflow can only narrow this
-#       uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1
+#       uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1
 #
 # Pin the major (@v1), not @main — same versioned contract as extension-ci.yml
 # (docs/releases.md). A vX.Y.Z-<pre> tag publishes a pre-release, which never
@@ -147,7 +147,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
 
@@ -305,7 +305,7 @@ jobs:
         run: |
           set -euo pipefail
           minor=$(php "$GITHUB_WORKSPACE"/.civikitchen-ci/toolbelt/bin/ckconform --policy civicrm)
-          image=$("$GITHUB_WORKSPACE"/.civikitchen-ci/.github/scripts/stack-image.sh "$minor" "$CK_IMAGE_INPUT" ghcr.io/jfilter/civikitchen:v1)
+          image=$("$GITHUB_WORKSPACE"/.civikitchen-ci/.github/scripts/stack-image.sh "$minor" "$CK_IMAGE_INPUT" ghcr.io/civico-de/civikitchen:v1)
           echo "smoke-test image: $image"
           echo "CIVIKITCHEN_IMAGE=$image" >> "$GITHUB_ENV"
 
@@ -652,7 +652,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: jfilter/civikitchen
+          repository: civico-de/civikitchen
           ref: ${{ job.workflow_sha }}
           path: .civikitchen-ci
 

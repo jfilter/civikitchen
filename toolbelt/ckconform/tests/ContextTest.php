@@ -101,14 +101,14 @@ final class ContextTest extends CheckTestCase
         # END CIVIKITCHEN MANAGED header
           # BEGIN CIVIKITCHEN MANAGED job-ext-a
           ext-a:
-            uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+            uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
             with:
               working_directory: ext-a
           # END CIVIKITCHEN MANAGED job-ext-a
               playwright: true
           # BEGIN CIVIKITCHEN MANAGED job-ext_b
           ext_b:
-            uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+            uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
             with:
               working_directory: ext.b
           # END CIVIKITCHEN MANAGED job-ext_b

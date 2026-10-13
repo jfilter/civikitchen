@@ -1,8 +1,8 @@
-"$schema": https://raw.githubusercontent.com/jfilter/civikitchen/main/packages/civikitchen-scenario-schema/scenario.schema.json
+"$schema": https://raw.githubusercontent.com/civico-de/civikitchen/main/packages/civikitchen-scenario-schema/scenario.schema.json
 version: 1
 scenario:
   name: ckmonoaddon
-  image: ghcr.io/jfilter/civikitchen:v1
+  image: ghcr.io/civico-de/civikitchen:v1
   database:
     image: mariadb:11.4
   extension:

@@ -516,6 +516,10 @@ function migrateReleaseCaller(string $existing, string $template): array {
   if (isset($rest['on']['push']['tags'])) {
     $rest['on']['push']['tags'] = $wanted['on']['push']['tags'];
   }
+  // Callers from before the markers name the repository's previous owner.
+  if (is_string($rest['jobs']['release']['uses'] ?? NULL)) {
+    $rest['jobs']['release']['uses'] = (string) preg_replace('#^jfilter/civikitchen/#i', 'civico-de/civikitchen/', $rest['jobs']['release']['uses']);
+  }
   $lost = yamlDifferences($rest, $wanted);
   if ($id !== 'release') {
     $lost[] = "jobs.{$id} (job id)";
@@ -710,7 +714,7 @@ TXT;
   foreach ($extensions as $directory) {
     $out .= "  # BEGIN CIVIKITCHEN MANAGED job-{$directory}\n"
       . '  ' . jobId($directory) . ":\n"
-      . "    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1\n"
+      . "    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1\n"
       . "    with:\n"
       . "      working_directory: {$directory}\n"
       . "  # END CIVIKITCHEN MANAGED job-{$directory}\n";
@@ -761,7 +765,7 @@ TXT;
       . ($required === [] ? '' : '    needs: ' . $jobList($required) . "\n")
       . "    permissions:\n"
       . "      contents: write        # a called workflow can only narrow this\n"
-      . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n"
+      . "    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n"
       . "    with:\n"
       . "      working_directory: {$directory}\n"
       . "      stage: build\n"
@@ -772,7 +776,7 @@ TXT;
     . '    needs: ' . $jobList(array_keys($needs)) . "\n"
     . "    permissions:\n"
     . "      contents: write        # creates the release\n"
-    . "    uses: jfilter/civikitchen/.github/workflows/extension-release.yml@v1\n"
+    . "    uses: civico-de/civikitchen/.github/workflows/extension-release.yml@v1\n"
     . "    with:\n"
     . "      stage: publish\n"
     . "  # END CIVIKITCHEN MANAGED publish\n";

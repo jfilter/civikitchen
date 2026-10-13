@@ -35,5 +35,5 @@ permissions:
 # No inputs: the workflow reads the extension key from info.xml itself.
 jobs:
   ci:
-    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
 # END CIVIKITCHEN MANAGED caller

@@ -14,8 +14,25 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- `ckconform` check `moved-repository` warns on every remaining
+  `jfilter/civikitchen`, `ghcr.io/jfilter/civikitchen`,
+  `jfilter/civikitchen-scenario-schema` or `@jfilter/civicrm-profile-schema`
+  outside prose files.
+
 ### Changed
 
+- **Breaking:** civikitchen moved to `civico-de/civikitchen`. Callers use
+  `civico-de/civikitchen/.github/workflows/extension-ci.yml@v1` (and
+  `extension-release.yml@v1`), images come from `ghcr.io/civico-de/civikitchen`,
+  the npm schema package is `@civico-de/civicrm-profile-schema` and the
+  composer one `civico-de/civikitchen-scenario-schema`. The jfilter images and
+  packages stay pullable but no longer update. GitHub Actions does not
+  follow the redirect, so a caller still naming `jfilter` fails. In a
+  templated repo, `ckinit --update` rewrites the managed files; the seeded
+  `.docker/docker-compose.yml` and `civikitchen.yaml` need the new names by
+  hand, and `moved-repository` lists what is left.
 - *Build Dev Images* builds only the standalone flavors on push; the CMS and
   demo flavors build daily or on a manual dispatch. `release.sh` now requires a
   full run (daily or dispatched) covering the image commit — start one with

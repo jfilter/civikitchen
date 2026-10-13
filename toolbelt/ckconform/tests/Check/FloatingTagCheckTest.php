@@ -17,7 +17,7 @@ final class FloatingTagCheckTest extends CheckTestCase
     public function testSilentWhenTagsArePinned(): void
     {
         $context = $this->repo([
-            '.github/workflows/ci.yml' => "image: ghcr.io/jfilter/civikitchen:1.2.3\n",
+            '.github/workflows/ci.yml' => "image: ghcr.io/civico-de/civikitchen:1.2.3\n",
         ]);
         $this->assertSilent($this->run_(new FloatingTagCheck(), $context));
     }
@@ -25,12 +25,12 @@ final class FloatingTagCheckTest extends CheckTestCase
     public function testWarnsOnFloatingImageTagWithExactMessage(): void
     {
         $context = $this->repo([
-            '.github/workflows/ci.yml' => "image: ghcr.io/jfilter/civikitchen:latest\n",
+            '.github/workflows/ci.yml' => "image: ghcr.io/civico-de/civikitchen:latest\n",
         ]);
         $reporter = $this->run_(new FloatingTagCheck(), $context);
         $this->assertWarns(
             $reporter,
-            'CI pins nothing (floating :latest): .github/workflows/ci.yml:1:image: ghcr.io/jfilter/civikitchen:latest'
+            'CI pins nothing (floating :latest): .github/workflows/ci.yml:1:image: ghcr.io/civico-de/civikitchen:latest'
         );
     }
 

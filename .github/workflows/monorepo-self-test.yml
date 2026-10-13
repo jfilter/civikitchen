@@ -34,21 +34,21 @@ permissions:
 
 jobs:
   base:
-    if: ${{ github.repository == 'jfilter/civikitchen' }}
+    if: ${{ github.repository == 'civico-de/civikitchen' }}
     uses: ./.github/workflows/extension-ci.yml
     with:
       working_directory: examples/monorepo/ckmonobase
-      image: ghcr.io/jfilter/civikitchen:standalone
+      image: ghcr.io/civico-de/civikitchen:standalone
 
   addon:
-    if: ${{ github.repository == 'jfilter/civikitchen' }}
+    if: ${{ github.repository == 'civico-de/civikitchen' }}
     uses: ./.github/workflows/extension-ci.yml
     with:
       working_directory: examples/monorepo/ckmonoaddon
-      image: ghcr.io/jfilter/civikitchen:standalone
+      image: ghcr.io/civico-de/civikitchen:standalone
 
   release-base:
-    if: ${{ github.repository == 'jfilter/civikitchen' }}
+    if: ${{ github.repository == 'civico-de/civikitchen' }}
     permissions:
       contents: write  # declared by the called publish job; a dry run writes nothing
     uses: ./.github/workflows/extension-release.yml
@@ -56,7 +56,7 @@ jobs:
       working_directory: examples/monorepo/ckmonobase
       stage: build
       dry_run: true
-      image: ghcr.io/jfilter/civikitchen:standalone
+      image: ghcr.io/civico-de/civikitchen:standalone
 
   release-addon:
     needs: [release-base]
@@ -67,7 +67,7 @@ jobs:
       working_directory: examples/monorepo/ckmonoaddon
       stage: build
       dry_run: true
-      image: ghcr.io/jfilter/civikitchen:standalone
+      image: ghcr.io/civico-de/civikitchen:standalone
 
   release-publish:
     needs: [release-base, release-addon]

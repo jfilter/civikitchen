@@ -16,7 +16,7 @@
 #   neither               bundled with core (e.g. flexmailer), enable only
 # The full, canonical profile.json shape is packages/civicrm-profile-schema/
 # profile.schema.json (draft 2020-12, enforced in CI; published as
-# @jfilter/civicrm-profile-schema).
+# @civico-de/civicrm-profile-schema).
 #
 #   apply.sh <profile-dir> [all|deps|content]   # e.g. /opt/civikitchen/docker/profiles/verein
 set -euo pipefail

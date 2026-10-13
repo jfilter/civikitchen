@@ -1,8 +1,8 @@
 # civikitchen
 
-[![Build Dev Images](https://github.com/jfilter/civikitchen/actions/workflows/build-dev-images.yml/badge.svg)](https://github.com/jfilter/civikitchen/actions/workflows/build-dev-images.yml)
-[![Lint](https://github.com/jfilter/civikitchen/actions/workflows/lint.yml/badge.svg)](https://github.com/jfilter/civikitchen/actions/workflows/lint.yml)
-[![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fjfilter%2Fcivikitchen-24292f?logo=github)](https://github.com/jfilter/civikitchen/pkgs/container/civikitchen)
+[![Build Dev Images](https://github.com/civico-de/civikitchen/actions/workflows/build-dev-images.yml/badge.svg)](https://github.com/civico-de/civikitchen/actions/workflows/build-dev-images.yml)
+[![Lint](https://github.com/civico-de/civikitchen/actions/workflows/lint.yml/badge.svg)](https://github.com/civico-de/civikitchen/actions/workflows/lint.yml)
+[![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fcivico--de%2Fcivikitchen-24292f?logo=github)](https://github.com/civico-de/civikitchen/pkgs/container/civikitchen)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
 
 civikitchen is a set of CiviCRM Docker images with development tools built in,
@@ -14,7 +14,7 @@ and releasing CiviCRM extensions.
 Look around in a throwaway CiviCRM Standalone with demo data:
 
 ```bash
-docker run -d -p 80:80 --name civicrm ghcr.io/jfilter/civikitchen:standalone-demo
+docker run -d -p 80:80 --name civicrm ghcr.io/civico-de/civikitchen:standalone-demo
 ```
 
 Open http://localhost and log in as admin / admin.
@@ -22,7 +22,7 @@ Open http://localhost and log in as admin / admin.
 Start a new extension:
 
 ```bash
-git clone https://github.com/jfilter/civikitchen
+git clone https://github.com/civico-de/civikitchen
 civikitchen/scaffold/ckcreate myext \
     --author "Example Maintainer" --email dev@example.org --copyright "Example Org"
 cd myext
@@ -49,7 +49,7 @@ Maildev. For an extension that does not use the template, the standalone
 example has the same services:
 
 ```bash
-git clone https://github.com/jfilter/civikitchen
+git clone https://github.com/civico-de/civikitchen
 cd civikitchen/examples/standalone
 # uncomment the volumes: block in docker-compose.yml and point it at your extension
 docker compose up -d
@@ -87,7 +87,7 @@ An extension created by `ckcreate` or `ckinit` has a CI caller in
 ```yaml
 jobs:
   ci:
-    uses: jfilter/civikitchen/.github/workflows/extension-ci.yml@v1
+    uses: civico-de/civikitchen/.github/workflows/extension-ci.yml@v1
 ```
 
 The workflow boots the stack from `.docker/docker-compose.ci.yml`, runs PHPUnit
@@ -179,7 +179,7 @@ A profile adds an extension stack, seed data and API users on first boot:
 ```bash
 docker run -d -p 80:80 --name civicrm \
     -e CIVIKITCHEN_PROFILE=verein \
-    ghcr.io/jfilter/civikitchen:drupal10-demo
+    ghcr.io/civico-de/civikitchen:drupal10-demo
 docker logs -f civicrm
 docker exec civicrm cat /home/buildkit/api-credentials.txt
 ```
@@ -199,7 +199,7 @@ CIVICRM_VERSION=5.78.2 docker compose up -d --build
 
 ## Images
 
-`ghcr.io/jfilter/civikitchen` is multi-arch. `:standalone` is the main image;
+`ghcr.io/civico-de/civikitchen` is multi-arch. `:standalone` is the main image;
 `:drupal10`, `:drupal11`, `:wordpress` and `:joomla` carry the same tools on a
 civibuild site, and each has a `-demo` variant with an embedded database.
 Moving tags are rebuilt daily from the current CiviCRM stable and move only

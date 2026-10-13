@@ -49,7 +49,7 @@ give every check at least one fixture that FAILs and one that passes.
 
 ```bash
 docker run --rm -v "$PWD":/work -w /work \
-  ghcr.io/jfilter/civikitchen:standalone phpunit --no-coverage
+  ghcr.io/civico-de/civikitchen:standalone phpunit --no-coverage
 ```
 
 Its own classes need no composer — `src/Autoloader.php` is a dozen lines. Reading
