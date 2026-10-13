@@ -10,7 +10,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 work="$(mktemp -d)"
 trap '/bin/rm -rf "$work"' EXIT
-mkdir -p "$work/bin" "$work/ext/alpha" "$work/ext/beta-dir" "$work/ext/downloaded" "$work/ext/no key"
+mkdir -p "$work/bin" "$work/ext/alpha" "$work/ext/beta-dir" "$work/ext/downloaded" "$work/ext/no key" "$work/ext/workspace/mine"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 cat > "$work/bin/cv" <<'FAKE'
@@ -57,12 +57,15 @@ write_info "$work/ext/alpha" alpha
 write_info "$work/ext/beta-dir" org.example.beta
 write_info "$work/ext/downloaded" downloaded
 printf '<extension' > "$work/ext/no key/info.xml"
+# A folder of extensions: CiviCRM's scanner finds what is below it.
+write_info "$work/ext/workspace/mine" mine
 # Field 5 is the mount point; a space in it is escaped as \040. The ext dir
 # itself and a nested mount below an extension are not extensions.
 cat > "$work/mountinfo" <<MOUNTS
 100 90 0:37 /host/a $work/ext/alpha rw,relatime - fakeowner /dev/x rw
 101 90 0:37 /host/b $work/ext/beta-dir rw,relatime - fakeowner /dev/x rw
 102 90 0:37 /host/n $work/ext/no\\040key rw,relatime - fakeowner /dev/x rw
+105 90 0:37 /host/ws $work/ext/workspace rw,relatime - fakeowner /dev/x rw
 103 90 0:37 /host/root $work/ext rw,relatime - fakeowner /dev/x rw
 104 90 0:37 /host/nested $work/ext/alpha/vendor rw,relatime - fakeowner /dev/x rw
 MOUNTS
@@ -73,12 +76,13 @@ expect_log() {
   [[ "$actual" == "$1" ]] || fail "$2 — expected '$1', got '$actual'"
 }
 
-# Mounts are enabled by their info.xml key, in name order; the download and
-# the key-less mount are not.
+# Mounts are enabled by their info.xml key, in name order; the download, the
+# key-less mount and the folder of extensions are not.
 : > "$CV_LOG"
 ck_enable_extensions 2>"$work/err"
 expect_log 'ext:enable alpha;ext:enable org.example.beta;' 'mounted extensions'
 grep -q 'no key' "$work/err" || fail "a mount without a key should be reported"
+grep -q 'workspace' "$work/err" && fail "a mount without info.xml is no extension and no warning"
 
 # The explicit list goes first, in its order, and is not repeated.
 : > "$CV_LOG"

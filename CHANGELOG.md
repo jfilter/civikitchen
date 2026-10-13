@@ -47,6 +47,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
   full run (daily or dispatched) covering the image commit — start one with
   `gh workflow run build-dev-images.yml` before releasing right after a push.
 
+### Fixed
+
+- A bind mount into the ext dir without `info.xml`, such as an empty workspace
+  or a folder of extensions, no longer logs a warning at provisioning; an
+  `info.xml` without a readable key still does.
+
 ## [1.39.3] - 2026-10-13
 
 ### Fixed

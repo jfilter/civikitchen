@@ -654,8 +654,8 @@ ck_resolve_requires() {
 # Enable the extensions bind-mounted into the ext dir, plus the keys listed
 # in CIVIKITCHEN_ENABLE_EXTENSIONS (listed ones first, in their order — the
 # override for an extension that must precede another or is not a mount),
-# each after its <requires> are in place. A mount whose info.xml carries no
-# key is reported and skipped: a directory of files is not an extension.
+# each after its <requires> are in place. A mount without info.xml (a folder of
+# extensions, an empty workspace) is not one; an info.xml without key is reported.
 ck_enable_extensions() {
     local ext_key ext_dir listed
     local -a keys=() dirs=()
@@ -670,6 +670,7 @@ ck_enable_extensions() {
     done
     while IFS= read -r ext_dir; do
         [[ -n "${ext_dir}" ]] || continue
+        [[ -e "${ext_dir}/info.xml" ]] || continue
         ext_key="$(ck_extension_key "${ext_dir}")"
         if [[ -z "${ext_key}" ]]; then
             echo "[civikitchen] WARN: ${ext_dir} is mounted into the ext dir but has no readable info.xml key — not enabled" >&2
