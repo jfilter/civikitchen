@@ -29,7 +29,7 @@ final class ExtensionArchiveInstaller
             throw new RuntimeException('invalid extension ZIP');
         }
         try {
-            $top = $this->validateEntries($zip);
+            [$top, $links] = $this->validateEntries($zip);
             if (file_exists($target)) {
                 throw new RuntimeException('extension target exists');
             }
@@ -42,6 +42,12 @@ final class ExtensionArchiveInstaller
                     throw new RuntimeException('could not extract extension ZIP');
                 }
                 $source = $temporary . '/' . $top;
+                // extractTo writes a link entry as a file holding the target path.
+                foreach ($links as $link => $file) {
+                    if (!copy($temporary . '/' . $file, $temporary . '/' . $link)) {
+                        throw new RuntimeException('could not materialise extension ZIP symlink');
+                    }
+                }
                 $xml = $this->inspector->load($source . '/info.xml', $expectedKey);
                 $this->inspector->assertVersion($xml, $constraint);
                 if (!rename($source, $target)) {
@@ -55,10 +61,15 @@ final class ExtensionArchiveInstaller
         }
     }
 
-    private function validateEntries(ZipArchive $zip): string
+    /**
+     * @return array{string, array<string, string>} root directory, symlink entry => file entry it points to
+     */
+    private function validateEntries(ZipArchive $zip): array
     {
         $top = null;
         $total = 0;
+        $files = [];
+        $links = [];
         if ($zip->numFiles > 10000) {
             throw new RuntimeException('extension ZIP exceeds extraction limits');
         }
@@ -83,14 +94,42 @@ final class ExtensionArchiveInstaller
             if ($zip->getExternalAttributesIndex($index, $operatingSystem, $attributes)) {
                 $kind = ($attributes >> 16) & 0170000;
                 if ($kind === 0120000) {
-                    throw new RuntimeException('extension ZIP contains a symlink');
+                    $links[$name] = $this->resolveLink(dirname($name), (string) $zip->getFromIndex($index, 4096));
+                    continue;
                 }
+            }
+            if (!str_ends_with($name, '/')) {
+                $files[$name] = true;
             }
         }
         if ($top === null) {
             throw new RuntimeException('extension ZIP is empty');
         }
-        return $top;
+        foreach ($links as $file) {
+            if ($file === null || !isset($files[$file])) {
+                throw new RuntimeException('extension ZIP contains a symlink that does not point to a file in it');
+            }
+        }
+        return [$top, array_filter($links)];
+    }
+
+    private function resolveLink(string $directory, string $target): ?string
+    {
+        if ($target === '' || str_starts_with($target, '/') || str_contains($target, '\\')) {
+            return null;
+        }
+        $parts = explode('/', $directory);
+        foreach (explode('/', $target) as $part) {
+            if ($part === '..') {
+                if (count($parts) < 2) {
+                    return null;
+                }
+                array_pop($parts);
+            } elseif ($part !== '' && $part !== '.') {
+                $parts[] = $part;
+            }
+        }
+        return implode('/', $parts);
     }
 
     private function removeTree(string $directory): void

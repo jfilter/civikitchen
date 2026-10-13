@@ -264,6 +264,59 @@ final class SharedPhpTest extends TestCase
             ->install($badArchive, 'org.example.safe', $this->temporary . '/bad-target', '');
     }
 
+    public function testArchiveInstallerMaterialisesSymlinkToAFileInTheArchive(): void
+    {
+        $archive = $this->symlinkArchive('docs/index.md', '../README.md');
+        $target = $this->temporary . '/installed';
+        (new ExtensionArchiveInstaller(new ExtensionInspector('missing')))
+            ->install($archive, 'org.example.safe', $target, '');
+        self::assertFalse(is_link($target . '/docs/index.md'));
+        self::assertSame('readme', file_get_contents($target . '/docs/index.md'));
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function unsafeSymlinks(): array
+    {
+        return [
+            'leaves the root' => ['docs/index.md', '../../README.md'],
+            'absolute' => ['docs/index.md', '/etc/passwd'],
+            'missing file' => ['docs/index.md', 'missing.md'],
+            'directory' => ['link', 'docs'],
+            'another symlink' => ['other.md', 'docs/index.md'],
+        ];
+    }
+
+    /**
+     * @dataProvider unsafeSymlinks
+     */
+    public function testArchiveInstallerRejectsSymlinkThatDoesNotPointToAFileInTheArchive(string $link, string $to): void
+    {
+        $archive = $this->symlinkArchive($link, $to);
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('symlink that does not point to a file in it');
+        (new ExtensionArchiveInstaller(new ExtensionInspector('missing')))
+            ->install($archive, 'org.example.safe', $this->temporary . '/installed', '');
+    }
+
+    private function symlinkArchive(string $link, string $to): string
+    {
+        $archive = $this->temporary . '/symlink.zip';
+        $zip = new ZipArchive();
+        self::assertTrue($zip->open($archive, ZipArchive::CREATE | ZipArchive::OVERWRITE));
+        $zip->addFromString('package/info.xml', '<extension key="org.example.safe"><version>1.0.0</version></extension>');
+        $zip->addFromString('package/README.md', 'readme');
+        $zip->addFromString('package/docs/guide.md', 'guide');
+        $entries = $link === 'other.md' ? ['docs/index.md' => '../README.md', $link => $to] : [$link => $to];
+        foreach ($entries as $name => $target) {
+            $zip->addFromString('package/' . $name, $target);
+            $zip->setExternalAttributesName('package/' . $name, ZipArchive::OPSYS_UNIX, 0120777 << 16);
+        }
+        $zip->close();
+        return $archive;
+    }
+
     public function testLifecycleRejectsUnsafeKeyBeforeStartingCv(): void
     {
         file_put_contents($this->temporary . '/info.xml', '<extension key="org.example.safe"><file>safe</file></extension>');

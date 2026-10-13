@@ -24,6 +24,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - ckconform's `required-extensions` check accepts an abstract class behind the
   `// ckconform-optional civirules` guard, so an optional CiviRules adapter can
   have a shared base class.
+- A digest-pinned extension archive may contain a symlink to a file in the
+  same archive; it is installed as a copy of that file. Such archives used to
+  fail with "extension ZIP contains a symlink". Any other symlink still fails
+  the install.
 
 ## [1.41.0] - 2026-10-13
 

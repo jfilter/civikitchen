@@ -763,7 +763,9 @@ info.xml version in the downloaded archive must satisfy; the SHA-256 pins the
 exact tested bytes. A dependency in a private repository names a release
 (repository, tag and asset) instead of a url; see
 [A dependency only a credential can reach](extension-releases.md#a-dependency-only-a-credential-can-reach).
-An entry carries exactly one of the two.
+An entry carries exactly one of the two. The archive has one root directory;
+a symlink in it must point to a file in the same archive and is installed as a
+copy of that file, any other symlink fails the install.
 
 A repo targeting one CiviCRM minor names it as `civicrm: "6.17"`. Quote it: unquoted YAML reads 6.10 as 6.1.
 extension-ci.yml and the release smoke test then run on that minor's
