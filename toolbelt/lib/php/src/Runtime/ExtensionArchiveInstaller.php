@@ -87,10 +87,8 @@ final class ExtensionArchiveInstaller
             if ($top !== $parts[0]) {
                 throw new RuntimeException('extension ZIP needs one root directory');
             }
-            $total += (int) ($stat['size'] ?? 0);
-            if ($total > 268435456) {
-                throw new RuntimeException('extension ZIP exceeds extraction limits');
-            }
+            $size = (int) ($stat['size'] ?? 0);
+            $total = $this->addToLimit($total, $size);
             if ($zip->getExternalAttributesIndex($index, $operatingSystem, $attributes)) {
                 $kind = ($attributes >> 16) & 0170000;
                 if ($kind === 0120000) {
@@ -99,7 +97,7 @@ final class ExtensionArchiveInstaller
                 }
             }
             if (!str_ends_with($name, '/')) {
-                $files[$name] = true;
+                $files[$name] = $size;
             }
         }
         if ($top === null) {
@@ -109,8 +107,18 @@ final class ExtensionArchiveInstaller
             if ($file === null || !isset($files[$file])) {
                 throw new RuntimeException('extension ZIP contains a symlink that does not point to a file in it');
             }
+            $total = $this->addToLimit($total, $files[$file]);
         }
         return [$top, array_filter($links)];
+    }
+
+    private function addToLimit(int $total, int $size): int
+    {
+        $total += $size;
+        if ($total > 268435456) {
+            throw new RuntimeException('extension ZIP exceeds extraction limits');
+        }
+        return $total;
     }
 
     private function resolveLink(string $directory, string $target): ?string

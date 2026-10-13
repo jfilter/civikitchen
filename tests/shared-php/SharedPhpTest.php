@@ -274,6 +274,24 @@ final class SharedPhpTest extends TestCase
         self::assertSame('readme', file_get_contents($target . '/docs/index.md'));
     }
 
+    public function testArchiveInstallerCountsSymlinkCopiesTowardTheExtractionLimit(): void
+    {
+        $archive = $this->temporary . '/large.zip';
+        $zip = new ZipArchive();
+        self::assertTrue($zip->open($archive, ZipArchive::CREATE));
+        $zip->addFromString('package/info.xml', '<extension key="org.example.safe"><version>1.0.0</version></extension>');
+        $large = fopen($this->temporary . '/large.bin', 'wb');
+        self::assertTrue($large !== false && ftruncate($large, 130 << 20) && fclose($large));
+        $zip->addFile($this->temporary . '/large.bin', 'package/large.bin');
+        $zip->addFromString('package/copy.bin', 'large.bin');
+        $zip->setExternalAttributesName('package/copy.bin', ZipArchive::OPSYS_UNIX, 0120777 << 16);
+        $zip->close();
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('exceeds extraction limits');
+        (new ExtensionArchiveInstaller(new ExtensionInspector('missing')))
+            ->install($archive, 'org.example.safe', $this->temporary . '/installed', '');
+    }
+
     /**
      * @return array<string, array{string, string}>
      */
