@@ -84,6 +84,7 @@ function ck_restore_core_foreign_keys(): void {
  * Hashed once per process: setUpHeadless() runs before every test.
  */
 function ck_install_signature(string $dir, SimpleXMLElement $info): string {
+  /** @var array<string, string> $signatures */
   static $signatures = [];
   if (isset($signatures[$dir])) {
     return $signatures[$dir];
