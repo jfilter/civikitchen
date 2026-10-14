@@ -254,7 +254,7 @@ test-core-patches: ## Standalone core patches: applied once, contained ones skip
 
 # Two managed template files derive the <requires> chain from info.xml — the
 # test bootstrap for Civi\Test, the phpstan bootstrap for class resolution.
-test-ck-headless: ## ck_headless() installs the manager's <requires> closure (stubbed Civi)
+test-ck-headless: ## ck_headless() installs the <requires> closure and rebuilds on install-file changes (stubbed Civi)
 	bash tests/toolbelt/test-ck-headless.sh
 
 test-phpstan-bootstrap: ## phpstanBootstrap.php autoloads mounted <requires> extensions (stubbed core)

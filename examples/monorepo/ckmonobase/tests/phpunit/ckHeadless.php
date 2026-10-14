@@ -15,6 +15,10 @@ declare(strict_types = 1);
  * registry extensions. A dependency the site does not have is an install
  * error, not a silent skip.
  *
+ * Civi\Test reuses the scratch database while the step signatures match, and
+ * an install() step signs only the key; a no-op step signed with the
+ * extension's install files rebuilds it when one of them changes.
+ *
  * Template-managed (rewritten by ckinit --update); chain further steps:
  *   ck_headless()->sqlFile(__DIR__ . '/fixtures.sql')->apply();
  */
@@ -29,6 +33,7 @@ function ck_headless(): \Civi\Test\CiviEnvBuilder {
     $builder = $builder->install([trim((string) $required)]);
   }
   $builder = $builder->install([trim((string) $info['key'])]);
+  $builder = $builder->callback(static function (): void {}, ck_install_signature(dirname(__DIR__, 2), $info));
   // Last step, so it drains what every earlier step queued.
   $builder = $builder->callback('ck_discard_bootstrap_status', 'ck-discard-bootstrap-status');
   if (!$builder instanceof \Civi\Test\CiviEnvBuilder) {
@@ -60,6 +65,34 @@ function ck_restore_core_foreign_keys(): void {
       throw new RuntimeException('ck_headless: could not restore the core foreign keys');
     }
   });
+}
+
+/**
+ * A content hash of the files that decide what install() produces: info.xml,
+ * the main file, the upgrader class, every *.mgd.php, and schema/, xml/, sql/.
+ * Dot directories, vendor/ and node_modules/ belong to other packages or tools.
+ */
+function ck_install_signature(string $dir, SimpleXMLElement $info): string {
+  $stems = array_filter([trim((string) $info->file), str_replace(['_', '\\'], '/', trim((string) $info->upgrader))]);
+  $files = ['info.xml', ...array_map(static fn(string $stem): string => $stem . '.php', $stems)];
+  $tree = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
+    new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+    static fn(SplFileInfo $item): bool => !$item->isDir()
+      || !(str_starts_with($item->getFilename(), '.') || in_array($item->getFilename(), ['vendor', 'node_modules'], TRUE)),
+  ));
+  foreach ($tree as $item) {
+    $relative = substr((string) $item->getPathname(), strlen($dir) + 1);
+    if (str_ends_with($relative, '.mgd.php') || preg_match('@^(schema|xml|sql)/@', $relative) === 1) {
+      $files[] = $relative;
+    }
+  }
+  $files = array_unique($files);
+  sort($files, SORT_STRING);
+  $digest = '';
+  foreach (array_filter($files, static fn(string $relative): bool => is_file($dir . '/' . $relative)) as $relative) {
+    $digest .= $relative . "\0" . hash_file('sha256', $dir . '/' . $relative) . "\n";
+  }
+  return 'ck-install-files:' . hash('sha256', $digest);
 }
 
 /**

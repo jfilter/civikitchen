@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The managed test bootstrap's ck_headless() queues the extension's info.xml
 # <requires> before the extension itself, without touching the extension
-# system, restores the core foreign keys its own signing drops before 6.20, and drains the
-# status messages the build queues. Civi is stubbed: what is under test is the
+# system, restores the core foreign keys its own signing drops before 6.20, signs
+# a step with the extension's install files, and drains the status messages the
+# build queues. Civi is stubbed: what is under test is the
 # info.xml reader and the calls the builder receives.
 set -euo pipefail
 
@@ -112,6 +113,58 @@ IFS='|' read -r _ restored _ executed _ _ <<<"$out"
 # starts with status messages it did not cause.
 [[ "$sig" == "ck-discard-bootstrap-status" ]] || fail "the last step must be the status drain; got '$sig'"
 [[ "$drained" == "drained" ]] || fail "the last step did not drain the session status"
+
+# Civi\Test rebuilds the scratch database only when the step signatures
+# change; the install-files step must follow the files install() reads.
+cat > "$work/ext/info.xml" <<'XML'
+<?xml version="1.0"?>
+<extension key="org.example.fixture" type="module">
+  <file>fixture</file>
+  <upgrader>CRM_Fixture_Upgrader</upgrader>
+</extension>
+XML
+mkdir -p "$work/ext/CRM/Fixture" "$work/ext/schema" "$work/ext/vendor/acme/lib" "$work/ext/.git"
+echo '<?php // main' > "$work/ext/fixture.php"
+echo '<?php // upgrader' > "$work/ext/CRM/Fixture/Upgrader.php"
+echo '<?php // page' > "$work/ext/CRM/Fixture/Page.php"
+echo '<?php return [];' > "$work/ext/schema/Widget.entityType.php"
+install_sig() {
+  php -r 'require $argv[1]; require $argv[2];
+    $b = ck_headless(); $n = 0;
+    foreach ($b->steps as [$cb, $sig]) {
+      if (str_starts_with((string) $sig, "ck-install-files:")) { $n++; echo is_callable($cb) ? $sig : "not-callable"; }
+    }
+    if ($n !== 1) { echo "steps:$n"; }' "$work/stubs.php" "$work/ext/tests/phpunit/ckHeadless.php"
+}
+base="$(install_sig)"
+[[ "$base" == ck-install-files:* ]] || fail "expected one callable install-files step; got '$base'"
+[[ "$(install_sig)" == "$base" ]] || fail "the install signature must be stable between runs"
+touch -t 202001010000 "$work/ext/fixture.php" "$work/ext/schema/Widget.entityType.php"
+[[ "$(install_sig)" == "$base" ]] || fail "a new mtime must not change the install signature"
+echo '<?php // edited' > "$work/ext/CRM/Fixture/Page.php"
+echo '<?php return [];' > "$work/ext/vendor/acme/lib/Other.mgd.php"
+echo 'x' > "$work/ext/.git/Ignored.mgd.php"
+[[ "$(install_sig)" == "$base" ]] || fail "files install() does not read must not change the install signature"
+
+expect_changed() {
+  local next
+  next="$(install_sig)"
+  [[ "$next" == ck-install-files:* && "$next" != "$base" ]] || fail "$1 must change the install signature"
+  base="$next"
+}
+mkdir -p "$work/ext/managed"
+echo '<?php return [["name" => "ActivityType_Call"]];' > "$work/ext/managed/ActivityType.mgd.php"
+expect_changed "a new managed/*.mgd.php"
+echo '<?php return [["name" => "Nested"]];' > "$work/ext/CRM/Fixture/Nested.mgd.php"
+expect_changed "a *.mgd.php outside managed/"
+echo '<?php return ["fields" => []];' > "$work/ext/schema/Widget.entityType.php"
+expect_changed "an edited schema file"
+mkdir -p "$work/ext/sql" && echo 'CREATE TABLE t (id INT);' > "$work/ext/sql/auto_install.sql"
+expect_changed "an install SQL file"
+echo '<?php // upgrader with a new step' > "$work/ext/CRM/Fixture/Upgrader.php"
+expect_changed "an edited upgrader"
+echo '<?php // main with a hook' > "$work/ext/fixture.php"
+expect_changed "an edited main file"
 
 # No key in info.xml: a loud error, never a guessed key.
 printf '%s\n' '<extension type="module"><file>fixture</file></extension>' > "$work/ext/info.xml"

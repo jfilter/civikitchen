@@ -125,6 +125,10 @@ public function setUpHeadless(): \Civi\Test\CiviEnvBuilder {
 }
 ```
 
+It also rebuilds the test database when a file that decides the install
+changes: info.xml, the main file, the upgrader, any `*.mgd.php`, and `schema/`,
+`xml/` and `sql/`. `\Civi\Test::headless()` alone keeps the old install.
+
 ## Dev profile and provisioning hooks
 
 Data a test setup needs beyond the extension belongs in the dev profile,

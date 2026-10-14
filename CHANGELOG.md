@@ -26,6 +26,15 @@ except that a break the consumers are adjusted for ships as a minor, marked
   civicrm`. `CIVIKITCHEN_IMAGE` in the environment or in `.docker/.env` still
   wins, and ckup prints the image it chose.
 
+### Fixed
+
+- The managed test bootstrap's `ck_headless()` rebuilds the scratch test
+  database when the extension's install files change: info.xml, the main file,
+  the upgrader, any `*.mgd.php`, and `schema/`, `xml/` and `sql/`. Before, a
+  new managed entity or schema change kept the old install until a forced
+  rebuild, and tests failed on the missing records. `ckinit --update` brings
+  the file into an extension.
+
 ## [1.41.2] - 2026-10-14
 
 ### Changed
