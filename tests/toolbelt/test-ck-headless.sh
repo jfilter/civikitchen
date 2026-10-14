@@ -95,6 +95,12 @@ IFS='|' read -r installed restored order executed sig drained <<<"$out"
 [[ "$installed" == "org.example.base,org.example.dep,org.example.fixture" ]] \
   || fail "expected the info.xml requires, trimmed, own key last; got '$installed'"
 
+# An optional integration installs after <requires>, before the extension.
+out="$(php -r 'require $argv[1]; require $argv[2]; echo implode(",", ck_headless("org.example.optional")->installed);' \
+  "$work/stubs.php" "$work/ext/tests/phpunit/ckHeadless.php")"
+[[ "$out" == "org.example.base,org.example.dep,org.example.optional,org.example.fixture" ]] \
+  || fail "expected optional extensions between <requires> and the own key; got '$out'"
+
 # Signing CoreSchemaStep drops the core foreign keys, so the generated SQL has
 # to be replayed — inside asPreInstall, before the builder is handed out.
 [[ "$restored" == "restored" ]] || fail "ck_headless did not re-run the core schema SQL under asPreInstall"
@@ -165,6 +171,14 @@ echo '<?php // upgrader with a new step' > "$work/ext/CRM/Fixture/Upgrader.php"
 expect_changed "an edited upgrader"
 echo '<?php // main with a hook' > "$work/ext/fixture.php"
 expect_changed "an edited main file"
+
+# setUpHeadless() runs before every test: one process hashes the files once.
+out="$(php -r 'require $argv[1]; require $argv[2];
+  $first = end(ck_headless()->steps)[1];
+  file_put_contents($argv[3], "<?php // edited mid-run");
+  echo $first === end(ck_headless()->steps)[1] ? "once" : "rehashed";' \
+  "$work/stubs.php" "$work/ext/tests/phpunit/ckHeadless.php" "$work/ext/fixture.php")"
+[[ "$out" == "once" ]] || fail "the install files must be hashed once per process; got '$out'"
 
 # No key in info.xml: a loud error, never a guessed key.
 printf '%s\n' '<extension type="module"><file>fixture</file></extension>' > "$work/ext/info.xml"

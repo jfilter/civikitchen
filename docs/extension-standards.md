@@ -705,6 +705,12 @@ return ck_headless()->sqlFile(__DIR__ . '/fixtures.sql')->apply();
 
 The ckconform check is headless-builder-applied.
 
+Give the whole suite one environment. Civi\Test keeps the test database while
+the step list matches the previous test's, so a class with a different chain
+reinstalls it, and the next class reinstalls it back. Put the shared chain in
+one helper that every class calls, and keep a different chain only for a test
+that needs it, such as one without an optional extension.
+
 ### Coverage
 
 CI runs the suite with coverage through ckcoverage, or at minimum

@@ -19,10 +19,14 @@ declare(strict_types = 1);
  * an install() step signs only the key; a no-op step signed with the
  * extension's install files rebuilds it when one of them changes.
  *
+ * $optional names extensions the code integrates with but does not require;
+ * they install after <requires>, before the extension itself.
+ *
  * Template-managed (rewritten by ckinit --update); chain further steps:
  *   ck_headless()->sqlFile(__DIR__ . '/fixtures.sql')->apply();
+ *   ck_headless('org.example.optional')->apply();
  */
-function ck_headless(): \Civi\Test\CiviEnvBuilder {
+function ck_headless(string ...$optional): \Civi\Test\CiviEnvBuilder {
   ck_restore_core_foreign_keys();
   $info = ck_extension_info(dirname(__DIR__, 2));
   $builder = \Civi\Test::headless();
@@ -31,6 +35,9 @@ function ck_headless(): \Civi\Test\CiviEnvBuilder {
   // references a dependency's table then fails its own table lookup.
   foreach ($info->requires->ext ?? [] as $required) {
     $builder = $builder->install([trim((string) $required)]);
+  }
+  foreach ($optional as $key) {
+    $builder = $builder->install([$key]);
   }
   $builder = $builder->install([trim((string) $info['key'])]);
   // Last step, so it drains what every earlier step queued. Its signature
@@ -74,8 +81,13 @@ function ck_restore_core_foreign_keys(): void {
  * A content hash of the files that decide what install() produces: info.xml,
  * the main file, the upgrader class, every *.mgd.php, and schema/, xml/, sql/.
  * Dot directories, vendor/ and node_modules/ belong to other packages or tools.
+ * Hashed once per process: setUpHeadless() runs before every test.
  */
 function ck_install_signature(string $dir, SimpleXMLElement $info): string {
+  static $signatures = [];
+  if (isset($signatures[$dir])) {
+    return $signatures[$dir];
+  }
   $stems = array_filter([trim((string) $info->file), str_replace(['_', '\\'], '/', trim((string) $info->upgrader))]);
   $files = ['info.xml', ...array_map(static fn (string $stem): string => $stem . '.php', $stems)];
   $tree = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
@@ -100,7 +112,7 @@ function ck_install_signature(string $dir, SimpleXMLElement $info): string {
   foreach (array_filter($files, static fn (string $relative): bool => is_file($dir . '/' . $relative)) as $relative) {
     $digest .= $relative . "\0" . hash_file('sha256', $dir . '/' . $relative) . "\n";
   }
-  return 'ck-install-files:' . hash('sha256', $digest);
+  return $signatures[$dir] = 'ck-install-files:' . hash('sha256', $digest);
 }
 
 /**

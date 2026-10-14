@@ -14,6 +14,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- `ck_headless()` takes optional extension keys,
+  `ck_headless('org.example.optional')`. They install after the info.xml
+  `<requires>` and before the extension itself. Run `ckinit --update` to pick
+  up the template.
+
 ### Changed
 
 - The standalone image patches core so the custom extensions directory honours
@@ -30,6 +37,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - `CIVIKITCHEN_TEST_DB=0` skips only the `TEST_DB_DSN` write. The boot stub
   is patched either way, so a hand-set `TEST_DB_DSN` takes effect and a
   headless boot without one goes to `<db>_test`, never to the dev database.
+- `ck_headless()` hashes the extension's install files once per PHP process
+  instead of before every test.
 
 ## [1.42.0] - 2026-10-14
 

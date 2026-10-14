@@ -130,6 +130,13 @@ It also rebuilds the test database when a file that decides the install
 changes: info.xml, the main file, the upgrader, any `*.mgd.php`, and `schema/`,
 `xml/` and `sql/`. `\Civi\Test::headless()` alone keeps the old install.
 
+An extension the code integrates with but does not require goes in as an
+argument. It installs after the `<requires>` and before the extension itself:
+
+```php
+return ck_headless('org.example.optional')->apply();
+```
+
 ## Dev profile and provisioning hooks
 
 Data a test setup needs beyond the extension belongs in the dev profile,
