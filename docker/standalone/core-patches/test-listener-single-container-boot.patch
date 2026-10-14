@@ -1,0 +1,47 @@
+Every headless test builds the service container twice: Civi::reset() boots
+one, and CRM_Core_Config::singleton(TRUE, TRUE) replaces it one line later.
+
+Upstream: https://github.com/civicrm/civicrm-core/pull/37431
+
+diff --git a/Civi/Test/CiviTestListener.php b/Civi/Test/CiviTestListener.php
+index 6d16281cff..7aacb47282 100644
+--- a/Civi/Test/CiviTestListener.php
++++ b/Civi/Test/CiviTestListener.php
+@@ -123,7 +123,8 @@ else {
+       $test->setUpHeadless();
+ 
+       \Civi::rebuild(['system' => TRUE])->execute();
+-      \Civi::reset();
++      // Like Civi::reset(), minus the container boot that Config::singleton() repeats.
++      \Civi::$statics = [];
+       \CRM_Core_Session::singleton()->set('userID', NULL);
+       // ugh, performance
+       $config = \CRM_Core_Config::singleton(TRUE, TRUE);
+diff --git a/Civi/Test/CiviTestListenerPHPUnit7.php b/Civi/Test/CiviTestListenerPHPUnit7.php
+index 29737c816a..1fa75e0d7c 100644
+--- a/Civi/Test/CiviTestListenerPHPUnit7.php
++++ b/Civi/Test/CiviTestListenerPHPUnit7.php
+@@ -111,7 +111,8 @@ class CiviTestListenerPHPUnit7 implements \PHPUnit\Framework\TestListener {
+     $test->setUpHeadless();
+ 
+     \Civi::rebuild(['system' => TRUE])->execute();
+-    \Civi::reset();
++    // Like Civi::reset(), minus the container boot that Config::singleton() repeats.
++    \Civi::$statics = [];
+     \CRM_Core_Session::singleton()->set('userID', NULL);
+     // ugh, performance
+     $config = \CRM_Core_Config::singleton(TRUE, TRUE);
+diff --git a/Civi/Test/Legacy/CiviTestListener.php b/Civi/Test/Legacy/CiviTestListener.php
+index 47d01475ea..64517d675a 100644
+--- a/Civi/Test/Legacy/CiviTestListener.php
++++ b/Civi/Test/Legacy/CiviTestListener.php
+@@ -113,7 +113,8 @@ class CiviTestListener extends \PHPUnit_Framework_BaseTestListener {
+     $test->setUpHeadless();
+ 
+     \Civi::rebuild(['system' => TRUE])->execute();
+-    \Civi::reset();
++    // Like Civi::reset(), minus the container boot that Config::singleton() repeats.
++    \Civi::$statics = [];
+     \CRM_Core_Session::singleton()->set('userID', NULL);
+     // ugh, performance
+     $config = \CRM_Core_Config::singleton(TRUE, TRUE);

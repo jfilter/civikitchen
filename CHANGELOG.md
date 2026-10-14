@@ -20,6 +20,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `ext_max_depth` (civicrm/civicrm-core#37430). Before, every cache flush
   walked each extension's `vendor/` and `node_modules/`; in a headless suite
   that is one flush per test.
+- The standalone image patches core's test listener to build the service
+  container once per headless test instead of twice
+  (civicrm/civicrm-core#37431), about 100 ms less per test.
 
 ## [1.42.0] - 2026-10-14
 
