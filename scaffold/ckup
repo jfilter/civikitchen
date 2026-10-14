@@ -10,6 +10,10 @@
 # with any further arguments passed through. Before that it installs vendor/
 # in every mounted extension that ships a composer.json without one.
 #
+# The stack runs the image CI runs: :standalone-<minor> of policy.civicrm in
+# civikitchen.yaml, unless CIVIKITCHEN_IMAGE is set in the environment or
+# .docker/.env; with neither, the compose file's default.
+#
 # Usage, from anywhere inside the extension repo:  ckup [compose up args]
 set -euo pipefail
 
@@ -17,6 +21,8 @@ tool="ckup"
 die() { echo "$tool: $*" >&2; exit 2; }
 
 : "${CK_PORT_CHECK:=ck_port_free}"
+: "${CK_POLICY_READ:=ck_policy_civicrm}"
+checkout="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 dir="$PWD"
 while [[ ! -f "$dir/.docker/docker-compose.yml" ]]; do
@@ -55,6 +61,33 @@ assign CK_HTTP_PORT 8080
 assign CK_MAILDEV_PORT 1080
 assign CK_SMTP_PORT 1025
 assign CK_PMA_PORT 8081
+
+# policy.civicrm through ckconform, the one civikitchen.yaml parser, from the
+# image (the host needs only bash and Docker); runs in the extension directory.
+ck_policy_civicrm() {
+  docker run --rm -v "$PWD:/ext:ro" -w /ext --entrypoint ckconform \
+    ghcr.io/civico-de/civikitchen:v1 --policy civicrm
+}
+
+pinned="$( [[ -f "$env_file" ]] && sed -n 's/^CIVIKITCHEN_IMAGE=//p' "$env_file" | tail -1 || true)"
+if [[ -n "${CIVIKITCHEN_IMAGE:-}" ]]; then
+  echo "$tool: image $CIVIKITCHEN_IMAGE (CIVIKITCHEN_IMAGE)"
+elif [[ -n "$pinned" ]]; then
+  echo "$tool: image $pinned (CIVIKITCHEN_IMAGE in .docker/.env)"
+else
+  minor=""
+  if [[ -f "$dir/civikitchen.yaml" ]]; then
+    minor="$(cd "$dir" && "$CK_POLICY_READ")" || die "cannot read policy.civicrm from $dir/civikitchen.yaml"
+  fi
+  # The mapping and validation the shared CI workflows use.
+  image="$("$checkout/.github/scripts/stack-image.sh" "$minor" "" "")" || die "no stack image for policy.civicrm"
+  if [[ -n "$image" ]]; then
+    export CIVIKITCHEN_IMAGE="$image"
+    echo "$tool: image $image (policy.civicrm $minor)"
+  else
+    echo "$tool: image from the compose file's default (no policy.civicrm)"
+  fi
+fi
 
 cd "$dir/.docker"
 # As the calling user, with the image's PHP and composer: vendor/ lands in the

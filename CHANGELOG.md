@@ -21,6 +21,10 @@ except that a break the consumers are adjusted for ships as a minor, marked
   `COMPOSE_PROFILES=pma` to `.docker/.env` or run
   `docker compose --profile pma up -d`. ckup still assigns `CK_PMA_PORT`, so
   the port stays stable. The quickstart examples follow the template.
+- ckup starts the dev stack on the image CI uses: `:standalone-<minor>` when
+  `civikitchen.yaml` sets `policy.civicrm`, read with `ckconform --policy
+  civicrm`. `CIVIKITCHEN_IMAGE` in the environment or in `.docker/.env` still
+  wins, and ckup prints the image it chose.
 
 ## [1.41.2] - 2026-10-14
 

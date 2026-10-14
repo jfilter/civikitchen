@@ -15,10 +15,19 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 cat > "$work/bin/docker" <<'FAKE'
 #!/usr/bin/env bash
 printf '%s|%s\n' "$PWD" "$*" >> "$DOCKER_LOG"
+printf '%s|%s\n' "${CIVIKITCHEN_IMAGE:-}" "$*" >> "$IMAGE_LOG"
 [[ "${DOCKER_FAIL_RUN:-}" != 1 || "$2" != run ]]
 FAKE
 chmod +x "$work/bin/docker"
-export PATH="$work/bin:$PATH" DOCKER_LOG="$work/docker.log"
+export PATH="$work/bin:$PATH" DOCKER_LOG="$work/docker.log" IMAGE_LOG="$work/image.log"
+unset CIVIKITCHEN_IMAGE
+# The real ckconform of this checkout reads civikitchen.yaml, on the host.
+cat > "$work/bin/policy" <<FAKE
+#!/usr/bin/env bash
+exec php "$root/toolbelt/bin/ckconform" --policy civicrm
+FAKE
+chmod +x "$work/bin/policy"
+export CK_POLICY_READ="$work/bin/policy"
 # The port probe is a script: ports listed in TAKEN_PORTS are "taken".
 cat > "$work/bin/probe" <<'FAKE'
 #!/usr/bin/env bash
@@ -54,6 +63,34 @@ export TAKEN_PORTS=""
 (cd "$work/partial" && "$root/scaffold/ckup" >/dev/null)
 [[ "$(cat "$work/partial/.docker/.env")" == $'CK_HTTP_PORT=8081\nCK_MAILDEV_PORT=1080\nCK_SMTP_PORT=1025\nCK_PMA_PORT=8082' ]] \
   || fail "existing port reused: $(cat "$work/partial/.docker/.env")"
+
+# Without policy.civicrm the compose file's default image stays: nothing exported.
+grep -q '^|compose up' "$IMAGE_LOG" || fail "an image was exported without policy.civicrm: $(cat "$IMAGE_LOG")"
+
+# policy.civicrm picks the image CI runs, for the composer install and the stack.
+: > "$IMAGE_LOG"
+printf 'version: 1\npolicy:\n  civicrm: "6.17"\n' > "$work/repo/civikitchen.yaml"
+out="$(cd "$work/repo" && "$root/scaffold/ckup")"
+[[ "$(cut -d'|' -f1 "$IMAGE_LOG" | sort -u)" == ghcr.io/civico-de/civikitchen:standalone-6.17 ]] \
+  || fail "policy.civicrm must set the image of every compose call: $(cat "$IMAGE_LOG")"
+grep -q 'image ghcr.io/civico-de/civikitchen:standalone-6.17 (policy.civicrm 6.17)' <<<"$out" || fail "no image line: $out"
+
+# An image set in the environment or in .docker/.env wins over the policy.
+: > "$IMAGE_LOG"
+(cd "$work/repo" && CIVIKITCHEN_IMAGE=ghcr.io/acme/img:1 "$root/scaffold/ckup" >/dev/null)
+[[ "$(cut -d'|' -f1 "$IMAGE_LOG" | sort -u)" == ghcr.io/acme/img:1 ]] || fail "environment image overridden: $(cat "$IMAGE_LOG")"
+: > "$IMAGE_LOG"
+printf 'CIVIKITCHEN_IMAGE=ghcr.io/acme/img:2\n' >> "$work/repo/.docker/.env"
+(cd "$work/repo" && "$root/scaffold/ckup" >/dev/null)
+grep -q '^|compose up' "$IMAGE_LOG" || fail ".env image overridden by the policy: $(cat "$IMAGE_LOG")"
+sed -i.bak '/^CIVIKITCHEN_IMAGE=/d' "$work/repo/.docker/.env"
+
+# A policy.civicrm that is no minor stops before compose runs.
+: > "$DOCKER_LOG"
+printf 'version: 1\npolicy:\n  civicrm: latest\n' > "$work/repo/civikitchen.yaml"
+if (cd "$work/repo" && "$root/scaffold/ckup" >/dev/null 2>&1); then fail "an invalid policy.civicrm must fail ckup"; fi
+[[ ! -s "$DOCKER_LOG" ]] || fail "compose must not run with an invalid policy.civicrm"
+/bin/rm "$work/repo/civikitchen.yaml"
 
 # Outside a repo: a clear error, no compose call.
 : > "$DOCKER_LOG"

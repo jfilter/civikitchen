@@ -51,6 +51,11 @@ phpMyAdmin is opt-in, like the browser service. Add `COMPOSE_PROFILES=pma` to
 start it once with `docker compose --profile pma up -d`. Its port is assigned
 either way, so it stays the same when you switch it on later.
 
+ckup runs the image CI runs: `:standalone-<minor>` when `civikitchen.yaml` sets
+`policy.civicrm`, otherwise the compose file's default. `CIVIKITCHEN_IMAGE` in
+the environment or in `.docker/.env` overrides both, and a plain
+`docker compose up` sees only that variable, not the policy.
+
 ```bash
 /path/to/civikitchen/scaffold/ckup
 /path/to/civikitchen/scaffold/ckx              # shell in the extension directory

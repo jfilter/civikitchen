@@ -62,7 +62,7 @@ final class Policy
         'renovate_preset' => 'ckinit: the Renovate preset the managed renovate.json extends',
         'ci' => "ckinit: 'gitlab' for a repository whose CI runs on GitLab",
         // read by the reusable workflows
-        'civicrm' => 'extension-ci.yml + extension-release.yml: the CiviCRM minor whose :standalone-<minor> image the stacks run',
+        'civicrm' => 'extension-ci.yml + extension-release.yml + ckup: the CiviCRM minor whose :standalone-<minor> image the stacks run',
         // read by the image entrypoint (docker/runtime/provision.sh)
         'extension_source' => 'entrypoint: key@HTTPS-URL#sha256=digest for a dependency, one per source',
         'extension_release' => 'entrypoint + extension-release.yml: key repo tag asset sha256 for a dependency staged from a GitHub release',
