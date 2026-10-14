@@ -14,6 +14,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- The extension template's dev stack no longer starts phpMyAdmin by default.
+  It sits behind the compose profile `pma`, like `browser`: add
+  `COMPOSE_PROFILES=pma` to `.docker/.env` or run
+  `docker compose --profile pma up -d`. ckup still assigns `CK_PMA_PORT`, so
+  the port stays stable. The quickstart examples follow the template.
+
 ## [1.41.2] - 2026-10-14
 
 ### Changed

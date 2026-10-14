@@ -16,7 +16,7 @@
 #
 # URLs:
 #   CiviCRM:    http://localhost:8080
-#   phpMyAdmin: http://localhost:8081
+#   phpMyAdmin: http://localhost:8081  (opt-in: --profile pma)
 #   Maildev:    http://localhost:1080
 
 # Distinct compose project name (rather than the CWD-derived default, e.g.
@@ -85,7 +85,9 @@ services:
       timeout: 5s
       retries: 10
 
+  # Opt-in: docker compose --profile pma up -d
   phpmyadmin:
+    profiles: [pma]
     image: phpmyadmin/phpmyadmin:5.2.3
     depends_on:
       - db

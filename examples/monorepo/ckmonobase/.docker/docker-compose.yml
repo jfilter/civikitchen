@@ -1,5 +1,5 @@
-# ckmonobase dev stack — CiviCRM (civikitchen standalone) + MariaDB + maildev
-# + phpMyAdmin.
+# ckmonobase dev stack — CiviCRM (civikitchen standalone) + MariaDB + maildev,
+# phpMyAdmin opt-in.
 #
 # Usage:
 #   /path/to/civikitchen/scaffold/ckup     # composer install, free host ports, `up -d`
@@ -7,6 +7,7 @@
 #
 # URLs:  CiviCRM http://localhost:${CK_HTTP_PORT:-8080} (admin/admin)
 #        maildev :${CK_MAILDEV_PORT:-1080} · phpMyAdmin :${CK_PMA_PORT:-8081}
+#        (opt-in: COMPOSE_PROFILES=pma in .docker/.env, or --profile pma)
 #
 # Host ports come from .docker/.env (gitignored; ckup writes it) so several
 # stacks can run side by side; the defaults apply when it is absent.
@@ -87,7 +88,10 @@ services:
       - "${CK_MAILDEV_PORT:-1080}:1080"
       - "${CK_SMTP_PORT:-1025}:1025"
 
+  # phpMyAdmin, opt-in like browser: add COMPOSE_PROFILES=pma to .docker/.env
+  # (ckup keeps it), or docker compose --profile pma up -d.
   phpmyadmin:
+    profiles: [pma]
     image: phpmyadmin/phpmyadmin:5.2.3
     depends_on:
       - db

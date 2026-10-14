@@ -34,8 +34,8 @@ ckcreate generates the module with civix and adds the template: compose
 files, CI and release workflows, phpstan and phpunit config, and a first test.
 For an existing civix extension, `scaffold/ckinit <dir>` adds the same files.
 
-ckup starts CiviCRM Standalone with MariaDB, phpMyAdmin and Maildev and
-enables the extension. ckx runs a command in the stack, in the extension's
+ckup starts CiviCRM Standalone with MariaDB and Maildev and enables the
+extension; phpMyAdmin is opt-in (`COMPOSE_PROFILES=pma` in `.docker/.env`). ckx runs a command in the stack, in the extension's
 directory. The image carries cv, civix, composer, node, phpunit, phpstan, mago,
 xdebug and the ck tools.
 

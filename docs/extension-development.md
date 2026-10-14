@@ -46,6 +46,11 @@ writes that file with free ports, then runs `docker compose up -d` with any
 further arguments. Without the file the ports are 8080 (web), 1080 (Maildev),
 1025 (SMTP) and 8081 (phpMyAdmin).
 
+phpMyAdmin is opt-in, like the browser service. Add `COMPOSE_PROFILES=pma` to
+`.docker/.env` (ckup keeps the line, and compose reads it on every call), or
+start it once with `docker compose --profile pma up -d`. Its port is assigned
+either way, so it stays the same when you switch it on later.
+
 ```bash
 /path/to/civikitchen/scaffold/ckup
 /path/to/civikitchen/scaffold/ckx              # shell in the extension directory
