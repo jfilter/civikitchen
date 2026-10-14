@@ -14,6 +14,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+## [1.43.0] - 2026-10-15
+
 ### Added
 
 - `ck_headless()` takes optional extension keys,
@@ -2067,7 +2069,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - First boot no longer wipes a persistent dev database, and the install is
   retryable.
 
-[Unreleased]: https://github.com/civico-de/civikitchen/compare/v1.42.0...HEAD
+[Unreleased]: https://github.com/civico-de/civikitchen/compare/v1.43.0...HEAD
+[1.43.0]: https://github.com/civico-de/civikitchen/compare/v1.42.0...v1.43.0
 [1.42.0]: https://github.com/civico-de/civikitchen/compare/v1.41.2...v1.42.0
 [1.41.2]: https://github.com/civico-de/civikitchen/compare/v1.41.1...v1.41.2
 [1.41.1]: https://github.com/civico-de/civikitchen/compare/v1.41.0...v1.41.1
