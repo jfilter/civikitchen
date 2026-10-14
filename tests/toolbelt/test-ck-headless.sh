@@ -111,7 +111,7 @@ IFS='|' read -r _ restored _ executed _ _ <<<"$out"
 
 # The build queues managed-entity errors; the last step drains them, so no test
 # starts with status messages it did not cause.
-[[ "$sig" == "ck-discard-bootstrap-status" ]] || fail "the last step must be the status drain; got '$sig'"
+[[ "$sig" == "ck-discard-bootstrap-status;ck-install-files:"* ]] || fail "the last step must be the status drain; got '$sig'"
 [[ "$drained" == "drained" ]] || fail "the last step did not drain the session status"
 
 # Civi\Test rebuilds the scratch database only when the step signatures
@@ -132,12 +132,12 @@ install_sig() {
   php -r 'require $argv[1]; require $argv[2];
     $b = ck_headless(); $n = 0;
     foreach ($b->steps as [$cb, $sig]) {
-      if (str_starts_with((string) $sig, "ck-install-files:")) { $n++; echo is_callable($cb) ? $sig : "not-callable"; }
+      if (str_contains((string) $sig, "ck-install-files:")) { $n++; echo is_callable($cb) ? $sig : "not-callable"; }
     }
     if ($n !== 1) { echo "steps:$n"; }' "$work/stubs.php" "$work/ext/tests/phpunit/ckHeadless.php"
 }
 base="$(install_sig)"
-[[ "$base" == ck-install-files:* ]] || fail "expected one callable install-files step; got '$base'"
+[[ "$base" == *ck-install-files:* ]] || fail "expected one callable step signed with the install files; got '$base'"
 [[ "$(install_sig)" == "$base" ]] || fail "the install signature must be stable between runs"
 touch -t 202001010000 "$work/ext/fixture.php" "$work/ext/schema/Widget.entityType.php"
 [[ "$(install_sig)" == "$base" ]] || fail "a new mtime must not change the install signature"
@@ -149,7 +149,7 @@ echo 'x' > "$work/ext/.git/Ignored.mgd.php"
 expect_changed() {
   local next
   next="$(install_sig)"
-  [[ "$next" == ck-install-files:* && "$next" != "$base" ]] || fail "$1 must change the install signature"
+  [[ "$next" == *ck-install-files:* && "$next" != "$base" ]] || fail "$1 must change the install signature"
   base="$next"
 }
 mkdir -p "$work/ext/managed"

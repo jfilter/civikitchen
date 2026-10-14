@@ -33,9 +33,12 @@ function ck_headless(): \Civi\Test\CiviEnvBuilder {
     $builder = $builder->install([trim((string) $required)]);
   }
   $builder = $builder->install([trim((string) $info['key'])]);
-  $builder = $builder->callback(static function (): void {}, ck_install_signature(dirname(__DIR__, 2), $info));
-  // Last step, so it drains what every earlier step queued.
-  $builder = $builder->callback('ck_discard_bootstrap_status', 'ck-discard-bootstrap-status');
+  // Last step, so it drains what every earlier step queued. Its signature
+  // carries the install files, so editing them rebuilds the test database.
+  $builder = $builder->callback(
+    'ck_discard_bootstrap_status',
+    'ck-discard-bootstrap-status;' . ck_install_signature(dirname(__DIR__, 2), $info),
+  );
   if (!$builder instanceof \Civi\Test\CiviEnvBuilder) {
     throw new RuntimeException('ck_headless: callback() did not return the builder');
   }
@@ -84,8 +87,9 @@ function ck_install_signature(string $dir, SimpleXMLElement $info): string {
       )
     ),
   ));
+  /** @var SplFileInfo $item */
   foreach ($tree as $item) {
-    $relative = substr((string) $item->getPathname(), strlen($dir) + 1);
+    $relative = substr($item->getPathname(), strlen($dir) + 1);
     if (str_ends_with($relative, '.mgd.php') || preg_match('@^(schema|xml|sql)/@', $relative) === 1) {
       $files[] = $relative;
     }
