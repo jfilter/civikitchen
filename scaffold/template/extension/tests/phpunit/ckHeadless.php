@@ -74,11 +74,15 @@ function ck_restore_core_foreign_keys(): void {
  */
 function ck_install_signature(string $dir, SimpleXMLElement $info): string {
   $stems = array_filter([trim((string) $info->file), str_replace(['_', '\\'], '/', trim((string) $info->upgrader))]);
-  $files = ['info.xml', ...array_map(static fn(string $stem): string => $stem . '.php', $stems)];
+  $files = ['info.xml', ...array_map(static fn (string $stem): string => $stem . '.php', $stems)];
   $tree = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
     new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
-    static fn(SplFileInfo $item): bool => !$item->isDir()
-      || !(str_starts_with($item->getFilename(), '.') || in_array($item->getFilename(), ['vendor', 'node_modules'], TRUE)),
+    static fn (SplFileInfo $item): bool => (
+      !$item->isDir()
+      || !(
+        str_starts_with($item->getFilename(), '.') || in_array($item->getFilename(), ['vendor', 'node_modules'], TRUE)
+      )
+    ),
   ));
   foreach ($tree as $item) {
     $relative = substr((string) $item->getPathname(), strlen($dir) + 1);
@@ -89,7 +93,7 @@ function ck_install_signature(string $dir, SimpleXMLElement $info): string {
   $files = array_unique($files);
   sort($files, SORT_STRING);
   $digest = '';
-  foreach (array_filter($files, static fn(string $relative): bool => is_file($dir . '/' . $relative)) as $relative) {
+  foreach (array_filter($files, static fn (string $relative): bool => is_file($dir . '/' . $relative)) as $relative) {
     $digest .= $relative . "\0" . hash_file('sha256', $dir . '/' . $relative) . "\n";
   }
   return 'ck-install-files:' . hash('sha256', $digest);
