@@ -264,7 +264,13 @@ ck_listen_on_site_port() {
 
 # Route CIVICRM_UF=UnitTests boots at <db>_test: TEST_DB_DSN in ~/.cv.json plus
 # the patched boot stub. Both live outside private/, so this runs on every boot.
+# The opt-out skips only the DSN: the stub reads one set by hand too.
 ck_wire_test_db_boot() {
+    # Core composes CIVICRM_DSN from the CIVICRM_DB_* env vars before the settings
+    # file's TEST_DB_DSN branch can fire; the patched stub routes around that.
+    if [[ -n "${CK_BOOT_STUB}" ]]; then
+        php /usr/local/share/civikitchen/patch-test-db-boot.php "${CK_BOOT_STUB}"
+    fi
     [[ "${CIVIKITCHEN_TEST_DB:-1}" == "1" ]] || return 0
     local test_db_dsn="mysql://${CIVICRM_DB_USER}:${CIVICRM_DB_PASSWORD}@${CIVICRM_DB_HOST}:${CIVICRM_DB_PORT}/${CIVICRM_DB_NAME}_test?new_link=true"
     # cv merges ~/.cv.json into $GLOBALS['_CV'], keyed by the site bootstrap
@@ -292,11 +298,6 @@ ck_wire_test_db_boot() {
         printf '%s\n' "${cv_json}" > "${CK_WEB_USER_HOME}/.cv.json"
         chown "${CK_WEB_USER}:${CK_WEB_GROUP}" "${CK_WEB_USER_HOME}/.cv.json"
         chmod 600 "${CK_WEB_USER_HOME}/.cv.json"
-    fi
-    # Core composes CIVICRM_DSN from the CIVICRM_DB_* env vars before the settings
-    # file's TEST_DB_DSN branch can fire; the patched stub routes around that.
-    if [[ -n "${CK_BOOT_STUB}" ]]; then
-        php /usr/local/share/civikitchen/patch-test-db-boot.php "${CK_BOOT_STUB}"
     fi
 }
 

@@ -23,6 +23,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - The standalone image patches core's test listener to build the service
   container once per headless test instead of twice
   (civicrm/civicrm-core#37431), about 100 ms less per test.
+- The standalone image scans extensions two directory levels deep
+  (`ext_max_depth`, core default 3), on the dev site and in headless tests.
+  That covers `ext/<key>` and a monorepo's `ext/<repo>/<key>`; an extension
+  nested deeper needs `ext_max_depth` raised in `civicrm.settings.php`.
+- `CIVIKITCHEN_TEST_DB=0` skips only the `TEST_DB_DSN` write. The boot stub
+  is patched either way, so a hand-set `TEST_DB_DSN` takes effect and a
+  headless boot without one goes to `<db>_test`, never to the dev database.
 
 ## [1.42.0] - 2026-10-14
 

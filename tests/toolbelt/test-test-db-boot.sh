@@ -62,6 +62,18 @@ out="$(boot 'mysql://u:p@db:3306/scratch_test')"
 [[ "$out" == "FileCache civicrm" ]] \
   || fail "the dev site must keep its own database and cache class: '$out'"
 
+# Both boots scan two extension levels; the settings file can raise it.
+depth() {
+  env CIVICRM_DB_NAME=civicrm "$@" php -r 'require $argv[1];
+    echo $GLOBALS["civicrm_setting"]["domain"]["ext_max_depth"] ?? "unset", "\n";' "$stub"
+}
+[[ "$(depth)" == "2" ]] || fail "the dev site must scan two extension levels: '$(depth)'"
+[[ "$(depth CIVICRM_UF=UnitTests)" == "2" ]] || fail "a UnitTests boot must scan two extension levels"
+cp "$work/civicrm.settings.php" "$work/settings.orig"
+echo '$GLOBALS["civicrm_setting"]["domain"]["ext_max_depth"] = 4;' >> "$work/civicrm.settings.php"
+[[ "$(depth)" == "4" ]] || fail "civicrm.settings.php must be able to raise the depth: '$(depth)'"
+cp "$work/settings.orig" "$work/civicrm.settings.php"
+
 php "$patcher" "$work/absent.php" || fail "a missing stub must be a no-op"
 
 # A stub patched by an older image (block without the cache define) gets the
@@ -136,8 +148,10 @@ wire
 
 /bin/rm -f "$work/php-call" "$work/root/.cv.json" "$work/www/.cv.json"
 wire CIVIKITCHEN_TEST_DB=0
-[[ ! -e "$work/php-call" && ! -e "$work/root/.cv.json" && ! -e "$work/www/.cv.json" ]] \
-  || fail "CIVIKITCHEN_TEST_DB=0 must skip the .cv.json write and the stub patch"
+[[ ! -e "$work/root/.cv.json" && ! -e "$work/www/.cv.json" ]] \
+  || fail "CIVIKITCHEN_TEST_DB=0 must skip the .cv.json write"
+[[ -e "$work/php-call" ]] \
+  || fail "CIVIKITCHEN_TEST_DB=0 must still patch the stub, which reads a hand-set TEST_DB_DSN"
 
 # An unwritable stub must fail, not report a patch it did not apply. Root writes anyway.
 if [[ "$(id -u)" -ne 0 ]]; then

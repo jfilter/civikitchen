@@ -15,7 +15,8 @@
  * The same block pins the cache to the test database. Core keys its
  * version-scoped caches by cache name and CiviCRM version only, so a cache
  * outside the DB (FileCache, Redis, Memcache) is shared with the dev site and
- * outlives Civi\Test's schema rebuild.
+ * outlives Civi\Test's schema rebuild. It also caps the extension scan at two
+ * levels, as a mandatory setting the test schema rebuild cannot drop.
  *
  * Usage:  php patch-test-db-boot.php [/path/to/civicrm.standalone.php]
  * Idempotent: a block that differs from the current one (an older image's) is
@@ -46,6 +47,9 @@ $inject = <<<'PHP'
 // directly: core then composes the DSN itself and its settings bag stays
 // consistent with the constant. A stub-level define() leaves the bag on the
 // main DB and the boot dies in a translation that runs before DAO::init().
+// Extensions sit at ext/<key> or, in a monorepo, ext/<repo>/<key>. Every
+// flush scans this deep; civicrm.settings.php can raise it.
+$GLOBALS['civicrm_setting']['domain']['ext_max_depth'] ??= 2;
 if (getenv('CIVICRM_UF') === 'UnitTests' && !defined('CIVICRM_DSN')) {
   $ckTestDsn = $GLOBALS['_CV']['TEST_DB_DSN'] ?? NULL;
   $ckParts = $ckTestDsn ? parse_url($ckTestDsn) : NULL;

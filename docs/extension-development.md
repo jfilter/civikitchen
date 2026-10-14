@@ -88,8 +88,9 @@ They run against a scratch database named after the main one with a `_test`
 suffix, never against your dev site. The image creates it, writes the test DSN
 into the cv config and patches the boot stub so a headless boot cannot fall
 back to the dev database. If you manage `TEST_DB_DSN` yourself, opt out with
-`CIVIKITCHEN_TEST_DB=0`. **Never point it at the dev database: a headless
-phpunit run rebuilds that schema.**
+`CIVIKITCHEN_TEST_DB=0`; the boot stub stays patched and reads your DSN.
+**Never point it at the dev database: a headless phpunit run rebuilds that
+schema.**
 
 **Database grants.** The test harness needs SUPER on MariaDB, so first-boot
 provisioning grants it as the database root user and sets
