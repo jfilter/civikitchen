@@ -1,0 +1,22 @@
+The custom extensions directory is searched for info.xml to any depth, through
+every extension's vendor/ and node_modules/, on each system flush; headless
+tests flush before every test.
+
+CRM_Extension_System::getDefaultContainer() builds that container without
+ext_max_depth, which the other extension containers get.
+
+Upstream: https://github.com/civicrm/civicrm-core/pull/37430
+
+diff --git a/CRM/Extension/System.php b/CRM/Extension/System.php
+index d3108ebbaa..b760472347 100644
+--- a/CRM/Extension/System.php
++++ b/CRM/Extension/System.php
+@@ -164,7 +164,7 @@ class CRM_Extension_System {
+   public function getDefaultContainer() {
+     if ($this->defaultContainer === NULL) {
+       if ($this->parameters['extensionsDir']) {
+-        $this->defaultContainer = new CRM_Extension_Container_Default($this->parameters['extensionsDir'], $this->parameters['extensionsURL'], $this->getCache(), 'default');
++        $this->defaultContainer = new CRM_Extension_Container_Default($this->parameters['extensionsDir'], $this->parameters['extensionsURL'], $this->getCache(), 'default', $this->parameters['maxDepth']);
+       }
+       else {
+         $this->defaultContainer = FALSE;
