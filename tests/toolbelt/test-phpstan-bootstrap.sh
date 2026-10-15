@@ -51,6 +51,10 @@ mkdir -p "$ext/org.example.dep/CRM/Dep/DAO"
 echo '<?php class CRM_Dep_DAO_Thing extends CRM_Dep_DAO_Base {}' > "$ext/org.example.dep/CRM/Dep/DAO/Thing.php"
 echo '<?php namespace Civi\Dep; interface Contract {}' > "$ext/org.example.dep/Civi/Dep/Contract.php"
 echo '<?php define("CK_DEP_VENDOR_LOADED", 1);' > "$ext/org.example.dep/vendor/autoload.php"
+# A class that requires a bundled package relative to the extension root, as at runtime.
+mkdir -p "$ext/org.example.dep/packages/lib"
+echo '<?php function ck_dep_bundled() {}' > "$ext/org.example.dep/packages/lib/bundled.php"
+echo '<?php require_once "packages/lib/bundled.php"; class CRM_Dep_Bundled {}' > "$ext/org.example.dep/CRM/Dep/Bundled.php"
 cp "$root/scaffold/template/extension/phpstanBootstrap.php" "$ext/repo/"
 cat > "$ext/repo/info.xml" <<'XML'
 <?xml version="1.0"?>
@@ -68,13 +72,14 @@ probe='require $argv[1];
   echo class_exists("CRM_Dep_Base") ? "crm" : "-", " ",
     interface_exists("Civi\\Dep\\Contract") ? "civi" : "-", " ",
     defined("CK_DEP_VENDOR_LOADED") ? "vendor" : "-", " ",
-    is_subclass_of("CRM_Dep_DAO_Thing", "CRM_Core_DAO_Base") ? "dao" : "-", "\n";'
+    is_subclass_of("CRM_Dep_DAO_Thing", "CRM_Core_DAO_Base") ? "dao" : "-", " ",
+    class_exists("CRM_Dep_Bundled") && function_exists("ck_dep_bundled") ? "bundled" : "-", "\n";'
 coreprobe='require $argv[1];
   echo class_exists("Civi\\Api4\\Membership") ? "member" : "-", " ",
     class_exists("Civi\\Flexmailer\\Sender") ? "flexmailer" : "-", " ",
     class_exists("Civi\\Afform\\Event\\AfformSubmitEvent") ? "afform" : "-", "\n";'
 out="$(CIVICRM_CORE_DIR="$core" CK_EXT_DIR="$ext" php -r "$probe" "$ext/repo/phpstanBootstrap.php" 2>"$work/stderr")"
-[[ "$out" == "crm civi vendor dao" ]] || fail "required extension classes did not resolve: '$out'"
+[[ "$out" == "crm civi vendor dao bundled" ]] || fail "required extension classes did not resolve: '$out'"
 grep -q 'org.example.absent is not under' "$work/stderr" \
   || fail "a required extension with no directory must be noted on stderr: $(cat "$work/stderr")"
 if grep -qE 'org.example.dep|org.civicrm.afform' "$work/stderr"; then
@@ -84,7 +89,7 @@ fi
 # No <requires>: nothing registered, nothing said.
 printf '%s\n' '<extension key="org.example.repo" type="module"><file>repo</file></extension>' > "$ext/repo/info.xml"
 out="$(CIVICRM_CORE_DIR="$core" CK_EXT_DIR="$ext" php -r "$probe" "$ext/repo/phpstanBootstrap.php" 2>"$work/stderr")"
-[[ "$out" == "- - - -" ]] || fail "without <requires> nothing may be autoloaded: '$out'"
+[[ "$out" == "- - - - -" ]] || fail "without <requires> nothing may be autoloaded: '$out'"
 [[ ! -s "$work/stderr" ]] || fail "without <requires> stderr must stay empty: $(cat "$work/stderr")"
 
 # Core component extensions need no <requires> entry; a package off the civix

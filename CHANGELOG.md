@@ -42,6 +42,14 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - `ck_headless()` hashes the extension's install files once per PHP process
   instead of before every test.
 
+### Fixed
+
+- The template's `phpstanBootstrap.php` puts each required extension's root on
+  the include path, as civix does at runtime. Before, phpstan aborted with an
+  internal error on the first class of a required extension that loads a
+  bundled package by a relative `require_once`. Run `ckinit --update` to pick
+  up the template.
+
 ## [1.42.0] - 2026-10-14
 
 ### Changed
