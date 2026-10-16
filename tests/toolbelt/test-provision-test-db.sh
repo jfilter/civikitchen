@@ -65,7 +65,8 @@ grep -q 'WARNING' "$work/err.log" || fail "a refused root connection must warn: 
 : > "$MYSQL_LOG"
 ck_provision_test_db civicrm_test >/dev/null 2>"$work/err.log"
 grep -q -- '-u root' "$MYSQL_LOG" || fail "the privileged statements must run as root: $(cat "$MYSQL_LOG")"
-grep -q 'CREATE DATABASE IF NOT EXISTS `civicrm_test`' "$MYSQL_LOG" || fail "civicrm_test not created"
+grep -q 'DROP DATABASE IF EXISTS `civicrm_test`; CREATE DATABASE `civicrm_test`;' "$MYSQL_LOG" \
+  || fail "civicrm_test must be recreated, not reused: $(cat "$MYSQL_LOG")"
 grep -q "GRANT ALL PRIVILEGES ON \`civicrm\\\\_test\`.\* TO 'civicrm'@'%'" "$MYSQL_LOG" \
   || fail "app user not granted on civicrm_test (escaped): $(cat "$MYSQL_LOG")"
 grep -q 'SET GLOBAL log_bin_trust_function_creators = 1' "$MYSQL_LOG" \

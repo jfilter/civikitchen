@@ -22,6 +22,9 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - Headless `ckcoretest` runs start phpunit with a sendmail sink and
   `variables_order=EGPCS`, startup-only settings core's suite expects. Mail
   tests no longer fail on the missing sendmail, and tests reading `$_ENV` see it.
+- Standalone provisioning recreates the `<db>_test` database before seeding it.
+  Seeding over an earlier one kept its `civitest_revs`, so core suites skipped
+  their schema rebuild and ran on the site's schema instead of core's.
 
 ## [1.44.0] - 2026-10-16
 

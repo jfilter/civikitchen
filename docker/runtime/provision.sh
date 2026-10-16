@@ -201,7 +201,9 @@ ck_provision_test_db() {
     # `_` is a GRANT wildcard even inside backticks — escape it so the grant
     # covers <db>_test and nothing else.
     local grant_db="${test_db_name//_/\\_}"
-    sql="CREATE DATABASE IF NOT EXISTS \`${test_db_name}\`;"
+    # Recreated, not reused: a seed over old \Civi\Test state (civitest_revs) skips the
+    # schema rebuild, and core suites then run on the site's schema instead of core's.
+    sql="DROP DATABASE IF EXISTS \`${test_db_name}\`; CREATE DATABASE \`${test_db_name}\`;"
     if [[ "${CIVICRM_DB_USER}" != "root" ]]; then
         sql+="GRANT ALL PRIVILEGES ON \`${grant_db}\`.* TO '${CIVICRM_DB_USER}'@'%';"
         # Civi\Test\Schema::setStrict runs `SET global
