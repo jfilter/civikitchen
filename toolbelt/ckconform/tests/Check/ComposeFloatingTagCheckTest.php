@@ -80,7 +80,7 @@ final class ComposeFloatingTagCheckTest extends CheckTestCase
     public function testACommentedImageDoesNotCount(): void
     {
         $context = $this->repo([
-            'compose.yaml' => "services:\n  x:\n    # image: mariadb:latest\n    image: mariadb:10.11\n",
+            'compose.yaml' => "services:\n  x:\n    # image: mariadb:latest\n    image: mariadb:11.4\n",
         ], git: true);
         $this->assertPasses($this->run_(new ComposeFloatingTagCheck(), $context));
     }

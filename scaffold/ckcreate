@@ -164,7 +164,7 @@ services:
       - $mount_root:/out
       - $checkout:/civikitchen:ro
   db:
-    image: mariadb:10.11
+    image: mariadb:11.4
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: civicrm

@@ -175,7 +175,7 @@ scenario:
   name: image-yaml-smoke
   image: ghcr.io/civico-de/civikitchen:v1
   database:
-    image: mariadb:10.11
+    image: mariadb:11.4
   extension:
     key: org.example.scenario
     path: extension

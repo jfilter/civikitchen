@@ -136,7 +136,7 @@ fi
 
 # --update restores the managed file (re-stamped) and leaves the seeded edit.
 /bin/rm "$work/drift/phpstan.neon.dist"
-rewrite_with_sed 's|mariadb:10.11|mariadb:10.6|' "$work/drift/.docker/docker-compose.ci.yml"
+rewrite_with_sed 's|mariadb:11.4|mariadb:10.6|' "$work/drift/.docker/docker-compose.ci.yml"
 out=$("$root/scaffold/ckinit.php" --update "$work/drift")
 grep -q 'updated   .github/workflows/ci.yml' <<<"$out"
 grep -q 'updated   .docker/docker-compose.ci.yml' <<<"$out"
@@ -255,7 +255,7 @@ out=$("$root/scaffold/ckinit.php" --check "$work/blocks")
 grep -q 'up to date' <<<"$out" || { echo "additions outside the managed blocks were reported as drift: $out" >&2; exit 1; }
 # An edit inside a block is drift; --update restores the block and keeps the additions.
 rewrite_with_sed 's|extension-ci.yml@v1|extension-ci.yml@v0|' "$work/blocks/.github/workflows/ci.yml"
-rewrite_with_sed 's|mariadb:10.11|mariadb:10.6|' "$work/blocks/.docker/docker-compose.ci.yml"
+rewrite_with_sed 's|mariadb:11.4|mariadb:10.6|' "$work/blocks/.docker/docker-compose.ci.yml"
 if "$root/scaffold/ckinit.php" --check "$work/blocks" >/dev/null 2>&1; then
   echo "an edit inside a managed block was not detected" >&2; exit 1
 fi
@@ -265,7 +265,7 @@ grep -q 'updated   .docker/docker-compose.ci.yml' <<<"$out"
 grep -q 'extension-ci.yml@v1' "$work/blocks/.github/workflows/ci.yml"
 grep -q 'sibling_repo: acme/other' "$work/blocks/.github/workflows/ci.yml"
 grep -q 'runs-on: ubuntu-latest' "$work/blocks/.github/workflows/ci.yml"
-grep -q 'mariadb:10.11' "$work/blocks/.docker/docker-compose.ci.yml"
+grep -q 'mariadb:11.4' "$work/blocks/.docker/docker-compose.ci.yml"
 grep -q 'ext/other:ro' "$work/blocks/.docker/docker-compose.ci.yml"
 "$root/scaffold/ckinit.php" --check "$work/blocks" >/dev/null
 # A repo file from before the markers: whole-file drift, --update brings the template.

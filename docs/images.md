@@ -64,7 +64,7 @@ services:
     volumes:
       - ../:/var/www/html/ext/myextension   # your extension repo
   db:
-    image: mariadb:10.11
+    image: mariadb:11.4
     # ... see examples/standalone/docker-compose.yml
 ```
 
@@ -96,7 +96,7 @@ services:
       CIVIKITCHEN_SITE_URL: http://localhost:8080   # must match the port mapping, or assets 404
     depends_on: [db]
   db:
-    image: mariadb:10.11
+    image: mariadb:11.4
     environment:
       MYSQL_ROOT_PASSWORD: root
 ```
@@ -313,9 +313,9 @@ version not published, see
 
 Before promotion the standalone candidate gets a real install, extension
 provisioning, locale rendering and a boot into the isolated test database. A
-push runs this against MariaDB 10.11 only. The daily and dispatched runs, which
-a release requires, add MariaDB 11.4 (recommended) and 12.2 and MySQL 8.0. The
-examples keep MariaDB 10.11 as default; changing it requires passing the full
+push runs this against MariaDB 11.4 only. The daily and dispatched runs, which
+a release requires, add MariaDB 10.11 and 12.2 and MySQL 8.0. The template and
+the examples default to MariaDB 11.4; changing it requires passing the full
 matrix.
 
 ## Custom or older CiviCRM versions

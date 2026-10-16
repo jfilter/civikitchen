@@ -14,6 +14,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Changed
+
+- The extension template, `ckcreate`, the examples and the release workflow's test
+  database move from MariaDB 10.11 to 11.4, both LTS lines. A push tests the
+  standalone candidate against 11.4; the full matrix keeps 10.11. Existing repos
+  pick up the new compose files with `ckinit --update`.
+
 ## [1.43.0] - 2026-10-15
 
 ### Added

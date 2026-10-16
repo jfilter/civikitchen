@@ -542,7 +542,7 @@ jobs:
                 - ${CK_DEPS}:/ck-deps:ro
                 - ${CK_SIBLINGS}:/ck-siblings:ro
             db:
-              image: mariadb:10.11
+              image: mariadb:11.4
               environment:
                 MYSQL_ROOT_PASSWORD: root
                 MYSQL_DATABASE: civicrm

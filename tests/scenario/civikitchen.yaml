@@ -3,7 +3,7 @@ scenario:
   name: ckscenario-runtime
   image: ghcr.io/civico-de/civikitchen:standalone
   database:
-    image: mariadb:10.11
+    image: mariadb:11.4
   extension:
     key: ckbootfixture
     path: ../images/fixtures/ckbootfixture

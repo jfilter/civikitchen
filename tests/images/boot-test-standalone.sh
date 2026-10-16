@@ -38,7 +38,7 @@
 set -euo pipefail
 
 IMAGE="${1:?usage: boot-test-standalone.sh <image>}"
-DATABASE_IMAGE="${CK_DATABASE_IMAGE:-mariadb:10.11}"
+DATABASE_IMAGE="${CK_DATABASE_IMAGE:-mariadb:11.4}"
 SRC="$(cd "$(dirname "$0")/../.." && pwd)"
 # The fixture is staged, not mounted from the checkout: the headless suite
 # needs the TEMPLATE bootstrap next to it, and nothing may be written into

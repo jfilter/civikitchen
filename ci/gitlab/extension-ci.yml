@@ -24,7 +24,7 @@
 
 variables:
   CK_IMAGE: ghcr.io/civico-de/civikitchen:v1
-  CK_DB_IMAGE: mariadb:10.11
+  CK_DB_IMAGE: mariadb:11.4
   CK_LIFECYCLE: "1"
   CK_NPM_CI: "0"
   CK_JS_TESTS: "0"

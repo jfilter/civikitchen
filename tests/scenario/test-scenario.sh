@@ -131,7 +131,7 @@ php -r '
   $p=json_decode(file_get_contents($argv[1]), TRUE, 512, JSON_THROW_ON_ERROR);
   $c=json_decode(file_get_contents($argv[2]), TRUE, 512, JSON_THROW_ON_ERROR);
   if ($p["credentials_output"] !== "file") exit(1);
-  if ($c["services"]["db"]["image"] !== "mariadb:10.11") exit(1);
+  if ($c["services"]["db"]["image"] !== "mariadb:11.4") exit(1);
   if ($c["services"]["app"]["environment"]["CIVIKITCHEN_DEFAULT_LOCALE"] !== "de_DE") exit(1);
   if ($c["services"]["app"]["environment"]["CIVIKITCHEN_DEMO_USER"] !== "admin") exit(1);
   if ($c["services"]["app"]["volumes"][0]["read_only"] !== true) exit(1);

@@ -4,7 +4,7 @@ scenario:
   name: example-extension
   image: ghcr.io/civico-de/civikitchen:v1
   database:
-    image: mariadb:10.11
+    image: mariadb:11.4
   extension:
     key: ckbootfixture
     path: ../../tests/images/fixtures/ckbootfixture

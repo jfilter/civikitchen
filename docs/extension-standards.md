@@ -494,7 +494,7 @@ variables also override the defaults:
 | Variable | Default | Effect |
 |---|---|---|
 | `CK_IMAGE` | `ghcr.io/civico-de/civikitchen:v1` | the job image |
-| `CK_DB_IMAGE` | `mariadb:10.11` | keep it equal to the database of `.docker/docker-compose.ci.yml` |
+| `CK_DB_IMAGE` | `mariadb:11.4` | keep it equal to the database of `.docker/docker-compose.ci.yml` |
 | `CK_LIFECYCLE` | `"1"` | `"0"` skips cklifecycle |
 | `CK_NPM_CI` | `"0"` | `"1"` installs node_modules before the gates |
 | `CK_JS_TESTS` | `"0"` | `"1"` also runs npm test |

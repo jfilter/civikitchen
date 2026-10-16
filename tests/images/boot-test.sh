@@ -39,7 +39,7 @@ trap cleanup EXIT
 echo "==> boot-test ${IMAGE} (${SITE_TYPE})"
 docker network create "${NET}" >/dev/null
 docker run -d --name "${DB}" --network "${NET}" \
-    -e MYSQL_ROOT_PASSWORD=root mariadb:10.11 >/dev/null
+    -e MYSQL_ROOT_PASSWORD=root mariadb:11.4 >/dev/null
 docker run -d --name "${APP}" --network "${NET}" \
     -e CIVICRM_DB_HOST="${DB}" \
     -e CIVICRM_DB_ROOT_PASSWORD=root \
