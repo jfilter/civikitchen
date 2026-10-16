@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ckcoretest --e2e runs only @group e2e against the dev site: no UnitTests UF and no
-# TEST_DB_DSN gate. Headless runs keep both and get a sendmail sink. Fakes record the calls.
+# TEST_DB_DSN gate. Headless runs keep both and get core's startup ini. Fakes record the calls.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -19,8 +19,12 @@ chmod +x "$work/bin/phpunit"
 # ckcoretest itself needs php (bin/ck); only the phpunit launch is recorded.
 cat > "$work/bin/php" <<FAKE
 #!/usr/bin/env bash
-[[ "\${3:-}" == "$work/bin/phpunit" ]] || exec "$(command -v php)" "\$@"
-printf 'uf=%s args=%s\\n' "\${CIVICRM_UF:-}" "\$*" > "\$PHP_LOG"
+for a in "\$@"; do
+  [[ "\$a" == "$work/bin/phpunit" ]] || continue
+  printf 'uf=%s args=%s\\n' "\${CIVICRM_UF:-}" "\$*" > "\$PHP_LOG"
+  exit 0
+done
+exec "$(command -v php)" "\$@"
 FAKE
 chmod +x "$work/bin/php"
 # The web user's home is $work/www, which has no ~/.cv.json.
@@ -42,8 +46,8 @@ grep -q 'No TEST_DB_DSN' "$work/err" || fail "the refusal must name the missing 
 mkdir -p "$work/www"
 echo '{"TEST_DB_DSN":"mysql://test@db/test"}' > "$work/www/.cv.json"
 bash "$root/toolbelt/bin/ckcoretest" --filter testX tests/phpunit/CRM >/dev/null
-[[ "$(cat "$work/php.log" 2>/dev/null)" == "uf=UnitTests args=-d sendmail_path=/bin/true $work/bin/phpunit --filter testX tests/phpunit/CRM" ]] \
-  || fail "a headless run must start phpunit under php with a sendmail sink: $(cat "$work/php.log" 2>/dev/null)"
+[[ "$(cat "$work/php.log" 2>/dev/null)" == "uf=UnitTests args=-d sendmail_path=/bin/true -d variables_order=EGPCS $work/bin/phpunit --filter testX tests/phpunit/CRM" ]] \
+  || fail "a headless run must start phpunit under php with a sendmail sink and variables_order=EGPCS: $(cat "$work/php.log" 2>/dev/null)"
 [[ ! -e "$work/phpunit.log" ]] || fail "a headless run must not start phpunit without the sendmail sink"
 
 echo "ckcoretest: ok"
