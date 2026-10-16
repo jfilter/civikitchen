@@ -132,6 +132,8 @@ php -r '
   $c=json_decode(file_get_contents($argv[2]), TRUE, 512, JSON_THROW_ON_ERROR);
   if ($p["credentials_output"] !== "file") exit(1);
   if ($c["services"]["db"]["image"] !== "mariadb:11.4") exit(1);
+  if (!str_starts_with($c["services"]["db"]["healthcheck"]["test"][1], "mariadb-admin ping ")) exit(1);
+  if (!str_contains($c["services"]["db"]["healthcheck"]["test"][1], "|| mysqladmin ping ")) exit(1);
   if ($c["services"]["app"]["environment"]["CIVIKITCHEN_DEFAULT_LOCALE"] !== "de_DE") exit(1);
   if ($c["services"]["app"]["environment"]["CIVIKITCHEN_DEMO_USER"] !== "admin") exit(1);
   if ($c["services"]["app"]["volumes"][0]["read_only"] !== true) exit(1);

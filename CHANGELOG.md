@@ -21,6 +21,11 @@ except that a break the consumers are adjusted for ships as a minor, marked
   standalone candidate against 11.4; the full matrix keeps 10.11. Existing repos
   pick up the new compose files with `ckinit --update`.
 
+### Fixed
+
+- A scenario's database healthcheck works on MariaDB 11 and later, whose images
+  no longer ship `mysqladmin`. Such a scenario never got past "db unhealthy".
+
 ## [1.43.0] - 2026-10-15
 
 ### Added

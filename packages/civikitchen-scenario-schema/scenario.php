@@ -223,8 +223,9 @@ function ck_scenario_compose(array $scenario): array {
           'MYSQL_ROOT_PASSWORD' => 'root',
           'MYSQL_DATABASE' => 'civicrm',
         ],
+        // MariaDB 11+ images ship only mariadb-admin, MySQL only mysqladmin.
         'healthcheck' => [
-          'test' => ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -proot --silent'],
+          'test' => ['CMD-SHELL', 'mariadb-admin ping -h 127.0.0.1 -proot --silent || mysqladmin ping -h 127.0.0.1 -proot --silent'],
           'interval' => '5s',
           'timeout' => '5s',
           'retries' => 30,
