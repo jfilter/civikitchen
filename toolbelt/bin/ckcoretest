@@ -129,4 +129,6 @@ cd "${run_dir}"
 if [ "${e2e}" = 1 ]; then
   exec phpunit --group e2e "$@"
 fi
-exec env CIVICRM_UF=UnitTests phpunit "$@"
+# No sendmail in the image: mail() would fail where buildkit's CIVICRM_MAIL_LOG succeeds.
+# sendmail_path is PHP_INI_SYSTEM, so phpunit's own -d (ini_set) cannot change it.
+exec env CIVICRM_UF=UnitTests php -d sendmail_path=/bin/true "$(command -v phpunit)" "$@"

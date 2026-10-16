@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ckcoretest --e2e runs only @group e2e against the dev site: no UnitTests UF and no
-# TEST_DB_DSN gate. Without it the headless run keeps both. Fake phpunit records the call.
+# TEST_DB_DSN gate. Headless runs keep both and get a sendmail sink. Fakes record the calls.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -16,10 +16,17 @@ cat > "$work/bin/phpunit" <<'FAKE'
 printf 'dir=%s uf=%s args=%s\n' "$PWD" "${CIVICRM_UF:-}" "$*" > "$PHPUNIT_LOG"
 FAKE
 chmod +x "$work/bin/phpunit"
+# ckcoretest itself needs php (bin/ck); only the phpunit launch is recorded.
+cat > "$work/bin/php" <<FAKE
+#!/usr/bin/env bash
+[[ "\${3:-}" == "$work/bin/phpunit" ]] || exec "$(command -v php)" "\$@"
+printf 'uf=%s args=%s\\n' "\${CIVICRM_UF:-}" "\$*" > "\$PHP_LOG"
+FAKE
+chmod +x "$work/bin/php"
 # The web user's home is $work/www, which has no ~/.cv.json.
 printf '#!/bin/sh\necho "www-data:x:33:33::%s/www:/bin/sh"\n' "$work" > "$work/bin/getent"
 chmod +x "$work/bin/getent"
-export PATH="$work/bin:$PATH" PHPUNIT_LOG="$work/phpunit.log" CK_CORE_DIR="$core"
+export PATH="$work/bin:$PATH" PHPUNIT_LOG="$work/phpunit.log" PHP_LOG="$work/php.log" CK_CORE_DIR="$core"
 
 CIVICRM_UF=Standalone bash "$root/toolbelt/bin/ckcoretest" --e2e --ext afform/mock tests/phpunit/E2E >/dev/null
 [[ "$(cat "$work/phpunit.log")" == "dir=$core/ext/afform/mock uf=Standalone args=--group e2e tests/phpunit/E2E" ]] \
@@ -32,4 +39,11 @@ fi
 grep -q 'No TEST_DB_DSN' "$work/err" || fail "the refusal must name the missing TEST_DB_DSN: $(cat "$work/err")"
 [[ ! -e "$work/phpunit.log" ]] || fail "a refused headless run must not start phpunit"
 
-echo "ckcoretest e2e: ok"
+mkdir -p "$work/www"
+echo '{"TEST_DB_DSN":"mysql://test@db/test"}' > "$work/www/.cv.json"
+bash "$root/toolbelt/bin/ckcoretest" --filter testX tests/phpunit/CRM >/dev/null
+[[ "$(cat "$work/php.log" 2>/dev/null)" == "uf=UnitTests args=-d sendmail_path=/bin/true $work/bin/phpunit --filter testX tests/phpunit/CRM" ]] \
+  || fail "a headless run must start phpunit under php with a sendmail sink: $(cat "$work/php.log" 2>/dev/null)"
+[[ ! -e "$work/phpunit.log" ]] || fail "a headless run must not start phpunit without the sendmail sink"
+
+echo "ckcoretest: ok"
