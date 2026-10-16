@@ -100,7 +100,9 @@ COPY toolbelt/ckdeps-root /opt/composer
 # ckcoretest runs core suites against its dist core, ckboot provisions the
 # standalone site inside a CI job container.
 COPY toolbelt /opt/civikitchen/toolbelt
-RUN rm /opt/civikitchen/toolbelt/bin/cktestreset /opt/civikitchen/toolbelt/bin/ckcoretest \
+# composer_auth is an optional BuildKit secret holding a COMPOSER_AUTH JSON. CI passes
+# its job token so GitHub dist downloads are not rate-limited; local builds run without.
+RUN --mount=type=secret,id=composer_auth,env=COMPOSER_AUTH rm /opt/civikitchen/toolbelt/bin/cktestreset /opt/civikitchen/toolbelt/bin/ckcoretest \
         /opt/civikitchen/toolbelt/bin/ckboot \
     && CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
         PHPUNIT_VERSION="${PHPUNIT_VERSION}" PHPUNIT_SHA256="${PHPUNIT_SHA256}" \
@@ -146,7 +148,7 @@ COPY docker/buildkit/site-types /usr/local/share/civikitchen/site-types
 # maintained YAML component. Install it once in the shared base so both final
 # and demo targets inherit the exact locked parser without runtime downloads.
 COPY packages/civikitchen-scenario-schema /opt/civikitchen/packages/civikitchen-scenario-schema
-RUN composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
+RUN --mount=type=secret,id=composer_auth,env=COMPOSER_AUTH composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
     --working-dir=/opt/civikitchen/packages/civikitchen-scenario-schema \
     && composer clear-cache
 
@@ -190,7 +192,7 @@ WORKDIR /home/buildkit
 # from github.com / CDNs with no built-in resilience, so a single transient 5xx
 # would fail the whole image. Retry the network-heavy setup; --depth 1 trims
 # the clone (its .git is dropped anyway) to shrink the failure surface.
-RUN for attempt in 1 2 3; do \
+RUN --mount=type=secret,id=composer_auth,env=COMPOSER_AUTH for attempt in 1 2 3; do \
         rm -rf buildkit; \
         if git clone --depth 1 https://github.com/civicrm/civicrm-buildkit.git buildkit \
             && rm -rf buildkit/.git \
@@ -232,7 +234,7 @@ RUN apt-get update \
 # joomla-demo path calls /usr/local/share/civikitchen/joomla-finish.sh, baked in
 # the base stage above (shared with the runtime dev-image path).
 COPY docker/buildkit/bake.sh /tmp/bake.sh
-RUN CIVICRM_VERSION="${CIVICRM_VERSION}" CIVICRM_BUILD_VERSION="${CIVICRM_BUILD_VERSION}" \
+RUN --mount=type=secret,id=composer_auth,env=COMPOSER_AUTH CIVICRM_VERSION="${CIVICRM_VERSION}" CIVICRM_BUILD_VERSION="${CIVICRM_BUILD_VERSION}" \
         DEFAULT_SITE_TYPE="${DEFAULT_SITE_TYPE}" \
         KEEP_GIT="${KEEP_GIT}" \
         bash /tmp/bake.sh && rm -rf /tmp/bake.sh

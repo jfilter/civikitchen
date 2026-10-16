@@ -134,6 +134,9 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
+          # Authenticated GitHub dist downloads for composer; see the Dockerfile.
+          secrets: |
+            composer_auth={"github-oauth":{"github.com":"${{ github.token }}"}}
           file: docker/standalone/Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
@@ -475,6 +478,9 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
+          # Authenticated GitHub dist downloads for composer; see the Dockerfile.
+          secrets: |
+            composer_auth={"github-oauth":{"github.com":"${{ github.token }}"}}
           file: docker/buildkit/Dockerfile
           target: final
           platforms: ${{ matrix.platform }}
@@ -755,6 +761,9 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
+          # Authenticated GitHub dist downloads for composer; see the Dockerfile.
+          secrets: |
+            composer_auth={"github-oauth":{"github.com":"${{ github.token }}"}}
           file: docker/buildkit/Dockerfile
           target: demo
           platforms: ${{ matrix.platform }}

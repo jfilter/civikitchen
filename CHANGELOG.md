@@ -14,6 +14,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Fixed
+
+- The image builds in CI hand composer the job token as an optional
+  `composer_auth` BuildKit secret, so GitHub dist downloads no longer hit the
+  anonymous rate limit (HTTP 429). Local builds run without it.
+
 ## [1.44.0] - 2026-10-16
 
 ### Changed

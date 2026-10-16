@@ -61,7 +61,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends git unzip \
 ADD --keep-git-dir=true "https://github.com/civicrm/civicrm-core.git#${CIVICRM_VERSION}" /tmp/civicrm/civicrm-standalone/core
 ADD --keep-git-dir=true "https://github.com/civicrm/civicrm-packages.git#${CIVICRM_VERSION}" /tmp/civicrm/civicrm-standalone/core/packages
 WORKDIR /tmp/civicrm/civicrm-standalone/core
-RUN for repo in . packages; do \
+# composer_auth is an optional BuildKit secret holding a COMPOSER_AUTH JSON. CI passes
+# its job token so GitHub dist downloads are not rate-limited; local builds run without.
+RUN --mount=type=secret,id=composer_auth,env=COMPOSER_AUTH for repo in . packages; do \
          echo "git ${repo} $(git -C "${repo}" rev-parse HEAD)" >> /tmp/civicrm-source.log \
          && rm -rf "${repo}/.git"; \
        done \
@@ -170,7 +172,7 @@ COPY toolbelt/ckdeps-root /opt/composer
 # configs and toolchains relative to its own real path, so nothing branches on
 # "image or checkout". install-dev-tools.sh links the tools into PATH.
 COPY toolbelt /opt/civikitchen/toolbelt
-RUN CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
+RUN --mount=type=secret,id=composer_auth,env=COMPOSER_AUTH CIVIX_VERSION="${CIVIX_VERSION}" CIVIX_SHA256="${CIVIX_SHA256}" \
         PHPUNIT_VERSION="${PHPUNIT_VERSION}" PHPUNIT_SHA256="${PHPUNIT_SHA256}" \
         INFECTION_VERSION="${INFECTION_VERSION}" \
         MAGO_VERSION="${MAGO_VERSION}" MAGO_SHA256_X86_64="${MAGO_SHA256_X86_64}" \
@@ -213,7 +215,7 @@ COPY docker/runtime/patch-test-db-boot.php /usr/local/share/civikitchen/patch-te
 # docs/images.md).
 COPY docker/profiles /opt/civikitchen/docker/profiles
 COPY packages /opt/civikitchen/packages
-RUN composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
+RUN --mount=type=secret,id=composer_auth,env=COMPOSER_AUTH composer install --no-dev --no-interaction --no-progress --classmap-authoritative \
     --working-dir=/opt/civikitchen/packages/civikitchen-scenario-schema \
     && composer clear-cache
 
