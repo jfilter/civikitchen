@@ -855,6 +855,14 @@ printf '%s\n' '#!/bin/sh' 'echo "direct:$*"' > "$work/fakebin/cv"
 chmod +x "$work/fakebin/cv"
 out=$(PATH="$work/fakebin:$PATH" CK_IN_IMAGE=1 bash -c '. "$1"; cv ext:list' _ "$work/gitlab/tests/e2e/lib.sh")
 [ "$out" = 'direct:ext:list' ] || { echo "lib.sh ignored CK_IN_IMAGE: $out" >&2; exit 1; }
+# sql goes through the mariadb client: MariaDB 11 images ship no mysql binary.
+printf '%s\n' '#!/bin/sh' 'echo "mariadb:$*"' > "$work/fakebin/mariadb"
+printf '%s\n' '#!/bin/sh' 'echo "compose:$*"' > "$work/fakebin/docker"
+chmod +x "$work/fakebin/mariadb" "$work/fakebin/docker"
+out=$(PATH="$work/fakebin:$PATH" CK_IN_IMAGE=1 bash -c '. "$1"; sql "SELECT 1"' _ "$work/gitlab/tests/e2e/lib.sh")
+[ "$out" = 'mariadb:-h db -N -B -ucivicrm -pcivicrm civicrm -e SELECT 1' ] || { echo "lib.sh sql in the image: $out" >&2; exit 1; }
+out=$(PATH="$work/fakebin:$PATH" COMPOSE_DIR="$work" bash -c '. "$1"; sql "SELECT 1"' _ "$work/gitlab/tests/e2e/lib.sh")
+[ "$out" = 'compose:compose exec -T db mariadb -N -B -ucivicrm -pcivicrm civicrm -e SELECT 1' ] || { echo "lib.sh sql via compose: $out" >&2; exit 1; }
 # The root pass writes GitHub callers only, so an extension below a root refuses.
 git init -q "$work/gitlab-mono"
 cp -R "$work/gitlab" "$work/gitlab-mono/ext"

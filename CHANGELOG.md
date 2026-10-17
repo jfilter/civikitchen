@@ -14,6 +14,13 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 ## [Unreleased]
 
+### Added
+
+- The managed `tests/e2e/lib.sh` has `sql <query>`, which queries the site
+  database through the `mariadb` client, via compose or inside the image
+  (`CK_IN_IMAGE=1`). MariaDB 11 images ship no `mysql` binary, so a suite's own
+  `docker compose exec db mysql …` stops working with the 11.4 template.
+
 ### Fixed
 
 - The image builds in CI hand composer the job token as an optional
@@ -26,6 +33,12 @@ except that a break the consumers are adjusted for ships as a minor, marked
 - Standalone provisioning recreates the `<db>_test` database before seeding it.
   Seeding over an earlier one kept its `civitest_revs`, so core suites skipped
   their schema rebuild and ran on the site's schema instead of core's.
+- The standalone image scans extensions at core's default depth again (3)
+  instead of two levels. Two levels hid test fixture extensions under
+  `ext/<key>/tests/<fixture>/`, so headless suites installing them failed with
+  "Unknown extension". The custom extensions directory still honours the depth
+  (civicrm/civicrm-core#37430), so the scan never walks `vendor/` or
+  `node_modules/` in full.
 
 ## [1.44.0] - 2026-10-16
 
