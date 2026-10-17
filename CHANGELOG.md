@@ -18,7 +18,8 @@ except that a break the consumers are adjusted for ships as a minor, marked
 
 - The image builds in CI hand composer the job token as an optional
   `composer_auth` BuildKit secret, so GitHub dist downloads no longer hit the
-  anonymous rate limit (HTTP 429). Local builds run without it.
+  anonymous rate limit (HTTP 429). Local builds run without it. buildkit's own
+  composer steps run without it: that composer rejects GitHub's newer token format.
 - Headless `ckcoretest` runs start phpunit with a sendmail sink and
   `variables_order=EGPCS`, startup-only settings core's suite expects. Mail
   tests no longer fail on the missing sendmail, and tests reading `$_ENV` see it.

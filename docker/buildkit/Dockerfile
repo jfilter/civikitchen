@@ -192,7 +192,9 @@ WORKDIR /home/buildkit
 # from github.com / CDNs with no built-in resilience, so a single transient 5xx
 # would fail the whole image. Retry the network-heavy setup; --depth 1 trims
 # the clone (its .git is dropped anyway) to shrink the failure surface.
-RUN --mount=type=secret,id=composer_auth,env=COMPOSER_AUTH for attempt in 1 2 3; do \
+# No composer_auth here or in the bake: buildkit's pinned composer predates the
+# ghs_<id>_<jwt> token format, rejects it and prints the token.
+RUN for attempt in 1 2 3; do \
         rm -rf buildkit; \
         if git clone --depth 1 https://github.com/civicrm/civicrm-buildkit.git buildkit \
             && rm -rf buildkit/.git \
@@ -234,7 +236,7 @@ RUN apt-get update \
 # joomla-demo path calls /usr/local/share/civikitchen/joomla-finish.sh, baked in
 # the base stage above (shared with the runtime dev-image path).
 COPY docker/buildkit/bake.sh /tmp/bake.sh
-RUN --mount=type=secret,id=composer_auth,env=COMPOSER_AUTH CIVICRM_VERSION="${CIVICRM_VERSION}" CIVICRM_BUILD_VERSION="${CIVICRM_BUILD_VERSION}" \
+RUN CIVICRM_VERSION="${CIVICRM_VERSION}" CIVICRM_BUILD_VERSION="${CIVICRM_BUILD_VERSION}" \
         DEFAULT_SITE_TYPE="${DEFAULT_SITE_TYPE}" \
         KEEP_GIT="${KEEP_GIT}" \
         bash /tmp/bake.sh && rm -rf /tmp/bake.sh
